@@ -1,2 +1,1 @@
-# firmium
-A lightweight, fast, and simple music player for Navidrome. Based on the OpenSubsonic API!
+<h3>**Firmium**</h3>
