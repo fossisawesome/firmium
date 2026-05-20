@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' tauri: asset: localhost:; connect-src 'self' https: http: tauri: asset: http://localhost:* http://127.0.0.1.*; media-src 'self' blob: https: tauri: asset:; img-src 'self' data: blob: https: tauri: asset:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
+  <title>Firmium</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="setup">
+    <div class="setup-box">
+      <h1>Firmium</h1>
+
+      <div class="field">
+        <label>Server URL</label>
+        <input type="url" id="serverUrl" placeholder="https://navidrome.music:4533" />
+      </div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="username" placeholder="admin" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <div class="field-checkbox">
+        <input type="checkbox" id="savePassword" />
+        <label for="savePassword">Save Password</label>
+      </div>
+      <button class="btn-primary" data-action="connect" id="connectBtn">Connect</button>
+      <div class="error-msg" id="setupError"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="sidebar">
+      <div class="app-brand">
+        <span class="logo">⬡</span>
+        <span class="server-lbl" id="serverLabel">offline</span>
+      </div>
+      <div class="nav-links">
+        <button class="nav-btn active" data-action="nav-view" data-view="albums">Albums</button>
+        <button class="nav-btn" data-action="nav-view" data-view="artists">Artists</button>
+        <button class="nav-btn" data-action="nav-view" data-view="search">Search</button>
+        <button class="nav-btn" data-action="nav-view" data-view="settings">Settings</button>
+      </div>
+      <button class="logout-btn" data-action="logout" id="logoutBtn">✕ disconnect</button>
+    </div>
+
+    <div class="main-area">
+      <div class="list-panel" id="listPanel">
+        <div class="empty-state"><div class="big">♪</div><div>loading…</div></div>
+      </div>
+    </div>
+
+    <div class="player-bar">
+      <div class="now-playing">
+        <div class="np-art" id="npArt">♪</div>
+        <div class="np-info">
+          <div class="np-title" id="npTitle">—</div>
+          <div class="np-artist" id="npArtist">No track selected</div>
+        </div>
+        <div class="vol-row">
+          <span>☊</span>
+          <input type="range" class="volume-slider" id="volSlider" min="0" max="1" step="0.01" value="0.8" />
+        </div>
+      </div>
+      <div class="progress-row">
+        <span class="time" id="curTime">0:00</span>
+        <input type="range" id="seekBar" min="0" max="100" value="0" step="0.1" />
+        <span class="time right" id="durTime">0:00</span>
+      </div>
+      <div class="controls">
+        <button class="ctrl-btn" data-action="prev-track" id="prevBtn" title="Previous">⏮</button>
+        <button class="ctrl-btn main-ctrl" data-action="play-toggle" id="playBtn" title="Play/Pause">▶</button>
+        <button class="ctrl-btn" data-action="next-track" id="nextBtn" title="Next">⏭</button>
+        <button class="ctrl-btn secondary-ctrl" data-action="toggle-repeat-one" id="rOneBtn" title="Repeat One">⥀</button>
+        <button class="ctrl-btn secondary-ctrl" data-action="toggle-repeat-all" id="rAllBtn" title="Repeat All">⥁</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
