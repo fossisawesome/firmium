@@ -612,14 +612,19 @@ const loadView = async (view) => {
       const show = e.target.checked;
       SafeStorage.setItem('firmium_decorations', show ? 'true' : 'false');
       try {
-        if (window.__TAURI__ && window.__TAURI__.window && typeof window.__TAURI__.window.getCurrentWindow === 'function') {
-          await window.__TAURI__.window.getCurrentWindow().setDecorations(show);
-        } else if (window.__TAURI__ && window.__TAURI__.window && typeof window.__TAURI__.window.getCurrent === 'function') {
-          await window.__TAURI__.window.getCurrent().setDecorations(show);
-        } else {
-          const { getCurrentWindow } = await import('@tauri-apps/api/window');
-          await getCurrentWindow().setDecorations(show);
+        if (window.__TAURI__) {
+          const tauriWindow = window.__TAURI__.window || (window.__TAURI__.core ? window.__TAURI__ : null);
+          if (tauriWindow && typeof tauriWindow.getCurrentWindow === 'function') {
+            await tauriWindow.getCurrentWindow().setDecorations(show);
+            return;
+          }
+          if (tauriWindow && typeof tauriWindow.getCurrent === 'function') {
+            await tauriWindow.getCurrent().setDecorations(show);
+            return;
+          }
         }
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().setDecorations(show);
       } catch (err) {
         console.error("Failed to alter window decorations status:", err);
       }
@@ -688,11 +693,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const isDecorated = SafeStorage.getItem('firmium_decorations') !== 'false';
+  const decoCheckbox = DOM.el('toggleDecorations');
+  if (decoCheckbox) {
+    decoCheckbox.checked = isDecorated;
+  }
+
   try {
-    if (window.__TAURI__ && window.__TAURI__.window && typeof window.__TAURI__.window.getCurrentWindow === 'function') {
-      window.__TAURI__.window.getCurrentWindow().setDecorations(isDecorated);
-    } else if (window.__TAURI__ && window.__TAURI__.window && typeof window.__TAURI__.window.getCurrent === 'function') {
-      window.__TAURI__.window.getCurrent().setDecorations(isDecorated);
+    if (window.__TAURI__) {
+      const tauriWindow = window.__TAURI__.window || window.__TAURI__;
+      if (tauriWindow && typeof tauriWindow.getCurrentWindow === 'function') {
+        tauriWindow.getCurrentWindow().setDecorations(isDecorated);
+      } else if (tauriWindow && typeof tauriWindow.getCurrent === 'function') {
+        tauriWindow.getCurrent().setDecorations(isDecorated);
+      }
     } else {
       import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
         getCurrentWindow().setDecorations(isDecorated);
@@ -742,6 +755,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       document.title = 'Firmium';
     }
+  });
+
+  document.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
   });
 
   document.body.addEventListener('click', async (e) => {
