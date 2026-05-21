@@ -1,0 +1,18 @@
+# Before testing
+- Do a /codereview with Claude Sonnet 4.6
+- Fix the issues and bugs
+- Update verisons in Cargo.toml | tauri.conf.json | PKGBUILD | package.json | package-lock.json
+
+---
+
+# Testing
+- Begin building the app with "npm run build:arch".
+- Install, "sudo pacman -U src-tauri/target/release/bundle/arch/*.pkg.tar.zst".
+
+---
+
+# Push to Git
+- Run "git add ."
+- Then run "git commit -m "MyCommitMessage".
+- Run "git push origin main" to send everything to the repo.
+- Run "git status" to confirm it worked.

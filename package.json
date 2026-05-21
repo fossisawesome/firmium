@@ -1,10 +1,12 @@
 {
   "name": "firmium-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build": "tauri build",
+    "build:arch": "tauri build && env -i HOME=$HOME PATH=$PATH TERM=$TERM PKGDEST=\"src-tauri/target/release/bundle/arch\" BUILDDIR=\"src-tauri/target/release/bundle/arch/build\" makepkg -f"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2"
