@@ -316,8 +316,8 @@ const teardownApp = () => {
   const audio = Store.Playback.getAudio();
   if (audio) {
     try { audio.pause(); } catch(e){}
-    if (audio.src?.startsWith('blob:')) { try { URL.revokeObjectURL(audio.src); } catch(e){} }
-    audio.src = '';
+    audio.removeAttribute('src');
+    audio.load();
   }
 
   Store.Playback.clearAllCache();
@@ -328,17 +328,6 @@ const teardownApp = () => {
   DOM.el('app')?.classList.add('hidden');
   DOM.render('setupError', '');
   document.title = 'Firmium';
-};
-
-const BlacklistFilter = () => {
-  const current = Store.Playback.getCurrentTrack();
-  const currentId = current ? String(current.id) : null;
-  const panel = DOM.el('listPanel');
-  if (panel) {
-    panel.querySelectorAll('.track-row').forEach(r => {
-      r.classList.toggle('playing', currentId !== null && r.dataset.id === currentId);
-    });
-  }
 };
 
 const highlightCurrentTrack = () => {
@@ -368,7 +357,8 @@ const playAt = async (idx) => {
     const streamUrl = SubsonicRouter.buildUrl('stream', { id: track.id });
     if (currentToken !== Store.Playback.getPlayToken()) return;
 
-    if (audio.src?.startsWith('blob:')) { try { URL.revokeObjectURL(audio.src); } catch(e){} }
+    audio.removeAttribute('src');
+    audio.load();
     audio.src = streamUrl;
     await audio.play();
     document.title = `▶ ${track.title} - Firmium`;
@@ -496,10 +486,11 @@ const loadArtist = async (id) => {
     observeLazyCovers(DOM.el('listPanel'));
 
     WikiApi.getInfo(name, ctrl.signal).then(wiki => {
-      if (wiki && !ctrl.signal.aborted) {
+      if (ctrl.signal.aborted) return;
+      if (wiki) {
         if (wiki.extract) DOM.render('wikiBio', DOM.safeText(wiki.extract));
         if (wiki.image) DOM.el('wikiImg').src = wiki.image;
-      } else if (!wiki && !ctrl.signal.aborted) {
+      } else {
         DOM.render('wikiBio', 'Biography not available.');
       }
     });
@@ -585,7 +576,7 @@ const loadView = async (view) => {
     DOM.render('listPanel', `
       <div class="search-row">
         <input type="text" id="searchInput" placeholder="Search albums, songs…" maxLength="${SEARCH_INPUT_MAX_LENGTH}">
-        <button id="searchSubmitBtn">Search</button>
+        <button id="searchSubmitBtn" data-action="search-submit">Search</button>
       </div>`);
     DOM.el('searchInput').focus();
     return;
@@ -758,7 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('contextmenu', (e) => {
-  e.preventDefault();
+    e.preventDefault();
   });
 
   document.body.addEventListener('click', async (e) => {

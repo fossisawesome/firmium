@@ -6,6 +6,9 @@
   "permissions": [
     "core:default",
     "core:window:allow-set-decorations",
-    "core:window:allow-is-decorated"
+    "core:window:allow-is-decorated",
+    "opener:default",
+    "shell:default",
+    "updater:default"
   ]
 }

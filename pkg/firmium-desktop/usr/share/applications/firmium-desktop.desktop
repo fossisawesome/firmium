@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=
+Comment=Subsonic Desktop Music Streamer
+Exec=firmium-desktop
+StartupWMClass=firmium-desktop
+Icon=firmium-desktop
+Name=firmium-desktop
+Terminal=false
+Type=Application
