@@ -6,22 +6,27 @@ authors = ["you"]
 edition = "2021"
 
 [build-dependencies]
-tauri-build = { version = "2.0.0", features = [] }
+tauri-build = { version = "2.6.2", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0", features = [] }
+tauri = { version = "2.11.2", features = [] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-keyring = "3.0"
-tauri-plugin-shell = "2.0.0"
-tauri-plugin-opener = "2.0.0"
-tauri-plugin-updater = "2.0.0"
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+tauri-plugin-shell = "2.3.5"
+tauri-plugin-opener = "2.5.4"
+tauri-plugin-updater = "2.10.1"
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-http = "2.5.9"
-reqwest = { version = "0.13.3", features = ["json"] }
+reqwest = { version = "0.13.3", features = ["json", "stream", "blocking"] }
 sysinfo = "0.39.2"
+rodio = "0.22.2"
+tokio = { version = "1.52.3", features = ["full"] }
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
+parking_lot = "0.12.5"
+bytes = "1"
 
 [profile.release]
-opt-level = 2       # Keeps Rust optimization high, but won't obfuscate frontend scripts
-strip = false       # CRITICAL: Stops Tauri from stripping debug symbols/data from web bundles
+opt-level = 2
+strip = false       # Retain Rust debug symbols in the release binary (useful for crash reporting).
 lto = true
