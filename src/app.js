@@ -15,57 +15,6 @@ const PLAY_ALL_CONCURRENCY = 5;
 // Keyring service name used for OS credential storage.
 const KEYRING_SERVICE = 'firmium-desktop';
 
-// ── MD5 ──────────────────────────────────────────────────────────────────────
-// MD5 is required by the Subsonic API token-auth scheme (password + salt → token).
-// Web Crypto (SubtleCrypto) does not support MD5 as it is cryptographically broken,
-// so we implement it here. This is NOT used for any security-sensitive purpose beyond
-// satisfying the Subsonic protocol — the MD5 weakness is a protocol limitation.
-// See: http://www.subsonic.org/pages/api.jsp (Authentication section)
-const md5 = (string) => {
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(string);
-  // Pre-computed sine-derived constants (standard MD5 table T[1..64]).
-  const k = [];
-  for (let i = 0; i < 64; i++) k[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296);
-  // Per-round bit-shift amounts.
-  const s = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
-  // Initial hash state (RFC 1321 §3.3).
-  let h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476;
-  // Pad message to 512-bit blocks as per MD5 spec.
-  const words = [];
-  for (let i = 0; i < bytes.length; i++) words[i >> 2] |= (bytes[i] & 0xff) << ((i % 4) * 8);
-  words[bytes.length >> 2] |= 0x80 << ((bytes.length % 4) * 8);
-  words[(((bytes.length + 8) >> 6) + 1) * 16 - 2] = bytes.length * 8;
-  // Process each 512-bit block.
-  for (let i = 0; i < words.length; i += 16) {
-    let a = h0, b = h1, c = h2, d = h3;
-    for (let j = 0; j < 64; j++) {
-      let f, g;
-      if (j < 16) { f = (b & c) | (~b & d); g = j; }
-      else if (j < 32) { f = (d & b) | (~d & c); g = (5 * j + 1) % 16; }
-      else if (j < 48) { f = b ^ c ^ d; g = (3 * j + 5) % 16; }
-      else { f = c ^ (b | ~d); g = (7 * j) % 16; }
-      // Left-rotate helper inlined as an arrow function.
-      const rotl = (q, r) => (q << r) | (q >>> (32 - r));
-      let temp = d; d = c; c = b;
-      b = b + rotl((a + f + k[j] + (words[i + g] || 0)), s[(Math.floor(j / 16) * 4) + (j % 4)]);
-      a = temp;
-    }
-    h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
-  }
-  return [h0, h1, h2, h3]
-    .map(v => ('00000000' + (v >>> 0).toString(16)).slice(-8).match(/../g).reverse().join(''))
-    .join('');
-};
-
-// ── Secure salt generation ────────────────────────────────────────────────────
-// Generates a cryptographically random 8-byte hex salt for each auth request.
-const generateSecureSalt = () => {
-  const arr = new Uint8Array(8);
-  crypto.getRandomValues(arr);
-  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
-};
-
 // ── Wikipedia API ─────────────────────────────────────────────────────────────
 const WikiApi = {
   /**
@@ -129,6 +78,18 @@ const Keyring = {
 
 // ── Application State ─────────────────────────────────────────────────────────
 const Store = {
+  ServerInfo: (() => {
+    let _extensions = null;
+    return {
+      // Called once per Api.fetch response when the server includes OpenSubsonic extensions.
+      setExtensions: (ext) => { _extensions = Array.isArray(ext) ? ext : null; },
+      getExtensions: () => _extensions,
+      isOpenSubsonic: () => _extensions !== null,
+      hasExtension: (name) => _extensions?.some(e => e.name === name) ?? false,
+      clear: () => { _extensions = null; }
+    };
+  })(),
+
   Auth: (() => {
     let _server = null, _username = null, _password = null;
     return {
@@ -141,10 +102,9 @@ const Store = {
       isAuthed: () => Boolean(_server && _username && _password),
       getServer: () => _server,
       getUsername: () => _username,
-      getQueryParams: () => {
+      getQueryParams: async () => {
         if (!_username || !_password) return {};
-        const salt = generateSecureSalt();
-        return { u: _username, t: md5(_password + salt), s: salt, v: '1.16.1', c: 'firmium', f: 'json' };
+        return tauriInvoke('generate_auth_params', { username: _username, password: _password });
       }
     };
   })(),
@@ -183,6 +143,11 @@ const Store = {
         });
 
         _bridge.on('finished', () => {
+          const finishedTrack = Store.Playback.getCurrentTrack();
+          if (finishedTrack) {
+            Api.scrobble(finishedTrack.id, true);
+          }
+
           if (Store.Playback.getRepeatOne()) {
             playAt(Store.Playback.getQueueIdx());
           } else if (Store.Playback.getQueueIdx() < Store.Playback.getQueue().length - 1) {
@@ -245,9 +210,13 @@ const Store = {
         }
       },
 
+
       setSeeking: (seeking) => { _isSeeking = seeking; },
 
-      clearBridge: () => { _bridge = null; _self.stopPositionTracking(); }
+      clearBridge: () => {
+        _bridge = null;
+        _self.stopPositionTracking();
+      }
     };
     return _self;
   })(),
@@ -320,11 +289,11 @@ const Store = {
 
 // ── Subsonic URL builder ───────────────────────────────────────────────────────
 const SubsonicRouter = {
-  buildUrl: (action, params = {}) => {
+  buildUrl: async (action, params = {}) => {
     const server = Store.Auth.getServer();
     if (!server) return '';
-    const url = new URL(`${server}/rest/${action}.view`);
-    const combined = { ...Store.Auth.getQueryParams(), ...params };
+    const url = new URL(`${server}/rest/${action}`);
+    const combined = { ...await Store.Auth.getQueryParams(), ...params };
     Object.entries(combined).forEach(([k, v]) => {
       if (v !== null && v !== undefined) url.searchParams.append(k, String(v));
     });
@@ -337,10 +306,15 @@ const SubsonicMapper = {
   mapAlbum: (a) => ({
     id: a.id,
     name: a.name ?? a.title ?? 'Unknown Album',
-    albumArtist: a.artist ?? 'Unknown Artist',
+    // displayArtist is the OpenSubsonic multi-artist display field; fall back to artist.
+    albumArtist: a.displayArtist ?? a.artist ?? 'Unknown Artist',
     coverArtId: a.coverArt,
     songCount: a.songCount,
-    releaseType: a.releaseType // Preserve the server-provided release type.
+    // releaseTypes (array) is the OpenSubsonic field; releaseType (string) is the legacy fallback.
+    releaseType: a.releaseTypes?.[0] ?? a.releaseType,
+    genres: a.genres,
+    year: a.year,
+    isCompilation: a.isCompilation ?? false
   }),
   mapArtist: (a) => ({
     id: a.id,
@@ -350,23 +324,32 @@ const SubsonicMapper = {
   mapSong: (s) => ({
     id: s.id,
     title: s.title ?? 'Unknown Track',
-    artist: s.artist ?? 'Unknown Artist',
+    // displayArtist is the OpenSubsonic multi-artist display field; fall back to artist.
+    artist: s.displayArtist ?? s.artist ?? 'Unknown Artist',
     duration: s.duration ?? 0,
     trackNumber: s.track,
-    coverArtId: s.coverArt
+    coverArtId: s.coverArt,
+    replayGain: s.replayGain,
+    bpm: s.bpm,
+    comment: s.comment,
+    genres: s.genres
   })
 };
 
 // ── API layer ──────────────────────────────────────────────────────────────────
 const Api = {
   fetch: async (action, params = {}, signal = null) => {
-    const url = SubsonicRouter.buildUrl(action, params);
+    const url = await SubsonicRouter.buildUrl(action, params);
     const res = await fetch(url, signal ? { signal } : {});
     if (res.status === 401) { if (Store.Auth.isAuthed()) teardownApp(); throw new Error('Session Expired'); }
     if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
     const json = await res.json();
     const responseObj = json['subsonic-response'];
     if (!responseObj) throw new Error('Malformed API response');
+    // Detect OpenSubsonic server — the extensions array is present on every response.
+    if (responseObj.openSubsonicExtensions !== undefined) {
+      Store.ServerInfo.setExtensions(responseObj.openSubsonicExtensions);
+    }
     if (responseObj.status === 'failed') throw new Error(responseObj.error?.message ?? 'Engine error');
     return responseObj;
   },
@@ -403,7 +386,22 @@ const Api = {
       songs: (d.searchResult3?.song ?? []).map(SubsonicMapper.mapSong),
       albums: (d.searchResult3?.album ?? []).map(SubsonicMapper.mapAlbum)
     };
-  }
+  },
+  scrobble: (id, submission, time = Date.now()) => {
+    SubsonicRouter.buildUrl('scrobble', { id, submission: String(submission), time: String(time) }).then(url => {
+      if (!url) return;
+      fetch(url)
+        .then(async r => {
+          const json = await r.json().catch(() => null);
+          const resp = json?.['subsonic-response'];
+          if (!r.ok || resp?.status === 'failed') {
+            console.error(`Scrobble failed (HTTP ${r.status}):`, resp?.error ?? json);
+          }
+        })
+        .catch(e => console.error('Scrobble network error:', e));
+    });
+  },
+
 };
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
@@ -456,7 +454,7 @@ const loadImage = async (img, coverId, signal) => {
   let promise = Store.Playback.getPendingCover(coverId);
   if (!promise) {
     promise = (async () => {
-      const url = SubsonicRouter.buildUrl('getCoverArt', { id: coverId });
+      const url = await SubsonicRouter.buildUrl('getCoverArt', { id: coverId });
       const res = await fetch(url, { signal });
       if (!res.ok) throw new Error('Cover art unavailable');
       const blob = await res.blob();
@@ -564,6 +562,7 @@ const teardownApp = () => {
   Store.Playback.clearObserver();
   Store.Playback.clearAllCache();
   Store.Auth.clearAuth();
+  Store.ServerInfo.clear();
   Store.UI.clearNav();
 
   DOM.el('setup')?.classList.remove('hidden');
@@ -606,10 +605,12 @@ const playAt = async (idx) => {
   highlightCurrentTrack();
 
   try {
-    const streamUrl = SubsonicRouter.buildUrl('stream', { id: track.id });
+    const streamUrl = await SubsonicRouter.buildUrl('stream', { id: track.id });
     if (currentToken !== Store.Playback.getPlayToken()) return; // Superseded by newer play request.
 
     await bridge.play(streamUrl, track.id);
+
+    Api.scrobble(track.id, false);
 
     // Apply the stored volume to the new sink immediately.
     // Without this, the sink starts at rodio's default (1.0) until the slider moves.

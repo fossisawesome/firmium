@@ -56,6 +56,33 @@ fn delete_password(service: &str, user: &str) -> Result<(), String> {
 }
 
 // ============================================================================
+// SUBSONIC AUTH
+// ============================================================================
+
+/// Generate Subsonic token-auth query parameters on the Rust side.
+/// Keeps MD5 out of the JS layer — the frontend passes plaintext credentials
+/// and receives the ready-to-use param map.
+#[tauri::command]
+fn generate_auth_params(username: String, password: String) -> serde_json::Value {
+    use std::fmt::Write as _;
+    // Cryptographically random 8-byte salt, hex-encoded.
+    let salt_bytes: [u8; 8] = rand::random();
+    let mut salt = String::with_capacity(16);
+    for b in salt_bytes {
+        let _ = write!(salt, "{:02x}", b);
+    }
+    let token = format!("{:x}", md5::compute(format!("{}{}", password, salt)));
+    serde_json::json!({
+        "u": username,
+        "t": token,
+        "s": salt,
+        "v": "1.16.1",
+        "c": "firmium",
+        "f": "json"
+    })
+}
+
+// ============================================================================
 // COVER ART CACHING
 // ============================================================================
 
@@ -304,6 +331,8 @@ fn main() {
             save_password,
             get_password,
             delete_password,
+            // Auth
+            generate_auth_params,
             // Cover art
             cache_cover,
             // System info
