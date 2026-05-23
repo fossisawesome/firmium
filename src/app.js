@@ -14,6 +14,7 @@ const SEARCH_SONG_LIMIT = 100;
 const PLAY_ALL_CONCURRENCY = 5;
 // Keyring service name used for OS credential storage.
 const KEYRING_SERVICE = 'firmium-desktop';
+const DEFAULT_VOLUME = 0.8;
 
 // ── Wikipedia API ─────────────────────────────────────────────────────────────
 const WikiApi = {
@@ -110,11 +111,10 @@ const Store = {
   })(),
 
   UI: (() => {
-    let _view = 'albums', _loading = false, _navHistory = [];
+    let _view = 'albums', _navHistory = [];
     return {
       getView: () => _view,
       setView: (v) => { _view = v; },
-      setLoading: (l) => { _loading = Boolean(l); },
       pushNav: (fn) => { if (typeof fn === 'function') _navHistory.push(fn); },
       popNav: () => _navHistory.pop(),
       clearNav: () => { _navHistory = []; }
@@ -155,6 +155,7 @@ const Store = {
           } else if (Store.Playback.getRepeatAll()) {
             playAt(0);
           } else {
+            _self.stopPositionTracking();
             document.title = 'Firmium';
             const seekBar = DOM.el('seekBar');
             if (seekBar) { seekBar.value = 0; }
@@ -178,8 +179,11 @@ const Store = {
 
       getBridge: () => _bridge,
 
+      _cachedDuration: null,
+
       startPositionTracking: () => {
         _self.stopPositionTracking();
+        _self._cachedDuration = null;
         _positionInterval = setInterval(async () => {
           if (!_bridge || !Store.Playback.getCurrentTrack()) {
             _self.stopPositionTracking();
@@ -188,19 +192,21 @@ const Store = {
 
           try {
             const position = await _bridge.getCurrentPosition();
-            const duration = await _bridge.getDuration();
+            if (!_self._cachedDuration) {
+              _self._cachedDuration = await _bridge.getDuration();
+            }
             if (!_isSeeking) {
               DOM.el('curTime').textContent = formatDuration(position);
               const seekBar = DOM.el('seekBar');
-              if (seekBar && duration) {
-                seekBar.max = duration;
+              if (seekBar && _self._cachedDuration) {
+                seekBar.max = _self._cachedDuration;
                 seekBar.value = position;
               }
             }
           } catch (err) {
             console.error('Position update failed:', err);
           }
-        }, 100);
+        }, 250);
       },
 
       stopPositionTracking: () => {
@@ -223,7 +229,7 @@ const Store = {
 
   Playback: (() => {
     let _queue = [], _queueIdx = -1, _playToken = 0;
-    let _volume = Number(SafeStorage.getItem('firmium_volume') ?? 0.8);
+    let _volume = Number(SafeStorage.getItem('firmium_volume') ?? DEFAULT_VOLUME);
     let _repeatOne = false, _repeatAll = false;
     let _abortCtrl = null, _searchCtrl = null, _observer = null;
     const _covers = new Map(), _pendingCovers = new Map();
@@ -241,7 +247,7 @@ const Store = {
       bumpToken: () => ++_playToken,
       getVolume: () => _volume,
       setVolume: (v) => {
-        _volume = Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : 0.8));
+        _volume = Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : DEFAULT_VOLUME));
         SafeStorage.setItem('firmium_volume', String(_volume));
       },
       getRepeatOne: () => _repeatOne,
@@ -648,7 +654,7 @@ const loadAlbum = async (id) => {
   Store.Playback.abortActive();
   const ctrl = new AbortController();
   Store.Playback.setActiveCtrl(ctrl);
-  Store.UI.setLoading(true);
+  
   DOM.render('listPanel', '<div class="loading-msg">Loading album tracks…</div>');
 
   try {
@@ -690,7 +696,7 @@ const loadAlbum = async (id) => {
     if (ctrl.signal.aborted) return;
     DOM.render('listPanel', `<div class="loading-msg error-msg">${DOM.safeText(e.message)}</div>`);
   } finally {
-    if (!ctrl.signal.aborted) Store.UI.setLoading(false);
+    
   }
 };
 
@@ -698,7 +704,7 @@ const loadArtist = async (id) => {
   Store.Playback.abortActive();
   const ctrl = new AbortController();
   Store.Playback.setActiveCtrl(ctrl);
-  Store.UI.setLoading(true);
+  
   DOM.render('listPanel', '<div class="loading-msg">Loading artist profile…</div>');
 
   try {
@@ -777,7 +783,7 @@ const loadArtist = async (id) => {
     if (ctrl.signal.aborted) return;
     DOM.render('listPanel', `<div class="loading-msg error-msg">${DOM.safeText(e.message)}</div>`);
   } finally {
-    if (!ctrl.signal.aborted) Store.UI.setLoading(false);
+    
   }
 };
 
@@ -881,6 +887,7 @@ const loadView = async (view) => {
       ['catppuccin-macchiato','Catppuccin Macchiato'],
       ['catppuccin-frappe',   'Catppuccin Frappé'],
       ['catppuccin-latte',    'Catppuccin Latte'],
+      ['nord',                'Nord'],
     ];
     const themeOptions = themes
       .map(([val, label]) => `<option value="${val}"${currentTheme === val ? ' selected' : ''}>${label}</option>`)
@@ -950,7 +957,7 @@ const loadView = async (view) => {
     return;
   }
 
-  Store.UI.setLoading(true);
+  
   const ctrl = new AbortController();
   Store.Playback.setActiveCtrl(ctrl);
   DOM.render('listPanel', `<div class="loading-msg">Loading ${view}…</div>`);
@@ -972,7 +979,7 @@ const loadView = async (view) => {
     if (ctrl.signal.aborted) return;
     DOM.render('listPanel', `<div class="loading-msg error-msg">${DOM.safeText(e.message)}</div>`);
   } finally {
-    if (!ctrl.signal.aborted) Store.UI.setLoading(false);
+    
   }
 };
 
@@ -986,7 +993,7 @@ const showApp = () => {
   } catch (_) {
     DOM.render('serverLabel', 'online');
   }
-  const savedVol = Number(SafeStorage.getItem('firmium_volume') ?? 0.8);
+  const savedVol = Number(SafeStorage.getItem('firmium_volume') ?? DEFAULT_VOLUME);
   DOM.el('volSlider').value = savedVol;
   loadView('albums');
 };
@@ -1220,27 +1227,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     Store.Playback.setVolume(volume);
   });
 
-  // Seek bar — handle user seeking.
   const seekBar = DOM.el('seekBar');
   if (seekBar) {
-    seekBar.addEventListener('mousedown', () => {
-      Store.Audio.setSeeking(true);
-    });
-    seekBar.addEventListener('mouseup', async (e) => {
-      Store.Audio.setSeeking(false);
-      const bridge = Store.Audio.getBridge();
-      if (bridge) {
-        try {
-          await bridge.seek(Number(e.target.value));
-        } catch (err) {
-          console.error('Seek failed:', err);
-        }
-      }
-    });
-    seekBar.addEventListener('touchstart', () => {
-      Store.Audio.setSeeking(true);
-    });
-    seekBar.addEventListener('touchend', async (e) => {
+    const startSeek = () => Store.Audio.setSeeking(true);
+    const endSeek = async () => {
       Store.Audio.setSeeking(false);
       const bridge = Store.Audio.getBridge();
       if (bridge) {
@@ -1250,6 +1240,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           console.error('Seek failed:', err);
         }
       }
-    });
+    };
+    seekBar.addEventListener('mousedown', startSeek);
+    seekBar.addEventListener('mouseup', endSeek);
+    seekBar.addEventListener('touchstart', startSeek);
+    seekBar.addEventListener('touchend', endSeek);
   }
 });

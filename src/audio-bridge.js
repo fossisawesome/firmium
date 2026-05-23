@@ -172,15 +172,14 @@ class AudioBridge {
     }
   }
 
-  /** Get current volume. Returns 0.8 as default if no session is active. */
   async getVolume() {
-    if (!this.currentPlayerId) return 0.8;
+    if (!this.currentPlayerId) return null;
 
     try {
       return await tauriInvoke('get_volume', { playerId: this.currentPlayerId });
     } catch (err) {
       console.error('Get volume failed:', err);
-      return 0.8;
+      return null;
     }
   }
 
