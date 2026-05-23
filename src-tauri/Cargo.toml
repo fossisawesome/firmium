@@ -25,6 +25,8 @@ tokio = { version = "1.52.3", features = ["full"] }
 uuid = { version = "1.23.1", features = ["v4", "serde"] }
 parking_lot = "0.12.5"
 bytes = "1"
+md5 = "0.7"
+rand = "0.8"
 
 [profile.release]
 opt-level = 2

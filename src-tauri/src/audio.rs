@@ -18,13 +18,102 @@
 ///   get_state()  → returns Loading while buffering, Playing/Paused/Stopped after
 ///   is_finished()→ returns Ok(false) while loading; Ok(true) only after audio plays out
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rodio::mixer::Mixer;
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
-use std::io::Cursor;
+use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
+
+/// A Read+Seek wrapper over a streaming HTTP response body.
+///
+/// Bytes are read from the response on demand and buffered locally.
+/// This keeps the HTTP connection open for as long as audio is playing,
+/// which allows Navidrome (and other Subsonic servers) to maintain the
+/// "Now Playing" status for the full track duration rather than just the
+/// brief moment the file is being downloaded.
+///
+/// Backward seeks are supported via the in-memory buffer. Forward seeks
+/// past the buffered position drain bytes from the live HTTP connection.
+struct StreamingReader {
+    response: reqwest::blocking::Response,
+    /// Shared buffer so the seek fallback can rebuild the decoder from buffered bytes.
+    buffer: Arc<Mutex<Vec<u8>>>,
+    pos: usize,
+}
+
+impl StreamingReader {
+    fn new(response: reqwest::blocking::Response) -> (Self, Arc<Mutex<Vec<u8>>>) {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let reader = Self { response, buffer: Arc::clone(&buffer), pos: 0 };
+        (reader, buffer)
+    }
+
+    fn fill_to(&mut self, target: usize) -> io::Result<()> {
+        let mut buf = self.buffer.lock();
+        if target <= buf.len() {
+            return Ok(());
+        }
+        let needed = target - buf.len();
+        let prev = buf.len();
+        buf.resize(prev + needed, 0);
+        let mut filled = 0;
+        while filled < needed {
+            let n = self.response.read(&mut buf[prev + filled..])?;
+            if n == 0 { break; }
+            filled += n;
+        }
+        buf.truncate(prev + filled);
+        Ok(())
+    }
+}
+
+impl Read for StreamingReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let buffered = self.buffer.lock();
+        if self.pos < buffered.len() {
+            let n = buf.len().min(buffered.len() - self.pos);
+            buf[..n].copy_from_slice(&buffered[self.pos..self.pos + n]);
+            drop(buffered);
+            self.pos += n;
+            return Ok(n);
+        }
+        drop(buffered);
+        // Read new bytes from the HTTP connection and buffer them.
+        let n = self.response.read(buf)?;
+        self.buffer.lock().extend_from_slice(&buf[..n]);
+        self.pos += n;
+        Ok(n)
+    }
+}
+
+impl Seek for StreamingReader {
+    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
+        let new_pos = match from {
+            SeekFrom::Start(n) => n as usize,
+            SeekFrom::Current(n) => (self.pos as i64 + n).max(0) as usize,
+            SeekFrom::End(n) => {
+                // Drain the rest of the response to know the total length.
+                let mut rest = Vec::new();
+                self.response.read_to_end(&mut rest)?;
+                self.buffer.lock().extend_from_slice(&rest);
+                (self.buffer.lock().len() as i64 + n).max(0) as usize
+            }
+        };
+
+        if new_pos > self.buffer.lock().len() {
+            self.fill_to(new_pos)?;
+        }
+
+        self.pos = new_pos.min(self.buffer.lock().len());
+        Ok(self.pos as u64)
+    }
+}
+
+// Safety: reqwest's blocking Response is Send (it wraps a sync I/O handle).
+unsafe impl Send for StreamingReader {}
+unsafe impl Sync for StreamingReader {}
 
 /// Wrapper to make rodio's MixerDeviceSink Send + Sync for Tauri state management.
 /// Safe because: (1) accessed through Mutex synchronization, (2) MixerDeviceSink
@@ -61,9 +150,9 @@ struct PlaybackSession {
     sink: Player,
     track_id: String,
     duration: Option<f64>,
-    /// Raw audio bytes kept so we can rebuild the decoder for backward seeks.
-    raw_bytes: Arc<bytes::Bytes>,
-    /// True while the network fetch + decode is still in progress.
+    /// Shared buffer from StreamingReader — used to rebuild the decoder for backward seeks.
+    buffered_bytes: Arc<Mutex<Vec<u8>>>,
+    /// True while the network fetch + initial decode is still in progress.
     /// Prevents get_state() from falsely reporting Stopped before audio loads.
     loading: bool,
     /// Time when playback started or resumed.
@@ -138,7 +227,7 @@ impl AudioPlayer {
                 sink,
                 track_id: track_id.clone(),
                 duration: None,
-                raw_bytes: Arc::new(bytes::Bytes::new()),
+                buffered_bytes: Arc::new(Mutex::new(Vec::new())),
                 loading: true, // Prevents false "Stopped" state during buffering.
                 playback_start_time: None,
                 accumulated_time: 0.0,
@@ -159,12 +248,12 @@ impl AudioPlayer {
             .await;
 
             match decode_result {
-                Ok(Ok((source, duration, raw))) => {
+                Ok(Ok((source, duration, shared_buffer))) => {
                     let mut sesh = sessions.write();
                     if let Some(session) = sesh.get_mut(&player_id_clone) {
                         session.sink.append(source);
                         session.duration = duration;
-                        session.raw_bytes = Arc::new(raw);
+                        session.buffered_bytes = shared_buffer;
                         session.loading = false; // Audio is now in the sink.
                         session.playback_start_time = Some(std::time::Instant::now());
                         session.accumulated_time = 0.0;
@@ -187,20 +276,22 @@ impl AudioPlayer {
         Ok(player_id)
     }
 
-    /// Fetch a stream from a URL and decode it synchronously on a blocking thread.
+    /// Fetch a stream from a URL and open a streaming decoder.
     ///
-    /// Returns a boxed i16 PCM source with optional duration metadata.
+    /// Unlike a full-download approach, this keeps the HTTP connection open and
+    /// reads audio bytes on demand as rodio consumes them. Because Navidrome
+    /// tracks "Now Playing" based on active stream connections, keeping this
+    /// connection alive for the song duration ensures the admin panel reflects
+    /// the correct playback state.
     ///
     /// Note: TLS certificate validation is intentionally NOT disabled here.
     /// If you use a self-signed certificate on your Subsonic server, add the
     /// certificate to your OS trust store instead of bypassing validation globally.
     fn fetch_and_decode_blocking(
         url: &str,
-    ) -> Result<(Box<dyn Source<Item = f32> + Send>, Option<f64>, bytes::Bytes), String> {
+    ) -> Result<(Box<dyn Source<Item = f32> + Send>, Option<f64>, Arc<Mutex<Vec<u8>>>), String> {
         let client = reqwest::blocking::Client::builder()
             .user_agent("firmium-desktop/1.0")
-            // NOTE: danger_accept_invalid_certs is intentionally removed.
-            // Add your server's certificate to the OS trust store instead.
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
@@ -213,18 +304,14 @@ impl AudioPlayer {
             return Err(format!("HTTP error: {}", response.status()));
         }
 
-        let raw = response
-            .bytes()
-            .map_err(|e| format!("Failed to read stream body: {}", e))?;
-
-        let cursor = Cursor::new(raw.clone());
+        let (streaming_reader, shared_buffer) = StreamingReader::new(response);
+        let reader = BufReader::new(streaming_reader);
         let source =
-            Decoder::try_from(cursor).map_err(|e| format!("Failed to decode audio: {}", e))?;
+            Decoder::try_from(reader).map_err(|e| format!("Failed to decode audio: {}", e))?;
 
-        // total_duration() is only populated for formats that embed length metadata.
         let duration = source.total_duration().map(|d| d.as_secs_f64());
 
-        Ok((Box::new(source), duration, raw))
+        Ok((Box::new(source), duration, shared_buffer))
     }
 
     /// Pause playback for a session.
@@ -370,10 +457,9 @@ impl AudioPlayer {
 
     /// Seek to a position in seconds.
     ///
-    /// Tries the native `Player::try_seek` first. If the format only supports forward
-    /// seeking (common with MP3/OGG in symphonia), rebuilds the decoder from the stored
-    /// raw bytes and seeks forward from the start — which always works since we have
-    /// the full file in memory.
+    /// Uses the native Player::try_seek. Because the underlying StreamingReader
+    /// buffers all bytes already consumed, symphonia can seek backward through
+    /// the buffer without re-fetching from the network.
     pub fn seek(&self, player_id: &str, position: f64) -> Result<(), String> {
         let pos = Duration::from_secs_f64(position.max(0.0));
         let mut sessions = self.sessions.write();
@@ -391,9 +477,12 @@ impl AudioPlayer {
             return Ok(());
         }
 
-        // Native seek failed (e.g. ForwardOnly format, backward seek).
-        // Rebuild the decoder from stored bytes and seek from the beginning.
-        let raw = (*session.raw_bytes).clone();
+        // Native seek failed (e.g. ForwardOnly format / backward seek in MP3/OGG).
+        // Rebuild the decoder from the in-memory buffer and seek from the start.
+        let raw = session.buffered_bytes.lock().clone();
+        if raw.is_empty() {
+            return Err("Seek failed: no buffered data available yet".to_string());
+        }
         let cursor = Cursor::new(raw);
         let mut source =
             Decoder::try_from(cursor).map_err(|e| format!("Failed to re-decode for seek: {}", e))?;

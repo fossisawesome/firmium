@@ -28,6 +28,8 @@
     "get_playback_state",
     "is_playback_finished",
     "get_track_duration",
+    "get_current_position",
+    "seek_position",
     "list_audio_devices"
   ]
 }
