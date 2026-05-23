@@ -19,15 +19,17 @@
 ///   is_finished()→ returns Ok(false) while loading; Ok(true) only after audio plays out
 
 use parking_lot::RwLock;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
+use rodio::mixer::Mixer;
+use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 use std::io::Cursor;
 use std::sync::Arc;
+use std::time::Duration;
 use uuid::Uuid;
 
-/// Wrapper to make rodio's OutputStream Send + Sync for Tauri state management.
-/// Safe because: (1) accessed through Mutex synchronization, (2) OutputStream
+/// Wrapper to make rodio's MixerDeviceSink Send + Sync for Tauri state management.
+/// Safe because: (1) accessed through Mutex synchronization, (2) MixerDeviceSink
 /// itself is thread-safe in practice, just not marked as such in the type system.
-struct SafeOutputStream(#[allow(dead_code)] OutputStream);
+struct SafeOutputStream(#[allow(dead_code)] MixerDeviceSink);
 unsafe impl Send for SafeOutputStream {}
 unsafe impl Sync for SafeOutputStream {}
 
@@ -56,12 +58,18 @@ pub struct AudioDevice {
 
 /// Playback session data
 struct PlaybackSession {
-    sink: Sink,
+    sink: Player,
     track_id: String,
     duration: Option<f64>,
+    /// Raw audio bytes kept so we can rebuild the decoder for backward seeks.
+    raw_bytes: Arc<bytes::Bytes>,
     /// True while the network fetch + decode is still in progress.
     /// Prevents get_state() from falsely reporting Stopped before audio loads.
     loading: bool,
+    /// Time when playback started or resumed.
+    playback_start_time: Option<std::time::Instant>,
+    /// Accumulated playback time (seconds).
+    accumulated_time: f64,
 }
 
 /// Main audio player manager (Send + Sync safe)
@@ -70,7 +78,7 @@ struct PlaybackSession {
 /// premature audio device drop-offs by the operating system.
 pub struct AudioPlayer {
     sessions: Arc<RwLock<std::collections::HashMap<PlayerId, PlaybackSession>>>,
-    handle: OutputStreamHandle,
+    mixer: Mixer,
     _stream: parking_lot::Mutex<SafeOutputStream>,
 }
 
@@ -80,12 +88,13 @@ impl AudioPlayer {
     /// Holds the OutputStream within the state context to maintain the audio
     /// connection alive for the lifetime of the application.
     pub fn new() -> Result<Self, String> {
-        let (stream, handle) =
-            OutputStream::try_default().map_err(|e| format!("Failed to create audio stream: {}", e))?;
+        let stream = DeviceSinkBuilder::open_default_sink()
+            .map_err(|e| format!("Failed to create audio stream: {}", e))?;
+        let mixer = stream.mixer().clone();
 
         Ok(AudioPlayer {
             sessions: Arc::new(RwLock::new(std::collections::HashMap::new())),
-            handle,
+            mixer,
             _stream: parking_lot::Mutex::new(SafeOutputStream(stream)),
         })
     }
@@ -117,9 +126,8 @@ impl AudioPlayer {
         // Stop any existing session for this track before starting a new one.
         self.stop_track(&track_id);
 
-        // Create the sink before inserting the session so failures surface early.
-        let sink = Sink::try_new(&self.handle)
-            .map_err(|e| format!("Failed to create audio sink: {}", e))?;
+        // Create the player before inserting the session so failures surface early.
+        let sink = Player::connect_new(&self.mixer);
 
         // ── CRITICAL: Insert the session BEFORE spawning the async task. ─────────
         // The async decode task looks up this player_id to append the source.
@@ -130,7 +138,10 @@ impl AudioPlayer {
                 sink,
                 track_id: track_id.clone(),
                 duration: None,
+                raw_bytes: Arc::new(bytes::Bytes::new()),
                 loading: true, // Prevents false "Stopped" state during buffering.
+                playback_start_time: None,
+                accumulated_time: 0.0,
             },
         );
 
@@ -148,12 +159,15 @@ impl AudioPlayer {
             .await;
 
             match decode_result {
-                Ok(Ok((source, duration))) => {
+                Ok(Ok((source, duration, raw))) => {
                     let mut sesh = sessions.write();
                     if let Some(session) = sesh.get_mut(&player_id_clone) {
                         session.sink.append(source);
                         session.duration = duration;
+                        session.raw_bytes = Arc::new(raw);
                         session.loading = false; // Audio is now in the sink.
+                        session.playback_start_time = Some(std::time::Instant::now());
+                        session.accumulated_time = 0.0;
                         session.sink.play();
                     }
                     // If session was removed (e.g. user skipped) before decode
@@ -182,7 +196,7 @@ impl AudioPlayer {
     /// certificate to your OS trust store instead of bypassing validation globally.
     fn fetch_and_decode_blocking(
         url: &str,
-    ) -> Result<(Box<dyn Source<Item = i16> + Send>, Option<f64>), String> {
+    ) -> Result<(Box<dyn Source<Item = f32> + Send>, Option<f64>, bytes::Bytes), String> {
         let client = reqwest::blocking::Client::builder()
             .user_agent("firmium-desktop/1.0")
             // NOTE: danger_accept_invalid_certs is intentionally removed.
@@ -199,27 +213,34 @@ impl AudioPlayer {
             return Err(format!("HTTP error: {}", response.status()));
         }
 
-        let bytes = response
+        let raw = response
             .bytes()
             .map_err(|e| format!("Failed to read stream body: {}", e))?;
 
-        let cursor = Cursor::new(bytes);
+        let cursor = Cursor::new(raw.clone());
         let source =
-            Decoder::new(cursor).map_err(|e| format!("Failed to decode audio: {}", e))?;
+            Decoder::try_from(cursor).map_err(|e| format!("Failed to decode audio: {}", e))?;
 
         // total_duration() is only populated for formats that embed length metadata.
         let duration = source.total_duration().map(|d| d.as_secs_f64());
 
-        Ok((Box::new(source), duration))
+        Ok((Box::new(source), duration, raw))
     }
 
     /// Pause playback for a session.
     pub fn pause(&self, player_id: &str) -> Result<(), String> {
-        let sessions = self.sessions.read();
+        let mut sessions = self.sessions.write();
         sessions
-            .get(player_id)
+            .get_mut(player_id)
             .ok_or_else(|| "Player not found".to_string())
-            .map(|s| s.sink.pause())
+            .map(|s| {
+                // Save accumulated time when pausing
+                if let Some(start) = s.playback_start_time {
+                    s.accumulated_time += start.elapsed().as_secs_f64();
+                    s.playback_start_time = None;
+                }
+                s.sink.pause()
+            })
     }
 
     /// Resume a paused playback session.
@@ -227,11 +248,15 @@ impl AudioPlayer {
     /// Renamed from `play` to `resume` to match the semantic intent and match
     /// the `resume_playback` Tauri command that calls this method.
     pub fn resume(&self, player_id: &str) -> Result<(), String> {
-        let sessions = self.sessions.read();
+        let mut sessions = self.sessions.write();
         sessions
-            .get(player_id)
+            .get_mut(player_id)
             .ok_or_else(|| "Player not found".to_string())
-            .map(|s| s.sink.play())
+            .map(|s| {
+                // Reset start time when resuming
+                s.playback_start_time = Some(std::time::Instant::now());
+                s.sink.play()
+            })
     }
 
     /// Stop playback and remove the session entirely.
@@ -324,6 +349,79 @@ impl AudioPlayer {
             .get(player_id)
             .ok_or_else(|| "Player not found".to_string())
             .map(|s| s.duration)
+    }
+
+    /// Get current playback position in seconds.
+    ///
+    /// Calculates position based on accumulated time and elapsed time since playback started.
+    pub fn get_current_position(&self, player_id: &str) -> Result<f64, String> {
+        let sessions = self.sessions.read();
+        sessions
+            .get(player_id)
+            .ok_or_else(|| "Player not found".to_string())
+            .map(|s| {
+                let mut position = s.accumulated_time;
+                if let Some(start) = s.playback_start_time {
+                    position += start.elapsed().as_secs_f64();
+                }
+                position
+            })
+    }
+
+    /// Seek to a position in seconds.
+    ///
+    /// Tries the native `Player::try_seek` first. If the format only supports forward
+    /// seeking (common with MP3/OGG in symphonia), rebuilds the decoder from the stored
+    /// raw bytes and seeks forward from the start — which always works since we have
+    /// the full file in memory.
+    pub fn seek(&self, player_id: &str, position: f64) -> Result<(), String> {
+        let pos = Duration::from_secs_f64(position.max(0.0));
+        let mut sessions = self.sessions.write();
+        let session = sessions
+            .get_mut(player_id)
+            .ok_or_else(|| "Player not found".to_string())?;
+
+        if session.sink.try_seek(pos).is_ok() {
+            session.accumulated_time = position.max(0.0);
+            session.playback_start_time = if session.sink.is_paused() {
+                None
+            } else {
+                Some(std::time::Instant::now())
+            };
+            return Ok(());
+        }
+
+        // Native seek failed (e.g. ForwardOnly format, backward seek).
+        // Rebuild the decoder from stored bytes and seek from the beginning.
+        let raw = (*session.raw_bytes).clone();
+        let cursor = Cursor::new(raw);
+        let mut source =
+            Decoder::try_from(cursor).map_err(|e| format!("Failed to re-decode for seek: {}", e))?;
+
+        source
+            .try_seek(pos)
+            .map_err(|e| format!("Seek failed: {}", e))?;
+
+        let was_paused = session.sink.is_paused();
+        session.sink.stop();
+
+        let new_sink = Player::connect_new(&self.mixer);
+        new_sink.append(source);
+        if was_paused {
+            new_sink.pause();
+        } else {
+            new_sink.play();
+        }
+
+        session.sink = new_sink;
+        session.accumulated_time = position.max(0.0);
+        session.playback_start_time = if was_paused {
+            None
+        } else {
+            Some(std::time::Instant::now())
+        };
+
+        Ok(())
     }
 }
 

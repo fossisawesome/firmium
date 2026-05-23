@@ -33,3 +33,10 @@ src-tauri/target/
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# PKG
+pkg
+pkg/firmium-desktop
+
+# misc
+releasechangelogs
