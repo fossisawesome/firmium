@@ -1,7 +1,4 @@
-// src-tauri/src/main.rs
 use keyring::Entry;
-use std::fs::{self, File};
-use std::io::Write;
 use std::sync::Arc;
 use tauri::Manager;
 use sysinfo::System;
@@ -17,14 +14,6 @@ struct SystemInfo {
     distro: String,
     version: String,
     package_manager: String,
-}
-
-/// Playback status event sent to frontend
-#[derive(serde::Serialize, Clone)]
-struct PlaybackStatus {
-    player_id: String,
-    state: PlaybackState,
-    finished: bool,
 }
 
 // ============================================================================
@@ -80,39 +69,6 @@ fn generate_auth_params(username: String, password: String) -> serde_json::Value
         "c": "firmium",
         "f": "json"
     })
-}
-
-// ============================================================================
-// COVER ART CACHING
-// ============================================================================
-
-/// Fetch and cache cover art locally, avoiding re-downloads on subsequent views.
-#[tauri::command]
-async fn cache_cover(
-    app_handle: tauri::AppHandle,
-    id: String,
-    server_url: String,
-) -> Result<String, String> {
-    let mut cache_path = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?;
-    cache_path.push("covers");
-
-    fs::create_dir_all(&cache_path).map_err(|e| e.to_string())?;
-    cache_path.push(format!("{}.img", id));
-
-    if cache_path.exists() {
-        return Ok(cache_path.to_string_lossy().into_owned());
-    }
-
-    let response = reqwest::get(&server_url).await.map_err(|e| e.to_string())?;
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
-
-    let mut file = File::create(&cache_path).map_err(|e| e.to_string())?;
-    file.write_all(&bytes).map_err(|e| e.to_string())?;
-
-    Ok(cache_path.to_string_lossy().into_owned())
 }
 
 // ============================================================================
@@ -174,137 +130,67 @@ async fn get_machine_info() -> SystemInfo {
 // AUDIO STREAM PLAYBACK INTERACTION HANDLERS
 // ============================================================================
 
-#[tauri::command]
-fn play_stream(
-    app_handle: tauri::AppHandle,
-    stream_url: &str,
-    track_id: &str,
-) -> Result<String, String> {
-    let player = app_handle
+fn get_player(app_handle: &tauri::AppHandle) -> Result<tauri::State<'_, Arc<AudioPlayer>>, String> {
+    app_handle
         .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
+        .ok_or_else(|| "Audio Player state not registered".to_string())
+}
 
-    (&*player).play_stream(stream_url, track_id.to_string())
+#[tauri::command]
+fn play_stream(app_handle: tauri::AppHandle, stream_url: &str, track_id: &str) -> Result<String, String> {
+    get_player(&app_handle)?.play_stream(stream_url, track_id.to_string())
 }
 
 #[tauri::command]
 fn pause_playback(app_handle: tauri::AppHandle, player_id: &str) -> Result<(), String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).pause(player_id)
+    get_player(&app_handle)?.pause(player_id)
 }
 
-/// Resume a paused session. Calls AudioPlayer::resume (previously misnamed `play`).
 #[tauri::command]
 fn resume_playback(app_handle: tauri::AppHandle, player_id: &str) -> Result<(), String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).resume(player_id)
+    get_player(&app_handle)?.resume(player_id)
 }
 
 #[tauri::command]
 fn stop_playback(app_handle: tauri::AppHandle, player_id: &str) -> Result<(), String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).stop(player_id)
+    get_player(&app_handle)?.stop(player_id)
 }
 
 #[tauri::command]
-fn set_volume(
-    app_handle: tauri::AppHandle,
-    player_id: &str,
-    volume: f32,
-) -> Result<(), String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).set_volume(player_id, volume)
+fn set_volume(app_handle: tauri::AppHandle, player_id: &str, volume: f32) -> Result<(), String> {
+    get_player(&app_handle)?.set_volume(player_id, volume)
 }
 
 #[tauri::command]
 fn get_volume(app_handle: tauri::AppHandle, player_id: &str) -> Result<f32, String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).get_volume(player_id)
+    get_player(&app_handle)?.get_volume(player_id)
 }
 
 #[tauri::command]
-fn get_playback_state(
-    app_handle: tauri::AppHandle,
-    player_id: &str,
-) -> Result<String, String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    let state = (&*player).get_state(player_id)?;
-    Ok(match state {
-        PlaybackState::Loading => "loading".to_string(),
-        PlaybackState::Playing => "playing".to_string(),
-        PlaybackState::Paused => "paused".to_string(),
-        PlaybackState::Stopped => "stopped".to_string(),
-    })
+fn get_playback_state(app_handle: tauri::AppHandle, player_id: &str) -> Result<PlaybackState, String> {
+    get_player(&app_handle)?.get_state(player_id)
 }
 
 #[tauri::command]
-fn is_playback_finished(
-    app_handle: tauri::AppHandle,
-    player_id: &str,
-) -> Result<bool, String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).is_finished(player_id)
+fn is_playback_finished(app_handle: tauri::AppHandle, player_id: &str) -> Result<bool, String> {
+    get_player(&app_handle)?.is_finished(player_id)
 }
 
 #[tauri::command]
-fn get_track_duration(
-    app_handle: tauri::AppHandle,
-    player_id: &str,
-) -> Result<Option<f64>, String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).get_duration(player_id)
+fn get_track_duration(app_handle: tauri::AppHandle, player_id: &str) -> Result<Option<f64>, String> {
+    get_player(&app_handle)?.get_duration(player_id)
 }
 
 #[tauri::command]
-fn get_current_position(
-    app_handle: tauri::AppHandle,
-    player_id: &str,
-) -> Result<f64, String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).get_current_position(player_id)
+fn get_current_position(app_handle: tauri::AppHandle, player_id: &str) -> Result<f64, String> {
+    get_player(&app_handle)?.get_current_position(player_id)
 }
 
 #[tauri::command]
-fn seek_position(
-    app_handle: tauri::AppHandle,
-    player_id: &str,
-    position: f64,
-) -> Result<(), String> {
-    let player = app_handle
-        .try_state::<Arc<AudioPlayer>>()
-        .ok_or_else(|| "Audio Player state not registered".to_string())?;
-
-    (&*player).seek(player_id, position)
+fn seek_position(app_handle: tauri::AppHandle, player_id: &str, position: f64) -> Result<(), String> {
+    get_player(&app_handle)?.seek(player_id, position)
 }
 
-/// List available audio output devices.
 #[tauri::command]
 fn list_audio_devices() -> Result<Vec<audio::AudioDevice>, String> {
     Ok(AudioPlayer::list_devices())
@@ -333,8 +219,6 @@ fn main() {
             delete_password,
             // Auth
             generate_auth_params,
-            // Cover art
-            cache_cover,
             // System info
             get_machine_info,
             // Audio playback
