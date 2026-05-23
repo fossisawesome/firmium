@@ -94,19 +94,24 @@ impl Seek for StreamingReader {
             SeekFrom::Start(n) => n as usize,
             SeekFrom::Current(n) => (self.pos as i64 + n).max(0) as usize,
             SeekFrom::End(n) => {
-                // Drain the rest of the response to know the total length.
                 let mut rest = Vec::new();
                 self.response.read_to_end(&mut rest)?;
-                self.buffer.lock().extend_from_slice(&rest);
-                (self.buffer.lock().len() as i64 + n).max(0) as usize
+                let mut buf = self.buffer.lock();
+                buf.extend_from_slice(&rest);
+                (buf.len() as i64 + n).max(0) as usize
             }
         };
 
-        if new_pos > self.buffer.lock().len() {
-            self.fill_to(new_pos)?;
+        {
+            let buf = self.buffer.lock();
+            if new_pos > buf.len() {
+                drop(buf);
+                self.fill_to(new_pos)?;
+            }
         }
 
-        self.pos = new_pos.min(self.buffer.lock().len());
+        let buf = self.buffer.lock();
+        self.pos = new_pos.min(buf.len());
         Ok(self.pos as u64)
     }
 }
