@@ -7,8 +7,27 @@
     "core:default",
     "core:window:allow-set-decorations",
     "core:window:allow-is-decorated",
+    "fs:default",
+    "http:default",
     "opener:default",
     "shell:default",
     "updater:default"
+  ],
+  "commands": [
+    "save_password",
+    "get_password",
+    "delete_password",
+    "cache_cover",
+    "get_machine_info",
+    "play_stream",
+    "pause_playback",
+    "resume_playback",
+    "stop_playback",
+    "set_volume",
+    "get_volume",
+    "get_playback_state",
+    "is_playback_finished",
+    "get_track_duration",
+    "list_audio_devices"
   ]
 }

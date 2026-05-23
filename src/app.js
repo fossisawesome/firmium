@@ -1,20 +1,42 @@
+// ── Constants ────────────────────────────────────────────────────────────────
+// Max albums/songs fetched per list request (Subsonic allows up to 500).
 const API_PAGE_SIZE = 500;
+// How many cover art blob URLs to keep in memory before evicting oldest.
 const MAX_COVER_CACHE_SIZE = 150;
+// Prevent runaway search queries from the input field.
 const SEARCH_INPUT_MAX_LENGTH = 500;
-const TRACK_RESTART_THRESHOLD_SECS = 3;
+// Max albums returned per search query.
 const SEARCH_ALBUM_LIMIT = 40;
+// Max songs returned per search query.
 const SEARCH_SONG_LIMIT = 100;
+// How many album track fetches to run in parallel when building "Play All" queue.
+// Keeps the Subsonic server from being flooded with simultaneous requests.
+const PLAY_ALL_CONCURRENCY = 5;
+// Keyring service name used for OS credential storage.
+const KEYRING_SERVICE = 'firmium-desktop';
 
+// ── MD5 ──────────────────────────────────────────────────────────────────────
+// MD5 is required by the Subsonic API token-auth scheme (password + salt → token).
+// Web Crypto (SubtleCrypto) does not support MD5 as it is cryptographically broken,
+// so we implement it here. This is NOT used for any security-sensitive purpose beyond
+// satisfying the Subsonic protocol — the MD5 weakness is a protocol limitation.
+// See: http://www.subsonic.org/pages/api.jsp (Authentication section)
 const md5 = (string) => {
   const encoder = new TextEncoder();
   const bytes = encoder.encode(string);
-  const k = [], s = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+  // Pre-computed sine-derived constants (standard MD5 table T[1..64]).
+  const k = [];
   for (let i = 0; i < 64; i++) k[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296);
+  // Per-round bit-shift amounts.
+  const s = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+  // Initial hash state (RFC 1321 §3.3).
   let h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476;
+  // Pad message to 512-bit blocks as per MD5 spec.
   const words = [];
   for (let i = 0; i < bytes.length; i++) words[i >> 2] |= (bytes[i] & 0xff) << ((i % 4) * 8);
   words[bytes.length >> 2] |= 0x80 << ((bytes.length % 4) * 8);
   words[(((bytes.length + 8) >> 6) + 1) * 16 - 2] = bytes.length * 8;
+  // Process each 512-bit block.
   for (let i = 0; i < words.length; i += 16) {
     let a = h0, b = h1, c = h2, d = h3;
     for (let j = 0; j < 64; j++) {
@@ -23,22 +45,33 @@ const md5 = (string) => {
       else if (j < 32) { f = (d & b) | (~d & c); g = (5 * j + 1) % 16; }
       else if (j < 48) { f = b ^ c ^ d; g = (3 * j + 5) % 16; }
       else { f = c ^ (b | ~d); g = (7 * j) % 16; }
+      // Left-rotate helper inlined as an arrow function.
+      const rotl = (q, r) => (q << r) | (q >>> (32 - r));
       let temp = d; d = c; c = b;
-      b = b + ((q, r) => (q << r) | (q >>> (32 - r)))((a + f + k[j] + (words[i + g] || 0)), s[(Math.floor(j / 16) * 4) + (j % 4)]);
+      b = b + rotl((a + f + k[j] + (words[i + g] || 0)), s[(Math.floor(j / 16) * 4) + (j % 4)]);
       a = temp;
     }
     h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
   }
-  return [h0, h1, h2, h3].map(v => ('00000000' + (v >>> 0).toString(16)).slice(-8).match(/../g).reverse().join('')).join('');
+  return [h0, h1, h2, h3]
+    .map(v => ('00000000' + (v >>> 0).toString(16)).slice(-8).match(/../g).reverse().join(''))
+    .join('');
 };
 
+// ── Secure salt generation ────────────────────────────────────────────────────
+// Generates a cryptographically random 8-byte hex salt for each auth request.
 const generateSecureSalt = () => {
   const arr = new Uint8Array(8);
   crypto.getRandomValues(arr);
   return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
 };
 
+// ── Wikipedia API ─────────────────────────────────────────────────────────────
 const WikiApi = {
+  /**
+   * Fetch a short biography and thumbnail for an artist from Wikipedia.
+   * Returns null if no results are found or if the request is aborted.
+   */
   getInfo: async (artistName, signal) => {
     try {
       const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(artistName + ' music')}&utf8=&format=json&origin=*`;
@@ -53,32 +86,61 @@ const WikiApi = {
         extract: summaryData.extract,
         image: summaryData.thumbnail?.source || null
       };
-    } catch (e) {
+    } catch {
       return null;
     }
   }
 };
 
+// ── SafeStorage ───────────────────────────────────────────────────────────────
+// Wraps localStorage with try/catch. Warns on failure so silent data loss is
+// surfaced in the developer console rather than swallowed completely.
 const SafeStorage = {
   getItem: (key) => {
-    try { return localStorage.getItem(key); } catch (e) { return null; }
+    try { return localStorage.getItem(key); } catch (e) {
+      console.warn(`SafeStorage.getItem("${key}") failed:`, e);
+      return null;
+    }
   },
   setItem: (key, value) => {
-    try { localStorage.setItem(key, value); } catch (e) { }
+    try { localStorage.setItem(key, value); } catch (e) {
+      console.warn(`SafeStorage.setItem("${key}") failed — storage may be full or unavailable:`, e);
+    }
   },
   removeItem: (key) => {
-    try { localStorage.removeItem(key); } catch (e) { }
+    try { localStorage.removeItem(key); } catch (e) {
+      console.warn(`SafeStorage.removeItem("${key}") failed:`, e);
+    }
   }
 };
 
+// ── Keyring helpers ───────────────────────────────────────────────────────────
+// Credentials are stored in the OS keyring via the Rust backend, NOT in localStorage.
+// localStorage is readable by any JS on the page and in plaintext on disk.
+// Uses tauriInvoke defined in audio-bridge.js (loaded before this script).
+const Keyring = {
+  save: (user, pass) =>
+    tauriInvoke('save_password', { service: KEYRING_SERVICE, user, pass }),
+  load: (user) =>
+    tauriInvoke('get_password', { service: KEYRING_SERVICE, user }),
+  remove: (user) =>
+    tauriInvoke('delete_password', { service: KEYRING_SERVICE, user }),
+};
+
+// ── Application State ─────────────────────────────────────────────────────────
 const Store = {
   Auth: (() => {
     let _server = null, _username = null, _password = null;
     return {
-      setAuth: (s, u, p) => { _server = s ? String(s).trim().replace(/\/+$/, '') : null; _username = u; _password = p; },
+      setAuth: (s, u, p) => {
+        _server = s ? String(s).trim().replace(/\/+$/, '') : null;
+        _username = u;
+        _password = p;
+      },
       clearAuth: () => { _server = null; _username = null; _password = null; },
       isAuthed: () => Boolean(_server && _username && _password),
       getServer: () => _server,
+      getUsername: () => _username,
       getQueryParams: () => {
         if (!_username || !_password) return {};
         const salt = generateSecureSalt();
@@ -99,33 +161,124 @@ const Store = {
     };
   })(),
 
+  Audio: (() => {
+    let _bridge = null;
+    let _positionInterval = null;
+    let _isSeeking = false;
+
+    const _self = {
+      init: () => {
+        _bridge = new AudioBridge();
+
+        _bridge.on('statechange', (state) => {
+          const isPlaying = state === 'playing';
+          const playBtn = DOM.el('playBtn');
+          if (playBtn) playBtn.textContent = state === 'loading' ? '⏳' : (isPlaying ? '⏸' : '▶');
+
+          if (isPlaying) {
+            _self.startPositionTracking();
+          } else {
+            _self.stopPositionTracking();
+          }
+        });
+
+        _bridge.on('finished', () => {
+          if (Store.Playback.getRepeatOne()) {
+            playAt(Store.Playback.getQueueIdx());
+          } else if (Store.Playback.getQueueIdx() < Store.Playback.getQueue().length - 1) {
+            playAt(Store.Playback.getQueueIdx() + 1);
+          } else if (Store.Playback.getRepeatAll()) {
+            playAt(0);
+          } else {
+            document.title = 'Firmium';
+            const seekBar = DOM.el('seekBar');
+            if (seekBar) { seekBar.value = 0; }
+            const curTime = DOM.el('curTime');
+            if (curTime) curTime.textContent = '0:00';
+          }
+        });
+
+        _bridge.on('volumechange', (vol) => {
+          const slider = DOM.el('volSlider');
+          if (slider) slider.value = vol;
+        });
+
+        _bridge.on('error', (msg) => {
+          console.error('Audio error:', msg);
+          DOM.render('npArtist', `Audio Error: ${DOM.safeText(msg)}`);
+        });
+
+        return _bridge;
+      },
+
+      getBridge: () => _bridge,
+
+      startPositionTracking: () => {
+        _self.stopPositionTracking();
+        _positionInterval = setInterval(async () => {
+          if (!_bridge || !Store.Playback.getCurrentTrack()) {
+            _self.stopPositionTracking();
+            return;
+          }
+
+          try {
+            const position = await _bridge.getCurrentPosition();
+            const duration = await _bridge.getDuration();
+            if (!_isSeeking) {
+              DOM.el('curTime').textContent = formatDuration(position);
+              const seekBar = DOM.el('seekBar');
+              if (seekBar && duration) {
+                seekBar.max = duration;
+                seekBar.value = position;
+              }
+            }
+          } catch (err) {
+            console.error('Position update failed:', err);
+          }
+        }, 100);
+      },
+
+      stopPositionTracking: () => {
+        if (_positionInterval) {
+          clearInterval(_positionInterval);
+          _positionInterval = null;
+        }
+      },
+
+      setSeeking: (seeking) => { _isSeeking = seeking; },
+
+      clearBridge: () => { _bridge = null; _self.stopPositionTracking(); }
+    };
+    return _self;
+  })(),
+
   Playback: (() => {
-    let _audio = null, _queue = [], _queueIdx = -1, _playToken = 0;
-    let _seeking = false, _volume = Number(SafeStorage.getItem('firmium_volume') ?? 0.8);
-    let _repeatOne = false, _repeatAll = false, _lastSec = -1;
+    let _queue = [], _queueIdx = -1, _playToken = 0;
+    let _volume = Number(SafeStorage.getItem('firmium_volume') ?? 0.8);
+    let _repeatOne = false, _repeatAll = false;
     let _abortCtrl = null, _searchCtrl = null, _observer = null;
     const _covers = new Map(), _pendingCovers = new Map();
 
     return {
-      initAudio: (el) => { _audio = el; _audio.volume = _volume; },
-      getAudio: () => _audio,
       getQueue: () => _queue,
       getQueueIdx: () => _queueIdx,
       getCurrentTrack: () => _queue[_queueIdx] || null,
-      setQueue: (items, idx = 0) => { _queue = Array.isArray(items) ? items : []; _queueIdx = _queue.length ? idx : -1; },
+      setQueue: (items, idx = 0) => {
+        _queue = Array.isArray(items) ? items : [];
+        _queueIdx = _queue.length ? idx : -1;
+      },
       setQueueIdx: (idx) => { if (idx >= 0 && idx < _queue.length) _queueIdx = idx; },
       getPlayToken: () => _playToken,
       bumpToken: () => ++_playToken,
-      isSeeking: () => _seeking,
-      setSeeking: (s) => { _seeking = Boolean(s); },
       getVolume: () => _volume,
-      setVolume: (v) => { _volume = Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : 0.8)); SafeStorage.setItem('firmium_volume', String(_volume)); if (_audio) _audio.volume = _volume; },
+      setVolume: (v) => {
+        _volume = Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : 0.8));
+        SafeStorage.setItem('firmium_volume', String(_volume));
+      },
       getRepeatOne: () => _repeatOne,
       setRepeatOne: (v) => { _repeatOne = Boolean(v); if (v) _repeatAll = false; },
       getRepeatAll: () => _repeatAll,
       setRepeatAll: (v) => { _repeatAll = Boolean(v); if (v) _repeatOne = false; },
-      getLastSec: () => _lastSec,
-      setLastSec: (s) => { _lastSec = s; },
 
       abortActive: () => { if (_abortCtrl) { _abortCtrl.abort(); _abortCtrl = null; } },
       setActiveCtrl: (c) => { _abortCtrl = c; },
@@ -142,20 +295,22 @@ const Store = {
         while (_covers.size > MAX_COVER_CACHE_SIZE) {
           const oldest = _covers.keys().next().value;
           const oldUrl = _covers.get(oldest);
-          if (oldUrl?.startsWith('blob:')) { try { URL.revokeObjectURL(oldUrl); } catch(e){} }
+          if (oldUrl?.startsWith('blob:')) { try { URL.revokeObjectURL(oldUrl); } catch (_) {} }
           _covers.delete(oldest);
         }
       },
       getCover: (id) => {
         const url = _covers.get(id) || null;
-        if (url) { _covers.delete(id); _covers.set(id, url); }
+        if (url) { _covers.delete(id); _covers.set(id, url); } // LRU touch
         return url;
       },
       getPendingCover: (id) => _pendingCovers.get(id) || null,
       setPendingCover: (id, p) => { if (id && p) _pendingCovers.set(id, p); },
       clearPendingCover: (id) => { _pendingCovers.delete(id); },
       clearAllCache: () => {
-        _covers.forEach(url => { if (url?.startsWith('blob:')) { try { URL.revokeObjectURL(url); } catch(e){} } });
+        _covers.forEach(url => {
+          if (url?.startsWith('blob:')) { try { URL.revokeObjectURL(url); } catch (_) {} }
+        });
         _covers.clear();
         _pendingCovers.clear();
       }
@@ -163,6 +318,7 @@ const Store = {
   })()
 };
 
+// ── Subsonic URL builder ───────────────────────────────────────────────────────
 const SubsonicRouter = {
   buildUrl: (action, params = {}) => {
     const server = Store.Auth.getServer();
@@ -176,12 +332,32 @@ const SubsonicRouter = {
   }
 };
 
+// ── Data mappers ───────────────────────────────────────────────────────────────
 const SubsonicMapper = {
-  mapAlbum: (a) => ({ id: a.id, name: a.name ?? a.title ?? 'Unknown Album', albumArtist: a.artist ?? 'Unknown Artist', coverArtId: a.coverArt, songCount: a.songCount, releaseType: a.releaseType }),
-  mapArtist: (a) => ({ id: a.id, name: a.name ?? 'Unknown Artist', albumCount: a.albumCount ?? 0 }),
-  mapSong: (s) => ({ id: s.id, title: s.title ?? 'Unknown Track', artist: s.artist ?? 'Unknown Artist', duration: s.duration ?? 0, trackNumber: s.track, coverArtId: s.coverArt })
+  mapAlbum: (a) => ({
+    id: a.id,
+    name: a.name ?? a.title ?? 'Unknown Album',
+    albumArtist: a.artist ?? 'Unknown Artist',
+    coverArtId: a.coverArt,
+    songCount: a.songCount,
+    releaseType: a.releaseType // Preserve the server-provided release type.
+  }),
+  mapArtist: (a) => ({
+    id: a.id,
+    name: a.name ?? 'Unknown Artist',
+    albumCount: a.albumCount ?? 0
+  }),
+  mapSong: (s) => ({
+    id: s.id,
+    title: s.title ?? 'Unknown Track',
+    artist: s.artist ?? 'Unknown Artist',
+    duration: s.duration ?? 0,
+    trackNumber: s.track,
+    coverArtId: s.coverArt
+  })
 };
 
+// ── API layer ──────────────────────────────────────────────────────────────────
 const Api = {
   fetch: async (action, params = {}, signal = null) => {
     const url = SubsonicRouter.buildUrl(action, params);
@@ -207,7 +383,12 @@ const Api = {
   getAlbumTracks: async (id, sig) => {
     const d = await Api.fetch('getAlbum', { id }, sig);
     const a = d.album ?? {};
-    return { tracks: (a.song ?? []).map(SubsonicMapper.mapSong), albumName: a.name ?? a.title ?? 'Unknown Album', albumArtist: a.artist ?? 'Unknown Artist', coverArtId: a.coverArt };
+    return {
+      tracks: (a.song ?? []).map(SubsonicMapper.mapSong),
+      albumName: a.name ?? a.title ?? 'Unknown Album',
+      albumArtist: a.artist ?? 'Unknown Artist',
+      coverArtId: a.coverArt
+    };
   },
   getArtistDetails: async (id, sig) => {
     const d = await Api.fetch('getArtist', { id }, sig);
@@ -218,10 +399,16 @@ const Api = {
   },
   search: async (query, sig) => {
     const d = await Api.fetch('search3', { query, albumCount: SEARCH_ALBUM_LIMIT, songCount: SEARCH_SONG_LIMIT }, sig);
-    return { songs: (d.searchResult3?.song ?? []).map(SubsonicMapper.mapSong), albums: (d.searchResult3?.album ?? []).map(SubsonicMapper.mapAlbum) };
+    return {
+      songs: (d.searchResult3?.song ?? []).map(SubsonicMapper.mapSong),
+      albums: (d.searchResult3?.album ?? []).map(SubsonicMapper.mapAlbum)
+    };
   }
 };
 
+// ── Utilities ──────────────────────────────────────────────────────────────────
+
+/** Format a duration in seconds as M:SS. */
 const formatDuration = (secs) => {
   const s = Number(secs);
   if (isNaN(s) || s <= 0) return '0:00';
@@ -229,17 +416,49 @@ const formatDuration = (secs) => {
   return `${m}:${r < 10 ? '0' : ''}${r}`;
 };
 
+/**
+ * Run async tasks with a concurrency limit.
+ * Used for "Play All" to avoid flooding the Subsonic server with parallel requests.
+ *
+ * @param {Array}    items     - Items to process
+ * @param {number}   limit     - Max simultaneous tasks
+ * @param {Function} asyncFn   - Async function receiving each item
+ * @returns {Promise<Array>}   - Results in original order
+ */
+const pooledMap = async (items, limit, asyncFn) => {
+  const results = new Array(items.length);
+  let nextIdx = 0;
+
+  const worker = async () => {
+    while (nextIdx < items.length) {
+      const idx = nextIdx++;
+      results[idx] = await asyncFn(items[idx]);
+    }
+  };
+
+  // Spawn `limit` workers that each pull from the shared queue.
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+};
+
+// ── Cover art loading ──────────────────────────────────────────────────────────
+
+/**
+ * Load a cover image into an img element, using an in-memory blob URL cache.
+ * Deduplicates in-flight requests for the same cover ID.
+ */
 const loadImage = async (img, coverId, signal) => {
   if (!img || !coverId) return;
   const cached = Store.Playback.getCover(coverId);
   if (cached) { img.src = cached; return; }
 
+  // Deduplicate: if a fetch is already in flight for this cover, share the promise.
   let promise = Store.Playback.getPendingCover(coverId);
   if (!promise) {
     promise = (async () => {
       const url = SubsonicRouter.buildUrl('getCoverArt', { id: coverId });
       const res = await fetch(url, { signal });
-      if (!res.ok) throw new Error('Cover art asset down');
+      if (!res.ok) throw new Error('Cover art unavailable');
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
       Store.Playback.addCover(coverId, objUrl);
@@ -252,12 +471,16 @@ const loadImage = async (img, coverId, signal) => {
     const finalUrl = await promise;
     if (finalUrl && !signal?.aborted) img.src = finalUrl;
   } catch (e) {
-    if (e.name !== 'AbortError') console.error(e);
+    if (e.name !== 'AbortError') console.error('Cover art load error:', e);
   } finally {
     Store.Playback.clearPendingCover(coverId);
   }
 };
 
+/**
+ * Set up IntersectionObserver to lazy-load cover art images as they scroll
+ * into view. Only observes elements with class 'lazy-art'.
+ */
 const observeLazyCovers = (container) => {
   Store.Playback.clearObserver();
   const ctrl = Store.Playback.getActiveCtrl();
@@ -273,22 +496,28 @@ const observeLazyCovers = (container) => {
   container.querySelectorAll('.lazy-art').forEach(img => observer.observe(img));
 };
 
+// ── DOM helpers ────────────────────────────────────────────────────────────────
 const DOM = {
   el: (id) => document.getElementById(id),
   render: (id, html) => { const el = DOM.el(id); if (el) el.innerHTML = html; },
-  safeText: (str) => String(str ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m])),
-  
+  /** Escape HTML special characters to prevent XSS when inserting into innerHTML. */
+  safeText: (str) => String(str ?? '').replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[m])),
+
   createAlbumCard: (album) => `
     <div class="album-row" data-action="load-album" data-id="${DOM.safeText(album.id)}">
       <div class="album-art-sm">
-        ${album.coverArtId ? `<img class="lazy-art" data-cover-id="${DOM.safeText(album.coverArtId)}" alt="">` : '<div class="no-art">♪</div>'}
+        ${album.coverArtId
+          ? `<img class="lazy-art" data-cover-id="${DOM.safeText(album.coverArtId)}" alt="">`
+          : '<div class="no-art">♪</div>'}
       </div>
       <div class="album-info">
         <div class="album-title">${DOM.safeText(album.name)}</div>
         <div class="album-artist">${DOM.safeText(album.albumArtist)}</div>
       </div>
     </div>`,
-    
+
   createArtistCard: (artist) => `
     <div class="artist-row" data-action="load-artist" data-id="${DOM.safeText(artist.id)}">
       <div class="artist-info">
@@ -308,18 +537,31 @@ const DOM = {
     </div>`
 };
 
+// ── Theme ─────────────────────────────────────────────────────────────────────
+const applyTheme = (theme) => {
+  if (!theme || theme === 'firmium') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+};
+
+// ── App lifecycle ──────────────────────────────────────────────────────────────
+
+/**
+ * Full teardown: stop audio, abort all pending requests, clear all state,
+ * return to the login screen.
+ */
 const teardownApp = () => {
+  const bridge = Store.Audio.getBridge();
+  if (bridge) {
+    bridge.destroy();
+    Store.Audio.clearBridge(); // Null out the reference so stale callbacks can't use it.
+  }
+
   Store.Playback.abortActive();
   Store.Playback.abortSearch();
   Store.Playback.clearObserver();
-
-  const audio = Store.Playback.getAudio();
-  if (audio) {
-    try { audio.pause(); } catch(e){}
-    audio.removeAttribute('src');
-    audio.load();
-  }
-
   Store.Playback.clearAllCache();
   Store.Auth.clearAuth();
   Store.UI.clearNav();
@@ -330,6 +572,9 @@ const teardownApp = () => {
   document.title = 'Firmium';
 };
 
+// ── Playback ───────────────────────────────────────────────────────────────────
+
+/** Highlight the currently playing track row in the list panel. */
 const highlightCurrentTrack = () => {
   const current = Store.Playback.getCurrentTrack();
   const currentId = current ? String(current.id) : null;
@@ -341,9 +586,16 @@ const highlightCurrentTrack = () => {
   }
 };
 
+/**
+ * Play the track at the given queue index.
+ *
+ * After starting the stream, applies the saved volume immediately so the
+ * native sink doesn't blast at rodio's default 1.0 before the user touches
+ * the slider.
+ */
 const playAt = async (idx) => {
-  const audio = Store.Playback.getAudio();
-  if (!audio || idx < 0 || idx >= Store.Playback.getQueue().length) return;
+  const bridge = Store.Audio.getBridge();
+  if (!bridge || idx < 0 || idx >= Store.Playback.getQueue().length) return;
 
   Store.Playback.setQueueIdx(idx);
   const track = Store.Playback.getCurrentTrack();
@@ -355,26 +607,29 @@ const playAt = async (idx) => {
 
   try {
     const streamUrl = SubsonicRouter.buildUrl('stream', { id: track.id });
-    if (currentToken !== Store.Playback.getPlayToken()) return;
+    if (currentToken !== Store.Playback.getPlayToken()) return; // Superseded by newer play request.
 
-    audio.removeAttribute('src');
-    audio.load();
-    audio.src = streamUrl;
-    await audio.play();
+    await bridge.play(streamUrl, track.id);
+
+    // Apply the stored volume to the new sink immediately.
+    // Without this, the sink starts at rodio's default (1.0) until the slider moves.
+    await bridge.setVolume(Store.Playback.getVolume());
+
     document.title = `▶ ${track.title} - Firmium`;
   } catch (e) {
     if (currentToken === Store.Playback.getPlayToken()) {
-      console.error('Core audio exception:', e);
+      console.error('Playback error:', e);
       DOM.render('npArtist', `Playback Error: ${DOM.safeText(e.message)}`);
     }
   }
 };
 
+/** Update the now-playing bar with track metadata and cover art. */
 const updateNowPlaying = (track) => {
   DOM.render('npTitle', DOM.safeText(track?.title ?? '—'));
   DOM.render('npArtist', DOM.safeText(track?.artist ?? 'No track selected'));
   DOM.render('durTime', formatDuration(track?.duration ?? 0));
-  
+
   const container = DOM.el('npArt');
   if (container) {
     if (track?.coverArtId) {
@@ -386,12 +641,13 @@ const updateNowPlaying = (track) => {
   }
 };
 
+// ── View loaders ───────────────────────────────────────────────────────────────
+
 const loadAlbum = async (id) => {
   Store.Playback.abortActive();
   const ctrl = new AbortController();
   Store.Playback.setActiveCtrl(ctrl);
   Store.UI.setLoading(true);
-
   DOM.render('listPanel', '<div class="loading-msg">Loading album tracks…</div>');
 
   try {
@@ -399,10 +655,12 @@ const loadAlbum = async (id) => {
     if (ctrl.signal.aborted) return;
 
     Store.UI.pushNav(() => loadView(Store.UI.getView()));
-    
-    let html = `
+
+    const html = `
       <div class="tracklist-header">
-        <div class="tl-art">${coverArtId ? `<img class="lazy-art" data-cover-id="${DOM.safeText(coverArtId)}" alt="">` : '♪'}</div>
+        <div class="tl-art">${coverArtId
+          ? `<img class="lazy-art" data-cover-id="${DOM.safeText(coverArtId)}" alt="">`
+          : '♪'}</div>
         <div class="tl-info">
           <div class="tl-title">${DOM.safeText(albumName)}</div>
           <div class="tl-subtitle">${DOM.safeText(albumArtist)}</div>
@@ -411,9 +669,10 @@ const loadAlbum = async (id) => {
       <div class="track-list" id="trackListWrapper">
         ${tracks.map((t, idx) => DOM.createTrackCard(t, idx)).join('')}
       </div>`;
-      
+
     DOM.render('listPanel', html);
 
+    // Use event delegation on the wrapper div rather than adding per-render listeners.
     DOM.el('trackListWrapper')?.addEventListener('click', (e) => {
       const row = e.target.closest('[data-action="play-track"]');
       if (row) {
@@ -446,30 +705,46 @@ const loadArtist = async (id) => {
     if (ctrl.signal.aborted) return;
 
     Store.UI.pushNav(() => loadView(Store.UI.getView()));
-    
+
+    // Group albums by release type.
+    // Relies primarily on the server-provided `releaseType` field.
+    // Falls back to heuristics (title keywords, song count) only when releaseType is absent.
+    // Note: heuristics are unreliable — `releaseType` from the server is always preferred.
     const groups = { Albums: [], EPs: [], Singles: [] };
     albums.forEach(a => {
       const type = String(a.releaseType || '').toLowerCase();
       const titleLower = a.name.toLowerCase();
-      if (type === 'single' || titleLower.includes('single') || a.songCount === 1) {
+
+      if (type === 'single') {
         groups.Singles.push(a);
-      } else if (type === 'ep' || titleLower.includes('ep') || (a.songCount > 1 && a.songCount <= 4)) {
+      } else if (type === 'ep') {
         groups.EPs.push(a);
-      } else {
+      } else if (type === 'album') {
         groups.Albums.push(a);
+      } else {
+        // Fallback heuristics when releaseType is not provided by the server.
+        if (titleLower.includes(' - single') || titleLower.endsWith('(single)')) {
+          groups.Singles.push(a);
+        } else if (titleLower.includes(' - ep') || titleLower.endsWith('(ep)')) {
+          groups.EPs.push(a);
+        } else {
+          // Without a reliable type, default everything else to Albums.
+          groups.Albums.push(a);
+        }
       }
     });
 
     let html = `
       <div class="artist-page-header">
-        <img id="wikiImg" class="artist-img-circle" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23888' viewBox='0 0 24 24'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>" alt="${DOM.safeText(name)}">
+        <img id="wikiImg" class="artist-img-circle"
+          src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23888' viewBox='0 0 24 24'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>"
+          alt="${DOM.safeText(name)}">
         <div class="artist-page-info">
           <div class="artist-page-name">${DOM.safeText(name)}</div>
-          <div class="artist-page-bio" id="wikiBio">Fetching artist biography...</div>
+          <div class="artist-page-bio" id="wikiBio">${SafeStorage.getItem('firmium_wikipedia') !== 'false' ? 'Fetching artist biography…' : 'Biography disabled.'}</div>
           <button class="play-all-btn" data-action="play-artist-all" data-id="${DOM.safeText(id)}">▶ Play All Songs</button>
         </div>
-      </div>
-    `;
+      </div>`;
 
     if (!albums.length) {
       html += '<div class="loading-msg">No releases discovered.</div>';
@@ -485,15 +760,17 @@ const loadArtist = async (id) => {
     DOM.render('listPanel', html);
     observeLazyCovers(DOM.el('listPanel'));
 
-    WikiApi.getInfo(name, ctrl.signal).then(wiki => {
-      if (ctrl.signal.aborted) return;
-      if (wiki) {
-        if (wiki.extract) DOM.render('wikiBio', DOM.safeText(wiki.extract));
-        if (wiki.image) DOM.el('wikiImg').src = wiki.image;
-      } else {
-        DOM.render('wikiBio', 'Biography not available.');
-      }
-    });
+    if (SafeStorage.getItem('firmium_wikipedia') !== 'false') {
+      WikiApi.getInfo(name, ctrl.signal).then(wiki => {
+        if (ctrl.signal.aborted) return;
+        if (wiki) {
+          if (wiki.extract) DOM.render('wikiBio', DOM.safeText(wiki.extract));
+          if (wiki.image) { const img = DOM.el('wikiImg'); if (img) img.src = wiki.image; }
+        } else {
+          DOM.render('wikiBio', 'Biography not available.');
+        }
+      });
+    }
 
   } catch (e) {
     if (ctrl.signal.aborted) return;
@@ -533,8 +810,10 @@ const executeSearch = async () => {
 
     let innerHTML = `<div class="search-results-container">`;
     if (songs.length) {
+      // Using a data attribute to tag this wrapper so the delegated listener below
+      // can identify which song list to queue when a track is clicked.
       innerHTML += `<div class="section-header">Songs</div>
-                    <div class="track-list" id="searchTrackListWrapper">
+                    <div class="track-list" id="searchTrackListWrapper" data-context="search">
                       ${songs.map((t, i) => DOM.createTrackCard(t, i)).join('')}
                     </div>`;
     }
@@ -544,21 +823,27 @@ const executeSearch = async () => {
     innerHTML += `</div>`;
 
     DOM.el('listPanel').insertAdjacentHTML('beforeend', innerHTML);
-    
-    DOM.el('searchTrackListWrapper')?.addEventListener('click', (e) => {
-      const row = e.target.closest('[data-action="play-track"]');
-      if (row) {
-        Store.Playback.setQueue(songs, Number(row.dataset.index));
-        playAt(Number(row.dataset.index));
-      }
-    });
+
+    // Attach click listener to the wrapper div, not to each track row.
+    // The songs variable is captured in this closure — it is fresh for each search.
+    const wrapper = DOM.el('searchTrackListWrapper');
+    if (wrapper) {
+      wrapper.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-action="play-track"]');
+        if (row) {
+          Store.Playback.setQueue(songs, Number(row.dataset.index));
+          playAt(Number(row.dataset.index));
+        }
+      });
+    }
 
     observeLazyCovers(DOM.el('listPanel'));
     highlightCurrentTrack();
   } catch (e) {
     if (ctrl.signal.aborted) return;
     status.remove();
-    DOM.el('listPanel').insertAdjacentHTML('beforeend', `<div class="loading-msg error-msg">${DOM.safeText(e.message)}</div>`);
+    DOM.el('listPanel').insertAdjacentHTML('beforeend',
+      `<div class="loading-msg error-msg">${DOM.safeText(e.message)}</div>`);
   }
 };
 
@@ -584,6 +869,21 @@ const loadView = async (view) => {
 
   if (view === 'settings') {
     const isDecorated = SafeStorage.getItem('firmium_decorations') !== 'false';
+    const isWikiEnabled = SafeStorage.getItem('firmium_wikipedia') !== 'false';
+    const currentTheme = SafeStorage.getItem('firmium_theme') || 'firmium';
+    const themes = [
+      ['firmium',             'Firmium'],
+      ['gruvbox',             'Gruvbox'],
+      ['tokyo-night',         'Tokyo Night'],
+      ['dracula',             'Dracula'],
+      ['catppuccin-mocha',    'Catppuccin Mocha'],
+      ['catppuccin-macchiato','Catppuccin Macchiato'],
+      ['catppuccin-frappe',   'Catppuccin Frappé'],
+      ['catppuccin-latte',    'Catppuccin Latte'],
+    ];
+    const themeOptions = themes
+      .map(([val, label]) => `<option value="${val}"${currentTheme === val ? ' selected' : ''}>${label}</option>`)
+      .join('');
     const html = `
       <div class="section-header">Settings</div>
       <div class="settings-row">
@@ -596,8 +896,34 @@ const loadView = async (view) => {
           <span class="toggle-slider"></span>
         </label>
       </div>
-    `;
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Theme</div>
+          <div class="settings-desc">Color scheme for the interface</div>
+        </div>
+        <select class="theme-selector" id="themeSelector">${themeOptions}</select>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Wikipedia Integration</div>
+          <div class="settings-desc">Show artist biography and photo from Wikipedia</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleWikipedia" ${isWikiEnabled ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`;
     DOM.render('listPanel', html);
+
+    DOM.el('themeSelector')?.addEventListener('change', (e) => {
+      const theme = e.target.value;
+      applyTheme(theme);
+      SafeStorage.setItem('firmium_theme', theme);
+    });
+
+    DOM.el('toggleWikipedia')?.addEventListener('change', (e) => {
+      SafeStorage.setItem('firmium_wikipedia', e.target.checked ? 'true' : 'false');
+    });
 
     DOM.el('toggleDecorations')?.addEventListener('change', async (e) => {
       const show = e.target.checked;
@@ -617,7 +943,7 @@ const loadView = async (view) => {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         await getCurrentWindow().setDecorations(show);
       } catch (err) {
-        console.error("Failed to alter window decorations status:", err);
+        console.error('Failed to set window decorations:', err);
       }
     });
     return;
@@ -649,45 +975,50 @@ const loadView = async (view) => {
   }
 };
 
+// ── App startup ────────────────────────────────────────────────────────────────
+
 const showApp = () => {
   DOM.el('setup')?.classList.add('hidden');
   DOM.el('app')?.classList.remove('hidden');
   try {
     DOM.render('serverLabel', new URL(Store.Auth.getServer()).hostname);
-  } catch(e) {
+  } catch (_) {
     DOM.render('serverLabel', 'online');
   }
-  DOM.el('volSlider').value = Store.Playback.getVolume();
+  const savedVol = Number(SafeStorage.getItem('firmium_volume') ?? 0.8);
+  DOM.el('volSlider').value = savedVol;
   loadView('albums');
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  let audio = DOM.el('audioEl');
-  if (!audio) {
-    audio = document.createElement('audio');
-    audio.id = 'audioEl';
-    audio.preload = 'auto';
-    document.body.appendChild(audio);
-  }
-  Store.Playback.initAudio(audio);
+document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize audio bridge — must happen before any playback calls.
+  Store.Audio.init();
 
+  // Apply saved theme before anything renders.
+  applyTheme(SafeStorage.getItem('firmium_theme'));
+
+  // Restore non-sensitive settings from localStorage.
   const savedServer = SafeStorage.getItem('firmium_server');
   const savedUser = SafeStorage.getItem('firmium_user');
-  const savedPass = SafeStorage.getItem('firmium_pass');
-  
+  const savePasswordEnabled = SafeStorage.getItem('firmium_save_pass') === 'true';
+
   if (savedServer) DOM.el('serverUrl').value = savedServer;
   if (savedUser) DOM.el('username').value = savedUser;
-  if (savedPass) {
-    DOM.el('password').value = savedPass;
+
+  // Attempt to load the saved password from the OS keyring (NOT localStorage).
+  if (savePasswordEnabled && savedUser) {
     const saveCb = DOM.el('savePassword');
     if (saveCb) saveCb.checked = true;
+    try {
+      const savedPass = await Keyring.load(savedUser);
+      if (savedPass) DOM.el('password').value = savedPass;
+    } catch {
+      // Keyring entry may not exist yet (first run after migrating from localStorage).
+      // Silently ignore — the user will just need to re-enter their password.
+    }
   }
 
   const isDecorated = SafeStorage.getItem('firmium_decorations') !== 'false';
-  const decoCheckbox = DOM.el('toggleDecorations');
-  if (decoCheckbox) {
-    decoCheckbox.checked = isDecorated;
-  }
 
   try {
     if (window.__TAURI__) {
@@ -702,56 +1033,11 @@ document.addEventListener('DOMContentLoaded', () => {
         getCurrentWindow().setDecorations(isDecorated);
       }).catch(() => {});
     }
-  } catch(e) {}
+  } catch (_) {}
 
-  audio.addEventListener('play', () => { DOM.render('playBtn', '⏸'); });
-  audio.addEventListener('pause', () => { DOM.render('playBtn', '▶'); });
-  audio.addEventListener('durationchange', () => { DOM.render('durTime', formatDuration(audio.duration || 0)); });
-  
-  audio.addEventListener('error', () => {
-    const err = audio.error;
-    if (err && err.code === 4) {
-      const currentTimeSave = audio.currentTime;
-      audio.load(); 
-      audio.currentTime = currentTimeSave;
-      audio.play().catch(() => {});
-    }
-  });
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  audio.addEventListener('stalled', () => {
-    if (!audio.paused) {
-       audio.play().catch(() => {});
-    }
-  });
-
-  audio.addEventListener('timeupdate', () => {
-    if (Store.Playback.isSeeking()) return;
-    const cur = audio.currentTime, dur = audio.duration || 0;
-    DOM.el('seekBar').value = dur > 0 ? String((cur / dur) * 100) : '0';
-
-    const currentSec = Math.floor(cur);
-    if (currentSec !== Store.Playback.getLastSec()) {
-      Store.Playback.setLastSec(currentSec);
-      DOM.render('curTime', formatDuration(currentSec));
-    }
-  });
-
-  audio.addEventListener('ended', () => {
-    if (Store.Playback.getRepeatOne()) {
-      playAt(Store.Playback.getQueueIdx());
-    } else if (Store.Playback.getQueueIdx() < Store.Playback.getQueue().length - 1) {
-      playAt(Store.Playback.getQueueIdx() + 1);
-    } else if (Store.Playback.getRepeatAll()) {
-      playAt(0);
-    } else {
-      document.title = 'Firmium';
-    }
-  });
-
-  document.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-  });
-
+  // ── Main click dispatcher ────────────────────────────────────────────────────
   document.body.addEventListener('click', async (e) => {
     const target = e.target.closest('[data-action]');
     if (!target) return;
@@ -759,25 +1045,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const action = target.dataset.action;
     switch (action) {
+
       case 'nav-view':
         loadView(target.dataset.view);
         break;
+
       case 'load-album':
         loadAlbum(target.dataset.id);
         break;
+
       case 'load-artist':
         loadArtist(target.dataset.id);
         break;
+
       case 'play-artist-all': {
         const artistId = target.dataset.id;
         const ogText = target.textContent;
-        target.textContent = 'Loading Queue...';
+        target.textContent = 'Loading Queue…';
         target.style.opacity = '0.5';
         target.style.pointerEvents = 'none';
         try {
           const { albums } = await Api.getArtistDetails(artistId);
-          const trackPromises = albums.map(a => Api.getAlbumTracks(a.id));
-          const completedAlbums = await Promise.all(trackPromises);
+          // Use a concurrency pool to avoid firing all fetches simultaneously.
+          // PLAY_ALL_CONCURRENCY = 5 keeps the server load manageable.
+          const completedAlbums = await pooledMap(albums, PLAY_ALL_CONCURRENCY, (a) =>
+            Api.getAlbumTracks(a.id)
+          );
           const allTracks = completedAlbums.flatMap(res => res.tracks);
           if (allTracks.length > 0) {
             Store.Playback.setQueue(allTracks, 0);
@@ -786,6 +1079,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('No playable tracks found for this artist.');
           }
         } catch (err) {
+          console.error('Play artist all failed:', err);
           alert('Failed to load artist queue.');
         } finally {
           target.textContent = ogText;
@@ -794,17 +1088,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         break;
       }
-      case 'play-toggle':
-        if (!Store.Playback.getCurrentTrack()) return;
-        if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+
+      case 'play-toggle': {
+        const bridge = Store.Audio.getBridge();
+        if (!Store.Playback.getCurrentTrack() || !bridge) return;
+        try {
+          const state = await bridge.getState();
+          if (state === 'paused') {
+            await bridge.resume();
+          } else if (state === 'playing') {
+            await bridge.pause();
+          } else if (state === 'stopped') {
+            // Song finished — restart from the beginning.
+            playAt(Store.Playback.getQueueIdx());
+          }
+          // Ignore clicks during 'loading' state — audio isn't ready yet.
+        } catch (err) {
+          console.error('Play toggle failed:', err);
+        }
         break;
+      }
+
       case 'prev-track':
-        if (audio.currentTime > TRACK_RESTART_THRESHOLD_SECS) {
-          audio.currentTime = 0;
-        } else if (Store.Playback.getQueueIdx() > 0) {
+        if (Store.Playback.getQueueIdx() > 0) {
           playAt(Store.Playback.getQueueIdx() - 1);
         }
         break;
+
       case 'next-track':
         if (Store.Playback.getQueueIdx() < Store.Playback.getQueue().length - 1) {
           playAt(Store.Playback.getQueueIdx() + 1);
@@ -812,25 +1122,34 @@ document.addEventListener('DOMContentLoaded', () => {
           playAt(0);
         }
         break;
-      case 'toggle-repeat-one':
+
+      case 'toggle-repeat-one': {
         const nextR1 = !Store.Playback.getRepeatOne();
         Store.Playback.setRepeatOne(nextR1);
         target.classList.toggle('active', nextR1);
         DOM.el('rAllBtn')?.classList.remove('active');
         break;
-      case 'toggle-repeat-all':
+      }
+
+      case 'toggle-repeat-all': {
         const nextRA = !Store.Playback.getRepeatAll();
         Store.Playback.setRepeatAll(nextRA);
         target.classList.toggle('active', nextRA);
         DOM.el('rOneBtn')?.classList.remove('active');
         break;
+      }
+
+      // Fixed: was 'logout-action' in HTML but 'logout' in switch → button did nothing.
+      // HTML data-action is now 'logout' to match this case.
       case 'logout':
         teardownApp();
         break;
+
       case 'search-submit':
         executeSearch();
         break;
-      case 'connect':
+
+      case 'connect': {
         const sUrl = DOM.el('serverUrl')?.value ?? '';
         const uName = DOM.el('username')?.value ?? '';
         const pWord = DOM.el('password')?.value ?? '';
@@ -841,20 +1160,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
           let parsed;
-          try { parsed = new URL(sUrl); } catch(err) { throw new Error('Invalid URL format'); }
-          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Protocol must be HTTP or HTTPS');
+          try { parsed = new URL(sUrl); } catch (_) { throw new Error('Invalid URL format'); }
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            throw new Error('Protocol must be HTTP or HTTPS');
+          }
 
           Store.Auth.setAuth(sUrl, uName, pWord);
           await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 });
-          
+
+          // Save non-sensitive values to localStorage.
           SafeStorage.setItem('firmium_server', sUrl);
           SafeStorage.setItem('firmium_user', uName);
+
+          // Save the password to the OS keyring, NOT localStorage.
           if (DOM.el('savePassword')?.checked) {
-            SafeStorage.setItem('firmium_pass', pWord);
+            SafeStorage.setItem('firmium_save_pass', 'true');
+            try {
+              await Keyring.save(uName, pWord);
+            } catch (kErr) {
+              console.warn('Keyring save failed — password will not be remembered:', kErr);
+            }
           } else {
-            SafeStorage.removeItem('firmium_pass');
+            SafeStorage.setItem('firmium_save_pass', 'false');
+            // Remove any previously saved keyring entry.
+            Keyring.remove(uName).catch(() => {});
           }
-          
+
           showApp();
         } catch (err) {
           Store.Auth.clearAuth();
@@ -863,22 +1194,61 @@ document.addEventListener('DOMContentLoaded', () => {
           target.textContent = 'Connect';
         }
         break;
+      }
     }
   });
 
+  // Search on Enter key in the search input.
   document.body.addEventListener('keydown', (e) => {
     if (e.target.id === 'searchInput' && e.key === 'Enter') {
       executeSearch();
     }
   });
 
-  DOM.el('seekBar')?.addEventListener('input', () => Store.Playback.setSeeking(true));
-  DOM.el('seekBar')?.addEventListener('change', (e) => {
-    audio.currentTime = (Number(e.target.value) / 100) * (audio.duration || 0);
-    Store.Playback.setSeeking(false);
+  // Volume slider — update the bridge and persist the value.
+  DOM.el('volSlider')?.addEventListener('input', async (e) => {
+    const volume = e.target.value;
+    const bridge = Store.Audio.getBridge();
+    if (bridge) {
+      try {
+        await bridge.setVolume(volume);
+      } catch (err) {
+        console.error('Volume change failed:', err);
+      }
+    }
+    Store.Playback.setVolume(volume);
   });
 
-  DOM.el('volSlider')?.addEventListener('input', (e) => {
-    Store.Playback.setVolume(e.target.value);
-  });
+  // Seek bar — handle user seeking.
+  const seekBar = DOM.el('seekBar');
+  if (seekBar) {
+    seekBar.addEventListener('mousedown', () => {
+      Store.Audio.setSeeking(true);
+    });
+    seekBar.addEventListener('mouseup', async (e) => {
+      Store.Audio.setSeeking(false);
+      const bridge = Store.Audio.getBridge();
+      if (bridge) {
+        try {
+          await bridge.seek(Number(e.target.value));
+        } catch (err) {
+          console.error('Seek failed:', err);
+        }
+      }
+    });
+    seekBar.addEventListener('touchstart', () => {
+      Store.Audio.setSeeking(true);
+    });
+    seekBar.addEventListener('touchend', async (e) => {
+      Store.Audio.setSeeking(false);
+      const bridge = Store.Audio.getBridge();
+      if (bridge) {
+        try {
+          await bridge.seek(Number(seekBar.value));
+        } catch (err) {
+          console.error('Seek failed:', err);
+        }
+      }
+    });
+  }
 });

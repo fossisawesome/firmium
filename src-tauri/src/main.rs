@@ -252,6 +252,31 @@ fn get_track_duration(
     (&*player).get_duration(player_id)
 }
 
+#[tauri::command]
+fn get_current_position(
+    app_handle: tauri::AppHandle,
+    player_id: &str,
+) -> Result<f64, String> {
+    let player = app_handle
+        .try_state::<Arc<AudioPlayer>>()
+        .ok_or_else(|| "Audio Player state not registered".to_string())?;
+
+    (&*player).get_current_position(player_id)
+}
+
+#[tauri::command]
+fn seek_position(
+    app_handle: tauri::AppHandle,
+    player_id: &str,
+    position: f64,
+) -> Result<(), String> {
+    let player = app_handle
+        .try_state::<Arc<AudioPlayer>>()
+        .ok_or_else(|| "Audio Player state not registered".to_string())?;
+
+    (&*player).seek(player_id, position)
+}
+
 /// List available audio output devices.
 #[tauri::command]
 fn list_audio_devices() -> Result<Vec<audio::AudioDevice>, String> {
@@ -293,6 +318,8 @@ fn main() {
             get_playback_state,
             is_playback_finished,
             get_track_duration,
+            get_current_position,
+            seek_position,
             list_audio_devices,
         ])
         .run(tauri::generate_context!())
