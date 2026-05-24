@@ -28,6 +28,24 @@ const tauriInvoke = (cmd, args) => {
   return invokeFn(cmd, args);
 };
 
+// Routes HTTP requests through the Tauri http plugin (reqwest on the Rust side)
+// rather than the WebView's native fetch. This bypasses WebKit's mixed-content
+// blocker, which silently aborts http:// requests from the secure tauri://localhost
+// origin. Falls back to window.fetch if the plugin is not available (e.g. tests).
+const tauriFetch = (url, init) => {
+  const pluginFetch = window.__TAURI__?.http?.fetch;
+  if (!pluginFetch) {
+    console.warn("tauri-plugin-http not available — falling back to window.fetch. http:// targets may fail.");
+    return fetch(url, init);
+  }
+  return pluginFetch(url, init);
+};
+
+// Expose tauriFetch for use in app.js (loaded as a plain script tag).
+if (typeof window !== 'undefined') {
+  window.tauriFetch = tauriFetch;
+}
+
 class AudioBridge {
   constructor() {
     this.currentPlayerId = null;
