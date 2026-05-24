@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+**Version**: 1.5.0
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
@@ -181,9 +183,7 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 
 ## Versioning
 
-Always use semantic verisoning
-- Automatically change files to reflect the new version
-- List of files is found in /info/claude/files.txt
+- Always use semantic verisoning
 
 ## Comments
 
@@ -196,6 +196,7 @@ Always use semantic verisoning
 - Use the .md format
 - File names should follow this `RELEASE_v(verison-number)`
 - To generate a change log - compare the local files to the Git repo
+- Use semantic versioning (Look at #versioning(Versioning))
 
 ## Performance Considerations
 
