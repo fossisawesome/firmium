@@ -7,12 +7,11 @@ Firmium is a desktop Open-Subsonic music streaming client built with Tauri 2. It
 
 ## Features
 
-- Secure credential storage using the OS keyring 
-- Artist biographies and thumbnails fetched from Wikipedia
-- Cover art caching with automatic eviction
-- Album browsing, search, and queue management
-- Eight color themes
-
+- Lyrics 
+- Wikipedia artist biographys
+- Lightweight audio backend with Rodio
+- Pretty UI with 8 color themes
+- Open-Subsonic
 ## Gallery
 
 *Screenshots coming soon.*
@@ -37,6 +36,23 @@ sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl
 ```
 
 Firmium also requires a Secret Service provider (GNOME Keyring or KWallet) for credential storage. This is included in most desktop environments by default.
+
+### Installing the app
+
+**Arch Linux**
+```bash
+yay -S firmium-desktop-bin # or paru -S firmium-desktop-bin
+```
+
+**Fedora**
+```bash
+# Download and install the .rpm - in the future this will be added to DNF
+```
+
+**Debian / Ubuntu**
+```bash
+# Download and install the .deb - in the future this will be added to APT
+```
 
 ## Building from Source
 
