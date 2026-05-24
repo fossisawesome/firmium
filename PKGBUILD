@@ -15,29 +15,41 @@ source=()
 sha256sums=()
 
 package() {
-  # This is the exact staging folder Tauri compiles when building a Linux deb bundle
-  local tauri_bundle_dir="${startdir}/src-tauri/target/release/bundle/deb/firmium-desktop_${pkgver}_amd64"
-
-  # Fallback check in case Tauri alters the directory suffix naming conventions
-  if [ ! -d "$tauri_bundle_dir" ]; then
-    tauri_bundle_dir=$(find "${startdir}/src-tauri/target/release/bundle/deb" -maxdepth 1 -type d -name "firmium-desktop*" | head -n 1)
-  fi
+  # Find Tauri's deb bundle directory (handles both Firmium_* and firmium-desktop_* naming)
+  local tauri_bundle_dir=$(find "${startdir}/src-tauri/target/release/bundle/deb" -maxdepth 1 -type d -name "*_${pkgver}_amd64" | head -n 1)
 
   if [ -z "$tauri_bundle_dir" ] || [ ! -d "$tauri_bundle_dir" ]; then
-    error "Tauri Linux bundle directory not found. Ensure tauri build successfully completed."
+    error "Tauri Linux bundle directory not found. Ensure 'npm run tauri build' completed successfully."
     return 1
   fi
 
   msg2 "Extracting application assets out of Tauri's build directory..."
 
-  # 1. Install your compiled binary executable straight into /usr/bin/
-  install -Dm755 "${tauri_bundle_dir}/data/usr/bin/firmium-desktop" "${pkgdir}/usr/bin/firmium-desktop"
+  # 1. Install compiled binary (handles both possible names Tauri might use)
+  local binary_path
+  if [ -f "${tauri_bundle_dir}/data/usr/bin/firmium-desktop" ]; then
+    binary_path="${tauri_bundle_dir}/data/usr/bin/firmium-desktop"
+  elif [ -f "${tauri_bundle_dir}/data/usr/bin/Firmium" ]; then
+    binary_path="${tauri_bundle_dir}/data/usr/bin/Firmium"
+  fi
 
-  # 2. Extract your custom desktop launcher entry based on your exact tauri.conf.json mapping
-  if [ -f "${tauri_bundle_dir}/data/usr/share/applications/firmium.desktop" ]; then
-    install -Dm644 "${tauri_bundle_dir}/data/usr/share/applications/firmium.desktop" "${pkgdir}/usr/share/applications/firmium.desktop"
-  elif [ -f "${tauri_bundle_dir}/data/usr/share/applications/firmium-desktop.desktop" ]; then
-    install -Dm644 "${tauri_bundle_dir}/data/usr/share/applications/firmium-desktop.desktop" "${pkgdir}/usr/share/applications/firmium.desktop"
+  if [ -z "$binary_path" ]; then
+    error "Compiled binary not found in bundle directory"
+    return 1
+  fi
+  install -Dm755 "$binary_path" "${pkgdir}/usr/bin/firmium-desktop"
+
+  # 2. Install desktop launcher entry (handles both possible names)
+  local desktop_file
+  for candidate in "firmium.desktop" "Firmium.desktop" "firmium-desktop.desktop"; do
+    if [ -f "${tauri_bundle_dir}/data/usr/share/applications/$candidate" ]; then
+      desktop_file="${tauri_bundle_dir}/data/usr/share/applications/$candidate"
+      break
+    fi
+  done
+
+  if [ -n "$desktop_file" ]; then
+    install -Dm644 "$desktop_file" "${pkgdir}/usr/share/applications/firmium.desktop"
   fi
 
   # 3. Pull all processed application graphics completely over
