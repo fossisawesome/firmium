@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "firmium-desktop",
+  "productName": "Firmium",
   "version": "1.3.0",
-  "identifier": "com.fossisawesome.firmium-desktop",
+  "identifier": "com.fossisawesome.firmium",
   "build": {
     "frontendDist": "../src"
   },
@@ -39,10 +39,7 @@
     ],
     "linux": {
       "deb": {
-        "depends": ["libwebkit2gtk-4.1-0", "libasound2 | libasound2t64", "libssl3"],
-        "files": {
-          "/usr/share/applications/firmium.desktop": "./firmium.desktop"
-        }
+        "depends": ["libwebkit2gtk-4.1-0", "libasound2 | libasound2t64", "libssl3"]
       }
     }
   }
