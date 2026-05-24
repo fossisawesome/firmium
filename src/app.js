@@ -591,11 +591,7 @@ const OpenSubsonicMapper = {
 const Api = {
   fetch: async (action, params = {}, signal = null) => {
     const url = await OpenSubsonicRouter.buildUrl(action, params);
-    // Use the http plugin (registered in main.rs) instead of the WebView's native
-    // fetch — plain http:// targets are blocked by WebKit's mixed-content rule from
-    // the secure WebView origin (tauri://localhost). The plugin routes through
-    // reqwest on the Rust side, where that restriction doesn't apply.
-    const res = await window.__TAURI__.http.fetch(url, signal ? { signal } : {});
+    const res = await tauriFetch(url, signal ? { signal } : {});
     if (res.status === 401) { if (Store.Auth.isAuthed()) teardownApp(); throw new Error('Session Expired'); }
     if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
     const json = await res.json();
@@ -645,7 +641,7 @@ const Api = {
   scrobble: (id, submission, time = Date.now()) => {
     OpenSubsonicRouter.buildUrl('scrobble', { id, submission: String(submission), time: String(time) }).then(url => {
       if (!url) return;
-      fetch(url)
+      tauriFetch(url)
         .then(async r => {
           const json = await r.json().catch(() => null);
           const resp = json?.['subsonic-response'];
@@ -751,8 +747,7 @@ const loadImage = async (img, coverId, signal) => {
   if (!promise) {
     promise = (async () => {
       const url = await OpenSubsonicRouter.buildUrl('getCoverArt', { id: coverId });
-      // http plugin — see Api.fetch for the why.
-      const res = await window.__TAURI__.http.fetch(url, { signal });
+      const res = await tauriFetch(url, { signal });
       if (!res.ok) throw new Error('Cover art unavailable');
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
