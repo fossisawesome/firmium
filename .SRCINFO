@@ -1,6 +1,6 @@
 pkgbase = firmium-desktop
 	pkgdesc = Lightning fast OpenSubsonic player in Tauri
-	pkgver = 1.3.0
+	pkgver = 1.4.0
 	pkgrel = 1
 	url = https://github.com/fossisawesome/firmium
 	arch = x86_64
@@ -18,7 +18,7 @@ pkgbase = firmium-desktop
 	depends = openssl
 	depends = libsecret
 	options = !strip
-	source = firmium-desktop-1.3.0.tar.gz::https://github.com/fossisawesome/firmium/archive/refs/tags/v1.3.0.tar.gz
+	source = firmium-desktop-1.4.0.tar.gz::https://github.com/fossisawesome/firmium/archive/refs/tags/v1.4.0.tar.gz
 	sha256sums = 1fb4b0ef54c95d4430072710576d852ffe44c5048f2970a84178aef5178a5c9b
 
 pkgname = firmium-desktop
