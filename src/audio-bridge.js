@@ -39,6 +39,10 @@ class AudioBridge {
     // Guards against the monitoring loop seeing an empty sink BEFORE audio loads
     // and incorrectly emitting 'finished'.
     this._hasStartedPlaying = false;
+
+    // Crossfade state: the outgoing session being faded out.
+    this.crossfadingPlayerId = null;
+    this.crossfadeInterval = null;
   }
 
   // ── Event emitter ──────────────────────────────────────────────────────────
@@ -136,6 +140,17 @@ class AudioBridge {
   async stop() {
     if (!this.currentPlayerId) return;
 
+    // Cancel any in-progress crossfade and clean up the outgoing session.
+    if (this.crossfadeInterval) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
+    if (this.crossfadingPlayerId) {
+      const oldId = this.crossfadingPlayerId;
+      this.crossfadingPlayerId = null;
+      try { await tauriInvoke('stop_playback', { playerId: oldId }); } catch (_) {}
+    }
+
     // Cancel monitoring first to prevent the interval from seeing
     // the just-removed session and emitting 'finished' incorrectly.
     this.stopStatusMonitoring();
@@ -151,6 +166,98 @@ class AudioBridge {
     } catch (err) {
       // Even if the Rust side errors (e.g. already cleaned up), JS state is clear.
       this.emit('error', `Stop failed: ${err}`);
+    }
+  }
+
+  /**
+   * Crossfade from the current session into a new stream.
+   *
+   * Starts the new session at volume 0, then linearly ramps the new session
+   * up to targetVolume while ramping the old session down to 0 over
+   * fadeDurationMs milliseconds. The old session is stopped after the fade.
+   *
+   * Handles the race where the user skips while play_stream is in-flight:
+   * if currentPlayerId changed before we can swap, the new session is
+   * discarded immediately.
+   *
+   * @param {string} streamUrl      - URL for the incoming track
+   * @param {string} trackId        - Application track identifier
+   * @param {number} targetVolume   - Volume to fade the new track up to (0–1)
+   * @param {number} fadeDurationMs - Total crossfade duration in milliseconds
+   */
+  async startCrossfadeIn(streamUrl, trackId, targetVolume, fadeDurationMs) {
+    const oldPlayerId = this.currentPlayerId;
+
+    try {
+      const newPlayerId = await tauriInvoke('play_stream', { streamUrl, trackId });
+
+      // If the player changed while play_stream was awaiting, a user action
+      // (skip/stop) superseded this crossfade — discard the new session.
+      if (this.currentPlayerId !== oldPlayerId) {
+        try { await tauriInvoke('stop_playback', { playerId: newPlayerId }); } catch (_) {}
+        return;
+      }
+
+      // Cancel any previously running crossfade before starting a new one.
+      if (this.crossfadeInterval) {
+        clearInterval(this.crossfadeInterval);
+        this.crossfadeInterval = null;
+        if (this.crossfadingPlayerId) {
+          const prev = this.crossfadingPlayerId;
+          this.crossfadingPlayerId = null;
+          try { await tauriInvoke('stop_playback', { playerId: prev }); } catch (_) {}
+        }
+      }
+
+      // New track starts silent.
+      try { await tauriInvoke('set_volume', { playerId: newPlayerId, volume: 0 }); } catch (_) {}
+
+      // Transition to the crossfade state.
+      this.crossfadingPlayerId = oldPlayerId;
+      this.currentPlayerId = newPlayerId;
+      this._hasStartedPlaying = false;
+      this.lastKnownState = 'loading';
+
+      this.startStatusMonitoring();
+      this.emit('statechange', 'loading');
+
+      // Volume ramp: 25 steps over fadeDurationMs.
+      const steps = 25;
+      const stepMs = Math.max(50, fadeDurationMs / steps);
+      let step = 0;
+
+      this.crossfadeInterval = setInterval(async () => {
+        step++;
+        const progress = Math.min(step / steps, 1);
+
+        if (oldPlayerId) {
+          try {
+            await tauriInvoke('set_volume', {
+              playerId: oldPlayerId,
+              volume: targetVolume * (1 - progress)
+            });
+          } catch (_) {}
+        }
+        try {
+          await tauriInvoke('set_volume', {
+            playerId: newPlayerId,
+            volume: targetVolume * progress
+          });
+        } catch (_) {}
+
+        if (step >= steps) {
+          clearInterval(this.crossfadeInterval);
+          this.crossfadeInterval = null;
+          if (oldPlayerId) {
+            this.crossfadingPlayerId = null;
+            try { await tauriInvoke('stop_playback', { playerId: oldPlayerId }); } catch (_) {}
+          }
+        }
+      }, stepMs);
+
+    } catch (err) {
+      this.emit('error', `Crossfade failed: ${err}`);
+      throw err;
     }
   }
 
@@ -332,6 +439,10 @@ class AudioBridge {
   /** Release all resources. Call when the app is tearing down. */
   destroy() {
     this.stopStatusMonitoring();
+    if (this.crossfadeInterval) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
     if (this.currentPlayerId) {
       this.stop().catch(() => {});
     }

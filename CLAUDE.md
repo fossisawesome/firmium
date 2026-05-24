@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Firmium** is a desktop Subsonic music streaming client built with Tauri 2 (Rust backend + JavaScript frontend). It provides low-latency audio playback using the `rodio` audio library, OS-level credential storage via the system keyring, and integrates with Subsonic/Navidrome servers to stream music.
+**Firmium** is a desktop OpenSubsonic music streaming client built with Tauri 2 (Rust backend + JavaScript frontend). It provides low-latency audio playback using the `rodio` audio library, OS-level credential storage via the system keyring, and integrates with OpenSubsonic-compatible servers (e.g. Navidrome) to stream music.
 
 ### Tech Stack
 - **Frontend**: Vanilla JavaScript (no framework), HTML/CSS
 - **Backend**: Rust 2021 edition, Tauri 2.11+
 - **Audio**: `rodio` 0.22 for native OS audio engine integration
-- **HTTP**: `reqwest` 0.13 for async Subsonic API calls
+- **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
 - **Credentials**: OS keyring (libsecret on Linux) via `keyring` crate
 - **UI Framework**: Tauri window management + system-native audio device support
 - **Packaging**: Linux (deb, rpm), with Arch Linux (makepkg) support
@@ -61,7 +61,7 @@ Single-page app with no JS frameworks. Architecture:
 Frontend (app.js)
     ↓ (tauriInvoke)
 Rust Commands (main.rs)
-    ├─ Subsonic API calls (reqwest) → reqwest::blocking::Response
+    ├─ OpenSubsonic API calls (reqwest) → reqwest::blocking::Response
     ├─ MD5 auth token generation
     └─ Audio playback (audio.rs)
          └─ StreamingReader (HTTP→rodio)
@@ -168,12 +168,14 @@ Currently no automated tests. Manual testing workflow:
 - `src-tauri/capabilities/default.json` — Tauri permissions (security scoping)
 - `package.json` — npm scripts for build/dev
 
-## Subsonic API Integration
+## OpenSubsonic API Integration
 
-The app uses Subsonic REST API (versions 1.12–1.16+). Requests include:
-- `u` (username), `t` (MD5-hashed token), `s` (random salt), `v` (API version), `c` (client name)
+The app targets the OpenSubsonic REST API (v1.16.1). Legacy Subsonic servers are tolerated but unsupported. Requests include:
+- `u` (username), `t` (MD5-hashed token), `s` (random salt), `v=1.16.1`, `c=firmium`, `f=json`
 - MD5 hashing done on Rust side; plaintext password sent to Rust, never leaves frontend
-- OpenSubsonic extension detection for forward compatibility
+- `openSubsonicExtensions` detected on every response and stored in `Store.ServerInfo`
+- OpenSubsonic fields used as primary: `displayArtist`, `releaseTypes[]`, `replayGain`, `bpm`, `genres[]`, `isCompilation`
+- Settings page shows a server badge ("OpenSubsonic" or "Subsonic") based on detected capabilities
 
 Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverArt`, `scrobble`, etc.
 
@@ -183,11 +185,16 @@ Always use semantic verisoning
 - Automatically change files to reflect the new version
 - List of files is found in /info/claude/files.txt
 
+## Comments
+
+- Whenever creating something new - add a comment above it explaining what it does
+- Use previous comments to get a better understanding of the code
+
 ## Changelogs
 
 - Always output change-logs to extra/changelogs
 - Use the .md format
-- File names should follow this `RELEASE_VerisonNumber`
+- File names should follow this `RELEASE_v(verison-number)`
 - To generate a change log - compare the local files to the Git repo
 
 ## Performance Considerations

@@ -30,7 +30,7 @@ use uuid::Uuid;
 ///
 /// Bytes are read from the response on demand and buffered locally.
 /// This keeps the HTTP connection open for as long as audio is playing,
-/// which allows Navidrome (and other Subsonic servers) to maintain the
+/// which allows Navidrome (and other OpenSubsonic servers) to maintain the
 /// "Now Playing" status for the full track duration rather than just the
 /// brief moment the file is being downloaded.
 ///
@@ -290,7 +290,7 @@ impl AudioPlayer {
     /// the correct playback state.
     ///
     /// Note: TLS certificate validation is intentionally NOT disabled here.
-    /// If you use a self-signed certificate on your Subsonic server, add the
+    /// If you use a self-signed certificate on your OpenSubsonic server, add the
     /// certificate to your OS trust store instead of bypassing validation globally.
     fn fetch_and_decode_blocking(
         url: &str,
