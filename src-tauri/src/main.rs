@@ -137,6 +137,19 @@ async fn get_machine_info() -> SystemInfo {
     let version = System::os_version().unwrap_or_else(|| "0.0".to_string());
 
     // Use tokio::process::Command so these shell calls don't block the async runtime.
+    #[cfg(target_os = "windows")]
+    let gpu = tokio::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "Get-WmiObject Win32_VideoController | Select-Object -First 1 -ExpandProperty Name",
+        ])
+        .output()
+        .await
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "Unknown GPU".to_string());
+
+    #[cfg(not(target_os = "windows"))]
     let gpu = tokio::process::Command::new("sh")
         .arg("-c")
         .arg("lspci | grep -E 'VGA|3D' | cut -d ':' -f3 | sed 's/^[ \\t]*//'")
@@ -145,6 +158,22 @@ async fn get_machine_info() -> SystemInfo {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_else(|_| "Unknown GPU".to_string());
 
+    #[cfg(target_os = "windows")]
+    let package_manager = tokio::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            "if (Get-Command winget -EA SilentlyContinue) { 'winget' } \
+             elseif (Get-Command choco -EA SilentlyContinue) { 'chocolatey' } \
+             elseif (Get-Command scoop -EA SilentlyContinue) { 'scoop' } \
+             else { 'none' }",
+        ])
+        .output()
+        .await
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "none".to_string());
+
+    #[cfg(not(target_os = "windows"))]
     let package_manager = tokio::process::Command::new("sh")
         .arg("-c")
         .arg("which pacman || which apt || which dnf || which zypper || echo 'unknown'")
