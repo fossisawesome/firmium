@@ -5,42 +5,40 @@ pkgrel=1
 pkgdesc="Lightning fast OpenSubsonic player in Tauri"
 arch=('x86_64')
 url="https://github.com/fossisawesome/firmium"
-license=('GPL3')
+license=('GPL-3.0-only')
 depends=('webkit2gtk-4.1' 'alsa-lib' 'openssl')
-makedepends=('cargo' 'npm')
+makedepends=('cargo' 'npm' 'nodejs')
 options=('!strip')
 
-source=()
-sha256sums=()
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/fossisawesome/firmium/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('1fb4b0ef54c95d4430072710576d852ffe44c5048f2970a84178aef5178a5c9b')
+
+build() {
+  cd "firmium-${pkgver}"
+
+  npm install
+  npm run tauri build -- --bundles deb
+}
 
 package() {
-  # This is the exact staging folder Tauri compiles when building a Linux deb bundle
-  local tauri_bundle_dir="${startdir}/src-tauri/target/release/bundle/deb/firmium-desktop_${pkgver}_amd64"
+  cd "firmium-${pkgver}"
 
-  # Fallback check in case Tauri alters the directory suffix naming conventions
-  if [ ! -d "$tauri_bundle_dir" ]; then
-    tauri_bundle_dir=$(find "${startdir}/src-tauri/target/release/bundle/deb" -maxdepth 1 -type d -name "firmium-desktop*" | head -n 1)
-  fi
+  local tauri_bundle_dir="src-tauri/target/release/bundle/deb"
 
-  if [ -z "$tauri_bundle_dir" ] || [ ! -d "$tauri_bundle_dir" ]; then
-    error "Tauri Linux bundle directory not found. Ensure tauri build successfully completed."
+  # Find the actual extracted deb directory (Tauri naming convention)
+  local deb_dir=$(find "$tauri_bundle_dir" -maxdepth 1 -type d -name "firmium-desktop*" | head -n 1)
+
+  if [ -z "$deb_dir" ] || [ ! -d "$deb_dir" ]; then
+    error "Tauri deb bundle directory not found"
     return 1
   fi
 
-  msg2 "Extracting application assets out of Tauri's build directory..."
+  # Install binary
+  install -Dm755 "$deb_dir/data/usr/bin/firmium-desktop" "$pkgdir/usr/bin/firmium-desktop"
 
-  # 1. Install your compiled binary executable straight into /usr/bin/
-  install -Dm755 "${tauri_bundle_dir}/data/usr/bin/firmium-desktop" "${pkgdir}/usr/bin/firmium-desktop"
+  # Install .desktop file
+  install -Dm644 "$deb_dir/data/usr/share/applications/firmium.desktop" "$pkgdir/usr/share/applications/firmium.desktop"
 
-  # 2. Extract your custom desktop launcher entry based on your exact tauri.conf.json mapping
-  if [ -f "${tauri_bundle_dir}/data/usr/share/applications/firmium.desktop" ]; then
-    install -Dm644 "${tauri_bundle_dir}/data/usr/share/applications/firmium.desktop" "${pkgdir}/usr/share/applications/firmium.desktop"
-  elif [ -f "${tauri_bundle_dir}/data/usr/share/applications/firmium-desktop.desktop" ]; then
-    install -Dm644 "${tauri_bundle_dir}/data/usr/share/applications/firmium-desktop.desktop" "${pkgdir}/usr/share/applications/firmium.desktop"
-  fi
-
-  # 3. Pull all processed application graphics completely over
-  if [ -d "${tauri_bundle_dir}/data/usr/share/icons" ]; then
-    cp -r "${tauri_bundle_dir}/data/usr/share/icons" "${pkgdir}/usr/share/"
-  fi
+  # Install icons
+  cp -r "$deb_dir/data/usr/share/icons" "$pkgdir/usr/share/"
 }
