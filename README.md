@@ -3,17 +3,15 @@
 
 ---
 
-Firmium is a desktop Subsonic music streaming client built with Tauri 2. It connects to any Subsonic or Navidrome server and provides low-latency audio playback using native OS audio.
+Firmium is a desktop Open-Subsonic music streaming client built with Tauri 2. It connects to any Open-Subsonic server and provides lightweight audio playback using native OS audio.
 
 ## Features
 
-- Low-latency audio playback via the native OS audio engine (ALSA)
 - Secure credential storage using the OS keyring 
 - Artist biographies and thumbnails fetched from Wikipedia
 - Cover art caching with automatic eviction
 - Album browsing, search, and queue management
 - Eight color themes
-- Auto-updater via GitHub releases
 
 ## Gallery
 
