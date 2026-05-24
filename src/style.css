@@ -1145,3 +1145,122 @@ input[type="range"].volume-slider {
 .theme-option.selected {
   color: var(--accent);
 }
+
+/* ── Lyrics Panel ─────────────────────────────────────────────────────────── */
+
+.lyrics-panel {
+  width: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 75px;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lyrics-panel.open {
+  width: 300px;
+  min-width: 300px;
+}
+
+.lyrics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.lyrics-header-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.lyrics-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all var(--timing);
+  padding: 0;
+  font-family: var(--font);
+}
+
+.lyrics-close:hover {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.lyrics-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px 40px;
+  scroll-behavior: smooth;
+}
+
+/* Status message shown when no lyrics or loading */
+.lyrics-status {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 40px 0;
+  line-height: 1.7;
+}
+
+/* Individual lyric line — default state is future/upcoming */
+.lyric-line {
+  font-size: 14px;
+  color: var(--muted);
+  padding: 7px 0;
+  line-height: 1.55;
+  opacity: 0.55;
+  transition: color 0.3s ease, font-size 0.25s ease, opacity 0.3s ease, font-weight 0.25s ease;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Currently playing line */
+.lyric-line.active {
+  color: var(--accent);
+  font-size: 19px;
+  font-weight: bold;
+  opacity: 1;
+  letter-spacing: -0.2px;
+}
+
+/* Already-played lines */
+.lyric-line.past {
+  opacity: 0.3;
+}
+
+/* About to play (next few lines) */
+.lyric-line.upcoming {
+  opacity: 0.65;
+}
+
+/* Unsynced plain-text lyrics — no highlighting, just show the text */
+.lyric-line.unsynced {
+  opacity: 0.8;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Empty instrumental lines rendered as a subtle spacer glyph */
+.lyric-line.empty-line {
+  opacity: 0.2;
+  font-size: 12px;
+  text-align: center;
+  letter-spacing: 4px;
+}
