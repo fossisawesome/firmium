@@ -6,3 +6,4 @@
 /firmium-desktop/src-tauri/Cargo.toml
 ~/firmium/aur-firmium-git
 ~/firmium/aur-firmium-bin
+/firmium-desktop/CLAUDE.md
