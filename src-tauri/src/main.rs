@@ -1,4 +1,5 @@
 use keyring::Entry;
+use std::io::Write as _;
 use std::sync::Arc;
 use tauri::Manager;
 use sysinfo::System;
@@ -45,10 +46,10 @@ fn delete_password(service: &str, user: &str) -> Result<(), String> {
 }
 
 // ============================================================================
-// SUBSONIC AUTH
+// OPENSUBSONIC AUTH
 // ============================================================================
 
-/// Generate Subsonic token-auth query parameters on the Rust side.
+/// Generate OpenSubsonic token-auth query parameters on the Rust side.
 /// Keeps MD5 out of the JS layer — the frontend passes plaintext credentials
 /// and receives the ready-to-use param map.
 #[tauri::command]
@@ -69,6 +70,48 @@ fn generate_auth_params(username: String, password: String) -> serde_json::Value
         "c": "firmium",
         "f": "json"
     })
+}
+
+// ============================================================================
+// LOGGING
+// ============================================================================
+
+/// Append a pre-formatted log entry (timestamp + level + message built by JS) to app-logs.txt.
+#[tauri::command]
+fn write_log(app_handle: tauri::AppHandle, entry: String) -> Result<(), String> {
+    let log_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&log_dir).map_err(|e| e.to_string())?;
+    let log_file = log_dir.join("app-logs.txt");
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+        .map_err(|e| e.to_string())?;
+    writeln!(file, "{}", entry).map_err(|e| e.to_string())
+}
+
+/// Delete the app-logs.txt file.
+#[tauri::command]
+fn delete_logs(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let log_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let log_file = log_dir.join("app-logs.txt");
+    if log_file.exists() {
+        std::fs::remove_file(&log_file).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Return the absolute path to app-logs.txt so the UI can display it.
+#[tauri::command]
+fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let log_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    Ok(log_dir.join("app-logs.txt").to_string_lossy().into_owned())
+}
+
+/// Return the app version string from Cargo.toml at compile time.
+#[tauri::command]
+fn get_app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
 // ============================================================================
@@ -219,6 +262,11 @@ fn main() {
             delete_password,
             // Auth
             generate_auth_params,
+            // Logging
+            write_log,
+            delete_logs,
+            get_log_path,
+            get_app_version,
             // System info
             get_machine_info,
             // Audio playback

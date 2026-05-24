@@ -6,6 +6,7 @@
 
 :root {
   /* Firmium Theme (Default) */
+  color-scheme: dark;
   --bg: #0f0f0f;
   --surface: #1a1a1a;
   --surface2: #242424;
@@ -34,6 +35,7 @@
 
 /* Catppuccin Latte */
 :root[data-theme="catppuccin-latte"] {
+  color-scheme: light;
   --bg: #eff1f5;
   --surface: #e6e9f0;
   --surface2: #dce0e8;
@@ -347,9 +349,9 @@ body {
   text-transform: uppercase;
   color: var(--muted);
   letter-spacing: 1px;
+  margin-top: 10px;
   margin-bottom: 20px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
 }
 
 .album-row {
@@ -511,6 +513,22 @@ body {
   color: var(--muted);
   font-size: 11px;
   text-align: right;
+}
+
+.track-thumb {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.track-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .track-info {
@@ -910,7 +928,7 @@ input[type="range"].volume-slider {
 
 .settings-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 15px 10px;
   border-bottom: 1px solid var(--border);
@@ -933,11 +951,33 @@ input[type="range"].volume-slider {
   color: var(--muted);
 }
 
+.server-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.server-badge--os {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.server-badge--legacy {
+  background: color-mix(in srgb, var(--muted) 20%, transparent);
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
 .toggle-switch {
   position: relative;
   display: inline-block;
   width: 40px;
   height: 20px;
+  align-self: center;
 }
 
 .toggle-switch input {
@@ -979,7 +1019,68 @@ input[type="range"].volume-slider {
   background-color: #000;
 }
 
+.crossfade-duration-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.crossfade-duration-control input[type="range"] {
+  width: 100px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.crossfade-duration-control span {
+  font-size: 13px;
+  color: var(--text);
+  min-width: 24px;
+  text-align: right;
+}
+
+.debug-btn {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 5px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background var(--timing), border-color var(--timing);
+}
+
+.debug-btn:hover {
+  background: var(--surface2);
+  border-color: var(--accent);
+}
+
+.debug-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.debug-btn--danger {
+  border-color: color-mix(in srgb, #e05 40%, transparent);
+  color: color-mix(in srgb, #e05 80%, var(--text));
+}
+
+.debug-btn--danger:hover {
+  background: color-mix(in srgb, #e05 15%, transparent);
+  border-color: #e05;
+}
+
+.debug-path {
+  word-break: break-all;
+  max-width: 340px;
+}
+
 .theme-selector {
+  position: relative;
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -988,12 +1089,59 @@ input[type="range"].volume-slider {
   font-family: var(--font);
   font-size: 13px;
   border-radius: 2px;
-  outline: none;
-  transition: border-color var(--timing);
   cursor: pointer;
-  color-scheme: dark;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  transition: border-color var(--timing);
 }
 
-.theme-selector:focus {
+.theme-selector:hover,
+.theme-selector.open {
   border-color: var(--accent);
+}
+
+.theme-selector-arrow {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform var(--timing);
+}
+
+.theme-selector.open .theme-selector-arrow {
+  transform: rotate(180deg);
+}
+
+.theme-selector-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: -1px;
+  right: -1px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.theme-selector.open .theme-selector-dropdown {
+  display: block;
+}
+
+.theme-option {
+  padding: 9px 12px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--timing);
+}
+
+.theme-option:hover {
+  background: var(--surface2);
+}
+
+.theme-option.selected {
+  color: var(--accent);
 }
