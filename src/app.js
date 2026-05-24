@@ -97,6 +97,55 @@ const AppLogger = (() => {
   console.error = (...a) => { _error(...a); AppLogger.error(...a); };
 }))();
 
+// ── LRC format parser ─────────────────────────────────────────────────────────
+// Converts an LRC timestamp "[mm:ss.xx]" or "[mm:ss.xxx]" to milliseconds.
+const parseLrcTimestamp = (mm, ss, frac) => {
+  const fracMs = frac.length === 2 ? parseInt(frac, 10) * 10 : parseInt(frac, 10);
+  return (parseInt(mm, 10) * 60 + parseInt(ss, 10)) * 1000 + fracMs;
+};
+
+// Parse an LRC-format string into an array of { start: ms, value: string }.
+// Lines without a valid timestamp (metadata tags like [ar:], [ti:]) are skipped.
+const parseLrc = (lrcText) => {
+  const lines = [];
+  for (const raw of lrcText.split('\n')) {
+    const m = raw.match(/^\[(\d{1,2}):(\d{2})\.(\d{2,3})\]\s*(.*)/);
+    if (m) lines.push({ start: parseLrcTimestamp(m[1], m[2], m[3]), value: m[4] });
+  }
+  return lines.sort((a, b) => a.start - b.start);
+};
+
+// ── LRCLIB external lyrics provider ───────────────────────────────────────────
+// lrclib.net — free, no API key, returns synced LRC lyrics.
+// Sends artist name, track title, and duration to the public API.
+const LrclibApi = {
+  getLyrics: async (song) => {
+    const params = new URLSearchParams({
+      artist_name: song.artist,
+      track_name:  song.title,
+      duration:    String(Math.round(song.duration ?? 0))
+    });
+    const res = await fetch(`https://lrclib.net/api/get?${params}`, {
+      headers: { 'Lrclib-Client': 'Firmium (https://github.com/fossisawesome/firmium)' }
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`LRCLIB ${res.status}`);
+    const data = await res.json();
+    if (data.instrumental) return { lines: [{ start: 0, value: '♪ Instrumental ♪' }], synced: false };
+    if (data.syncedLyrics) {
+      const lines = parseLrc(data.syncedLyrics);
+      if (lines.length) return { lines, synced: true };
+    }
+    if (data.plainLyrics) {
+      return {
+        lines: data.plainLyrics.split('\n').map(v => ({ start: 0, value: v })),
+        synced: false
+      };
+    }
+    return null;
+  }
+};
+
 // ── Keyring helpers ───────────────────────────────────────────────────────────
 // Credentials are stored in the OS keyring via the Rust backend, NOT in localStorage.
 // localStorage is readable by any JS on the page and in plaintext on disk.
@@ -239,6 +288,9 @@ const Store = {
               }
             }
 
+            // Advance the active lyric line to match the current playback position.
+            Lyrics.syncToPosition(position);
+
             // Crossfade trigger: start fading in the next track before this one ends.
             if (
               !_crossfadeStarted &&
@@ -359,6 +411,117 @@ const Store = {
   })()
 };
 
+// ── Lyrics state ─────────────────────────────────────────────────────────────
+// Manages the lyrics panel: open/closed state, parsed lyric lines, and active
+// line index. Rendering is done by mutating DOM directly for performance since
+// the interval fires every 250ms.
+const Lyrics = (() => {
+  let _open = false;
+  // Array of { start: number (ms), value: string }
+  let _lines = [];
+  let _synced = false;
+  let _activeIdx = -1;
+  // Track ID currently loaded — used to discard stale async results.
+  let _trackId = null;
+
+  const _updateHighlights = () => {
+    const body = DOM.el('lyricsContent');
+    if (!body) return;
+    body.querySelectorAll('.lyric-line').forEach((el, i) => {
+      el.classList.remove('active', 'past', 'upcoming');
+      if (i === _activeIdx) el.classList.add('active');
+      else if (i < _activeIdx) el.classList.add('past');
+      else el.classList.add('upcoming');
+    });
+  };
+
+  const _scrollToActive = () => {
+    const body = DOM.el('lyricsContent');
+    if (!body || _activeIdx < 0) return;
+    const els = body.querySelectorAll('.lyric-line');
+    const el = els[_activeIdx];
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  return {
+    isOpen: () => _open,
+
+    // Toggle the panel open/closed, update button state, and return new state.
+    toggle: () => {
+      _open = !_open;
+      DOM.el('lyricsPanel')?.classList.toggle('open', _open);
+      DOM.el('lyricsBtn')?.classList.toggle('active', _open);
+      return _open;
+    },
+
+    close: () => {
+      _open = false;
+      DOM.el('lyricsPanel')?.classList.remove('open');
+      DOM.el('lyricsBtn')?.classList.remove('active');
+    },
+
+    // Show a status message (loading, error, unavailable).
+    setStatus: (msg) => {
+      const body = DOM.el('lyricsContent');
+      if (body) body.innerHTML = `<div class="lyrics-status">${DOM.safeText(msg)}</div>`;
+    },
+
+    // Render parsed lyric lines. Synced lines get position-based highlighting;
+    // unsynced lines are shown as plain text at full opacity.
+    setLyrics: (lines, synced) => {
+      _lines = lines || [];
+      _synced = synced ?? false;
+      _activeIdx = -1;
+      const body = DOM.el('lyricsContent');
+      if (!body) return;
+      if (!_lines.length) {
+        body.innerHTML = '<div class="lyrics-status">No lyrics available</div>';
+        return;
+      }
+      if (!_synced) {
+        body.innerHTML = _lines.map(l =>
+          `<div class="lyric-line unsynced">${l.value ? DOM.safeText(l.value) : '&nbsp;'}</div>`
+        ).join('');
+        return;
+      }
+      body.innerHTML = _lines.map((l, i) => {
+        const cls = 'lyric-line' + (l.value.trim() === '' ? ' empty-line' : '');
+        const text = l.value.trim() === '' ? '· · ·' : DOM.safeText(l.value);
+        return `<div class="${cls}" data-idx="${i}">${text}</div>`;
+      }).join('');
+    },
+
+    getTrackId: () => _trackId,
+    setTrackId: (id) => { _trackId = id; },
+
+    clear: (msg = 'No track playing') => {
+      _lines = [];
+      _synced = false;
+      _activeIdx = -1;
+      _trackId = null;
+      const body = DOM.el('lyricsContent');
+      if (body) body.innerHTML = `<div class="lyrics-status">${DOM.safeText(msg)}</div>`;
+    },
+
+    // Called every 250ms from position tracking. Finds the last line whose
+    // start time is <= current position and highlights it.
+    syncToPosition: (positionSec) => {
+      if (!_open || !_synced || !_lines.length) return;
+      const posMs = positionSec * 1000;
+      let newIdx = -1;
+      for (let i = 0; i < _lines.length; i++) {
+        if (_lines[i].start <= posMs) newIdx = i;
+        else break;
+      }
+      if (newIdx !== _activeIdx) {
+        _activeIdx = newIdx;
+        _updateHighlights();
+        if (_activeIdx >= 0) _scrollToActive();
+      }
+    }
+  };
+})();
+
 // ── OpenSubsonic URL builder ───────────────────────────────────────────────────
 const OpenSubsonicRouter = {
   buildUrl: async (action, params = {}) => {
@@ -472,6 +635,47 @@ const Api = {
         })
         .catch(e => console.error('Scrobble network error:', e));
     });
+  },
+
+  // Fetch lyrics for a song. Priority order:
+  //   1. OpenSubsonic getLyricsBySongId (synced preferred, plain as fallback)
+  //   2. Legacy Subsonic getLyrics (plain text)
+  //   3. LRCLIB external API (synced LRC if available, plain otherwise)
+  //      — only if firmium_lrclib setting is not disabled.
+  // Returns { lines: [{start: ms, value: string}], synced: bool } or null.
+  getLyrics: async (song) => {
+    // OpenSubsonic structured lyrics (synced preferred over unsynced).
+    try {
+      const d = await Api.fetch('getLyricsBySongId', { id: song.id });
+      const list = d.lyricsList?.structuredLyrics ?? [];
+      const best = list.find(l => l.synced) || list[0];
+      if (best && best.line?.length) {
+        const offset = best.offset ?? 0;
+        return {
+          lines: best.line.map(l => ({ start: (l.start ?? 0) + offset, value: l.value ?? '' })),
+          synced: best.synced ?? false
+        };
+      }
+    } catch (_) {}
+    // Legacy getLyrics — plain text, no timestamps.
+    try {
+      const d = await Api.fetch('getLyrics', { artist: song.artist, title: song.title });
+      const lyr = d.lyrics;
+      if (lyr?.value?.trim()) {
+        return {
+          lines: lyr.value.split('\n').map(v => ({ start: 0, value: v })),
+          synced: false
+        };
+      }
+    } catch (_) {}
+    // External fallback: LRCLIB (sends artist + title + duration to lrclib.net).
+    if (SafeStorage.getItem('firmium_lrclib') !== 'false') {
+      try {
+        const result = await LrclibApi.getLyrics(song);
+        if (result) return result;
+      } catch (_) {}
+    }
+    return null;
   },
 
 };
@@ -640,6 +844,9 @@ const teardownApp = () => {
   Store.ServerInfo.clear();
   Store.UI.clearNav();
 
+  Lyrics.close();
+  Lyrics.clear();
+
   DOM.el('setup')?.classList.remove('hidden');
   DOM.el('app')?.classList.add('hidden');
   DOM.render('setupError', '');
@@ -750,6 +957,39 @@ const updateNowPlaying = (track) => {
       loadImage(DOM.el('npCoverImg'), track.coverArtId, Store.Playback.getActiveCtrl()?.signal);
     } else {
       container.innerHTML = '<div class="no-art">♪</div>';
+    }
+  }
+
+  // Clear any previously loaded lyrics and fetch new ones if the panel is open.
+  if (track) {
+    Lyrics.clear('Loading lyrics…');
+    fetchAndShowLyrics(track);
+  } else {
+    Lyrics.clear();
+  }
+};
+
+// Fetch lyrics for the given song and populate the lyrics panel.
+// No-ops immediately if the panel is closed; discards stale results if the
+// track changed while the fetch was in flight.
+const fetchAndShowLyrics = async (song) => {
+  if (!song) return;
+  Lyrics.setTrackId(song.id);
+  if (!Lyrics.isOpen()) return;
+  Lyrics.setStatus('Loading lyrics…');
+  try {
+    const result = await Api.getLyrics(song);
+    // Discard if a different track started playing while we were fetching.
+    if (Lyrics.getTrackId() !== song.id) return;
+    if (result) {
+      Lyrics.setLyrics(result.lines, result.synced);
+    } else {
+      Lyrics.setStatus('No lyrics available for this track');
+    }
+  } catch (e) {
+    if (Lyrics.getTrackId() === song.id) {
+      Lyrics.setStatus('Failed to load lyrics');
+      console.error('Lyrics fetch error:', e);
     }
   }
 };
@@ -984,6 +1224,7 @@ const loadView = async (view) => {
     const isDecorated = SafeStorage.getItem('firmium_decorations') !== 'false';
     const isWikiEnabled = SafeStorage.getItem('firmium_wikipedia') !== 'false';
     const isAutoLoginEnabled = SafeStorage.getItem('firmium_auto_login') !== 'false';
+    const isLrclibEnabled = SafeStorage.getItem('firmium_lrclib') !== 'false';
     const isCrossfadeEnabled = Store.Playback.getCrossfadeEnabled();
     const crossfadeDuration = Store.Playback.getCrossfadeDuration();
     const currentTheme = SafeStorage.getItem('firmium_theme') || 'firmium';
@@ -1044,6 +1285,16 @@ const loadView = async (view) => {
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="toggleWikipedia" ${isWikiEnabled ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">External Lyrics (LRCLIB)</div>
+          <div class="settings-desc">Fetch synced lyrics from lrclib.net when your server has none. Sends song title and artist name.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleLrclib" ${isLrclibEnabled ? 'checked' : ''}>
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -1137,6 +1388,10 @@ const loadView = async (view) => {
       SafeStorage.setItem('firmium_wikipedia', e.target.checked ? 'true' : 'false');
     });
 
+    DOM.el('toggleLrclib')?.addEventListener('change', (e) => {
+      SafeStorage.setItem('firmium_lrclib', e.target.checked ? 'true' : 'false');
+    });
+
     DOM.el('toggleCrossfade')?.addEventListener('change', (e) => {
       Store.Playback.setCrossfadeEnabled(e.target.checked);
       const durationRow = DOM.el('crossfadeDurationRow');
@@ -1198,7 +1453,7 @@ const loadView = async (view) => {
     DOM.el('debugDeleteSettings')?.addEventListener('click', (e) => {
       const SETTINGS_KEYS = [
         'firmium_server', 'firmium_user', 'firmium_save_pass',
-        'firmium_auto_login', 'firmium_wikipedia', 'firmium_theme',
+        'firmium_auto_login', 'firmium_wikipedia', 'firmium_lrclib', 'firmium_theme',
         'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
         'firmium_volume',
       ];
@@ -1452,6 +1707,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         Store.Playback.setRepeatAll(nextRA);
         target.classList.toggle('active', nextRA);
         DOM.el('rOneBtn')?.classList.remove('active');
+        break;
+      }
+
+      case 'toggle-lyrics': {
+        const nowOpen = Lyrics.toggle();
+        // If just opened, fetch lyrics for the current track if not already loaded.
+        if (nowOpen) {
+          const track = Store.Playback.getCurrentTrack();
+          if (track && Lyrics.getTrackId() !== track.id) {
+            fetchAndShowLyrics(track);
+          } else if (!track) {
+            Lyrics.setStatus('No track playing');
+          }
+        }
         break;
       }
 
