@@ -77,6 +77,18 @@
         <button class="ctrl-btn" data-action="next-track" id="nextBtn" title="Next">⏭</button>
         <button class="ctrl-btn secondary-ctrl" data-action="toggle-repeat-one" id="rOneBtn" title="Repeat One">⥀</button>
         <button class="ctrl-btn secondary-ctrl" data-action="toggle-repeat-all" id="rAllBtn" title="Repeat All">⥁</button>
+        <button class="ctrl-btn secondary-ctrl" data-action="toggle-lyrics" id="lyricsBtn" title="Lyrics">🎙</button>
+      </div>
+    </div>
+
+    <!-- Lyrics panel — slides in from the right when toggled -->
+    <div class="lyrics-panel" id="lyricsPanel">
+      <div class="lyrics-header">
+        <span class="lyrics-header-title">Lyrics</span>
+        <button class="lyrics-close" data-action="toggle-lyrics" title="Close lyrics">✕</button>
+      </div>
+      <div class="lyrics-body" id="lyricsContent">
+        <div class="lyrics-status">No track playing</div>
       </div>
     </div>
   </div>

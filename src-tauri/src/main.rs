@@ -246,6 +246,10 @@ fn list_audio_devices() -> Result<Vec<audio::AudioDevice>, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Initialize audio player within the setup lifecycle hook.
             // This ensures the Tokio async runtime context is fully running.
