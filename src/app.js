@@ -1,5 +1,5 @@
 // ── Constants ────────────────────────────────────────────────────────────────
-// Max albums/songs fetched per list request (Subsonic allows up to 500).
+// Max albums/songs fetched per list request (OpenSubsonic allows up to 500).
 const API_PAGE_SIZE = 500;
 // How many cover art blob URLs to keep in memory before evicting oldest.
 const MAX_COVER_CACHE_SIZE = 150;
@@ -10,7 +10,7 @@ const SEARCH_ALBUM_LIMIT = 40;
 // Max songs returned per search query.
 const SEARCH_SONG_LIMIT = 100;
 // How many album track fetches to run in parallel when building "Play All" queue.
-// Keeps the Subsonic server from being flooded with simultaneous requests.
+// Keeps the OpenSubsonic server from being flooded with simultaneous requests.
 const PLAY_ALL_CONCURRENCY = 5;
 // Keyring service name used for OS credential storage.
 const KEYRING_SERVICE = 'firmium-desktop';
@@ -63,6 +63,39 @@ const SafeStorage = {
     }
   }
 };
+
+// ── App Logger ────────────────────────────────────────────────────────────────
+// Writes timestamped log entries to app-logs.txt via the Rust backend.
+// Intercepts console.log/warn/error so all dev output is persisted to disk.
+const AppLogger = (() => {
+  const _write = (level, ...args) => {
+    const msg = args.map(a => {
+      if (a instanceof Error) return `${a.name}: ${a.message}`;
+      if (typeof a === 'object' && a !== null) {
+        try { return JSON.stringify(a); } catch (_) { return String(a); }
+      }
+      return String(a);
+    }).join(' ');
+    const ts = new Date().toISOString();
+    const entry = `[${ts}] [${level}] ${msg}`;
+    try { tauriInvoke('write_log', { entry }); } catch (_) {}
+  };
+  return {
+    info:  (...args) => _write('INFO',  ...args),
+    warn:  (...args) => _write('WARN',  ...args),
+    error: (...args) => _write('ERROR', ...args),
+  };
+})();
+
+// Patch console so existing log calls are also persisted.
+((() => {
+  const _log   = console.log.bind(console);
+  const _warn  = console.warn.bind(console);
+  const _error = console.error.bind(console);
+  console.log   = (...a) => { _log(...a);   AppLogger.info(...a);  };
+  console.warn  = (...a) => { _warn(...a);  AppLogger.warn(...a);  };
+  console.error = (...a) => { _error(...a); AppLogger.error(...a); };
+}))();
 
 // ── Keyring helpers ───────────────────────────────────────────────────────────
 // Credentials are stored in the OS keyring via the Rust backend, NOT in localStorage.
@@ -125,6 +158,7 @@ const Store = {
     let _bridge = null;
     let _positionInterval = null;
     let _isSeeking = false;
+    let _crossfadeStarted = false;
 
     const _self = {
       init: () => {
@@ -184,6 +218,7 @@ const Store = {
       startPositionTracking: () => {
         _self.stopPositionTracking();
         _self._cachedDuration = null;
+        _crossfadeStarted = false;
         _positionInterval = setInterval(async () => {
           if (!_bridge || !Store.Playback.getCurrentTrack()) {
             _self.stopPositionTracking();
@@ -201,6 +236,25 @@ const Store = {
               if (seekBar && _self._cachedDuration) {
                 seekBar.max = _self._cachedDuration;
                 seekBar.value = position;
+              }
+            }
+
+            // Crossfade trigger: start fading in the next track before this one ends.
+            if (
+              !_crossfadeStarted &&
+              _self._cachedDuration &&
+              Store.Playback.getCrossfadeEnabled() &&
+              !Store.Playback.getRepeatOne()
+            ) {
+              const fadeSec = Store.Playback.getCrossfadeDuration();
+              if (position >= _self._cachedDuration - fadeSec) {
+                const queue = Store.Playback.getQueue();
+                let nextIdx = Store.Playback.getQueueIdx() + 1;
+                if (nextIdx >= queue.length && Store.Playback.getRepeatAll()) nextIdx = 0;
+                if (nextIdx < queue.length) {
+                  _crossfadeStarted = true;
+                  crossfadeToNext(nextIdx);
+                }
               }
             }
           } catch (err) {
@@ -231,6 +285,8 @@ const Store = {
     let _queue = [], _queueIdx = -1, _playToken = 0;
     let _volume = Number(SafeStorage.getItem('firmium_volume') ?? DEFAULT_VOLUME);
     let _repeatOne = false, _repeatAll = false;
+    let _crossfadeEnabled = SafeStorage.getItem('firmium_crossfade') !== 'false';
+    let _crossfadeDuration = Math.max(1, Math.min(12, Number(SafeStorage.getItem('firmium_crossfade_duration') ?? 5)));
     let _abortCtrl = null, _searchCtrl = null, _observer = null;
     const _covers = new Map(), _pendingCovers = new Map();
 
@@ -254,6 +310,16 @@ const Store = {
       setRepeatOne: (v) => { _repeatOne = Boolean(v); if (v) _repeatAll = false; },
       getRepeatAll: () => _repeatAll,
       setRepeatAll: (v) => { _repeatAll = Boolean(v); if (v) _repeatOne = false; },
+      getCrossfadeEnabled: () => _crossfadeEnabled,
+      setCrossfadeEnabled: (v) => {
+        _crossfadeEnabled = Boolean(v);
+        SafeStorage.setItem('firmium_crossfade', _crossfadeEnabled ? 'true' : 'false');
+      },
+      getCrossfadeDuration: () => _crossfadeDuration,
+      setCrossfadeDuration: (v) => {
+        _crossfadeDuration = Math.max(1, Math.min(12, Number(v) || 5));
+        SafeStorage.setItem('firmium_crossfade_duration', String(_crossfadeDuration));
+      },
 
       abortActive: () => { if (_abortCtrl) { _abortCtrl.abort(); _abortCtrl = null; } },
       setActiveCtrl: (c) => { _abortCtrl = c; },
@@ -293,8 +359,8 @@ const Store = {
   })()
 };
 
-// ── Subsonic URL builder ───────────────────────────────────────────────────────
-const SubsonicRouter = {
+// ── OpenSubsonic URL builder ───────────────────────────────────────────────────
+const OpenSubsonicRouter = {
   buildUrl: async (action, params = {}) => {
     const server = Store.Auth.getServer();
     if (!server) return '';
@@ -307,8 +373,8 @@ const SubsonicRouter = {
   }
 };
 
-// ── Data mappers ───────────────────────────────────────────────────────────────
-const SubsonicMapper = {
+// ── OpenSubsonic data mappers ─────────────────────────────────────────────────
+const OpenSubsonicMapper = {
   mapAlbum: (a) => ({
     id: a.id,
     name: a.name ?? a.title ?? 'Unknown Album',
@@ -342,10 +408,10 @@ const SubsonicMapper = {
   })
 };
 
-// ── API layer ──────────────────────────────────────────────────────────────────
+// ── OpenSubsonic API layer ────────────────────────────────────────────────────
 const Api = {
   fetch: async (action, params = {}, signal = null) => {
-    const url = await SubsonicRouter.buildUrl(action, params);
+    const url = await OpenSubsonicRouter.buildUrl(action, params);
     const res = await fetch(url, signal ? { signal } : {});
     if (res.status === 401) { if (Store.Auth.isAuthed()) teardownApp(); throw new Error('Session Expired'); }
     if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
@@ -361,21 +427,21 @@ const Api = {
   },
   getAlbums: async (sig) => {
     const d = await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: API_PAGE_SIZE }, sig);
-    return (d.albumList2?.album ?? d.albumList?.album ?? []).map(SubsonicMapper.mapAlbum);
+    return (d.albumList2?.album ?? []).map(OpenSubsonicMapper.mapAlbum);
   },
   getArtists: async (sig) => {
     const d = await Api.fetch('getArtists', {}, sig);
     const container = [];
     if (d.artists?.index) d.artists.index.forEach(i => { if (Array.isArray(i.artist)) container.push(...i.artist); });
-    return container.map(SubsonicMapper.mapArtist);
+    return container.map(OpenSubsonicMapper.mapArtist);
   },
   getAlbumTracks: async (id, sig) => {
     const d = await Api.fetch('getAlbum', { id }, sig);
     const a = d.album ?? {};
     return {
-      tracks: (a.song ?? []).map(SubsonicMapper.mapSong),
+      tracks: (a.song ?? []).map(OpenSubsonicMapper.mapSong),
       albumName: a.name ?? a.title ?? 'Unknown Album',
-      albumArtist: a.artist ?? 'Unknown Artist',
+      albumArtist: a.displayArtist ?? a.artist ?? 'Unknown Artist',
       coverArtId: a.coverArt
     };
   },
@@ -383,18 +449,18 @@ const Api = {
     const d = await Api.fetch('getArtist', { id }, sig);
     return {
       name: d.artist?.name ?? 'Unknown Artist',
-      albums: (d.artist?.album ?? []).map(SubsonicMapper.mapAlbum)
+      albums: (d.artist?.album ?? []).map(OpenSubsonicMapper.mapAlbum)
     };
   },
   search: async (query, sig) => {
     const d = await Api.fetch('search3', { query, albumCount: SEARCH_ALBUM_LIMIT, songCount: SEARCH_SONG_LIMIT }, sig);
     return {
-      songs: (d.searchResult3?.song ?? []).map(SubsonicMapper.mapSong),
-      albums: (d.searchResult3?.album ?? []).map(SubsonicMapper.mapAlbum)
+      songs: (d.searchResult3?.song ?? []).map(OpenSubsonicMapper.mapSong),
+      albums: (d.searchResult3?.album ?? []).map(OpenSubsonicMapper.mapAlbum)
     };
   },
   scrobble: (id, submission, time = Date.now()) => {
-    SubsonicRouter.buildUrl('scrobble', { id, submission: String(submission), time: String(time) }).then(url => {
+    OpenSubsonicRouter.buildUrl('scrobble', { id, submission: String(submission), time: String(time) }).then(url => {
       if (!url) return;
       fetch(url)
         .then(async r => {
@@ -422,7 +488,7 @@ const formatDuration = (secs) => {
 
 /**
  * Run async tasks with a concurrency limit.
- * Used for "Play All" to avoid flooding the Subsonic server with parallel requests.
+ * Used for "Play All" to avoid flooding the OpenSubsonic server with parallel requests.
  *
  * @param {Array}    items     - Items to process
  * @param {number}   limit     - Max simultaneous tasks
@@ -460,7 +526,7 @@ const loadImage = async (img, coverId, signal) => {
   let promise = Store.Playback.getPendingCover(coverId);
   if (!promise) {
     promise = (async () => {
-      const url = await SubsonicRouter.buildUrl('getCoverArt', { id: coverId });
+      const url = await OpenSubsonicRouter.buildUrl('getCoverArt', { id: coverId });
       const res = await fetch(url, { signal });
       if (!res.ok) throw new Error('Cover art unavailable');
       const blob = await res.blob();
@@ -533,6 +599,9 @@ const DOM = {
   createTrackCard: (track, idx) => `
     <div class="track-row" data-action="play-track" data-index="${idx}" data-id="${DOM.safeText(track.id)}">
       <div class="track-num">${DOM.safeText(track.trackNumber ?? (idx + 1))}</div>
+      <div class="track-thumb">${track.coverArtId
+        ? `<img class="lazy-art" data-cover-id="${DOM.safeText(track.coverArtId)}" alt="">`
+        : ''}</div>
       <div class="track-info">
         <div class="track-title">${DOM.safeText(track.title)}</div>
         <div class="track-artist">${DOM.safeText(track.artist)}</div>
@@ -579,6 +648,43 @@ const teardownApp = () => {
 
 // ── Playback ───────────────────────────────────────────────────────────────────
 
+/**
+ * Crossfade from the current track into the track at nextIdx.
+ *
+ * Called automatically by position tracking when the playing track is within
+ * crossfadeDuration seconds of its end. Updates all UI and queue state, then
+ * hands off to AudioBridge.startCrossfadeIn for the volume ramp.
+ */
+const crossfadeToNext = async (nextIdx) => {
+  const bridge = Store.Audio.getBridge();
+  if (!bridge) return;
+
+  const currentTrack = Store.Playback.getCurrentTrack();
+  if (currentTrack) Api.scrobble(currentTrack.id, true);
+
+  Store.Playback.setQueueIdx(nextIdx);
+  const nextTrack = Store.Playback.getCurrentTrack();
+  if (!nextTrack) return;
+
+  updateNowPlaying(nextTrack);
+  highlightCurrentTrack();
+
+  const currentToken = Store.Playback.bumpToken();
+
+  try {
+    const streamUrl = await OpenSubsonicRouter.buildUrl('stream', { id: nextTrack.id });
+    if (currentToken !== Store.Playback.getPlayToken()) return;
+
+    const fadeDurationMs = Store.Playback.getCrossfadeDuration() * 1000;
+    await bridge.startCrossfadeIn(streamUrl, nextTrack.id, Store.Playback.getVolume(), fadeDurationMs);
+
+    Api.scrobble(nextTrack.id, false);
+    document.title = `▶ ${nextTrack.title} - Firmium`;
+  } catch (e) {
+    console.error('Crossfade error:', e);
+  }
+};
+
 /** Highlight the currently playing track row in the list panel. */
 const highlightCurrentTrack = () => {
   const current = Store.Playback.getCurrentTrack();
@@ -611,7 +717,7 @@ const playAt = async (idx) => {
   highlightCurrentTrack();
 
   try {
-    const streamUrl = await SubsonicRouter.buildUrl('stream', { id: track.id });
+    const streamUrl = await OpenSubsonicRouter.buildUrl('stream', { id: track.id });
     if (currentToken !== Store.Playback.getPlayToken()) return; // Superseded by newer play request.
 
     await bridge.play(streamUrl, track.id);
@@ -877,6 +983,9 @@ const loadView = async (view) => {
   if (view === 'settings') {
     const isDecorated = SafeStorage.getItem('firmium_decorations') !== 'false';
     const isWikiEnabled = SafeStorage.getItem('firmium_wikipedia') !== 'false';
+    const isAutoLoginEnabled = SafeStorage.getItem('firmium_auto_login') !== 'false';
+    const isCrossfadeEnabled = Store.Playback.getCrossfadeEnabled();
+    const crossfadeDuration = Store.Playback.getCrossfadeDuration();
     const currentTheme = SafeStorage.getItem('firmium_theme') || 'firmium';
     const themes = [
       ['firmium',             'Firmium'],
@@ -889,9 +998,12 @@ const loadView = async (view) => {
       ['catppuccin-latte',    'Catppuccin Latte'],
       ['nord',                'Nord'],
     ];
-    const themeOptions = themes
-      .map(([val, label]) => `<option value="${val}"${currentTheme === val ? ' selected' : ''}>${label}</option>`)
+    const themeItems = themes
+      .map(([val, label]) => `<div class="theme-option${currentTheme === val ? ' selected' : ''}" data-value="${val}">${label}</div>`)
       .join('');
+    const currentThemeLabel = (themes.find(([v]) => v === currentTheme) || themes[0])[1];
+    const isOpenSubsonic = Store.ServerInfo.isOpenSubsonic();
+    const extensions = Store.ServerInfo.getExtensions() ?? [];
     const html = `
       <div class="section-header">Settings</div>
       <div class="settings-row">
@@ -909,7 +1021,21 @@ const loadView = async (view) => {
           <div class="settings-title">Theme</div>
           <div class="settings-desc">Color scheme for the interface</div>
         </div>
-        <select class="theme-selector" id="themeSelector">${themeOptions}</select>
+        <div class="theme-selector" id="themeSelector">
+          <div class="theme-selector-value" id="themeSelectorValue">${currentThemeLabel}</div>
+          <span class="theme-selector-arrow">▾</span>
+          <div class="theme-selector-dropdown" id="themeSelectorDropdown">${themeItems}</div>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Auto-Login</div>
+          <div class="settings-desc">Automatically connect on startup when credentials are saved</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleAutoLogin" ${isAutoLoginEnabled ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
       <div class="settings-row">
         <div class="settings-info">
@@ -920,17 +1046,166 @@ const loadView = async (view) => {
           <input type="checkbox" id="toggleWikipedia" ${isWikiEnabled ? 'checked' : ''}>
           <span class="toggle-slider"></span>
         </label>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Crossfade</div>
+          <div class="settings-desc">Smoothly blend between tracks</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleCrossfade" ${isCrossfadeEnabled ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row" id="crossfadeDurationRow" style="${isCrossfadeEnabled ? '' : 'display:none'}">
+        <div class="settings-info">
+          <div class="settings-title">Crossfade Duration</div>
+          <div class="settings-desc">Length of the blend in seconds</div>
+        </div>
+        <div class="crossfade-duration-control">
+          <input type="range" id="crossfadeDurationSlider" min="1" max="12" step="1" value="${crossfadeDuration}">
+          <span id="crossfadeDurationLabel">${crossfadeDuration}s</span>
+        </div>
+      </div>
+      <div class="section-header">Debug</div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">App Version</div>
+          <div class="settings-desc" id="debugAppVersion">Loading…</div>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">System</div>
+          <div class="settings-desc" id="debugSystemInfo">Loading…</div>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Log File</div>
+          <div class="settings-desc debug-path" id="debugLogPath">Loading…</div>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Wipe Cache</div>
+          <div class="settings-desc">Clear in-memory cover art cache</div>
+        </div>
+        <button class="debug-btn" id="debugWipeCache">Wipe</button>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Delete Logs</div>
+          <div class="settings-desc">Remove the app-logs.txt file from disk</div>
+        </div>
+        <button class="debug-btn debug-btn--danger" id="debugDeleteLogs">Delete</button>
+      </div>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Delete User Settings</div>
+          <div class="settings-desc">Reset all preferences to defaults</div>
+        </div>
+        <button class="debug-btn debug-btn--danger" id="debugDeleteSettings">Delete</button>
       </div>`;
     DOM.render('listPanel', html);
 
-    DOM.el('themeSelector')?.addEventListener('change', (e) => {
-      const theme = e.target.value;
+    const selector = DOM.el('themeSelector');
+    const dropdown = DOM.el('themeSelectorDropdown');
+    const valueEl = DOM.el('themeSelectorValue');
+    selector?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selector.classList.toggle('open');
+    });
+    dropdown?.addEventListener('click', (e) => {
+      const opt = e.target.closest('.theme-option');
+      if (!opt) return;
+      const theme = opt.dataset.value;
+      dropdown.querySelectorAll('.theme-option').forEach(el => el.classList.remove('selected'));
+      opt.classList.add('selected');
+      valueEl.textContent = opt.textContent;
+      selector.classList.remove('open');
       applyTheme(theme);
       SafeStorage.setItem('firmium_theme', theme);
+    });
+    document.addEventListener('click', () => selector?.classList.remove('open'), { capture: true });
+
+    DOM.el('toggleAutoLogin')?.addEventListener('change', (e) => {
+      SafeStorage.setItem('firmium_auto_login', e.target.checked ? 'true' : 'false');
     });
 
     DOM.el('toggleWikipedia')?.addEventListener('change', (e) => {
       SafeStorage.setItem('firmium_wikipedia', e.target.checked ? 'true' : 'false');
+    });
+
+    DOM.el('toggleCrossfade')?.addEventListener('change', (e) => {
+      Store.Playback.setCrossfadeEnabled(e.target.checked);
+      const durationRow = DOM.el('crossfadeDurationRow');
+      if (durationRow) durationRow.style.display = e.target.checked ? '' : 'none';
+    });
+
+    DOM.el('crossfadeDurationSlider')?.addEventListener('input', (e) => {
+      const val = Number(e.target.value);
+      Store.Playback.setCrossfadeDuration(val);
+      const label = DOM.el('crossfadeDurationLabel');
+      if (label) label.textContent = `${val}s`;
+    });
+
+    // ── Debug section: async info loaders ──────────────────────────────────────
+    tauriInvoke('get_app_version').then(v => {
+      const el = DOM.el('debugAppVersion');
+      if (el) el.textContent = `v${v}`;
+    }).catch(() => {
+      const el = DOM.el('debugAppVersion');
+      if (el) el.textContent = 'unavailable';
+    });
+
+    tauriInvoke('get_machine_info').then(info => {
+      const el = DOM.el('debugSystemInfo');
+      if (el) el.textContent = `${info.distro} ${info.version}`;
+    }).catch(() => {
+      const el = DOM.el('debugSystemInfo');
+      if (el) el.textContent = 'unavailable';
+    });
+
+    tauriInvoke('get_log_path').then(p => {
+      const el = DOM.el('debugLogPath');
+      if (el) el.textContent = p;
+    }).catch(() => {
+      const el = DOM.el('debugLogPath');
+      if (el) el.textContent = 'unavailable';
+    });
+
+    DOM.el('debugWipeCache')?.addEventListener('click', (e) => {
+      Store.Playback.clearAllCache();
+      e.target.textContent = 'Wiped!';
+      setTimeout(() => { e.target.textContent = 'Wipe'; }, 1500);
+      AppLogger.info('Cover art cache wiped by user');
+    });
+
+    DOM.el('debugDeleteLogs')?.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        await tauriInvoke('delete_logs');
+        e.target.textContent = 'Deleted!';
+        AppLogger.info('Log file deleted by user');
+      } catch (err) {
+        e.target.textContent = 'Failed';
+        console.error('Failed to delete logs:', err);
+      }
+      setTimeout(() => { e.target.textContent = 'Delete'; e.target.disabled = false; }, 1500);
+    });
+
+    DOM.el('debugDeleteSettings')?.addEventListener('click', (e) => {
+      const SETTINGS_KEYS = [
+        'firmium_server', 'firmium_user', 'firmium_save_pass',
+        'firmium_auto_login', 'firmium_wikipedia', 'firmium_theme',
+        'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
+        'firmium_volume',
+      ];
+      SETTINGS_KEYS.forEach(k => SafeStorage.removeItem(k));
+      AppLogger.info('User settings deleted by user');
+      e.target.textContent = 'Deleted!';
+      setTimeout(() => { e.target.textContent = 'Delete'; }, 1500);
     });
 
     DOM.el('toggleDecorations')?.addEventListener('change', async (e) => {
@@ -985,6 +1260,21 @@ const loadView = async (view) => {
 
 // ── App startup ────────────────────────────────────────────────────────────────
 
+// Attempt to connect with the given credentials. Returns true on success.
+const doConnect = async (sUrl, uName, pWord) => {
+  let parsed;
+  try { parsed = new URL(sUrl); } catch (_) { throw new Error('Invalid URL format'); }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Protocol must be HTTP or HTTPS');
+  }
+  Store.Auth.setAuth(sUrl, uName, pWord);
+  await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 });
+  if (!Store.ServerInfo.isOpenSubsonic()) {
+    console.warn('Connected to a legacy Subsonic server — OpenSubsonic features will not be available.');
+  }
+  return true;
+};
+
 const showApp = () => {
   DOM.el('setup')?.classList.add('hidden');
   DOM.el('app')?.classList.remove('hidden');
@@ -1014,15 +1304,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (savedUser) DOM.el('username').value = savedUser;
 
   // Attempt to load the saved password from the OS keyring (NOT localStorage).
+  let resolvedPass = null;
   if (savePasswordEnabled && savedUser) {
     const saveCb = DOM.el('savePassword');
     if (saveCb) saveCb.checked = true;
     try {
       const savedPass = await Keyring.load(savedUser);
-      if (savedPass) DOM.el('password').value = savedPass;
+      if (savedPass) {
+        DOM.el('password').value = savedPass;
+        resolvedPass = savedPass;
+      }
     } catch {
       // Keyring entry may not exist yet (first run after migrating from localStorage).
       // Silently ignore — the user will just need to re-enter their password.
+    }
+  }
+
+  // Auto-login: if all credentials are available and the setting is on (default), skip the login screen.
+  const autoLoginEnabled = SafeStorage.getItem('firmium_auto_login') !== 'false';
+  if (autoLoginEnabled && savedServer && savedUser && resolvedPass) {
+    const statusEl = DOM.el('setupError');
+    if (statusEl) { statusEl.textContent = 'Connecting…'; statusEl.style.color = ''; }
+    try {
+      await doConnect(savedServer, savedUser, resolvedPass);
+      showApp();
+    } catch (err) {
+      Store.Auth.clearAuth();
+      if (statusEl) { statusEl.textContent = err.message ?? 'Auto-login failed'; statusEl.style.color = 'var(--error, red)'; }
     }
   }
 
@@ -1167,14 +1475,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         DOM.render('setupError', '');
 
         try {
-          let parsed;
-          try { parsed = new URL(sUrl); } catch (_) { throw new Error('Invalid URL format'); }
-          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            throw new Error('Protocol must be HTTP or HTTPS');
-          }
-
-          Store.Auth.setAuth(sUrl, uName, pWord);
-          await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 });
+          await doConnect(sUrl, uName, pWord);
 
           // Save non-sensitive values to localStorage.
           SafeStorage.setItem('firmium_server', sUrl);
