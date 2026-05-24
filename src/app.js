@@ -118,11 +118,27 @@ const parseLrc = (lrcText) => {
 // ── LRCLIB external lyrics provider ───────────────────────────────────────────
 // lrclib.net — free, no API key, returns synced LRC lyrics.
 // Sends artist name, track title, and duration to the public API.
+
+// Normalize song title and artist for better lrclib matching.
+// Removes remix/version info in parentheses/brackets and strips featured artists.
+const normalizeLrclibQuery = (song) => {
+  // Remove common version suffixes: (Remix), [Live], (Extended Mix), (Acoustic), etc.
+  let title = song.title.replace(/\s*[\(\[](?:Remix|Live|Extended|Acoustic|Instrumental|Remaster|Cover|Edit|Version|feat\.?|featuring)[^\)\]]*[\)\]]/gi, '').trim();
+  // Remove trailing hyphens or dashes with artist info
+  title = title.replace(/\s*-\s*(?:feat\.|featuring).*$/i, '').trim();
+
+  // For artist, take only the first name before "feat" or "/"
+  let artist = song.artist.split(/\s*(?:feat\.|feat|featuring|ft\.?|\/)\s*/i)[0].trim();
+
+  return { artist, title };
+};
+
 const LrclibApi = {
   getLyrics: async (song) => {
+    const { artist, title } = normalizeLrclibQuery(song);
     const params = new URLSearchParams({
-      artist_name: song.artist,
-      track_name:  song.title,
+      artist_name: artist,
+      track_name:  title,
       duration:    String(Math.round(song.duration ?? 0))
     });
     const res = await fetch(`https://lrclib.net/api/get?${params}`, {
