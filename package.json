@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:app": "concurrently \"npm run dev\" \"npm run tauri:dev\"",
     "build": "vite build",
+    "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "release": "npm run build && npm run tauri:build"
