@@ -27,6 +27,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -55,6 +56,9 @@ jobs:
 
       - name: Install npm dependencies
         run: npm install
+
+      - name: Build frontend (Vite + Svelte)
+        run: npm run build
 
       - name: Build and bundle
         uses: tauri-apps/tauri-action@v0

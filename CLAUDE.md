@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 1.6.0
+**Version**: 2.0.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Firmium** is a desktop OpenSubsonic music streaming client built with Tauri 2 (Rust backend + JavaScript frontend). It provides low-latency audio playback using the `rodio` audio library, OS-level credential storage via the system keyring, and integrates with OpenSubsonic-compatible servers (e.g. Navidrome) to stream music.
 
 ### Tech Stack
-- **Frontend**: Vanilla JavaScript (no framework), HTML/CSS
+- **Frontend**: Svelte 4, bundled via Vite
 - **Backend**: Rust 2021 edition, Tauri 2.11+
 - **Audio**: `rodio` 0.22 for native OS audio engine integration
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Rust Backend (src-tauri/src/)
 
-The backend exposes Tauri commands that the frontend invokes via the bridge in `audio-bridge.js`. Key modules:
+The backend exposes Tauri commands that the frontend invokes via the bridge in `src/lib/audio-bridge.js`. Key modules:
 
 - **main.rs**: Entry point. Defines Tauri commands for:
   - Subsonic auth: `generate_auth_params()` — MD5 token hashing on Rust side (keeps plaintext credentials out of JS)
@@ -40,36 +40,46 @@ The backend exposes Tauri commands that the frontend invokes via the bridge in `
 
 - **lib.rs**: Boilerplate Tauri setup (plugins, handlers). Currently minimal; new commands must be registered here.
 
-### JavaScript Frontend (src/)
+### Svelte Frontend (src/)
 
-Single-page app with no JS frameworks. Architecture:
+Single-page Svelte app bundled by Vite. Hot reload works for all frontend changes during dev.
 
-- **index.html**: Basic page structure, loads CSS and JS in order
-- **audio-bridge.js**: Tauri invocation helpers + event listeners. Bridges `tauriInvoke()` calls from app.js to Rust commands.
-- **app.js** (~1500 lines): Main application state and UI logic:
-  - **Api**: Subsonic API client (fetch with auth params from Rust)
-  - **Store**: Singleton state manager (auth, server info, playlist, now playing, etc.)
-  - **WikiApi**: Wikipedia biography + thumbnail fetches for artists
-  - **SafeStorage**: Wrapper around localStorage with error handling
-  - **Keyring**: Credential management via Rust backend
-  - UI modules: AlbumBrowser, NowPlaying, Sidebar, SearchResults, VolumeControl, etc.
-  - Event flow: Click handlers → API calls → Store updates → DOM re-render
-
+- **App.svelte**: Root component. Handles auth check on mount, theme/decorations, view routing, and global overlay components (LyricsPanel, PlaylistMenu).
+- **components/**: Shared UI components
+  - `PlayerBar.svelte` — persistent bottom player with controls, seek bar, volume
+  - `Sidebar.svelte` — navigation sidebar
+  - `LyricsPanel.svelte` — synced/unsynced lyrics overlay
+  - `PlaylistMenu.svelte` — context menu for adding tracks to playlists
+  - `Setup.svelte` — initial server login screen
+- **views/**: Full-page view components (one per route)
+  - `AlbumList.svelte`, `AlbumDetail.svelte`, `ArtistList.svelte`, `ArtistDetail.svelte`
+  - `SearchView.svelte`, `PlaylistsView.svelte`, `PlaylistDetail.svelte`, `Settings.svelte`
+- **lib/**: Logic modules (no UI)
+  - `stores.js` — all Svelte writable/derived stores (auth, queue, playback state, lyrics, playlists, etc.)
+  - `playback.js` — `playAt()`, `crossfadeToNext()`, position tracking, lyrics sync, bridge event wiring
+  - `audio-bridge.js` — `AudioBridge` class: wraps Tauri IPC calls for play/pause/seek/volume, status polling loop
+  - `api.js` — `Api` (OpenSubsonic REST client), `OpenSubsonicRouter` (URL builder), `Keyring`, `WikiApi`
+  - `coverCache.js` — in-memory blob URL cache (max 150 entries, LRU eviction)
+  - `utils.js` — `SafeStorage` (localStorage wrapper), misc helpers
+  - `tauri.js` — thin `tauriInvoke()` wrapper
+  - `lazyLoad.js` — IntersectionObserver-based lazy image loading
+  - `lyrics.js` — lyrics fetch + parse logic
+  - `playlistMenu.js` — playlist context menu state helpers
 - **style.css**: Light/dark mode support, responsive layout for 1200×800 default window
 
 ### Data Flow
 
 ```
-Frontend (app.js)
-    ↓ (tauriInvoke)
+Svelte components / lib/playback.js
+    ↓ (AudioBridge → tauriInvoke)
 Rust Commands (main.rs)
     ├─ OpenSubsonic API calls (reqwest) → reqwest::blocking::Response
     ├─ MD5 auth token generation
     └─ Audio playback (audio.rs)
          └─ StreamingReader (HTTP→rodio)
               └─ OS audio device (rodio)
-    ↓ (tauri::emit)
-Frontend event listeners (audio-bridge.js, app.js)
+    ↓ (status polling every 750ms via AudioBridge)
+Svelte stores (playbackState, currentPosition, …) → reactive UI
 ```
 
 ### Key Design Decisions
@@ -98,9 +108,9 @@ Frontend event listeners (audio-bridge.js, app.js)
 # Install dependencies
 npm install
 
-# Develop: Build Rust backend + serve frontend in Tauri dev window
+# Develop: Build Rust backend + serve frontend via Vite in Tauri dev window
 npm run tauri dev
-# (Rebuilds Rust on changes; hot reload for frontend JS/CSS not available)
+# Rust recompiles on .rs changes; Svelte/CSS/JS changes hot-reload instantly via Vite.
 
 # Release build
 npm run build:arch
@@ -120,19 +130,21 @@ npm run build:arch
 
 ### Modifying Rust Commands
 - Add new `#[tauri::command]` functions in `main.rs`
-- Register them in `lib.rs` via `tauri::generate_handler![]` macro
+- Register them in `main.rs` via `tauri::generate_handler![]` macro (no separate lib.rs step needed)
 - Update `capabilities/default.json` to add the command to the allowed list
 - Restart dev server: `npm run tauri dev`
 
 ### Adding Audio Playback Features
-- Playback logic lives in `audio.rs`. New playback methods (e.g., crossfade, equalizer) belong there.
+- Playback logic lives in `audio.rs`. New playback methods (e.g., equalizer) belong there.
 - All changes must maintain thread-safety (Arc, Mutex, RwLock).
 - Sessions are identified by UUID; use `AudioPlayer::get_state(session_id)` to query state.
+- Crossfade is implemented entirely in the JS layer (`AudioBridge.startCrossfadeIn` in `lib/audio-bridge.js`).
 
 ### Frontend State Management
-- All mutable state in `Store` singleton (auth, server info, playlist, now-playing, search results, etc.).
-- DOM updates via direct manipulation (no virtual DOM). After changing `Store`, manually update affected DOM nodes.
-- API calls use the `Api` helper; responses are type-checked manually (no TypeScript).
+- All mutable app state lives in Svelte stores (`src/lib/stores.js`).
+- Components subscribe reactively — update the store, the UI updates automatically.
+- Playback orchestration (play, crossfade, position tracking, lyrics sync) is in `src/lib/playback.js`.
+- API calls use `Api` from `src/lib/api.js`; responses are type-checked manually (no TypeScript).
 
 ### Debugging Rust Backend
 - `eprintln!()` prints to dev server console
@@ -141,8 +153,9 @@ npm run build:arch
 
 ### Debugging Frontend
 - Dev window has DevTools: press F12 or `Ctrl+Shift+I`
-- Console logs visible in DevTools + stderr from dev server
+- Console logs visible in DevTools + the Vite dev server terminal output
 - Network tab shows Subsonic API requests (Content-Security-Policy allows http://* for local servers)
+- Svelte component state is inspectable via the Svelte DevTools browser extension
 
 ## Testing
 
@@ -164,10 +177,14 @@ Currently no automated tests. Manual testing workflow:
 
 - `src-tauri/src/main.rs` — Tauri command definitions & auth
 - `src-tauri/src/audio.rs` — Audio playback engine
-- `src/app.js` — Application state + UI logic
-- `src/audio-bridge.js` — Tauri IPC bridge
+- `src/App.svelte` — Root component, auth bootstrap, view routing
+- `src/lib/stores.js` — All Svelte stores (single source of truth for app state)
+- `src/lib/playback.js` — Playback orchestration, position tracking, lyrics sync
+- `src/lib/audio-bridge.js` — Tauri IPC bridge (`AudioBridge` class)
+- `src/lib/api.js` — OpenSubsonic API client, URL builder, keyring, WikiApi
 - `src-tauri/tauri.conf.json` — App metadata, bundler config, updater settings
 - `src-tauri/capabilities/default.json` — Tauri permissions (security scoping)
+- `vite.config.js` — Vite + Svelte plugin config
 - `package.json` — npm scripts for build/dev
 
 ## OpenSubsonic API Integration
@@ -175,7 +192,7 @@ Currently no automated tests. Manual testing workflow:
 The app targets the OpenSubsonic REST API (v1.16.1). Legacy Subsonic servers are tolerated but unsupported. Requests include:
 - `u` (username), `t` (MD5-hashed token), `s` (random salt), `v=1.16.1`, `c=firmium`, `f=json`
 - MD5 hashing done on Rust side; plaintext password sent to Rust, never leaves frontend
-- `openSubsonicExtensions` detected on every response and stored in `Store.ServerInfo`
+- `openSubsonicExtensions` detected on every response and stored in the `openSubsonicExtensions` Svelte store
 - OpenSubsonic fields used as primary: `displayArtist`, `releaseTypes[]`, `replayGain`, `bpm`, `genres[]`, `isCompilation`
 - Settings page shows a server badge ("OpenSubsonic" or "Subsonic") based on detected capabilities
 
@@ -202,14 +219,13 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 
 - **Cover Art Caching**: Blob URLs cached in memory (limit: 150 entries); oldest entries evicted when limit exceeded
 - **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit)
-- **Search**: Limited to 40 albums, 100 songs per query (configurable in app.js constants)
+- **Search**: Limited to 40 albums, 100 songs per query (configurable in `src/lib/api.js` constants)
 - **Playback Concurrency**: Only one audio stream per device active at a time; multiple devices can play different streams concurrently
 - **CPU**: Release build has `opt-level = 2` + LTO enabled; `strip = false` keeps debug symbols for crash reporting
 
 ## Future Considerations
 
 - Automated test suite (unit tests for audio module, integration tests for API)
-- Hot reload for frontend during dev (would require custom Tauri dev server)
 - Equalizer or DSP effects (extend audio.rs)
 - Playlist persistence beyond session
 - Scrobbling to ListenBrainz (API already supports it; UI not yet wired)
