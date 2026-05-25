@@ -1,3 +1,32 @@
+# v2.0.0
+
+Re-wrote code base from vanilla JS to Vite - and Svelte
+
+## Changed
+
+- **Frontend Build System** — Migrated from webpack/default bundler to Vite for improved DX and performance
+  - Development server now provides instant hot reload for Svelte/CSS/JS changes
+  - Build process optimized for faster compilation and smaller bundles
+
+- **App Structure** — Replaced single 1835-line `src/app.js` monolith with specialized components
+  - Root component (App.svelte) now handles auth bootstrapping and view routing
+  - View routing improved with dedicated component per page
+  - UI logic split across reusable components (PlayerBar, Sidebar, LyricsPanel, etc.)
+
+- **Styling Enhancements** — Expanded `src/style.css` with improved responsive design and component styling
+  - Enhanced light/dark mode support across all new components
+
+- **Audio Module** — Minor refinements to `src-tauri/src/audio.rs` for improved streaming compatibility
+
+## Technical Notes
+
+- Svelte component hot reloading works out-of-box with Vite during development
+- All audio and Tauri IPC logic remains unchanged; refactoring is purely architectural
+- Playback state management continues to use centralized Svelte stores
+- Component tree now reflects logical feature boundaries (views → components → lib modules)
+
+---
+
 # v1.6.0
 
 ## Added

@@ -15,6 +15,8 @@
 - Run "git add ."
 - Then run "git commit -m "MyCommitMessage".
 - Run "git push origin main" to send everything to the repo.
+- Run "git tag v(number)"
+- Run "git push origin v(number)"
 - Run "git status" to confirm it worked.
 
 ---

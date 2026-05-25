@@ -309,8 +309,11 @@ impl AudioPlayer {
             return Err(format!("HTTP error: {}", response.status()));
         }
 
-        let (streaming_reader, shared_buffer) = StreamingReader::new(response);
-        let reader = BufReader::new(streaming_reader);
+        let (mut streaming_reader, shared_buffer) = StreamingReader::new(response);
+        // Pre-buffer 512 KB before decoding so the rodio output thread has data
+        // from the first callback and isn't immediately starved by network jitter.
+        let _ = streaming_reader.fill_to(512 * 1024);
+        let reader = BufReader::with_capacity(256 * 1024, streaming_reader);
         let source =
             Decoder::try_from(reader).map_err(|e| format!("Failed to decode audio: {}", e))?;
 
@@ -497,6 +500,12 @@ impl AudioPlayer {
             .map_err(|e| format!("Seek failed: {}", e))?;
 
         let was_paused = session.sink.is_paused();
+        // Pause first to allow audio thread to stabilize before switching sinks.
+        // This prevents buffer underrun/overrun during rapid seeking.
+        if !was_paused {
+            session.sink.pause();
+        }
+        std::thread::sleep(Duration::from_millis(10));
         session.sink.stop();
 
         let new_sink = Player::connect_new(&self.mixer);
