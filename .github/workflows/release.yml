@@ -14,9 +14,13 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
-            args: "--bundles deb,rpm"
+            bundles: deb,rpm
+            artifacts: |
+              src-tauri/target/release/bundle/deb/*.deb
+              src-tauri/target/release/bundle/rpm/*.rpm
           - platform: windows-latest
-            args: "--bundles nsis"
+            bundles: nsis
+            artifacts: src-tauri/target/release/bundle/nsis/*.exe
 
     runs-on: ${{ matrix.platform }}
 
@@ -57,19 +61,19 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Build frontend (Vite + Svelte)
-        run: npm run build
-
       - name: Build and bundle
-        uses: tauri-apps/tauri-action@v0
+        run: npm run build && npx tauri build --bundles ${{ matrix.bundles }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Create release and upload artifacts
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Firmium ${{ github.ref_name }}"
-          releaseBody: "See the release notes."
-          releaseDraft: true
+          name: "Firmium ${{ github.ref_name }}"
+          body: "See the release notes."
+          draft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          files: ${{ matrix.artifacts }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
