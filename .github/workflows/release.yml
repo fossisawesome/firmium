@@ -70,6 +70,7 @@ jobs:
       - name: Create release and upload artifacts
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
           name: "Firmium ${{ github.ref_name }}"
           body: "See the release notes."
           draft: true
