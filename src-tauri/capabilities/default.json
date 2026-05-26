@@ -16,8 +16,7 @@
       ]
     },
     "opener:default",
-    "shell:default",
-    "updater:default"
+    "shell:default"
   ],
   "commands": [
     "map_albums",
