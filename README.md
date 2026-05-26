@@ -9,26 +9,43 @@
 
 ---
 
+<p align="center">
+  <img src="readme/homepage.png?raw=true" alt="Firmium homepage" width="800">
+</p>
+
+---
+
 Firmium is a desktop [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client built with Tauri 2. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
+
+> **Note:** Firmium is a *client only* — you need a self-hosted OpenSubsonic-compatible server to use it. [Navidrome](https://www.navidrome.org/) is the most popular choice and is free and open source.
 
 ## Features
 
+**What makes Firmium stand out:**
+- Native OS audio engine via Rodio - no Electron, no Chromium audio stack
+- Crossfade between tracks with configurable overlap
+- Credentials stored securely in the OS keyring (GNOME Keyring / KWallet) — never written to disk in plaintext
+
+**Everything else:**
 - Synced and unsynced lyrics
 - Wikipedia artist biographies
-- Lightweight native audio backend via Rodio
 - Pretty UI with 8 color themes
 - Cover art caching
-- Crossfade between tracks
 - Per-device volume control
-- Credentials stored securely in the OS keyring (GNOME Keyring / KWallet)
 - Full OpenSubsonic API support (scrobbling, search, playlists, and more)
 
 ## Gallery
 
-<img src="readme/homepage.png?raw=true" alt="Homepage of Firmium">
-<img src="readme/artist.png?raw=true" alt="Artist page of Firmium">
-<img src="readme/search.png?raw=true" alt="Searchpage of Firmium">
-<img src="readme/settings.png?raw=true" alt="Settings page of Firmium">
+<table>
+  <tr>
+    <td><img src="readme/homepage.png?raw=true" alt="Homepage" width="400"><br><sub>Home</sub></td>
+    <td><img src="readme/artist.png?raw=true" alt="Artist page" width="400"><br><sub>Artist page</sub></td>
+  </tr>
+  <tr>
+    <td><img src="readme/search.png?raw=true" alt="Search" width="400"><br><sub>Search</sub></td>
+    <td><img src="readme/settings.png?raw=true" alt="Settings" width="400"><br><sub>Settings & themes</sub></td>
+  </tr>
+</table>
 
 ## Getting Started
 
@@ -39,6 +56,8 @@ Firmium is a desktop [OpenSubsonic](https://opensubsonic.netlify.app/) music str
 That's it. Your library will load automatically.
 
 ## Install
+
+> **Compatibility:** Firmium is tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
 
 ### System Dependencies
 
@@ -82,10 +101,6 @@ sudo dnf install ./firmium_*.rpm
 sudo dpkg -i ./firmium_*.deb
 ```
 
-### Compatibility
-
-Firmium is tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested.
-
 ## Building from Source
 
 ### Prerequisites
@@ -116,6 +131,28 @@ npm run release
 
 This produces `.deb` and `.rpm` packages under `src-tauri/target/release/bundle/`.
 
+## Troubleshooting (Linux)
+
+**App launches but credentials aren't saved / login fails every restart**
+Your system's Secret Service daemon isn't running or isn't unlocked. On GNOME, ensure GNOME Keyring is started. On KDE, ensure KWallet is enabled and unlocked. You can test with:
+```bash
+secret-tool store --label='test' key value
+```
+If that fails, your keyring isn't running.
+
+**No audio output**
+Check that ALSA or PipeWire/PulseWire is set up correctly. Run `aplay -l` to list audio devices. If you have multiple devices, you can select the output in Firmium's Settings.
+
+**Blank window or app won't start (Wayland)**
+Try forcing XWayland: `WAYLAND_DISPLAY= ./firmium` or set `GDK_BACKEND=x11` before launching.
+
+**Server connection refused**
+Make sure your server URL includes the port (e.g. `http://192.168.1.10:4533`) and that Firmium can reach it on your network. Check your server's logs if the URL looks correct.
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome - open an issue or PR on [GitHub](https://github.com/fossisawesome/firmium/issues).
+
 ## License
 
-[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html) — see [LICENSE](LICENSE) for the full text.
+[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html) - see [LICENSE](LICENSE) for the full text.

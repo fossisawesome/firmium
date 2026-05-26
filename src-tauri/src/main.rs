@@ -421,6 +421,7 @@ fn list_audio_devices() -> Result<Vec<audio::AudioDevice>, String> {
     Ok(AudioPlayer::list_devices())
 }
 
+
 /// Cross-fade from `old_player_id` into a new stream over `fade_duration_ms` milliseconds.
 /// Volume steps run natively in a Rust async task — no IPC round-trips per step.
 /// Returns the new player ID so the frontend can track the incoming session.

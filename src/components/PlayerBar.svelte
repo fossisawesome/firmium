@@ -22,10 +22,10 @@
   async function togglePlay() {
     const bridge = get(audioBridge)
     if (!get(currentTrack) || !bridge) return
-    const state = await bridge.getState()
+    const state = bridge.lastKnownState
     if (state === 'paused') await bridge.resume()
     else if (state === 'playing') await bridge.pause()
-    else if (state === 'stopped') playAt(get(queueIdx))
+    else if (!state || state === 'stopped') playAt(get(queueIdx))
   }
 
   function prevTrack() {
@@ -40,16 +40,16 @@
     else if (get(repeatAll)) playAt(0)
   }
 
-  function toggleRepeatOne() {
-    const next = !get(repeatOne)
-    repeatOne.set(next)
-    if (next) repeatAll.set(false)
-  }
-
-  function toggleRepeatAll() {
-    const next = !get(repeatAll)
-    repeatAll.set(next)
-    if (next) repeatOne.set(false)
+  // Cycles: off → repeat-one → repeat-all → off
+  function cycleRepeat() {
+    if (!get(repeatOne) && !get(repeatAll)) {
+      repeatOne.set(true)
+    } else if (get(repeatOne)) {
+      repeatOne.set(false)
+      repeatAll.set(true)
+    } else {
+      repeatAll.set(false)
+    }
   }
 
   function toggleLyrics() {
@@ -131,8 +131,30 @@
     <button class="ctrl-btn" onclick={prevTrack} title="Previous">⏮</button>
     <button class="ctrl-btn main-ctrl" onclick={togglePlay} title="Play/Pause">{playIcon}</button>
     <button class="ctrl-btn" onclick={nextTrack} title="Next">⏭</button>
-    <button class="ctrl-btn secondary-ctrl" class:active={$repeatOne} onclick={toggleRepeatOne} title="Repeat One">⥀</button>
-    <button class="ctrl-btn secondary-ctrl" class:active={$repeatAll} onclick={toggleRepeatAll} title="Repeat All">⥁</button>
-    <button class="ctrl-btn secondary-ctrl" class:active={$lyricsOpen} onclick={toggleLyrics} title="Lyrics">🎙</button>
+    <!-- Single repeat button: off → repeat-one → repeat-all → off -->
+    <button
+      class="ctrl-btn secondary-ctrl repeat-btn"
+      class:active={$repeatOne || $repeatAll}
+      onclick={cycleRepeat}
+      title={$repeatOne ? 'Repeat One' : $repeatAll ? 'Repeat All' : 'Repeat Off'}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="17 1 21 5 17 9"/>
+        <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+        <polyline points="7 23 3 19 7 15"/>
+        <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+      </svg>
+      {#if $repeatOne}<span class="repeat-badge">1</span>{/if}
+    </button>
+    <button class="ctrl-btn secondary-ctrl" class:active={$lyricsOpen} onclick={toggleLyrics} title="Lyrics">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Lyrics">
+        <rect x="8" y="2" width="8" height="11" rx="4"/>
+        <line x1="8" y1="6" x2="16" y2="6"/>
+        <line x1="8" y1="9" x2="16" y2="9"/>
+        <path d="M6 13 Q6 17 12 17 Q18 17 18 13"/>
+        <line x1="12" y1="17" x2="12" y2="21"/>
+        <line x1="9" y1="21" x2="15" y2="21"/>
+      </svg>
+    </button>
   </div>
 </div>
