@@ -15,6 +15,12 @@ export async function playAt(idx) {
   const $queue = get(queue)
   if (!bridge || idx < 0 || idx >= $queue.length) return
 
+  // If gapless is promoting a preloaded track, the finished event for the outgoing
+  // track will be filtered out by the player ID guard in audio-bridge, so scrobble
+  // the outgoing track here before the bridge swaps player IDs.
+  const outgoing = get(currentTrack)
+  const isGaplessPromotion = get(gaplessEnabled) && !get(crossfadeEnabled) && bridge.preloadedTrackId === $queue[idx]?.id
+
   queueIdx.set(idx)
   const track = $queue[idx]
   if (!track) return
@@ -24,6 +30,8 @@ export async function playAt(idx) {
   try {
     const streamUrl = await OpenSubsonicRouter.buildUrl('stream', { id: track.id })
     if (currentToken !== getPlayToken()) return
+
+    if (isGaplessPromotion && outgoing) Api.scrobble(outgoing.id, true)
 
     const replayGainDb = track.replayGain?.trackGain ?? track.replayGain?.albumGain ?? null
     await bridge.play(streamUrl, track.id, replayGainDb)
@@ -177,6 +185,7 @@ export function wireBridgeEvents(bridge) {
     if (track) Api.scrobble(track.id, true)
 
     if (get(repeatOne)) {
+      repeatOne.set(false)
       playAt(get(queueIdx))
     } else if (get(queueIdx) < get(queue).length - 1) {
       playAt(get(queueIdx) + 1)
@@ -184,6 +193,7 @@ export function wireBridgeEvents(bridge) {
       playAt(0)
     } else {
       stopPositionTracking()
+      playbackState.set('stopped')
       document.title = 'Firmium'
       currentPosition.set(0)
     }

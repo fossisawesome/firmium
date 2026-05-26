@@ -854,7 +854,31 @@ body {
   font-size: 12px;
 }
 
+.ctrl-btn.lyrics-btn {
+  font-size: 18px;
+  padding: 2px;
+}
+
+
 .ctrl-btn.secondary-ctrl.active {
+  color: var(--accent);
+}
+
+/* Repeat button with optional "1" badge for repeat-one mode */
+.repeat-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.repeat-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 1;
   color: var(--accent);
 }
 

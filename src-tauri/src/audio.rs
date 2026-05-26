@@ -213,7 +213,6 @@ impl AudioPlayer {
     }
 
     /// Get available audio output devices.
-    /// On most systems rodio abstracts device selection; returns the default device.
     pub fn list_devices() -> Vec<AudioDevice> {
         vec![AudioDevice {
             name: "Default Output".to_string(),
