@@ -1,4 +1,5 @@
 import { tauriFetch, tauriInvoke } from './tauri.js'
+// map_albums / map_artists / map_songs are Tauri commands in main.rs
 import { LrclibApi } from './lyrics.js'
 import { SafeStorage } from './utils.js'
 import { get } from 'svelte/store'
@@ -32,39 +33,13 @@ export const OpenSubsonicRouter = {
   }
 }
 
-// ── Data mappers ──────────────────────────────────────────────────────────────
-const mapAlbum = (a) => ({
-  id: a.id,
-  name: a.name ?? a.title ?? 'Unknown Album',
-  albumArtist: a.displayArtist ?? a.artist ?? 'Unknown Artist',
-  coverArtId: a.coverArt,
-  songCount: a.songCount,
-  releaseType: a.releaseTypes?.[0] ?? a.releaseType,
-  genres: a.genres,
-  year: a.year,
-  isCompilation: a.isCompilation ?? false
-})
-
-const mapArtist = (a) => ({
-  id: a.id,
-  name: a.name ?? 'Unknown Artist',
-  albumCount: a.albumCount ?? 0
-})
-
-const mapSong = (s) => ({
-  id: s.id,
-  title: s.title ?? 'Unknown Track',
-  artist: s.displayArtist ?? s.artist ?? 'Unknown Artist',
-  duration: s.duration ?? 0,
-  trackNumber: s.track,
-  coverArtId: s.coverArt,
-  replayGain: s.replayGain,
-  bpm: s.bpm,
-  comment: s.comment,
-  genres: s.genres
-})
 
 // ── API layer ─────────────────────────────────────────────────────────────────
+const _fetchAlbumList = async (type, size, signal) => {
+  const d = await Api.fetch('getAlbumList2', { type, size }, signal)
+  return tauriInvoke('map_albums', { albums: d.albumList2?.album ?? [] })
+}
+
 export const Api = {
   fetch: async (action, params = {}, signal = null) => {
     const url = await OpenSubsonicRouter.buildUrl(action, params)
@@ -86,21 +61,22 @@ export const Api = {
 
   getAlbums: async (signal) => {
     const d = await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: API_PAGE_SIZE }, signal)
-    return (d.albumList2?.album ?? []).map(mapAlbum)
+    return tauriInvoke('map_albums', { albums: d.albumList2?.album ?? [] })
   },
 
   getArtists: async (signal) => {
     const d = await Api.fetch('getArtists', {}, signal)
-    const container = []
-    if (d.artists?.index) d.artists.index.forEach(i => { if (Array.isArray(i.artist)) container.push(...i.artist) })
-    return container.map(mapArtist)
+    const raw = []
+    if (d.artists?.index) d.artists.index.forEach(i => { if (Array.isArray(i.artist)) raw.push(...i.artist) })
+    return tauriInvoke('map_artists', { artists: raw })
   },
 
   getAlbumTracks: async (id, signal) => {
     const d = await Api.fetch('getAlbum', { id }, signal)
     const a = d.album ?? {}
+    const tracks = await tauriInvoke('map_songs', { songs: a.song ?? [] })
     return {
-      tracks: (a.song ?? []).map(mapSong),
+      tracks,
       albumName: a.name ?? a.title ?? 'Unknown Album',
       albumArtist: a.displayArtist ?? a.artist ?? 'Unknown Artist',
       coverArtId: a.coverArt
@@ -109,34 +85,39 @@ export const Api = {
 
   getArtistDetails: async (id, signal) => {
     const d = await Api.fetch('getArtist', { id }, signal)
+    const albums = await tauriInvoke('map_albums', { albums: d.artist?.album ?? [] })
     return {
       name: d.artist?.name ?? 'Unknown Artist',
-      albums: (d.artist?.album ?? []).map(mapAlbum)
+      albums
     }
+  },
+
+  // Returns artist info (bio + image) from Last.fm/MusicBrainz via the server's getArtistInfo2 endpoint.
+  getArtistInfo: async (id, signal) => {
+    try {
+      const d = await Api.fetch('getArtistInfo2', { id }, signal)
+      const info = d.artistInfo2 ?? {}
+      return {
+        image: info.largeImageUrl || info.mediumImageUrl || info.smallImageUrl || null,
+        bio: info.biography || null
+      }
+    } catch { return null }
   },
 
   search: async (query, signal) => {
     const d = await Api.fetch('search3', { query, albumCount: SEARCH_ALBUM_LIMIT, songCount: SEARCH_SONG_LIMIT }, signal)
-    return {
-      songs: (d.searchResult3?.song ?? []).map(mapSong),
-      albums: (d.searchResult3?.album ?? []).map(mapAlbum)
-    }
+    const [songs, albums] = await Promise.all([
+      tauriInvoke('map_songs', { songs: d.searchResult3?.song ?? [] }),
+      tauriInvoke('map_albums', { albums: d.searchResult3?.album ?? [] }),
+    ])
+    return { songs, albums }
   },
 
-  getRecentAlbums: async (size = 12, signal) => {
-    const d = await Api.fetch('getAlbumList2', { type: 'recent', size }, signal)
-    return (d.albumList2?.album ?? []).map(mapAlbum)
-  },
+  getRecentAlbums: async (size = 12, signal) => _fetchAlbumList('recent', size, signal),
 
-  getRandomAlbums: async (size = 12, signal) => {
-    const d = await Api.fetch('getAlbumList2', { type: 'random', size }, signal)
-    return (d.albumList2?.album ?? []).map(mapAlbum)
-  },
+  getRandomAlbums: async (size = 12, signal) => _fetchAlbumList('random', size, signal),
 
-  getNewestAlbums: async (size = 100, signal) => {
-    const d = await Api.fetch('getAlbumList2', { type: 'newest', size }, signal)
-    return (d.albumList2?.album ?? []).map(mapAlbum)
-  },
+  getNewestAlbums: async (size = 100, signal) => _fetchAlbumList('newest', size, signal),
 
   getGenresList: async (signal) => {
     const d = await Api.fetch('getGenres', {}, signal)
@@ -211,6 +192,8 @@ export async function loadImage(img, coverId, signal) {
       addCover(coverId, objUrl)
       return objUrl
     })()
+    // Attach a no-op catch so the shared promise never becomes an unhandled rejection
+    promise.catch(() => {})
     setPending(coverId, promise)
   }
 
@@ -218,7 +201,8 @@ export async function loadImage(img, coverId, signal) {
     const finalUrl = await promise
     if (finalUrl && !signal?.aborted) img.src = finalUrl
   } catch (e) {
-    if (e.name !== 'AbortError') console.error('Cover art load error:', e)
+    // Tauri HTTP plugin throws "resource id X is invalid" on abort instead of AbortError
+    if (e.name !== 'AbortError' && !signal?.aborted) console.error('Cover art load error:', e)
   } finally {
     clearPending(coverId)
   }

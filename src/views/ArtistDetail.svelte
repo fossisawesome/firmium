@@ -1,37 +1,33 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { queue, currentTrack, navToAlbum } from '../lib/stores.js'
-  import { Api, loadImage } from '../lib/api.js'
+  import { Api, Keyring, loadImage } from '../lib/api.js'
   import { playAt } from '../lib/playback.js'
   import { showPlaylistMenu } from '../lib/playlistMenu.js'
   import { lazyLoad } from '../lib/lazyLoad.js'
   import { pooledMap, SafeStorage } from '../lib/utils.js'
   import { PLAY_ALL_CONCURRENCY } from '../lib/api.js'
 
-  const WikiApi = {
-    getInfo: async (artistName, signal) => {
-      try {
-        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(artistName + ' music')}&utf8=&format=json&origin=*`
-        const searchRes = await fetch(searchUrl, { signal })
-        const searchData = await searchRes.json()
-        const title = searchData.query?.search?.[0]?.title
-        if (!title) return null
-        const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
-        const summaryRes = await fetch(summaryUrl, { signal })
-        const summaryData = await summaryRes.json()
-        return { extract: summaryData.extract, image: summaryData.thumbnail?.source || null }
-      } catch { return null }
-    }
+  // Fetches artist bio from Last.fm API using the user's own key.
+  // Note: Last.fm removed artist images from their API in 2019; images come from the server instead.
+  async function fetchLastfmBio(artistName, apiKey, signal) {
+    try {
+      const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getInfo&artist=${encodeURIComponent(artistName)}&api_key=${encodeURIComponent(apiKey)}&format=json`
+      const res = await fetch(url, { signal })
+      const data = await res.json()
+      const bio = data.artist?.bio?.summary || null
+      return bio
+    } catch { return null }
   }
 
-  let { id } = $props()
+let { id } = $props()
 
   let name = $state('')
   let groups = $state({ Albums: [], EPs: [], Singles: [] })
   let loading = $state(true)
   let error = $state('')
   let ctrl
-  let bio = $state(SafeStorage.getItem('firmium_wikipedia') !== 'false' ? 'Fetching artist biography…' : 'Biography disabled.')
+  let bio = $state('Fetching biography…')
   let wikiImage = $state(null)
   let playingAll = $state(false)
 
@@ -42,13 +38,27 @@
       if (ctrl.signal.aborted) return
       name = result.name
       buildGroups(result.albums)
-      if (SafeStorage.getItem('firmium_wikipedia') !== 'false') {
-        WikiApi.getInfo(name, ctrl.signal).then(wiki => {
+      const lastfmEnabled = SafeStorage.getItem('firmium_lastfm') === 'true'
+      const lastfmKey = lastfmEnabled ? (await Keyring.load('lastfm_api_key').catch(() => '')) || '' : ''
+      // Always fetch image from the server (Last.fm removed images from their API in 2019).
+      Api.getArtistInfo(id, ctrl.signal).then(info => {
+        if (ctrl.signal.aborted || !info?.image) return
+        wikiImage = info.image
+      })
+      // Fetch bio: Last.fm client-side if configured, otherwise server's getArtistInfo2.
+      const resolveBio = async () => {
+        if (lastfmEnabled && lastfmKey) {
+          const lfmBio = await fetchLastfmBio(name, lastfmKey, ctrl.signal)
           if (ctrl.signal.aborted) return
-          if (wiki) { bio = wiki.extract ?? 'Biography not available.'; wikiImage = wiki.image }
-          else bio = 'Biography not available.'
-        })
+          if (lfmBio) { bio = lfmBio.replace(/<[^>]+>/g, '').trim(); return }
+        } else {
+          const serverInfo = await Api.getArtistInfo(id, ctrl.signal)
+          if (ctrl.signal.aborted) return
+          if (serverInfo?.bio) { bio = serverInfo.bio.replace(/<[^>]+>/g, '').trim(); return }
+        }
+        bio = 'Biography not available.'
       }
+      resolveBio()
     } catch (e) {
       if (!ctrl.signal.aborted) error = e.message
     } finally {

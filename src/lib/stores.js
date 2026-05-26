@@ -108,6 +108,16 @@ export function setCrossfadeDuration(v) {
   SafeStorage.setItem('firmium_crossfade_duration', String(val))
 }
 
+// Gapless playback — pre-buffers the next track so there's no pause between songs.
+// Mutually exclusive with crossfade; gapless is skipped when crossfade is active.
+export const gaplessEnabled = writable(SafeStorage.getItem('firmium_gapless') !== 'false')
+
+export function setGaplessEnabled(v) {
+  const val = Boolean(v)
+  gaplessEnabled.set(val)
+  SafeStorage.setItem('firmium_gapless', val ? 'true' : 'false')
+}
+
 // ── Lyrics ────────────────────────────────────────────────────────────────────
 export const lyricsOpen = writable(false)
 export const lyricsLines = writable([])
@@ -132,12 +142,12 @@ export const newSearchCtrl = () => { abortSearch(); _searchCtrl = new AbortContr
 const RECENT_SONGS_KEY = 'firmium_recent_songs'
 const RECENT_SONGS_MAX = 20
 
-function _loadRecentSongs() {
-  try { const raw = SafeStorage.getItem(RECENT_SONGS_KEY); return raw ? JSON.parse(raw) : [] } catch (_) { return [] }
+function _loadFromStorage(key, fallback = []) {
+  try { const raw = SafeStorage.getItem(key); return raw ? JSON.parse(raw) : fallback } catch (_) { return fallback }
 }
 
 function createRecentSongsStore() {
-  const { subscribe, update } = writable(_loadRecentSongs())
+  const { subscribe, update } = writable(_loadFromStorage(RECENT_SONGS_KEY))
 
   return {
     subscribe,
@@ -159,13 +169,10 @@ export const recentlyPlayedSongs = createRecentSongsStore()
 const PLAYLISTS_KEY = 'firmium_playlists'
 const _uuid = () => 'pl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
 
-function _loadPlaylists() {
-  try { const raw = SafeStorage.getItem(PLAYLISTS_KEY); return raw ? JSON.parse(raw) : [] } catch (_) { return [] }
-}
 function _savePlaylists(pls) { SafeStorage.setItem(PLAYLISTS_KEY, JSON.stringify(pls)) }
 
 function createPlaylistsStore() {
-  const { subscribe, update } = writable(_loadPlaylists())
+  const { subscribe, update } = writable(_loadFromStorage(PLAYLISTS_KEY))
 
   return {
     subscribe,

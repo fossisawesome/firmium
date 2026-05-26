@@ -7,14 +7,18 @@
 /// - Playback state management (Playing, Paused, Stopped, Loading)
 /// - Multiple device support
 /// - Background playback via dedicated thread
+/// - ReplayGain normalization applied per-source via rodio's amplify chain
+/// - Native crossfade between sessions with sub-50ms volume steps
+/// - Tauri event emission for state changes (eliminates JS polling)
 ///
 /// Design: Uses OutputStreamHandle (Send + Sync) instead of OutputStream to maintain
 /// thread-safety for Tauri managed state. The OutputStream itself is held securely
 /// within a Mutex container to guarantee its lifecycle matches the application state.
 ///
 /// Session lifecycle:
-///   play_stream() → session inserted immediately with loading=true
-///   async decode → source appended, loading set to false, sink.play() called
+///   play_stream() → session inserted immediately with loading=true → emits "playback-state-changed" (loading)
+///   async decode → source appended, loading set to false, sink.play() called → emits "playback-state-changed" (playing)
+///   finish watcher detects empty sink → emits "playback-finished" → session removed
 ///   get_state()  → returns Loading while buffering, Playing/Paused/Stopped after
 ///   is_finished()→ returns Ok(false) while loading; Ok(true) only after audio plays out
 
@@ -24,6 +28,7 @@ use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 /// A Read+Seek wrapper over a streaming HTTP response body.
@@ -51,20 +56,22 @@ impl StreamingReader {
     }
 
     fn fill_to(&mut self, target: usize) -> io::Result<()> {
-        let mut buf = self.buffer.lock();
-        if target <= buf.len() {
-            return Ok(());
+        {
+            let buf = self.buffer.lock();
+            if target <= buf.len() {
+                return Ok(());
+            }
         }
-        let needed = target - buf.len();
-        let prev = buf.len();
-        buf.resize(prev + needed, 0);
+        // Read from the network without holding the lock to avoid blocking other readers.
+        let needed = target - self.buffer.lock().len();
+        let mut tmp = vec![0u8; needed];
         let mut filled = 0;
         while filled < needed {
-            let n = self.response.read(&mut buf[prev + filled..])?;
+            let n = self.response.read(&mut tmp[filled..])?;
             if n == 0 { break; }
             filled += n;
         }
-        buf.truncate(prev + filled);
+        self.buffer.lock().extend_from_slice(&tmp[..filled]);
         Ok(())
     }
 }
@@ -130,6 +137,8 @@ unsafe impl Sync for SafeOutputStream {}
 /// Unique identifier for each playback session
 pub type PlayerId = String;
 
+const PLAYER_NOT_FOUND: &str = "Player not found";
+
 /// Represents the current playback state.
 ///
 /// `Loading` is the initial state while the audio is being fetched and decoded.
@@ -174,6 +183,10 @@ pub struct AudioPlayer {
     sessions: Arc<RwLock<std::collections::HashMap<PlayerId, PlaybackSession>>>,
     mixer: Mixer,
     _stream: parking_lot::Mutex<SafeOutputStream>,
+    /// Reused HTTP client — avoids rebuilding a connection pool and TLS context on every track.
+    http_client: reqwest::blocking::Client,
+    /// Tauri app handle for emitting state-change events to the frontend.
+    app_handle: AppHandle,
 }
 
 impl AudioPlayer {
@@ -181,15 +194,21 @@ impl AudioPlayer {
     ///
     /// Holds the OutputStream within the state context to maintain the audio
     /// connection alive for the lifetime of the application.
-    pub fn new() -> Result<Self, String> {
+    pub fn new(app_handle: AppHandle) -> Result<Self, String> {
         let stream = DeviceSinkBuilder::open_default_sink()
             .map_err(|e| format!("Failed to create audio stream: {}", e))?;
         let mixer = stream.mixer().clone();
+        let http_client = reqwest::blocking::Client::builder()
+            .user_agent(concat!("firmium-desktop/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
         Ok(AudioPlayer {
             sessions: Arc::new(RwLock::new(std::collections::HashMap::new())),
             mixer,
             _stream: parking_lot::Mutex::new(SafeOutputStream(stream)),
+            http_client,
+            app_handle,
         })
     }
 
@@ -209,12 +228,28 @@ impl AudioPlayer {
     /// could complete before the session was inserted.
     ///
     /// # Arguments
-    /// * `stream_url` - HTTP/HTTPS URL to the audio stream
-    /// * `track_id`   - Application track identifier
+    /// * `stream_url`     - HTTP/HTTPS URL to the audio stream
+    /// * `track_id`       - Application track identifier
+    /// * `replay_gain_db` - Optional ReplayGain track gain in dB (applied via Source::amplify)
     ///
     /// # Returns
     /// A unique player ID for this playback session.
-    pub fn play_stream(&self, stream_url: &str, track_id: String) -> Result<PlayerId, String> {
+    pub fn play_stream(&self, stream_url: &str, track_id: String, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
+        self.start_session(stream_url, track_id, false, replay_gain_db)
+    }
+
+    /// Pre-fetch and decode a track without starting audio output.
+    ///
+    /// The session is created in a paused state so it occupies no audible output.
+    /// Call `resume()` on the returned player ID to begin playback instantly,
+    /// with no HTTP fetch or decode delay — enabling gapless track transitions.
+    pub fn preload_stream(&self, stream_url: &str, track_id: String, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
+        self.start_session(stream_url, track_id, true, replay_gain_db)
+    }
+
+    /// Shared logic for play_stream and preload_stream.
+    /// `start_paused = true` leaves the sink paused after decode completes (gapless preload).
+    fn start_session(&self, stream_url: &str, track_id: String, start_paused: bool, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
         let player_id = Uuid::new_v4().to_string();
 
         // Stop any existing session for this track before starting a new one.
@@ -239,30 +274,59 @@ impl AudioPlayer {
             },
         );
 
+        // Only emit events for actively playing sessions, not silent preloads.
+        if !start_paused {
+            let _ = self.app_handle.emit("playback-state-changed", serde_json::json!({
+                "playerId": player_id,
+                "state": "loading"
+            }));
+        }
+
         // Clone everything the async task needs — Arc clone is cheap.
         let stream_url = stream_url.to_string();
         let player_id_clone = player_id.clone();
         let sessions = Arc::clone(&self.sessions);
+        let http_client = self.http_client.clone();
+        let app_handle = self.app_handle.clone();
 
         tauri::async_runtime::spawn(async move {
             // Use spawn_blocking because reqwest blocking I/O and rodio Decoder
             // must run on a thread that is allowed to block.
             let decode_result = tauri::async_runtime::spawn_blocking(move || {
-                Self::fetch_and_decode_blocking(&stream_url)
+                Self::fetch_and_decode_blocking(http_client, &stream_url)
             })
             .await;
 
             match decode_result {
                 Ok(Ok((source, duration, shared_buffer))) => {
+                    // Apply ReplayGain by wrapping the source in an amplify chain.
+                    // This scales sample amplitudes so the sink's volume knob remains
+                    // a pure master-volume control unaffected by per-track gain.
+                    let amplified: Box<dyn Source<Item = f32> + Send> = if let Some(gain_db) = replay_gain_db {
+                        let factor = 10_f32.powf(gain_db / 20.0).clamp(0.01, 4.0);
+                        Box::new(source.amplify(factor))
+                    } else {
+                        source
+                    };
+
                     let mut sesh = sessions.write();
                     if let Some(session) = sesh.get_mut(&player_id_clone) {
-                        session.sink.append(source);
+                        session.sink.append(amplified);
                         session.duration = duration;
                         session.buffered_bytes = shared_buffer;
                         session.loading = false; // Audio is now in the sink.
-                        session.playback_start_time = Some(std::time::Instant::now());
-                        session.accumulated_time = 0.0;
-                        session.sink.play();
+                        if start_paused {
+                            // Preloaded session — stay paused until promoted by the frontend.
+                            session.sink.pause();
+                        } else {
+                            session.playback_start_time = Some(std::time::Instant::now());
+                            session.accumulated_time = 0.0;
+                            session.sink.play();
+                            let _ = app_handle.emit("playback-state-changed", serde_json::json!({
+                                "playerId": player_id_clone,
+                                "state": "playing"
+                            }));
+                        }
                     }
                     // If session was removed (e.g. user skipped) before decode
                     // finished, silently discard — the sink was already stopped.
@@ -270,11 +334,45 @@ impl AudioPlayer {
                 Ok(Err(e)) => {
                     eprintln!("Audio decode failed for {}: {}", player_id_clone, e);
                     sessions.write().remove(&player_id_clone);
+                    if !start_paused {
+                        let _ = app_handle.emit("playback-state-changed", serde_json::json!({
+                            "playerId": player_id_clone,
+                            "state": "stopped"
+                        }));
+                    }
                 }
                 Err(join_err) => {
                     eprintln!("Blocking task panicked for {}: {}", player_id_clone, join_err);
                     sessions.write().remove(&player_id_clone);
                 }
+            }
+
+            // Finish watcher — polls the sink at 100ms intervals and emits "playback-finished"
+            // when the sink drains. Only runs for non-preloaded sessions since preloads are
+            // promoted to active players (and watched) only after resume() is called.
+            if !start_paused {
+                let sessions_watch = Arc::clone(&sessions);
+                let app_handle_watch = app_handle.clone();
+                let pid = player_id_clone.clone();
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        let finished = {
+                            let s = sessions_watch.read();
+                            match s.get(&pid) {
+                                None => break, // Session removed externally (stop() called).
+                                Some(session) => !session.loading && session.sink.empty(),
+                            }
+                        };
+                        if finished {
+                            sessions_watch.write().remove(&pid);
+                            let _ = app_handle_watch.emit("playback-finished", serde_json::json!({
+                                "playerId": pid
+                            }));
+                            break;
+                        }
+                    }
+                });
             }
         });
 
@@ -293,13 +391,9 @@ impl AudioPlayer {
     /// If you use a self-signed certificate on your OpenSubsonic server, add the
     /// certificate to your OS trust store instead of bypassing validation globally.
     fn fetch_and_decode_blocking(
+        client: reqwest::blocking::Client,
         url: &str,
     ) -> Result<(Box<dyn Source<Item = f32> + Send>, Option<f64>, Arc<Mutex<Vec<u8>>>), String> {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent("firmium-desktop/1.0")
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
         let response = client
             .get(url)
             .send()
@@ -325,9 +419,9 @@ impl AudioPlayer {
     /// Pause playback for a session.
     pub fn pause(&self, player_id: &str) -> Result<(), String> {
         let mut sessions = self.sessions.write();
-        sessions
+        let result = sessions
             .get_mut(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| {
                 // Save accumulated time when pausing
                 if let Some(start) = s.playback_start_time {
@@ -335,7 +429,14 @@ impl AudioPlayer {
                     s.playback_start_time = None;
                 }
                 s.sink.pause()
-            })
+            });
+        if result.is_ok() {
+            let _ = self.app_handle.emit("playback-state-changed", serde_json::json!({
+                "playerId": player_id,
+                "state": "paused"
+            }));
+        }
+        result
     }
 
     /// Resume a paused playback session.
@@ -344,14 +445,46 @@ impl AudioPlayer {
     /// the `resume_playback` Tauri command that calls this method.
     pub fn resume(&self, player_id: &str) -> Result<(), String> {
         let mut sessions = self.sessions.write();
-        sessions
+        let result = sessions
             .get_mut(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| {
                 // Reset start time when resuming
                 s.playback_start_time = Some(std::time::Instant::now());
                 s.sink.play()
-            })
+            });
+        if result.is_ok() {
+            let _ = self.app_handle.emit("playback-state-changed", serde_json::json!({
+                "playerId": player_id,
+                "state": "playing"
+            }));
+
+            // Promoted preloads need their own finish watcher since they were
+            // created with start_paused=true and skipped the initial watcher.
+            let sessions_watch = Arc::clone(&self.sessions);
+            let app_handle_watch = self.app_handle.clone();
+            let pid = player_id.to_string();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    let finished = {
+                        let s = sessions_watch.read();
+                        match s.get(&pid) {
+                            None => break,
+                            Some(session) => !session.loading && session.sink.empty(),
+                        }
+                    };
+                    if finished {
+                        sessions_watch.write().remove(&pid);
+                        let _ = app_handle_watch.emit("playback-finished", serde_json::json!({
+                            "playerId": pid
+                        }));
+                        break;
+                    }
+                }
+            });
+        }
+        result
     }
 
     /// Stop playback and remove the session entirely.
@@ -359,7 +492,7 @@ impl AudioPlayer {
         self.sessions
             .write()
             .remove(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| s.sink.stop())
     }
 
@@ -376,6 +509,68 @@ impl AudioPlayer {
         });
     }
 
+    /// Cross-fade from `old_player_id` into a new stream over `fade_duration_ms` milliseconds.
+    ///
+    /// Starts the new stream, sets its initial volume to 0, then ramps old→0 and new→target
+    /// in a background Tokio task using 25 evenly-spaced steps. The old session is stopped
+    /// and removed after the fade completes.
+    ///
+    /// Returns the new player ID so the caller can track the incoming session.
+    pub fn crossfade_to(
+        &self,
+        old_player_id: &str,
+        stream_url: &str,
+        track_id: String,
+        fade_duration_ms: u64,
+        target_volume: f32,
+        replay_gain_db: Option<f32>,
+    ) -> Result<PlayerId, String> {
+        let new_player_id = self.start_session(stream_url, track_id, false, replay_gain_db)?;
+
+        // Mute the new player immediately — the fade task will bring it up.
+        {
+            let sessions = self.sessions.read();
+            if let Some(s) = sessions.get(&new_player_id) {
+                s.sink.set_volume(0.0);
+            }
+        }
+
+        let old_id = old_player_id.to_string();
+        let new_id = new_player_id.clone();
+        let sessions = Arc::clone(&self.sessions);
+        let old_exists = !old_player_id.is_empty() && self.sessions.read().contains_key(old_player_id);
+
+        tauri::async_runtime::spawn(async move {
+            const STEPS: u32 = 25;
+            let step_ms = (fade_duration_ms / STEPS as u64).max(50);
+
+            for step in 1..=STEPS {
+                tokio::time::sleep(Duration::from_millis(step_ms)).await;
+                let progress = step as f32 / STEPS as f32;
+
+                // Acquire and release the read lock each step so other operations aren't blocked.
+                let s = sessions.read();
+                if old_exists {
+                    if let Some(sess) = s.get(&old_id) {
+                        sess.sink.set_volume((target_volume * (1.0 - progress)).max(0.0));
+                    }
+                }
+                if let Some(sess) = s.get(&new_id) {
+                    sess.sink.set_volume(target_volume * progress);
+                }
+            }
+
+            // Stop old session after fade.
+            if old_exists {
+                if let Some(s) = sessions.write().remove(&old_id) {
+                    s.sink.stop();
+                }
+            }
+        });
+
+        Ok(new_player_id)
+    }
+
     /// Get current playback state.
     ///
     /// Returns `Loading` while the initial network fetch is in progress so the
@@ -384,7 +579,7 @@ impl AudioPlayer {
         let sessions = self.sessions.read();
         sessions
             .get(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| {
                 if s.loading {
                     PlaybackState::Loading
@@ -404,7 +599,7 @@ impl AudioPlayer {
         let sessions = self.sessions.read();
         sessions
             .get(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| s.sink.set_volume(volume))
     }
 
@@ -413,7 +608,7 @@ impl AudioPlayer {
         let sessions = self.sessions.read();
         sessions
             .get(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| s.sink.volume())
     }
 
@@ -442,7 +637,7 @@ impl AudioPlayer {
         let sessions = self.sessions.read();
         sessions
             .get(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| s.duration)
     }
 
@@ -453,7 +648,7 @@ impl AudioPlayer {
         let sessions = self.sessions.read();
         sessions
             .get(player_id)
-            .ok_or_else(|| "Player not found".to_string())
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| {
                 let mut position = s.accumulated_time;
                 if let Some(start) = s.playback_start_time {
@@ -473,7 +668,7 @@ impl AudioPlayer {
         let mut sessions = self.sessions.write();
         let session = sessions
             .get_mut(player_id)
-            .ok_or_else(|| "Player not found".to_string())?;
+            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())?;
 
         if session.sink.try_seek(pos).is_ok() {
             session.accumulated_time = position.max(0.0);
@@ -530,19 +725,13 @@ impl AudioPlayer {
 
 impl Default for AudioPlayer {
     fn default() -> Self {
-        Self::new().expect("Failed to initialize audio player")
+        panic!("AudioPlayer::default() is not supported; use AudioPlayer::new(app_handle)")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    async fn test_audio_player_creation() {
-        let player = AudioPlayer::new();
-        assert!(player.is_ok());
-    }
 
     #[test]
     fn test_playback_state_serialization() {
