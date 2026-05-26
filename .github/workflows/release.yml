@@ -17,22 +17,27 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     outputs:
-      release_id: ${{ steps.create-release.outputs.releaseId }}
+      release_id: ${{ steps.create-release.outputs.id }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Create draft release
         id: create-release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v7
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Firmium ${{ github.ref_name }}"
-          releaseBody: "See the release notes."
-          releaseDraft: true
-          prerelease: false
+          script: |
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: context.ref.replace('refs/tags/', ''),
+              name: `Firmium ${context.ref.replace('refs/tags/', '')}`,
+              body: 'See the release notes.',
+              draft: true,
+              prerelease: false,
+            });
+            return data.id;
+          result-encoding: string
 
   build:
     needs: create-release
