@@ -20,9 +20,13 @@
     "updater:default"
   ],
   "commands": [
+    "map_albums",
+    "map_artists",
+    "map_songs",
     "save_password",
     "get_password",
     "delete_password",
+    "generate_auth_params",
     "cache_cover",
     "write_log",
     "delete_logs",
@@ -30,6 +34,7 @@
     "get_app_version",
     "get_machine_info",
     "play_stream",
+    "preload_stream",
     "pause_playback",
     "resume_playback",
     "stop_playback",
@@ -40,6 +45,7 @@
     "get_track_duration",
     "get_current_position",
     "seek_position",
-    "list_audio_devices"
+    "list_audio_devices",
+    "crossfade_to"
   ]
 }

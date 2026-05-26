@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 2.0.4
+**Version**: 2.1.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -109,11 +109,11 @@ Svelte stores (playbackState, currentPosition, …) → reactive UI
 npm install
 
 # Develop: Build Rust backend + serve frontend via Vite in Tauri dev window
-npm run tauri dev
+npm run dev:app
 # Rust recompiles on .rs changes; Svelte/CSS/JS changes hot-reload instantly via Vite.
 
 # Release build
-npm run build:arch
+npm run release
 # Builds .deb + .rpm, then runs makepkg in src-tauri/target/release/bundle/arch/
 ```
 
@@ -122,7 +122,7 @@ npm run build:arch
 1. Clone repo and `npm install` in the root
 2. Ensure Rust is installed: `rustup default stable`
 3. On Linux, install system dependencies (exact names vary by distro; Tauri docs list them)
-4. Run `npm run tauri dev` to start the dev window
+4. Run `npm run dev:app` to start the dev window
 5. In-app: enter a Subsonic/Navidrome server URL, username, and password
 6. Credentials are saved to the OS keyring; server address is stored in localStorage
 
@@ -132,7 +132,7 @@ npm run build:arch
 - Add new `#[tauri::command]` functions in `main.rs`
 - Register them in `main.rs` via `tauri::generate_handler![]` macro (no separate lib.rs step needed)
 - Update `capabilities/default.json` to add the command to the allowed list
-- Restart dev server: `npm run tauri dev`
+- Restart dev server: `npm run dev:app`
 
 ### Adding Audio Playback Features
 - Playback logic lives in `audio.rs`. New playback methods (e.g., equalizer) belong there.
@@ -148,7 +148,7 @@ npm run build:arch
 
 ### Debugging Rust Backend
 - `eprintln!()` prints to dev server console
-- Use `RUST_BACKTRACE=1 npm run tauri dev` for panic backtraces
+- Use `RUST_BACKTRACE=1 npm run dev:app` for panic backtraces
 - `sysinfo` crate queries hardware; check `get_machine_info()` for diagnostics output
 
 ### Debugging Frontend
@@ -160,7 +160,7 @@ npm run build:arch
 ## Testing
 
 Currently no automated tests. Manual testing workflow:
-1. Start dev server: `npm run tauri dev`
+1. Start dev server: `npm run dev:app`
 2. Log into a local Subsonic/Navidrome instance
 3. Test playback, seeking, pause/resume, volume control
 4. Test cover art caching (should be cached on second view)

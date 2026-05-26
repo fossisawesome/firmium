@@ -1,7 +1,7 @@
-import { get } from 'svelte/store'
+import { get, writable } from 'svelte/store'
 import {
   audioBridge, queue, queueIdx, currentTrack,
-  volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration,
+  volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration, gaplessEnabled,
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
   bumpToken, getPlayToken, recentlyPlayedSongs
@@ -25,7 +25,8 @@ export async function playAt(idx) {
     const streamUrl = await OpenSubsonicRouter.buildUrl('stream', { id: track.id })
     if (currentToken !== getPlayToken()) return
 
-    await bridge.play(streamUrl, track.id)
+    const replayGainDb = track.replayGain?.trackGain ?? track.replayGain?.albumGain ?? null
+    await bridge.play(streamUrl, track.id, replayGainDb)
     Api.scrobble(track.id, false)
     recentlyPlayedSongs.push(track)
     await bridge.setVolume(get(volume))
@@ -58,7 +59,8 @@ export async function crossfadeToNext(nextIdx) {
     if (currentToken !== getPlayToken()) return
 
     const fadeDurationMs = get(crossfadeDuration) * 1000
-    await bridge.startCrossfadeIn(streamUrl, nextTrack.id, get(volume), fadeDurationMs)
+    const replayGainDb = nextTrack.replayGain?.trackGain ?? nextTrack.replayGain?.albumGain ?? null
+    await bridge.startCrossfadeIn(streamUrl, nextTrack.id, get(volume), fadeDurationMs, replayGainDb)
 
     Api.scrobble(nextTrack.id, false)
     recentlyPlayedSongs.push(nextTrack)
@@ -73,11 +75,13 @@ export async function crossfadeToNext(nextIdx) {
 let _positionInterval = null
 let _cachedDuration = null
 let _crossfadeStarted = false
+let _preloadStarted = false
 
 export function startPositionTracking() {
   stopPositionTracking()
   _cachedDuration = null
   _crossfadeStarted = false
+  _preloadStarted = false
 
   _positionInterval = setInterval(async () => {
     const bridge = get(audioBridge)
@@ -85,15 +89,16 @@ export function startPositionTracking() {
 
     try {
       const position = await bridge.getCurrentPosition()
-      if (!_cachedDuration) _cachedDuration = await bridge.getDuration()
-
-      if (!get(isSeeking)) {
-        currentPosition.set(position)
+      if (!_cachedDuration) {
+        _cachedDuration = await bridge.getDuration()
         if (_cachedDuration) trackDuration.set(_cachedDuration)
       }
 
-      // Sync lyrics to current position.
-      syncLyricsToPosition(position)
+      if (!get(isSeeking)) {
+        currentPosition.set(position)
+      }
+
+      if (get(lyricsOpen)) syncLyricsToPosition(position)
 
       // Trigger crossfade when approaching end of track.
       if (!_crossfadeStarted && _cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
@@ -105,6 +110,27 @@ export function startPositionTracking() {
           if (nextIdx < $queue.length) {
             _crossfadeStarted = true
             crossfadeToNext(nextIdx)
+          }
+        }
+      }
+
+      // Preload next track for gapless playback — only when crossfade is off.
+      // Trigger 30 seconds before the end (or at track start for short tracks).
+      if (!_preloadStarted && _cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
+        const preloadAt = Math.max(0, _cachedDuration - 30)
+        if (position >= preloadAt) {
+          const $queue = get(queue)
+          let nextIdx = get(queueIdx) + 1
+          if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
+          if (nextIdx < $queue.length) {
+            _preloadStarted = true
+            const nextTrack = $queue[nextIdx]
+            if (nextTrack) {
+              const rgDb = nextTrack.replayGain?.trackGain ?? nextTrack.replayGain?.albumGain ?? null
+              OpenSubsonicRouter.buildUrl('stream', { id: nextTrack.id })
+                .then(url => get(audioBridge)?.preload(url, nextTrack.id, rgDb))
+                .catch(e => console.error('Preload URL error:', e))
+            }
           }
         }
       }
@@ -120,18 +146,12 @@ export function stopPositionTracking() {
 
 // ── Lyrics sync ───────────────────────────────────────────────────────────────
 
-// Called every 250ms from position tracking. Updates lyricsActiveIdx store.
-export const lyricsActiveIdx = { _val: -1 }
-let _lyricsActiveIdxStore = null
-
-import { writable } from 'svelte/store'
 export const activeLyricIdx = writable(-1)
 
 function syncLyricsToPosition(positionSec) {
-  const $lyricsOpen = get(lyricsOpen)
-  const $lyricsSynced = get(lyricsSynced)
+  if (!get(lyricsSynced)) return
   const $lyricsLines = get(lyricsLines)
-  if (!$lyricsOpen || !$lyricsSynced || !$lyricsLines.length) return
+  if (!$lyricsLines.length) return
 
   const posMs = positionSec * 1000
   let newIdx = -1

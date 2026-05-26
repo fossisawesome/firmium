@@ -125,6 +125,125 @@
   --error: #bf616a;
 }
 
+/* Monokai Classic */
+:root[data-theme="monokai-classic"] {
+  --bg: #272822;
+  --surface: #3e3d32;
+  --surface2: #49483e;
+  --border: rgba(255,255,255,0.08);
+  --text: #f8f8f2;
+  --muted: #75715e;
+  --accent: #a6e22e;
+  --accent-dim: rgba(166,226,46,0.15);
+  --error: #f92672;
+}
+
+/* Adwaita */
+:root[data-theme="adwaita"] {
+  color-scheme: light;
+  --bg: #f6f5f4;
+  --surface: #ffffff;
+  --surface2: #ebebeb;
+  --border: rgba(0,0,0,0.12);
+  --text: #2e3436;
+  --muted: #8c8c8c;
+  --accent: #3584e4;
+  --accent-dim: rgba(53,132,228,0.15);
+  --error: #c01c28;
+}
+
+/* Adwaita Dark */
+:root[data-theme="adwaita-dark"] {
+  --bg: #242424;
+  --surface: #303030;
+  --surface2: #3c3c3c;
+  --border: rgba(255,255,255,0.1);
+  --text: #deddda;
+  --muted: #9a9996;
+  --accent: #3584e4;
+  --accent-dim: rgba(53,132,228,0.15);
+  --error: #e01b24;
+}
+
+/* Monokai Pro */
+:root[data-theme="monokai-pro"] {
+  --bg: #2d2a2e;
+  --surface: #403e41;
+  --surface2: #5b5a5e;
+  --border: rgba(255,255,255,0.08);
+  --text: #fcfcfa;
+  --muted: #727072;
+  --accent: #a9dc76;
+  --accent-dim: rgba(169,220,118,0.15);
+  --error: #ff6188;
+}
+
+/* ayu Dark */
+:root[data-theme="ayu"] {
+  --bg: #0a0e14;
+  --surface: #0d1017;
+  --surface2: #131721;
+  --border: rgba(255,255,255,0.07);
+  --text: #b3b1ad;
+  --muted: #686868;
+  --accent: #e6b450;
+  --accent-dim: rgba(230,180,80,0.15);
+  --error: #ea6c73;
+}
+
+/* ayu Light */
+:root[data-theme="ayu-light"] {
+  color-scheme: light;
+  --bg: #fcfcfc;
+  --surface: #f3f4f5;
+  --surface2: #e7e8e9;
+  --border: rgba(0,0,0,0.08);
+  --text: #575f66;
+  --muted: #828c99;
+  --accent: #ff9940;
+  --accent-dim: rgba(255,153,64,0.15);
+  --error: #f07171;
+}
+
+/* GitHub Dark Default */
+:root[data-theme="github-dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: rgba(255,255,255,0.08);
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-dim: rgba(88,166,255,0.15);
+  --error: #f85149;
+}
+
+/* Nordfox */
+:root[data-theme="nordfox"] {
+  --bg: #232831;
+  --surface: #2e3440;
+  --surface2: #39404f;
+  --border: rgba(255,255,255,0.08);
+  --text: #cdcecf;
+  --muted: #60728a;
+  --accent: #81a1c1;
+  --accent-dim: rgba(129,161,193,0.15);
+  --error: #bf616a;
+}
+
+/* Synthwave '84 */
+:root[data-theme="synthwave"] {
+  --bg: #262335;
+  --surface: #2a2139;
+  --surface2: #34294f;
+  --border: rgba(255,255,255,0.1);
+  --text: #ffffff;
+  --muted: #848bbd;
+  --accent: #ff7edb;
+  --accent-dim: rgba(255,126,219,0.15);
+  --error: #fe4450;
+}
+
 
 html, body {
   height: 100%;
@@ -342,6 +461,11 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 30px;
+  scrollbar-width: none;
+}
+
+.list-panel::-webkit-scrollbar {
+  display: none;
 }
 
 .section-header {
@@ -374,10 +498,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 2px;
+  border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  border: 1px solid var(--border);
 }
 
 .album-art-sm img {
@@ -428,9 +551,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--border);
   font-size: 32px;
   color: var(--muted);
   flex-shrink: 0;
@@ -517,7 +639,7 @@ body {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
-  border-radius: 3px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--surface);
 }
@@ -628,8 +750,7 @@ body {
   width: 44px;
   height: 44px;
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -853,11 +974,10 @@ input[type="range"].volume-slider {
 .artist-img-circle {
   width: 130px;
   height: 130px;
-  border-radius: 50%;
+  border-radius: 16px;
   background: var(--surface2);
   object-fit: cover;
   flex-shrink: 0;
-  border: 2px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -948,6 +1068,30 @@ input[type="range"].volume-slider {
 .settings-desc {
   font-size: 11px;
   color: var(--muted);
+}
+
+.settings-text-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  width: 220px;
+  align-self: center;
+  outline: none;
+}
+.settings-text-input:focus {
+  border-color: var(--accent);
+}
+.settings-text-input::placeholder {
+  color: var(--muted);
+}
+
+.settings-row--disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .server-badge {
@@ -1530,13 +1674,12 @@ input[type="range"].volume-slider {
   width: 48px;
   height: 48px;
   background: var(--surface2);
-  border-radius: 3px;
+  border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
 }
 
 .pl-card-art img {
@@ -1582,11 +1725,10 @@ input[type="range"].volume-slider {
   width: 120px;
   height: 120px;
   background: var(--surface2);
-  border-radius: 4px;
+  border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
   cursor: pointer;
-  border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1846,21 +1988,11 @@ input[type="range"].volume-slider {
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 8px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--surface2) transparent;
+  scrollbar-width: none;
 }
 
 .home-scroll-row::-webkit-scrollbar {
-  height: 4px;
-}
-
-.home-scroll-row::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.home-scroll-row::-webkit-scrollbar-thumb {
-  background: var(--surface2);
-  border-radius: 2px;
+  display: none;
 }
 
 /* Individual card */
@@ -1882,18 +2014,17 @@ input[type="range"].volume-slider {
   width: 110px;
   height: 110px;
   background: var(--surface2);
-  border-radius: 4px;
+  border-radius: 12px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-/* Circular art for artist cards */
+/* Rounded box art for artist cards */
 .home-card-art--round {
-  border-radius: 50%;
+  border-radius: 12px;
 }
 
 .home-card-art img {

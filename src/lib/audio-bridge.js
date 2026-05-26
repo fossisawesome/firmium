@@ -1,9 +1,15 @@
 import { tauriInvoke } from './tauri.js'
+import { listen } from '@tauri-apps/api/event'
 
 /**
  * Audio Bridge — Frontend interface to the native Rust audio backend.
  *
- * Events emitted:
+ * State changes and track completion are delivered via Tauri events emitted
+ * by the Rust layer instead of JS polling:
+ *   "playback-state-changed" { playerId, state }  — 'loading' | 'playing' | 'paused'
+ *   "playback-finished"      { playerId }          — track played to completion
+ *
+ * Bridge events re-emitted to callers:
  *   'statechange' (state: string)  — 'loading' | 'playing' | 'paused' | 'stopped'
  *   'finished'    ()               — track played to completion
  *   'volumechange'(vol: number)    — volume was changed
@@ -13,11 +19,38 @@ export class AudioBridge {
   constructor() {
     this.currentPlayerId = null
     this.listeners = new Map()
-    this.statusCheckInterval = null
     this.lastKnownState = null
     this._hasStartedPlaying = false
-    this.crossfadingPlayerId = null
-    this.crossfadeInterval = null
+    // Gapless preload — stores the next track's player before it's needed.
+    this.preloadedPlayerId = null
+    this.preloadedTrackId = null
+    // Tauri event unlisten functions — called in destroy().
+    this._unlistenState = null
+    this._unlistenFinished = null
+    this._initListeners()
+  }
+
+  // ── Tauri event listeners ──────────────────────────────────────────────────
+
+  // Set up persistent listeners for Rust-emitted playback events.
+  // These replace the previous 750ms setInterval polling loop.
+  async _initListeners() {
+    this._unlistenState = await listen('playback-state-changed', ({ payload }) => {
+      if (payload.playerId !== this.currentPlayerId) return
+      const state = payload.state
+      if (state === 'playing') this._hasStartedPlaying = true
+      if (state !== this.lastKnownState) {
+        this.lastKnownState = state
+        this.emit('statechange', state)
+      }
+    })
+
+    this._unlistenFinished = await listen('playback-finished', ({ payload }) => {
+      if (payload.playerId !== this.currentPlayerId) return
+      this.lastKnownState = 'finished'
+      this.currentPlayerId = null
+      this.emit('finished')
+    })
   }
 
   // ── Event emitter ──────────────────────────────────────────────────────────
@@ -43,14 +76,34 @@ export class AudioBridge {
 
   // ── Playback controls ──────────────────────────────────────────────────────
 
-  async play(streamUrl, trackId) {
+  async play(streamUrl, trackId, replayGainDb = null) {
     try {
+      // If this track was preloaded, promote the preloaded session instead of
+      // starting a fresh fetch+decode — this is what makes gapless work.
+      if (this.preloadedPlayerId && this.preloadedTrackId === trackId) {
+        const preloadedId = this.preloadedPlayerId
+        this.preloadedPlayerId = null
+        this.preloadedTrackId = null
+        if (this.currentPlayerId) {
+          const old = this.currentPlayerId
+          this.currentPlayerId = null
+          try { await tauriInvoke('stop_playback', { playerId: old }) } catch (_) {}
+        }
+        this.currentPlayerId = preloadedId
+        this._hasStartedPlaying = false
+        this.lastKnownState = 'loading'
+        this.emit('statechange', 'loading')
+        // resume_playback emits 'playing' from Rust once the sink is unpaused.
+        await tauriInvoke('resume_playback', { playerId: preloadedId })
+        return preloadedId
+      }
+
       if (this.currentPlayerId) await this.stop()
-      const playerId = await tauriInvoke('play_stream', { streamUrl, trackId })
+      const playerId = await tauriInvoke('play_stream', { streamUrl, trackId, replayGainDb })
       this.currentPlayerId = playerId
       this._hasStartedPlaying = false
       this.lastKnownState = 'loading'
-      this.startStatusMonitoring()
+      // Rust emits 'loading' immediately on play_stream, and 'playing' after decode.
       this.emit('statechange', 'loading')
       return playerId
     } catch (err) {
@@ -59,9 +112,30 @@ export class AudioBridge {
     }
   }
 
+  // Pre-fetch and decode a track in the background without starting audio output.
+  // Call play() with the same trackId to promote it instantly when needed.
+  async preload(streamUrl, trackId, replayGainDb = null) {
+    // Drop any existing preload for a different track.
+    if (this.preloadedPlayerId && this.preloadedTrackId !== trackId) {
+      const old = this.preloadedPlayerId
+      this.preloadedPlayerId = null
+      this.preloadedTrackId = null
+      try { await tauriInvoke('stop_playback', { playerId: old }) } catch (_) {}
+    }
+    if (this.preloadedTrackId === trackId) return // already preloading this track
+    try {
+      const playerId = await tauriInvoke('preload_stream', { streamUrl, trackId, replayGainDb })
+      this.preloadedPlayerId = playerId
+      this.preloadedTrackId = trackId
+    } catch (err) {
+      console.error('Preload failed:', err)
+    }
+  }
+
   async pause() {
     if (!this.currentPlayerId) return
     try {
+      // Rust emits 'paused' state-change event after the sink is paused.
       await tauriInvoke('pause_playback', { playerId: this.currentPlayerId })
       this.lastKnownState = 'paused'
       this.emit('statechange', 'paused')
@@ -73,6 +147,7 @@ export class AudioBridge {
   async resume() {
     if (!this.currentPlayerId) return
     try {
+      // Rust emits 'playing' state-change event after the sink resumes.
       await tauriInvoke('resume_playback', { playerId: this.currentPlayerId })
       this.lastKnownState = 'playing'
       this._hasStartedPlaying = true
@@ -84,16 +159,13 @@ export class AudioBridge {
 
   async stop() {
     if (!this.currentPlayerId) return
-    if (this.crossfadeInterval) {
-      clearInterval(this.crossfadeInterval)
-      this.crossfadeInterval = null
+    // Discard any preloaded session — user is explicitly stopping playback.
+    if (this.preloadedPlayerId) {
+      const preId = this.preloadedPlayerId
+      this.preloadedPlayerId = null
+      this.preloadedTrackId = null
+      try { await tauriInvoke('stop_playback', { playerId: preId }) } catch (_) {}
     }
-    if (this.crossfadingPlayerId) {
-      const oldId = this.crossfadingPlayerId
-      this.crossfadingPlayerId = null
-      try { await tauriInvoke('stop_playback', { playerId: oldId }) } catch (_) {}
-    }
-    this.stopStatusMonitoring()
     const idToStop = this.currentPlayerId
     this.currentPlayerId = null
     this.lastKnownState = 'stopped'
@@ -106,50 +178,28 @@ export class AudioBridge {
     }
   }
 
-  // Crossfade from the current session into a new stream over fadeDurationMs milliseconds.
-  async startCrossfadeIn(streamUrl, trackId, targetVolume, fadeDurationMs) {
+  // Cross-fade from the current session into a new stream over fadeDurationMs milliseconds.
+  // Volume ramping runs natively in a Rust async task — no per-step IPC calls.
+  async startCrossfadeIn(streamUrl, trackId, targetVolume, fadeDurationMs, replayGainDb = null) {
     const oldPlayerId = this.currentPlayerId
     try {
-      const newPlayerId = await tauriInvoke('play_stream', { streamUrl, trackId })
+      const newPlayerId = await tauriInvoke('crossfade_to', {
+        oldPlayerId: oldPlayerId ?? '',
+        streamUrl,
+        trackId,
+        fadeDurationMs: Math.round(fadeDurationMs),
+        targetVolume,
+        replayGainDb,
+      })
+      // Guard against a concurrent play() call that changed currentPlayerId while awaiting.
       if (this.currentPlayerId !== oldPlayerId) {
-        try { await tauriInvoke('stop_playback', { playerId: newPlayerId }) } catch (_) {}
+        tauriInvoke('stop_playback', { playerId: newPlayerId }).catch(() => {})
         return
       }
-      if (this.crossfadeInterval) {
-        clearInterval(this.crossfadeInterval)
-        this.crossfadeInterval = null
-        if (this.crossfadingPlayerId) {
-          const prev = this.crossfadingPlayerId
-          this.crossfadingPlayerId = null
-          try { await tauriInvoke('stop_playback', { playerId: prev }) } catch (_) {}
-        }
-      }
-      try { await tauriInvoke('set_volume', { playerId: newPlayerId, volume: 0 }) } catch (_) {}
-      this.crossfadingPlayerId = oldPlayerId
       this.currentPlayerId = newPlayerId
       this._hasStartedPlaying = false
       this.lastKnownState = 'loading'
-      this.startStatusMonitoring()
       this.emit('statechange', 'loading')
-      const steps = 25
-      const stepMs = Math.max(50, fadeDurationMs / steps)
-      let step = 0
-      this.crossfadeInterval = setInterval(async () => {
-        step++
-        const progress = Math.min(step / steps, 1)
-        if (oldPlayerId) {
-          try { await tauriInvoke('set_volume', { playerId: oldPlayerId, volume: targetVolume * (1 - progress) }) } catch (_) {}
-        }
-        try { await tauriInvoke('set_volume', { playerId: newPlayerId, volume: targetVolume * progress }) } catch (_) {}
-        if (step >= steps) {
-          clearInterval(this.crossfadeInterval)
-          this.crossfadeInterval = null
-          if (oldPlayerId) {
-            this.crossfadingPlayerId = null
-            try { await tauriInvoke('stop_playback', { playerId: oldPlayerId }) } catch (_) {}
-          }
-        }
-      }, stepMs)
     } catch (err) {
       this.emit('error', `Crossfade failed: ${err}`)
       throw err
@@ -192,16 +242,7 @@ export class AudioBridge {
     }
   }
 
-  // ── State queries ──────────────────────────────────────────────────────────
-
-  async isFinished() {
-    if (!this.currentPlayerId) return true
-    if (this.lastKnownState === 'loading') return false
-    try { return await tauriInvoke('is_playback_finished', { playerId: this.currentPlayerId }) } catch (err) {
-      console.error('Is-finished check failed:', err)
-      return false
-    }
-  }
+  // ── State queries (kept for diagnostics; state is now driven by events) ────
 
   async getDuration() {
     if (!this.currentPlayerId) return null
@@ -211,52 +252,17 @@ export class AudioBridge {
     }
   }
 
-  async getState() {
-    if (!this.currentPlayerId) return 'stopped'
-    try { return await tauriInvoke('get_playback_state', { playerId: this.currentPlayerId }) } catch (err) {
-      console.error('Get state failed:', err)
-      return this.lastKnownState || 'stopped'
-    }
-  }
-
-  // ── Status monitoring ──────────────────────────────────────────────────────
-
-  startStatusMonitoring() {
-    this.stopStatusMonitoring()
-    this.statusCheckInterval = setInterval(async () => {
-      if (!this.currentPlayerId) { this.stopStatusMonitoring(); return }
-      try {
-        const currentState = await this.getState()
-        if (currentState === 'playing') this._hasStartedPlaying = true
-        if (currentState !== this.lastKnownState) {
-          this.lastKnownState = currentState
-          this.emit('statechange', currentState)
-        }
-        if (this._hasStartedPlaying) {
-          const finished = await this.isFinished()
-          if (finished && this.lastKnownState !== 'finished') {
-            this.lastKnownState = 'finished'
-            this.stopStatusMonitoring()
-            this.currentPlayerId = null
-            this.emit('finished')
-          }
-        }
-      } catch (err) {
-        console.error('Status monitoring error:', err)
-      }
-    }, 750)
-  }
-
-  stopStatusMonitoring() {
-    if (this.statusCheckInterval) {
-      clearInterval(this.statusCheckInterval)
-      this.statusCheckInterval = null
-    }
-  }
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   destroy() {
-    this.stopStatusMonitoring()
-    if (this.crossfadeInterval) { clearInterval(this.crossfadeInterval); this.crossfadeInterval = null }
+    if (this._unlistenState) { this._unlistenState(); this._unlistenState = null }
+    if (this._unlistenFinished) { this._unlistenFinished(); this._unlistenFinished = null }
+    if (this.preloadedPlayerId) {
+      const preId = this.preloadedPlayerId
+      this.preloadedPlayerId = null
+      this.preloadedTrackId = null
+      tauriInvoke('stop_playback', { playerId: preId }).catch(() => {})
+    }
     if (this.currentPlayerId) this.stop().catch(() => {})
     this.listeners.clear()
   }

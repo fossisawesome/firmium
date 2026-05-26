@@ -1,9 +1,8 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import { authUsername, navToAlbum, navToView, queue, recentlyPlayedSongs } from '../lib/stores.js'
+  import { authUsername, navToAlbum, navToArtist, navToView, recentlyPlayedSongs } from '../lib/stores.js'
   import { Api, loadImage } from '../lib/api.js'
   import { lazyLoad } from '../lib/lazyLoad.js'
-  import { playAt } from '../lib/playback.js'
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   function getTimeOfDay() {
@@ -25,12 +24,9 @@
   let recentArtists = $state([])
   let randomAlbums = $state([])
   let genres = $state([])
-  let eps = $state([])
-
   let loadingRecent = $state(true)
   let loadingRandom = $state(true)
   let loadingGenres = $state(true)
-  let loadingEps = $state(true)
 
   let ctrl
 
@@ -40,7 +36,7 @@
     const out = []
     for (const a of albums) {
       const key = a.albumArtist
-      if (!seen.has(key)) { seen.add(key); out.push({ name: key, coverArtId: a.coverArtId }) }
+      if (!seen.has(key)) { seen.add(key); out.push({ id: a.artistId, name: key, coverArtId: a.coverArtId }) }
     }
     return out
   }
@@ -49,12 +45,11 @@
     ctrl = new AbortController()
     const sig = ctrl.signal
 
-    // Fetch recent albums + random albums + genres + newest (for EP filter) in parallel
-    const [recentRes, randomRes, genresRes, newestRes] = await Promise.allSettled([
+    // Fetch recent albums + random albums + genres in parallel
+    const [recentRes, randomRes, genresRes] = await Promise.allSettled([
       Api.getRecentAlbums(12, sig),
       Api.getRandomAlbums(12, sig),
       Api.getGenresList(sig),
-      Api.getNewestAlbums(200, sig),
     ])
 
     if (sig.aborted) return
@@ -75,22 +70,23 @@
     }
     loadingGenres = false
 
-    if (newestRes.status === 'fulfilled') {
-      eps = newestRes.value.filter(a => {
-        const rt = (a.releaseType ?? '').toLowerCase()
-        return rt === 'ep' || rt.includes('ep')
-      }).slice(0, 12)
-    }
-    loadingEps = false
   })
 
   onDestroy(() => ctrl?.abort())
 
-  // ── Play track ────────────────────────────────────────────────────────────
-  function playSong(idx) {
-    queue.set($recentlyPlayedSongs)
-    playAt(idx)
-  }
+  // Derives unique albums from recently played songs (deduplicated by albumId)
+  const recentAlbumsFromSongs = $derived((() => {
+    const seen = new Set()
+    const out = []
+    for (const s of $recentlyPlayedSongs) {
+      const key = s.albumId
+      if (key && !seen.has(key)) {
+        seen.add(key)
+        out.push({ id: s.albumId, name: s.album, artist: s.artist, coverArtId: s.coverArtId })
+      }
+    }
+    return out
+  })())
 
   // ── Navigate to genre search ──────────────────────────────────────────────
   function navToGenre(genre) {
@@ -109,25 +105,25 @@
     <span class="home-greeting-name">{username}</span>
   </div>
 
-  <!-- Recently Played Songs -->
-  {#if $recentlyPlayedSongs.length > 0}
+  <!-- Recently Played (unique albums from play history) -->
+  {#if recentAlbumsFromSongs.length > 0}
     <section class="home-section">
-      <div class="home-section-title">Recently Played Tracks</div>
+      <div class="home-section-title">Recently Played</div>
       <div class="home-scroll-row">
-        {#each $recentlyPlayedSongs as song, i}
+        {#each recentAlbumsFromSongs as album}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="home-card home-card--track" onclick={() => playSong(i)}>
+          <div class="home-card" onclick={() => navToAlbum(album.id)}>
             <div class="home-card-art">
-              {#if song.coverArtId}
-                <img use:lazyLoad={img => loadImage(img, song.coverArtId, ctrl?.signal)} alt="" />
+              {#if album.coverArtId}
+                <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
               {:else}
                 <div class="home-card-no-art">♪</div>
               {/if}
             </div>
             <div class="home-card-info">
-              <div class="home-card-title">{song.title}</div>
-              <div class="home-card-sub">{song.artist}</div>
+              <div class="home-card-title">{album.name}</div>
+              <div class="home-card-sub">{album.artist}</div>
             </div>
           </div>
         {/each}
@@ -147,7 +143,7 @@
         {#each recentArtists as artist}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="home-card home-card--artist" onclick={() => navToView('artists')}>
+          <div class="home-card home-card--artist" onclick={() => artist.id ? navToArtist(artist.id) : navToView('artists')}>
             <div class="home-card-art home-card-art--round">
               {#if artist.coverArtId}
                 <img use:lazyLoad={img => loadImage(img, artist.coverArtId, ctrl?.signal)} alt="" />
@@ -157,36 +153,6 @@
             </div>
             <div class="home-card-info">
               <div class="home-card-title">{artist.name}</div>
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </section>
-
-  <!-- Recently Played Albums -->
-  <section class="home-section">
-    <div class="home-section-title">Recently Played Albums</div>
-    {#if loadingRecent}
-      <div class="home-loading">Loading…</div>
-    {:else if recentAlbums.length === 0}
-      <div class="home-empty">No recent albums found.</div>
-    {:else}
-      <div class="home-scroll-row">
-        {#each recentAlbums as album}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="home-card" onclick={() => navToAlbum(album.id)}>
-            <div class="home-card-art">
-              {#if album.coverArtId}
-                <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
-              {:else}
-                <div class="home-card-no-art">♪</div>
-              {/if}
-            </div>
-            <div class="home-card-info">
-              <div class="home-card-title">{album.name}</div>
-              <div class="home-card-sub">{album.albumArtist}</div>
             </div>
           </div>
         {/each}
@@ -223,36 +189,6 @@
       </div>
     {/if}
   </section>
-
-  <!-- EPs -->
-  {#if loadingEps || eps.length > 0}
-    <section class="home-section">
-      <div class="home-section-title">EPs</div>
-      {#if loadingEps}
-        <div class="home-loading">Loading…</div>
-      {:else}
-        <div class="home-scroll-row">
-          {#each eps as album}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="home-card" onclick={() => navToAlbum(album.id)}>
-              <div class="home-card-art">
-                {#if album.coverArtId}
-                  <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
-                {:else}
-                  <div class="home-card-no-art">♪</div>
-                {/if}
-              </div>
-              <div class="home-card-info">
-                <div class="home-card-title">{album.name}</div>
-                <div class="home-card-sub">{album.albumArtist}</div>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
-  {/if}
 
   <!-- Genres -->
   <section class="home-section">

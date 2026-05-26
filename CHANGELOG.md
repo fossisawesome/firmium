@@ -1,3 +1,45 @@
+# v2.1.0
+
+## Added
+
+- **Gapless playback**: New `preload_stream` Tauri command pre-fetches and decodes the next track in a paused state 30 seconds before the current track ends. When `play()` is called, the preloaded session is promoted instantly — no HTTP fetch or decode delay. Controlled by a new `gaplessEnabled` store (persisted to localStorage) and mutually exclusive with crossfade.
+- **ReplayGain normalization**: `play_stream` and `preload_stream` now accept an optional `replayGainDb` parameter. The Rust audio layer applies the gain via `rodio::Source::amplify` so the master volume control remains unaffected.
+- **Native crossfade**: `crossfade_to` Tauri command runs volume fade steps inside a Rust async task, eliminating per-step IPC round-trips.
+- **Event-driven playback state**: The Rust backend now emits Tauri events (`playback-state-changed`, `playback-finished`) directly, replacing the 750 ms JS `setInterval` polling loop. The `AudioBridge` subscribes to these events via `@tauri-apps/api/event`.
+- **Rust-side data mappers**: New `map_albums`, `map_artists`, `map_songs` Tauri commands perform OpenSubsonic JSON → typed struct mapping in Rust (with `serde` camelCase output), including `infer_release_type` logic previously in `api.js`.
+- **Last.FM**: Added LastFM toggle to fetch artist biographys.
+- **New themes**: Monokai Classic, Monokai Pro, Adwaita, Adwaita Dark, ayu, ayu Light, GitHub Dark, Nordfox, and Synthwave '84 added to `style.css`.
+- **`firmium.spec` RPM spec file** added for Fedora/RHEL packaging.
+- **Persistent HTTP client**: `AudioPlayer` now holds a reused `reqwest::blocking::Client` (with a `firmium-desktop/<version>` user-agent) to avoid rebuilding a TLS/connection pool per track.
+
+## Changed
+
+- **Home view redesign**: "Recently Played Tracks" section replaced by a deduplicated "Recently Played" albums row (derived from play history via `recentAlbumsFromSongs`). Removed the separate "Recently Played Albums" and "EPs" sections to reduce page length. Artist cards now navigate directly to the artist detail page instead of the artist list.
+- **`api.js` mappers removed**: JS `mapAlbum`, `mapArtist`, `mapSong` functions deleted; all callers now invoke the Rust `map_*` Tauri commands. `getRecentAlbums`, `getRandomAlbums`, `getNewestAlbums` refactored to share a `_fetchAlbumList` helper.
+- **`AudioBridge` gapless preload API**: `play()` checks for a matching preloaded session and promotes it; `preload()` method added. `startCrossfadeIn` updated to forward `replayGainDb`.
+- **`StreamingReader` locking fix**: `fill_to` now releases the buffer lock before network reads to avoid blocking other readers; data is written to a temporary buffer and extended under the lock afterward.
+- **`delete_logs` error handling**: No longer returns an error when the log file does not exist (uses `ErrorKind::NotFound` match).
+- **`PLAYER_NOT_FOUND` constant**: Extracted magic string in `audio.rs` to a named constant.
+- **Lyrics sync gate**: `syncLyricsToPosition` is now only called when the lyrics panel is open (`get(lyricsOpen)`), avoiding unnecessary work during normal playback.
+- **`_loadFromStorage` helper**: Deduplicated `_loadRecentSongs` and `_loadPlaylists` storage loaders in `stores.js` into a single generic helper.
+- **Scrollbar styling**: Panel scrollbars hidden (`scrollbar-width: none`) and border radii updated to `8px` in several components.
+- **`vite.config.js`**: Minor configuration update.
+
+## Removed
+
+- **Wikipedia API**: Was too unreliable, and inaccurate. Replaced by LastFM
+- **JS polling loop**: `statusCheckInterval` and related `setInterval`/`clearInterval` logic removed from `AudioBridge` — replaced by Tauri event listeners.
+- **JS crossfade interval tracking**: `crossfadingPlayerId` / `crossfadeInterval` fields removed from `AudioBridge`; crossfade now runs natively in Rust.
+- **`queue` store import from `HomeView`**: No longer needed after the "Recently Played" refactor.
+
+## Fixed
+
+- **Unhandled promise rejection in cover cache**: Added a `.catch(() => {})` no-op to the shared pending promise in `loadImage` so a failed image load never surfaces as an unhandled rejection.
+- **Artist card navigation**: Clicking a recently-played artist now navigates to their detail page; falls back to the artist list only if no `artistId` is available.
+- **Track duration display**: `trackDuration` store is now updated immediately when `getDuration()` returns a value during the position-tracking loop, fixing a race where the duration could show `0` for the first polling interval.
+
+---
+
 # v2.0.0
 
 Re-wrote code base from vanilla JS to Vite - and Svelte

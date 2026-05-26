@@ -3,7 +3,8 @@
   import { get } from 'svelte/store'
   import { tauriInvoke } from '../lib/tauri.js'
   import { SafeStorage } from '../lib/utils.js'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, isOpenSubsonic, openSubsonicExtensions } from '../lib/stores.js'
+  import { Keyring } from '../lib/api.js'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, isOpenSubsonic, openSubsonicExtensions } from '../lib/stores.js'
   import { clearAll } from '../lib/coverCache.js'
 
   // Callback props replace createEventDispatcher.
@@ -19,18 +20,30 @@
     ['catppuccin-frappe',   'Catppuccin Frappé'],
     ['catppuccin-latte',    'Catppuccin Latte'],
     ['nord',                'Nord'],
+    ['monokai-classic',     'Monokai Classic'],
+    ['monokai-pro',         'Monokai Pro'],
+    ['adwaita',             'Adwaita'],
+    ['adwaita-dark',        'Adwaita Dark'],
+    ['ayu',                 'ayu'],
+    ['ayu-light',           'ayu Light'],
+    ['github-dark',         'GitHub Dark Default'],
+    ['nordfox',             'Nordfox'],
+    ['synthwave',           'Synthwave'],
   ]
 
   const SETTINGS_KEYS = [
     'firmium_server', 'firmium_user', 'firmium_save_pass',
-    'firmium_auto_login', 'firmium_wikipedia', 'firmium_lrclib', 'firmium_theme',
-    'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration', 'firmium_volume',
+    'firmium_auto_login', 'firmium_lrclib', 'firmium_theme',
+    'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration', 'firmium_volume', 'firmium_gapless',
+    'firmium_lastfm',
   ]
 
   let isDecorated = $state(SafeStorage.getItem('firmium_decorations') !== 'false')
-  let isWikiEnabled = $state(SafeStorage.getItem('firmium_wikipedia') !== 'false')
-  let isAutoLoginEnabled = $state(SafeStorage.getItem('firmium_auto_login') !== 'false')
+let isAutoLoginEnabled = $state(SafeStorage.getItem('firmium_auto_login') !== 'false')
   let isLrclibEnabled = $state(SafeStorage.getItem('firmium_lrclib') !== 'false')
+  let isLastfmEnabled = $state(SafeStorage.getItem('firmium_lastfm') === 'true')
+  let lastfmKey = $state('')
+  let lastfmSecret = $state('')
   let currentTheme = $state(SafeStorage.getItem('firmium_theme') || 'firmium')
   let themeOpen = $state(false)
 
@@ -46,6 +59,9 @@
     tauriInvoke('get_app_version').then(v => appVersion = `v${v}`).catch(() => appVersion = 'unavailable')
     tauriInvoke('get_machine_info').then(info => systemInfo = `${info.distro} ${info.version}`).catch(() => systemInfo = 'unavailable')
     tauriInvoke('get_log_path').then(p => logPath = p).catch(() => logPath = 'unavailable')
+    // Load Last.fm credentials from keyring.
+    Keyring.load('lastfm_api_key').then(k => { if (k) lastfmKey = k }).catch(() => {})
+    Keyring.load('lastfm_secret').then(s => { if (s) lastfmSecret = s }).catch(() => {})
   })
 
   const themeName = $derived(THEMES.find(([v]) => v === currentTheme)?.[1] ?? 'Firmium')
@@ -64,11 +80,23 @@
   }
 
   function handleAutoLogin(e) { SafeStorage.setItem('firmium_auto_login', e.target.checked ? 'true' : 'false') }
-  function handleWikipedia(e) { SafeStorage.setItem('firmium_wikipedia', e.target.checked ? 'true' : 'false') }
-  function handleLrclib(e) { SafeStorage.setItem('firmium_lrclib', e.target.checked ? 'true' : 'false') }
+function handleLrclib(e) { SafeStorage.setItem('firmium_lrclib', e.target.checked ? 'true' : 'false') }
+  function handleLastfm(e) {
+    isLastfmEnabled = e.target.checked
+    SafeStorage.setItem('firmium_lastfm', isLastfmEnabled ? 'true' : 'false')
+  }
+  function handleLastfmKey(e) { lastfmKey = e.target.value; Keyring.save('lastfm_api_key', e.target.value).catch(() => {}) }
+  function handleLastfmSecret(e) { lastfmSecret = e.target.value; Keyring.save('lastfm_secret', e.target.value).catch(() => {}) }
 
-  function handleCrossfadeToggle(e) { setCrossfadeEnabled(e.target.checked) }
+  function handleCrossfadeToggle(e) {
+    setCrossfadeEnabled(e.target.checked)
+    if (e.target.checked) setGaplessEnabled(false)
+  }
   function handleCrossfadeDuration(e) { setCrossfadeDuration(Number(e.target.value)) }
+  function handleGaplessToggle(e) {
+    setGaplessEnabled(e.target.checked)
+    if (e.target.checked) setCrossfadeEnabled(false)
+  }
 
   function wipeCache() {
     clearAll()
@@ -154,14 +182,31 @@
 
 <div class="settings-row">
   <div class="settings-info">
-    <div class="settings-title">Wikipedia Integration</div>
-    <div class="settings-desc">Show artist biography and photo from Wikipedia</div>
+    <div class="settings-title">Last.fm Integration</div>
+    <div class="settings-desc">Fetch artist biography and photo directly from Last.fm using your own API key</div>
   </div>
   <label class="toggle-switch">
-    <input type="checkbox" bind:checked={isWikiEnabled} onchange={handleWikipedia} />
+    <input type="checkbox" bind:checked={isLastfmEnabled} onchange={handleLastfm} />
     <span class="toggle-slider"></span>
   </label>
 </div>
+
+{#if isLastfmEnabled}
+  <div class="settings-row">
+    <div class="settings-info">
+      <div class="settings-title">Last.fm API Key</div>
+      <div class="settings-desc">From your Last.fm API account</div>
+    </div>
+    <input class="settings-text-input" type="text" value={lastfmKey} oninput={handleLastfmKey} placeholder="API key…" />
+  </div>
+  <div class="settings-row">
+    <div class="settings-info">
+      <div class="settings-title">Last.fm Secret</div>
+      <div class="settings-desc">Shared secret for your API account</div>
+    </div>
+    <input class="settings-text-input" type="password" value={lastfmSecret} oninput={handleLastfmSecret} placeholder="Secret…" />
+  </div>
+{/if}
 
 <div class="settings-row">
   <div class="settings-info">
@@ -202,6 +247,17 @@
     </div>
   </div>
 {/if}
+
+<div class="settings-row">
+  <div class="settings-info">
+    <div class="settings-title">Gapless Playback</div>
+    <div class="settings-desc">Pre-buffer the next track for seamless transitions</div>
+  </div>
+  <label class="toggle-switch">
+    <input type="checkbox" checked={$gaplessEnabled} onchange={handleGaplessToggle} />
+    <span class="toggle-slider"></span>
+  </label>
+</div>
 
 <div class="section-header">Debug</div>
 
