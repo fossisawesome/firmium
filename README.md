@@ -64,7 +64,7 @@ Firmium is available for **Linux desktop** and **Android**.
 
 ### Android
 
-<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/https://github.com/fossisawesome/firmium"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54"></a>
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.fossisawesome.firmium%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffossisawesome%2Ffirmium%22%2C%22author%22%3A%22fossisawesome%22%2C%22name%22%3A%22Firmium%22%2C%22preferredApkIndex%22%3A0%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%2C%5C%22fallbackToOlderReleases%5C%22%3Atrue%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%2C%5C%22versionDetection%5C%22%3Atrue%2C%5C%22sortMethodChoice%5C%22%3A%5C%22date%5C%22%7D%22%2C%22overrideSource%22%3Anull%7D"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54"></a>
 
 Or download the latest `.apk` from the [releases page](https://github.com/fossisawesome/firmium/releases/latest) and install it manually:
 
