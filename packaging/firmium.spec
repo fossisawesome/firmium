@@ -30,17 +30,17 @@ Tauri 2. Supports low-latency audio playback, OS keyring credential storage,
 and OpenSubsonic server integration (e.g. Navidrome).
 
 %prep
-# Extract the Tauri RPM into a known absolute path so %%install can find it
-# regardless of which directory rpmbuild sets as cwd.
-mkdir -p %{_builddir}/firmium-extract
-rpm2cpio %{SOURCE0} | cpio -idmv --no-absolute-filenames -D %{_builddir}/firmium-extract
+# %prep always runs in %{_builddir}; extract there so we have a stable
+# absolute path to reference in %install.
+rpm2cpio %{SOURCE0} | cpio -idmv --no-absolute-filenames
 
 %build
 # Pre-compiled binary — nothing to build.
 
 %install
-# Copy extracted usr/ tree to buildroot using the absolute extraction path.
-cp -a %{_builddir}/firmium-extract/usr %{buildroot}/
+# Reference %{_builddir} explicitly — don't rely on cwd being the same
+# as in %prep.
+cp -a %{_builddir}/usr %{buildroot}/
 
 %files
 %{_bindir}/firmium-desktop
