@@ -123,12 +123,60 @@ export async function crossfadeToNext(nextIdx) {
   }
 }
 
-// ── Position tracking interval ────────────────────────────────────────────────
+// ── Position tracking ─────────────────────────────────────────────────────────
+// Desktop: driven by Rust "playback-position" events (~300ms cadence) via AudioBridge.
+// Mobile:  polling interval (plugin events not always reliable for position).
 
-let _positionInterval = null
+let _positionInterval = null  // mobile only
+let _positionHandler = null   // desktop only
 let _cachedDuration = null
 let _crossfadeStarted = false
 let _preloadStarted = false
+
+function _handlePositionUpdate(position, duration) {
+  if (!_cachedDuration && duration != null) {
+    _cachedDuration = duration
+    trackDuration.set(duration)
+  }
+
+  if (!get(isSeeking)) currentPosition.set(position)
+
+  if (get(lyricsOpen)) syncLyricsToPosition(position)
+
+  // Trigger crossfade when approaching end of track.
+  if (!_crossfadeStarted && _cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
+    const fadeSec = get(crossfadeDuration)
+    if (position >= _cachedDuration - fadeSec) {
+      const $queue = get(queue)
+      let nextIdx = get(queueIdx) + 1
+      if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
+      if (nextIdx < $queue.length) {
+        _crossfadeStarted = true
+        crossfadeToNext(nextIdx)
+      }
+    }
+  }
+
+  // Preload next track for gapless playback — crossfade off, 30s before end.
+  if (!_preloadStarted && _cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
+    const preloadAt = Math.max(0, _cachedDuration - 30)
+    if (position >= preloadAt) {
+      const $queue = get(queue)
+      let nextIdx = get(queueIdx) + 1
+      if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
+      if (nextIdx < $queue.length) {
+        _preloadStarted = true
+        const nextTrack = $queue[nextIdx]
+        if (nextTrack) {
+          const rgDb = nextTrack.replayGain?.trackGain ?? nextTrack.replayGain?.albumGain ?? null
+          OpenSubsonicRouter.buildUrl('stream', { id: nextTrack.id })
+            .then(url => get(audioBridge)?.preload(url, nextTrack.id, rgDb))
+            .catch(e => console.error('Preload URL error:', e))
+        }
+      }
+    }
+  }
+}
 
 export function startPositionTracking() {
   stopPositionTracking()
@@ -136,6 +184,16 @@ export function startPositionTracking() {
   _crossfadeStarted = false
   _preloadStarted = false
 
+  if (!isMobile) {
+    // Desktop: subscribe to Rust-emitted position events — no IPC round-trip overhead.
+    const bridge = get(audioBridge)
+    if (!bridge) return
+    _positionHandler = ({ position, duration }) => _handlePositionUpdate(position, duration)
+    bridge.on('position', _positionHandler)
+    return
+  }
+
+  // Mobile: polling interval with finish-detection fallback.
   _positionInterval = setInterval(async () => {
     const bridge = get(audioBridge)
     if (!bridge || !get(currentTrack)) { stopPositionTracking(); return }
@@ -147,52 +205,14 @@ export function startPositionTracking() {
         if (_cachedDuration) trackDuration.set(_cachedDuration)
       }
 
-      if (!get(isSeeking)) {
-        currentPosition.set(position)
-      }
+      if (!get(isSeeking)) currentPosition.set(position)
 
       if (get(lyricsOpen)) syncLyricsToPosition(position)
 
-      // On mobile, plugin finish events may not arrive — poll is_playback_finished
-      // when we're near the end as a reliable fallback.
-      if (isMobile && _cachedDuration && position >= _cachedDuration - 2) {
+      // On mobile, plugin finish events may not arrive — poll near end as fallback.
+      if (_cachedDuration && position >= _cachedDuration - 2) {
         const finished = await bridge.isFinished()
         if (finished) { bridge.emit('finished'); stopPositionTracking(); return }
-      }
-
-      // Trigger crossfade when approaching end of track (desktop only).
-      if (!isMobile && !_crossfadeStarted && _cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
-        const fadeSec = get(crossfadeDuration)
-        if (position >= _cachedDuration - fadeSec) {
-          const $queue = get(queue)
-          let nextIdx = get(queueIdx) + 1
-          if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
-          if (nextIdx < $queue.length) {
-            _crossfadeStarted = true
-            crossfadeToNext(nextIdx)
-          }
-        }
-      }
-
-      // Preload next track for gapless playback — desktop only, crossfade off.
-      // Trigger 30 seconds before the end (or at track start for short tracks).
-      if (!isMobile && !_preloadStarted && _cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
-        const preloadAt = Math.max(0, _cachedDuration - 30)
-        if (position >= preloadAt) {
-          const $queue = get(queue)
-          let nextIdx = get(queueIdx) + 1
-          if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
-          if (nextIdx < $queue.length) {
-            _preloadStarted = true
-            const nextTrack = $queue[nextIdx]
-            if (nextTrack) {
-              const rgDb = nextTrack.replayGain?.trackGain ?? nextTrack.replayGain?.albumGain ?? null
-              OpenSubsonicRouter.buildUrl('stream', { id: nextTrack.id })
-                .then(url => get(audioBridge)?.preload(url, nextTrack.id, rgDb))
-                .catch(e => console.error('Preload URL error:', e))
-            }
-          }
-        }
       }
     } catch (err) {
       console.error('Position update failed:', err)
@@ -201,6 +221,11 @@ export function startPositionTracking() {
 }
 
 export function stopPositionTracking() {
+  if (_positionHandler) {
+    const bridge = get(audioBridge)
+    if (bridge) bridge.off('position', _positionHandler)
+    _positionHandler = null
+  }
   if (_positionInterval) { clearInterval(_positionInterval); _positionInterval = null }
 }
 

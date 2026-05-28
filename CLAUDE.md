@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 3.1.2
+**Version**: 3.1.3
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -229,14 +229,6 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 
 - Whenever creating something new - add a comment above it explaining what it does
 - Use previous comments to get a better understanding of the code
-
-## Changelogs
-
-- Always output change-logs to extra/changelogs
-- Use the .md format
-- File names should follow this `RELEASE_v(verison-number)`
-- To generate a change log - compare the local files to the Git repo
-- Use semantic versioning (Look at #versioning(Versioning))
 
 ## Performance Considerations
 

@@ -8,7 +8,6 @@
     "core:default",
     "core:window:allow-set-decorations",
     "core:window:allow-is-decorated",
-    "fs:default",
     {
       "identifier": "http:default",
       "allow": [
@@ -17,9 +16,7 @@
         { "url": "https://**" },
         { "url": "https://**/**" }
       ]
-    },
-    "opener:default",
-    "shell:default"
+    }
   ],
   "commands": [
     "map_albums",
@@ -34,7 +31,6 @@
     "get_log_path",
     "get_app_version",
     "is_debug_mode",
-    "get_machine_info",
     "play_stream",
     "preload_stream",
     "pause_playback",

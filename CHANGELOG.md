@@ -1,3 +1,24 @@
+# v3.1.3
+
+## Added
+
+- **Rust-driven position events** (`playback-position`): The finish-watcher thread in `audio.rs` now emits `playback-position` every ~300ms, removing the need for JS polling on desktop. `AudioBridge` subscribes via a new `_unlistenPosition` listener and re-emits as a `'position'` event.
+- **Event-driven position tracking on desktop**: `startPositionTracking()` in `playback.js` now uses `bridge.on('position', ...)` on desktop instead of a `setInterval` poll — lower IPC overhead and more accurate timing.
+
+## Changed
+
+- **Cover cache switched from entry count to byte budget**: `coverCache.js` now evicts by total blob size (50 MB cap) instead of a fixed 150-entry count. `addCover()` accepts an optional `sizeBytes` argument; `api.js` passes `blob.size` when storing entries.
+- **Dependency cleanup** (`Cargo.toml`): Removed `tauri-plugin-shell`, `tauri-plugin-opener`, `tauri-plugin-fs`, and `sysinfo`. Removed corresponding permissions (`fs:default`, `opener:default`, `shell:default`) from `capabilities/default.json`.
+- **Tokio feature set trimmed**: `tokio` now uses `rt-multi-thread`, `macros`, `time` only (was `full`).
+- **Release profile optimized**: `opt-level` raised from `2` to `3`; `codegen-units = 1` added for maximum LTO effectiveness.
+- **`get_machine_info` command removed**: System diagnostics (CPU, GPU, distro, package manager via `sysinfo`/`lspci`) removed from backend and Settings UI — the Settings page no longer shows a "System" row.
+
+## Removed
+
+- `get_machine_info` Tauri command and `SystemInfo` struct from `lib.rs`.
+- `sysinfo` crate dependency.
+- `tauri-plugin-shell`, `tauri-plugin-opener`, `tauri-plugin-fs` plugin dependencies and their capability permissions.
+
 # v3.1.0
 
 ## Added

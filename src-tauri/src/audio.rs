@@ -338,23 +338,47 @@ impl AudioPlayer {
                 }
             }
 
-            // Finish watcher — polls the sink at 100ms intervals and emits "playback-finished"
-            // when the sink drains. Only runs for non-preloaded sessions since preloads are
-            // promoted to active players (and watched) only after resume() is called.
+            // Finish watcher — polls at 100ms, emits "playback-position" every ~300ms and
+            // "playback-finished" when the sink drains. Only runs for non-preloaded sessions.
             if !start_paused {
                 let sessions_watch = Arc::clone(&sessions);
                 let app_handle_watch = app_handle.clone();
                 let pid = player_id_clone.clone();
                 tauri::async_runtime::spawn(async move {
+                    let mut tick: u8 = 0;
                     loop {
                         tokio::time::sleep(Duration::from_millis(100)).await;
-                        let finished = {
+                        tick = tick.wrapping_add(1);
+
+                        let (finished, pos_payload) = {
                             let s = sessions_watch.read();
                             match s.get(&pid) {
                                 None => break, // Session removed externally (stop() called).
-                                Some(session) => !session.loading && session.sink.empty(),
+                                Some(session) => {
+                                    let finished = !session.loading && session.sink.empty();
+                                    // Emit position every ~300ms when actively playing.
+                                    let pos_payload = if tick % 3 == 0 && !session.loading && session.playback_start_time.is_some() {
+                                        let pos = session.accumulated_time
+                                            + session.playback_start_time
+                                                .map(|t| t.elapsed().as_secs_f64())
+                                                .unwrap_or(0.0);
+                                        Some(serde_json::json!({
+                                            "playerId": pid,
+                                            "position": pos,
+                                            "duration": session.duration
+                                        }))
+                                    } else {
+                                        None
+                                    };
+                                    (finished, pos_payload)
+                                }
                             }
                         };
+
+                        if let Some(payload) = pos_payload {
+                            let _ = app_handle_watch.emit("playback-position", payload);
+                        }
+
                         if finished {
                             sessions_watch.write().remove(&pid);
                             let _ = app_handle_watch.emit("playback-finished", serde_json::json!({
@@ -458,21 +482,44 @@ impl AudioPlayer {
                 "state": "playing"
             }));
 
-            // Promoted preloads need their own finish watcher since they were
-            // created with start_paused=true and skipped the initial watcher.
+            // Promoted preloads need their own finish watcher + position emitter.
             let sessions_watch = Arc::clone(&self.sessions);
             let app_handle_watch = self.app_handle.clone();
             let pid = player_id.to_string();
             tauri::async_runtime::spawn(async move {
+                let mut tick: u8 = 0;
                 loop {
                     tokio::time::sleep(Duration::from_millis(100)).await;
-                    let finished = {
+                    tick = tick.wrapping_add(1);
+
+                    let (finished, pos_payload) = {
                         let s = sessions_watch.read();
                         match s.get(&pid) {
                             None => break,
-                            Some(session) => !session.loading && session.sink.empty(),
+                            Some(session) => {
+                                let finished = !session.loading && session.sink.empty();
+                                let pos_payload = if tick % 3 == 0 && !session.loading && session.playback_start_time.is_some() {
+                                    let pos = session.accumulated_time
+                                        + session.playback_start_time
+                                            .map(|t| t.elapsed().as_secs_f64())
+                                            .unwrap_or(0.0);
+                                    Some(serde_json::json!({
+                                        "playerId": pid,
+                                        "position": pos,
+                                        "duration": session.duration
+                                    }))
+                                } else {
+                                    None
+                                };
+                                (finished, pos_payload)
+                            }
                         }
                     };
+
+                    if let Some(payload) = pos_payload {
+                        let _ = app_handle_watch.emit("playback-position", payload);
+                    }
+
                     if finished {
                         sessions_watch.write().remove(&pid);
                         let _ = app_handle_watch.emit("playback-finished", serde_json::json!({

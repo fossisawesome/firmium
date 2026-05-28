@@ -5,7 +5,6 @@ use std::io::Write as _;
 #[cfg(not(target_os = "android"))]
 use std::sync::Arc;
 use tauri::Manager;
-use sysinfo::System;
 
 // ============================================================================
 // ANDROID SECURE STORAGE PLUGIN
@@ -103,16 +102,6 @@ fn now_playing_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             Ok(())
         })
         .build()
-}
-
-/// System information structure for diagnostics
-#[derive(serde::Serialize)]
-struct SystemInfo {
-    cpu: String,
-    gpu: String,
-    distro: String,
-    version: String,
-    package_manager: String,
 }
 
 // ============================================================================
@@ -551,104 +540,6 @@ fn get_app_version() -> &'static str {
 }
 
 // ============================================================================
-// SYSTEM DIAGNOSTICS
-// ============================================================================
-
-/// Fetch machine specifications for the settings/about page.
-///
-/// On Android the function skips shell invocations (no `lspci`/`sh`) and returns
-/// whatever sysinfo can derive from the Android runtime instead.
-///
-/// Made async to avoid blocking the Tauri event loop: `lspci` can take
-/// 1-3 seconds on some systems, which would freeze the UI if run synchronously.
-#[tauri::command]
-async fn get_machine_info() -> SystemInfo {
-    let mut sys = System::new_all();
-    sys.refresh_all();
-
-    let cpu = sys
-        .cpus()
-        .first()
-        .map(|c| c.brand().to_string())
-        .unwrap_or_else(|| "Unknown CPU".to_string());
-
-    let distro = System::name().unwrap_or_else(|| "Android".to_string());
-    let version = System::os_version().unwrap_or_else(|| "0.0".to_string());
-
-    // Android has no shell, lspci, or package manager — return stubs directly.
-    #[cfg(target_os = "android")]
-    {
-        return SystemInfo {
-            cpu,
-            gpu: "N/A".to_string(),
-            distro,
-            version,
-            package_manager: "N/A".to_string(),
-        };
-    }
-
-    // Desktop path: shell out for GPU and package manager info.
-    #[cfg(not(target_os = "android"))]
-    {
-        #[cfg(target_os = "windows")]
-        let gpu = tokio::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "Get-WmiObject Win32_VideoController | Select-Object -First 1 -ExpandProperty Name",
-            ])
-            .output()
-            .await
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_else(|_| "Unknown GPU".to_string());
-
-        #[cfg(not(target_os = "windows"))]
-        let gpu = tokio::process::Command::new("sh")
-            .arg("-c")
-            .arg("lspci | grep -E 'VGA|3D' | cut -d ':' -f3 | sed 's/^[ \\t]*//'")
-            .output()
-            .await
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_else(|_| "Unknown GPU".to_string());
-
-        #[cfg(target_os = "windows")]
-        let package_manager = tokio::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "if (Get-Command winget -EA SilentlyContinue) { 'winget' } \
-                 elseif (Get-Command choco -EA SilentlyContinue) { 'chocolatey' } \
-                 elseif (Get-Command scoop -EA SilentlyContinue) { 'scoop' } \
-                 else { 'none' }",
-            ])
-            .output()
-            .await
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_else(|_| "none".to_string());
-
-        #[cfg(not(target_os = "windows"))]
-        let package_manager = tokio::process::Command::new("sh")
-            .arg("-c")
-            .arg("which pacman || which apt || which dnf || which zypper || echo 'unknown'")
-            .output()
-            .await
-            .map(|o| {
-                let path = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                path.split('/').last().unwrap_or("unknown").to_string()
-            })
-            .unwrap_or_else(|_| "unknown".to_string());
-
-        SystemInfo {
-            cpu,
-            gpu: if gpu.is_empty() { "Unknown GPU".to_string() } else { gpu },
-            distro,
-            version,
-            package_manager,
-        }
-    }
-}
-
-// ============================================================================
 // AUDIO STREAM PLAYBACK INTERACTION HANDLERS
 // ============================================================================
 //
@@ -1061,14 +952,7 @@ pub fn run() {
         .plugin(secure_storage_plugin())
         .plugin(audio_plugin())
         .plugin(now_playing_plugin())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_fs::init());
-
-    // shell and opener plugins are desktop-only.
-    #[cfg(not(mobile))]
-    let builder = builder
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_opener::init());
+        .plugin(tauri_plugin_http::init());
 
     builder
         .setup(move |_app| {
@@ -1113,8 +997,6 @@ pub fn run() {
             get_log_path,
             get_app_version,
             is_debug_mode,
-            // System info
-            get_machine_info,
             // Audio playback
             play_stream,
             preload_stream,

@@ -1,23 +1,32 @@
 // In-memory LRU cache for cover art blob URLs.
-// Oldest entries are evicted when the limit is exceeded and their blob URLs are revoked.
-const MAX_COVER_CACHE_SIZE = 150
+// Evicts oldest entries when total estimated byte size exceeds the budget.
+const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
+let _totalBytes = 0
+// Values stored as { url, size } objects.
 const _covers = new Map()
 const _pending = new Map()
 
 export function getCover(id) {
-  const url = _covers.get(id) || null
-  if (url) { _covers.delete(id); _covers.set(id, url) } // LRU touch
-  return url
+  const entry = _covers.get(id) || null
+  if (entry) { _covers.delete(id); _covers.set(id, entry) } // LRU touch
+  return entry ? entry.url : null
 }
 
-export function addCover(id, url) {
+// sizeBytes is the original blob.size — pass 0 if unknown (falls back to count guard).
+export function addCover(id, url, sizeBytes = 0) {
   if (!id || !url) return
-  if (_covers.has(id)) _covers.delete(id)
-  _covers.set(id, url)
-  while (_covers.size > MAX_COVER_CACHE_SIZE) {
+  if (_covers.has(id)) {
+    _totalBytes -= _covers.get(id).size
+    _covers.delete(id)
+  }
+  _covers.set(id, { url, size: sizeBytes })
+  _totalBytes += sizeBytes
+
+  while (_totalBytes > MAX_BYTES && _covers.size > 0) {
     const oldest = _covers.keys().next().value
-    const oldUrl = _covers.get(oldest)
-    if (oldUrl?.startsWith('blob:')) { try { URL.revokeObjectURL(oldUrl) } catch (_) {} }
+    const old = _covers.get(oldest)
+    if (old.url?.startsWith('blob:')) { try { URL.revokeObjectURL(old.url) } catch (_) {} }
+    _totalBytes -= old.size
     _covers.delete(oldest)
   }
 }
@@ -27,9 +36,10 @@ export const setPending = (id, p) => { if (id && p) _pending.set(id, p) }
 export const clearPending = (id) => { _pending.delete(id) }
 
 export function clearAll() {
-  _covers.forEach(url => {
-    if (url?.startsWith('blob:')) { try { URL.revokeObjectURL(url) } catch (_) {} }
+  _covers.forEach(entry => {
+    if (entry.url?.startsWith('blob:')) { try { URL.revokeObjectURL(entry.url) } catch (_) {} }
   })
   _covers.clear()
   _pending.clear()
+  _totalBytes = 0
 }
