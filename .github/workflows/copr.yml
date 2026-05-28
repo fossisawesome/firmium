@@ -7,11 +7,17 @@ on:
   workflow_run:
     workflows: ["Release"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v3.1.4)'
+        required: true
 
 jobs:
   copr-publish:
-    # Only run if the triggering Release workflow succeeded.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # For workflow_run: only proceed if the Release workflow succeeded.
+    # For workflow_dispatch: always run (conclusion is empty).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     # Run in a Fedora container so rpmbuild uses the correct macros and
     # doesn't inject Ubuntu-style xcb BuildRequires into the SRPM.
@@ -30,9 +36,9 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        # workflow_run exposes the triggering ref in head_branch (e.g. "v3.1.4")
+        # workflow_run exposes the tag in head_branch; workflow_dispatch uses the input
         run: |
-          TAG="${{ github.event.workflow_run.head_branch }}"
+          TAG="${{ github.event.workflow_run.head_branch || inputs.tag }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
