@@ -1,5 +1,5 @@
 <script>
-  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
+  import { IconMusic, IconList, IconPlay, IconUser } from '../lib/icons.js'
   import { onMount, onDestroy } from 'svelte'
   import { authUsername, navToAlbum, navToArtist, navToView, recentlyPlayedSongs } from '../lib/stores.js'
   import { Api, loadImage } from '../lib/api.js'
@@ -162,7 +162,7 @@
               {:else if artist.coverArtId}
                 <img use:lazyLoad={img => loadImage(img, artist.coverArtId, ctrl?.signal)} alt="" />
               {:else}
-                <div class="home-card-no-art">♬</div>
+                <div class="home-card-no-art"><span class="icon" style="width:28px;height:28px;color:var(--muted)">{@html IconUser}</span></div>
               {/if}
             </div>
             <div class="home-card-info">
