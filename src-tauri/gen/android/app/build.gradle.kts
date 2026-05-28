@@ -25,19 +25,19 @@ android {
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
     // Read signing credentials from env vars (set in CI) or a local keystore.properties file.
-    val keystorePath = System.getenv("ANDROID_SIGNING_KEY_PATH")
-    val keystoreAlias = System.getenv("ANDROID_SIGNING_KEY_ALIAS")
-    val keystorePassword = System.getenv("ANDROID_SIGNING_STORE_PASSWORD")
-    val keyPassword = System.getenv("ANDROID_SIGNING_KEY_PASSWORD")
-    val canSign = keystorePath != null && keystoreAlias != null && keystorePassword != null && keyPassword != null
+    val signingKeyPath = System.getenv("ANDROID_SIGNING_KEY_PATH")
+    val signingKeyAlias = System.getenv("ANDROID_SIGNING_KEY_ALIAS")
+    val signingStorePassword = System.getenv("ANDROID_SIGNING_STORE_PASSWORD")
+    val signingKeyPassword = System.getenv("ANDROID_SIGNING_KEY_PASSWORD")
+    val canSign = signingKeyPath != null && signingKeyAlias != null && signingStorePassword != null && signingKeyPassword != null
 
     if (canSign) {
         signingConfigs {
             create("release") {
-                storeFile = file(keystorePath!!)
-                storePassword = keystorePassword
-                keyAlias = keystoreAlias
-                keyPassword = keyPassword
+                storeFile = file(signingKeyPath!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
             }
         }
     }
