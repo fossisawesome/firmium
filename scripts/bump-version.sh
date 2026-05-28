@@ -35,6 +35,9 @@ update_file() {
   elif [[ $file == *.spec ]]; then
     sed -i "s/^Version:        .*/Version:        $version/" "$file"
     sed -i "s/^Release:        .*/Release:        1/" "$file"
+    # Update %changelog: replace version in the most recent entry line
+    CHANGELOG_DATE=$(date "+%a %b %d %Y")
+    sed -i "s/^\* .* - .*$/\* $CHANGELOG_DATE fossisawesome <fossisawesome AT github DOT com> - $version-1/" "$file"
   elif [[ $file == *.md ]]; then
     sed -i "s/^\*\*Version\*\*: [^*]*/\*\*Version\*\*: $version/" "$file"
   fi
