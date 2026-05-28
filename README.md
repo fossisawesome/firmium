@@ -107,10 +107,10 @@ Download the latest release from the [releases page](https://github.com/fossisaw
 yay -S firmium-desktop-bin # or paru -S firmium-desktop-bin
 ```
 
-**Fedora**
+**Fedora (COPR)**
 ```bash
-# Download the .rpm from the releases page, then:
-sudo dnf install ./firmium_*.rpm
+sudo dnf copr enable fossisawesome/Firmium
+sudo dnf install firmium
 ```
 
 **Debian / Ubuntu**

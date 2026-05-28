@@ -14,7 +14,7 @@ BuildRequires:  cargo
 BuildRequires:  rustc
 BuildRequires:  nodejs
 BuildRequires:  npm
-BuildRequires:  libssl-devel
+BuildRequires:  openssl-devel
 BuildRequires:  libxdo-devel
 BuildRequires:  libxcb-devel
 BuildRequires:  libxcb-render-devel
@@ -54,5 +54,5 @@ cp -r usr/* %{buildroot}/usr/ 2>/dev/null || true
 /usr/share/icons/hicolor/*/apps/firmium.svg
 
 %changelog
-* Sun May 25 2026 fossisawesome <fossisawesome AT github DOT com>> - 2.0.4-1
+* Wed May 28 2026 fossisawesome <fossisawesome AT github DOT com> - 3.1.1-1
 - Initial packaging for COPR
