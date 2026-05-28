@@ -1,12 +1,17 @@
 name: Publish to COPR
 
-# Fires when a GitHub release is published (not just drafted).
+# Fires after the Release workflow completes successfully, ensuring all
+# build artifacts (including the RPM) are already uploaded before we try
+# to fetch them.
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
 
 jobs:
   copr-publish:
+    # Only run if the triggering Release workflow succeeded.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     # Run in a Fedora container so rpmbuild uses the correct macros and
     # doesn't inject Ubuntu-style xcb BuildRequires into the SRPM.
@@ -15,13 +20,21 @@ jobs:
 
     steps:
       - name: Install tools
-        run: dnf install -y rpm-build copr-cli gh
+        run: dnf install -y rpm-build copr-cli gh git
+
+      # Containers run as root; mark all directories safe so git/gh work.
+      - name: Fix git safe directory
+        run: git config --global --add safe.directory '*'
 
       - uses: actions/checkout@v4
 
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        # workflow_run exposes the triggering ref in head_branch (e.g. "v3.1.4")
+        run: |
+          TAG="${{ github.event.workflow_run.head_branch }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
       # Find the RPM asset name — Tauri uses productName in the filename,
       # so we grep rather than hardcode to handle casing (e.g. Firmium vs firmium).
@@ -30,10 +43,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RPM=$(gh release view "$GITHUB_REF_NAME" --json assets \
+          RPM=$(gh release view "${{ steps.version.outputs.tag }}" --json assets \
             -q '.assets[].name' | grep -i '\.rpm$' | head -1)
           if [ -z "$RPM" ]; then
-            echo "No RPM asset found in release $GITHUB_REF_NAME" >&2
+            echo "No RPM asset found in release ${{ steps.version.outputs.tag }}" >&2
             exit 1
           fi
           echo "filename=$RPM" >> $GITHUB_OUTPUT
