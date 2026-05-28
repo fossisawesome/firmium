@@ -71,14 +71,20 @@ jobs:
           } > ~/.config/copr
 
       - name: Build SRPM
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p ~/rpmbuild/{SPECS,SRPMS}
+          mkdir -p ~/rpmbuild/{SPECS,SOURCES,SRPMS}
           DATE=$(date "+%a %b %d %Y")
           sed \
             -e "s/VERSION_PLACEHOLDER/${{ steps.version.outputs.version }}/g" \
             -e "s/RPM_FILENAME_PLACEHOLDER/${{ steps.rpm.outputs.filename }}/g" \
             -e "s/CHANGELOG_DATE_PLACEHOLDER/$DATE/g" \
             packaging/firmium.spec > ~/rpmbuild/SPECS/firmium.spec
+          # Download the pre-built RPM so rpmbuild can include it in the SRPM.
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --pattern "${{ steps.rpm.outputs.filename }}" \
+            --dir ~/rpmbuild/SOURCES/
           rpmbuild -bs --nodeps ~/rpmbuild/SPECS/firmium.spec
 
       - name: Submit to COPR
