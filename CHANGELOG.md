@@ -1,3 +1,11 @@
+# v3.1.5
+
+## Fixed
+
+- **Search section headers misaligned** (`style.css`): "SONGS" and "ALBUMS" headers in the search view were flush against the left edge. Added `padding-left: 16px` to `.section-header` so they align with the rest of the list content.
+
+---
+
 # v3.1.4
 
 ## Added
