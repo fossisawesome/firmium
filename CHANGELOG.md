@@ -1,3 +1,49 @@
+## Added
+
+- **Mobile / Android support**: New `MobilePlayer.svelte` full-screen player overlay and `QueueSheet.svelte` queue bottom sheet for touch-first layouts. `platform.js` detects Android vs desktop at runtime.
+- **Custom theming engine**: Themes loaded from the `themes/` directory via a new `list_themes` Tauri command. `applyThemeData()` applies CSS custom properties (`--bg`, `--surface`, `--accent`, etc.) directly to `:root`, replacing the old `data-theme` attribute approach. The Settings page now receives the full theme list.
+- **SVG icon library** (`src/lib/icons.js`): Centralised icon strings (Play, Pause, Loading, Prev, Next, Repeat, Lyrics, Volume, Music, ChevronDown) replacing inline emoji.
+- **`playerControls.js`**: Extracted `togglePlay()`, `prevTrack()`, `nextTrack()`, and `cycleRepeat()` from `PlayerBar.svelte` into a shared module reused by both the desktop bar and the mobile player.
+- **`nowPlaying.js`**: New module for OS-level now-playing metadata integration.
+- **Audio fade-in on playback start**: 25 ms `fade_in` applied to every new source to eliminate the start-of-playback pop (`audio.rs`).
+- **Audio volume ramp on pause/stop**: Volume ramped to 0 over ~20 ms (5 steps × 4 ms) before pausing or stopping, then restored, eliminating audible clicks (`audio.rs`).
+- **Debug-mode devtools gate**: DevTools keyboard shortcuts (F12, Ctrl+Shift+I/J/C) are blocked in release builds unless the app is launched with `--debug`. Controlled by a new `is_debug_mode` Tauri command.
+- **`has-player` CSS class**: `document.documentElement` gains `has-player` whenever a track is loaded, enabling CSS rules that shift layout when the player bar is visible.
+- **`is-mobile-layout` CSS class**: Applied via `matchMedia('(max-width: 640px)')` and the `isMobile` platform flag, giving Android tablets the mobile layout regardless of physical screen width.
+- **Android capabilities** (`src-tauri/capabilities/android.json`): Separate Tauri capability file for Android permission scoping.
+
+## Changed
+
+- **`main.rs` refactored into a library crate**: All Tauri commands, data mappers, audio init, and plugin wiring moved to `src-tauri/src/lib.rs`. `main.rs` is now a thin entry-point that calls `app_lib::run()`.
+- **`PlaybackState` and `AudioDevice` promoted to crate root**: Defined once in `lib.rs`; `audio.rs` re-exports them via `pub use crate::PlaybackState` and `pub use crate::AudioDevice`.
+- **`DeviceSinkBuilder` import guarded** with `#[cfg(not(target_os = "android"))]` to allow compilation on Android where device enumeration differs.
+- **`AudioPlayer::new` guarded** with `#[cfg(not(target_os = "android"))]` for the same reason.
+- **`PlayerBar.svelte` simplified**: Removed inline control logic (now in `playerControls.js`), replaced emoji icons with SVG strings from `icons.js`, and added a tap handler to open `MobilePlayer` on mobile.
+- **Theme application**: `applyTheme(id)` replaced by `applyThemeById(id)` + `applyThemeData(theme)` pair; theme is now applied from a loaded theme object rather than setting a DOM attribute.
+- **Login error handling hardened**: `clearAuth()` is now called if the post-login API check fails, preventing a half-authenticated state.
+- **`Settings.svelte`**: Receives `loadedThemes` prop and renders the full theme picker from the list returned by `list_themes`.
+- **`stores.js`**: Added `mobilePlayerOpen`, `queueSheetOpen` stores for mobile overlay state.
+- **`style.css`**: Refactored to use CSS custom properties throughout; `is-mobile-layout` and `has-player` class-driven layout rules added.
+- **Package updates**: `package.json` / `package-lock.json` updated; `Cargo.toml` / `Cargo.lock` updated for new crate structure and Android target support.
+- **Icons refreshed**: All app icon files regenerated (`32×32`, `128×128`, `128×128@2x`, `icon.icns`, `icon.ico`, `icon.png`).
+- **`tauri.conf.json`** updated for v3 bundle identifiers and capability references.
+- **`PKGBUILD` / `firmium.spec`** updated to v3.0.0.
+- **`README.md`** updated to reflect v3 feature set.
+
+## Removed
+
+- `public/lrclib-logo.png` removed (no longer referenced in the UI).
+- Inline `togglePlay`, `prevTrack`, `nextTrack`, `cycleRepeat` functions removed from `PlayerBar.svelte` (replaced by shared `playerControls.js`).
+- Old `data-theme` attribute theming removed in favour of CSS variable injection.
+
+## Fixed
+
+- Audible pop at the start of each track (fixed by 25 ms fade-in in `audio.rs`).
+- Audible click on pause and stop (fixed by volume ramp in `audio.rs`).
+- Half-authenticated app state after a failed login (fixed by calling `clearAuth()` on error in `App.svelte`).
+
+---
+
 # v2.1.0
 
 ## Added
