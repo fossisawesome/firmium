@@ -43,7 +43,6 @@
 - `IconLyrics` removed from MobilePlayer imports (no longer used in secondary controls).
 - Close chevron button removed from MobilePlayer top bar.
 
-
 ---
 
 # v3.0.0

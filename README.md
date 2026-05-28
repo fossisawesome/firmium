@@ -15,16 +15,17 @@
 
 ---
 
-Firmium is a desktop [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client built with Tauri 2. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
+Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client built with Tauri 2, targeting **Linux desktop and Android**. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
 
 > **Note:** Firmium is a *client only* — you need a self-hosted OpenSubsonic-compatible server to use it. [Navidrome](https://www.navidrome.org/) is the most popular choice and is free and open source.
 
 ## Features
 
 **What makes Firmium stand out:**
-- Native OS audio engine via Rodio - no Electron, no Chromium audio stack
+- Native OS audio engine via Rodio (Linux) / ExoPlayer (Android) — no Electron, no Chromium audio stack
 - Crossfade between tracks with configurable overlap
-- Credentials stored securely in the OS keyring (GNOME Keyring / KWallet) — never written to disk in plaintext
+- Credentials stored securely in the OS keyring (GNOME Keyring / KWallet on Linux) or Android Keystore-backed EncryptedSharedPreferences — never written to disk in plaintext
+- Android MediaSession integration: lock screen controls and persistent playback notification
 
 **Everything else:**
 - Synced and unsynced lyrics
@@ -57,7 +58,22 @@ That's it. Your library will load automatically.
 
 ## Install
 
-> **Compatibility:** Firmium is tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
+Firmium is available for **Linux desktop** and **Android**.
+
+> **Compatibility (Linux):** Tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
+
+### Android
+
+Download the latest `.apk` from the [releases page](https://github.com/fossisawesome/firmium/releases/latest), then install it on your device:
+
+```bash
+# Via ADB (sideloading):
+adb install firmium_*.apk
+```
+
+Or transfer the APK to your device and open it with a file manager. You may need to enable **Install from unknown sources** in your device settings.
+
+> **Note:** Firmium for Android requires Android 8.0 (API 26) or later.
 
 ### System Dependencies
 
@@ -84,7 +100,7 @@ Firmium also requires:
 
 ### Installing the App
 
-Download the latest release from the [releases page](https://github.com/fossisawesome/firmium/releases/latest).
+Download the latest release from the [releases page](https://github.com/fossisawesome/firmium/releases/latest). (Unless you use Arch)
 
 **Arch Linux**
 ```bash
@@ -132,6 +148,46 @@ npm run release
 ```
 
 This produces `.deb` and `.rpm` packages under `src-tauri/target/release/bundle/`.
+
+### Building for Android
+
+#### Additional Prerequisites
+
+- Android SDK and NDK (install via Android Studio or `sdkmanager`)
+- `ANDROID_HOME` and `NDK_HOME` environment variables set
+- Rust Android targets:
+  ```bash
+  rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+  ```
+
+#### Steps
+
+```bash
+# Initialize Android project (first time only)
+npx tauri android init
+
+# Development build (requires connected device or emulator)
+npx tauri android dev
+
+# Release APK
+npx tauri android build
+```
+
+The release APK is output to `src-tauri/gen/android/app/build/outputs/apk/`.
+
+## Troubleshooting (Android)
+
+**App installed but won't open**
+Ensure your device runs Android 7.0 (API 24) or later. If you sideloaded the APK, confirm you have allowed installs from unknown sources.
+
+**Playback notification doesn't appear**
+Grant Firmium the **Notifications** permission in your device's app settings. On Android 13+, this permission must be granted explicitly.
+
+**Credentials lost after reinstall**
+Credential storage is tied to the app's Android Keystore entry. A full uninstall clears the keys — you'll need to log in again after reinstalling.
+
+**No audio through Bluetooth / certain output devices**
+ExoPlayer routes audio through the Android audio system. If a specific output device isn't working, check that it is selected as the active output in your system's audio settings.
 
 ## Troubleshooting (Linux)
 
