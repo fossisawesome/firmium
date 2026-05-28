@@ -1,6 +1,7 @@
 import { tauriInvoke } from './tauri.js'
 import { isMobile } from './platform.js'
 import { OpenSubsonicRouter } from './api.js'
+import { addPluginListener } from '@tauri-apps/api/core'
 
 let _mediaActionHandler = null
 
@@ -11,10 +12,8 @@ export function initNowPlaying(onMediaAction) {
   _mediaActionHandler = onMediaAction
   // Plugin.trigger() sends through a Channel, not the global event bus.
   // addPluginListener registers the channel with the plugin's registerListener command.
-  import('@tauri-apps/api/core').then(({ addPluginListener }) => {
-    addPluginListener('now-playing', 'mediaAction', (payload) => {
-      if (_mediaActionHandler) _mediaActionHandler(payload?.action)
-    })
+  addPluginListener('now-playing', 'mediaAction', (payload) => {
+    if (_mediaActionHandler) _mediaActionHandler(payload?.action)
   }).catch(() => {})
 }
 
