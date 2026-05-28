@@ -169,8 +169,7 @@ jobs:
           script: |
             const fs = require('fs')
             const path = require('path')
-            const glob = require('glob')
-            const apks = glob.sync('src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk')
+            const apks = await glob.create('src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk').then(g => g.glob())
             if (apks.length === 0) throw new Error('No APK found')
             for (const apk of apks) {
               await github.rest.repos.uploadReleaseAsset({

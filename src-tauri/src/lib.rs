@@ -880,6 +880,7 @@ fn crossfade_to<R: tauri::Runtime>(
 // ============================================================================
 
 #[derive(serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 struct NowPlayingArgs {
     title: String,
     artist: String,
@@ -891,12 +892,14 @@ struct NowPlayingArgs {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 struct PlaybackStateArgs {
     #[serde(rename = "isPlaying")]
     is_playing: bool,
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct NowPlayingEmpty {}
 
 // Individual params match the JS payload keys (Tauri maps camelCase↔snake_case).
