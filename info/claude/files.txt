@@ -1,9 +1,0 @@
-/firmium-desktop/PKGBUILD
-/firmium-desktop/node_modules/.package-lock.json
-/firmium-desktop/package.json
-/firmium-desktop/package-lock.json/
-/firmium-desktop/src-tauri/tauri.conf.json
-/firmium-desktop/src-tauri/Cargo.toml
-~/firmium/aur-firmium-git
-~/firmium/aur-firmium-bin
-/firmium-desktop/CLAUDE.md
