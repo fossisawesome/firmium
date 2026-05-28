@@ -6,7 +6,6 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "fs:default",
     {
       "identifier": "http:default",
       "allow": [
