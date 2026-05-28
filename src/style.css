@@ -2111,7 +2111,8 @@ html.is-mobile-layout .sidebar {
   left: 0;
   right: 0;
   width: 100%;
-  height: 56px;
+  /* Grow to include the system nav bar area so buttons stay in the 56px content zone */
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
   flex-direction: row;
   padding: 0 4px;
   padding-bottom: env(safe-area-inset-bottom, 0px);

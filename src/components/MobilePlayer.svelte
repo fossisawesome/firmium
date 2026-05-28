@@ -134,6 +134,8 @@
   let overlayEl = $state()
   let closeTimer = null
   let springTimer = null
+  // null = undetermined, true = tracking a vertical close gesture, false = not
+  let gestureVertical = null
 
   onDestroy(() => {
     if (closeTimer !== null) clearTimeout(closeTimer)
@@ -141,12 +143,18 @@
   })
 
   // Non-passive so we can preventDefault and stop page scroll while dragging down.
+  // Only intercepts when at the top of scroll AND the gesture is primarily downward.
   $effect(() => {
     if (!overlayEl) return
     const handler = (e) => {
-      const delta = e.touches[0].clientY - touchStartY
-      if (delta > 0) {
-        dragOffset = delta
+      const dy = e.touches[0].clientY - touchStartY
+      const dx = Math.abs(e.touches[0].clientX - touchStartX)
+      // Determine gesture axis once the finger has moved enough to be confident
+      if (gestureVertical === null && (Math.abs(dy) > 8 || dx > 8)) {
+        gestureVertical = dy > 0 && Math.abs(dy) > dx
+      }
+      if (gestureVertical && overlayEl.scrollTop === 0 && dy > 0) {
+        dragOffset = dy
         springing = false
         e.preventDefault()
       }
@@ -167,6 +175,7 @@
     touchStartX = e.touches[0].clientX
     dragOffset = 0
     springing = false
+    gestureVertical = null
   }
 
   function onTouchEnd(e) {
