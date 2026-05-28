@@ -161,6 +161,23 @@ jobs:
           ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: npm run tauri android build -- --apk
 
+      - name: Print and publish APK certificate fingerprint
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk/universal/release -name '*.apk' ! -name '*-unsigned.apk' | head -1)
+          FINGERPRINT=$(apksigner verify --print-certs "$APK" | grep -i 'SHA-256' | awk '{print $NF}')
+          echo "APK SHA-256 certificate fingerprint: $FINGERPRINT"
+          gh release edit ${{ github.ref_name }} --notes-file - <<EOF
+          $(gh release view ${{ github.ref_name }} --json body -q .body)
+
+          ---
+          **APK certificate fingerprint (SHA-256):**
+          \`$FINGERPRINT\`
+
+          Verify with: \`apksigner verify --print-certs firmium.apk\`
+          EOF
+
       - name: Upload APK to release
         uses: actions/github-script@v7
         env:
