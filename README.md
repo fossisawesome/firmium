@@ -178,7 +178,7 @@ The release APK is output to `src-tauri/gen/android/app/build/outputs/apk/`.
 ## Troubleshooting (Android)
 
 **App installed but won't open**
-Ensure your device runs Android 7.0 (API 24) or later. If you sideloaded the APK, confirm you have allowed installs from unknown sources.
+Ensure your device runs Android 8.0 (API 26) or later. If you sideloaded the APK, confirm you have allowed installs from unknown sources.
 
 **Playback notification doesn't appear**
 Grant Firmium the **Notifications** permission in your device's app settings. On Android 13+, this permission must be granted explicitly.
