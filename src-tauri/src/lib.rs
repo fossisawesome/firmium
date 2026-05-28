@@ -712,6 +712,36 @@ struct AndroidCrossfadeArgs<'a> {
     #[serde(rename = "replayGainDb")]   replay_gain_db:   Option<f32>,
 }
 
+// Args for the native queue commands (Android only).
+#[cfg(target_os = "android")]
+#[derive(serde::Serialize)]
+struct AndroidQueueTrack {
+    #[serde(rename = "streamUrl")]    stream_url:     String,
+    #[serde(rename = "trackId")]      track_id:       String,
+    #[serde(rename = "replayGainDb")] replay_gain_db: Option<f32>,
+}
+#[cfg(target_os = "android")]
+#[derive(serde::Serialize)]
+struct AndroidSetQueueArgs {
+    tracks:       Vec<AndroidQueueTrack>,
+    #[serde(rename = "startIndex")] start_index: usize,
+    volume:       f32,
+}
+#[cfg(target_os = "android")]
+#[derive(serde::Serialize)]
+struct AndroidSkipToIndexArgs<'a> {
+    #[serde(rename = "playerId")] player_id: &'a str,
+    index: usize,
+}
+
+// Input struct for set_queue — JS sends camelCase, serde_json handles it via renames.
+#[derive(serde::Deserialize)]
+struct QueueTrackInput {
+    #[serde(rename = "streamUrl")]    stream_url:     String,
+    #[serde(rename = "trackId")]      track_id:       String,
+    #[serde(rename = "replayGainDb")] replay_gain_db: Option<f32>,
+}
+
 /// Helper: get the AudioHandle state on Android.
 #[cfg(target_os = "android")]
 fn get_audio_handle<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<tauri::State<'_, AudioHandle<R>>, String> {
@@ -873,6 +903,56 @@ fn crossfade_to<R: tauri::Runtime>(
         .map(|r| r.player_id).map_err(|e| e.to_string());
     #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.crossfade_to(old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db)
+}
+
+// ── Native queue commands (Android only) ──────────────────────────────────────
+
+// Loads all tracks into a single ExoPlayer playlist and starts at startIndex.
+// Returns a playerId usable with all standard playback commands.
+#[tauri::command]
+fn set_queue<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, tracks: Vec<QueueTrackInput>, start_index: usize, volume: f32) -> Result<String, String> {
+    #[cfg(target_os = "android")]
+    return get_audio_handle(&app_handle)?.0
+        .run_mobile_plugin::<AndroidPlayerIdResp>("setQueue", AndroidSetQueueArgs {
+            tracks: tracks.into_iter().map(|t| AndroidQueueTrack {
+                stream_url: t.stream_url, track_id: t.track_id, replay_gain_db: t.replay_gain_db,
+            }).collect(),
+            start_index,
+            volume,
+        })
+        .map(|r| r.player_id).map_err(|e| e.to_string());
+    #[cfg(not(target_os = "android"))]
+    Err("set_queue is only supported on Android".to_string())
+}
+
+#[tauri::command]
+fn skip_to_next<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return get_audio_handle(&app_handle)?.0
+        .run_mobile_plugin::<serde_json::Value>("skipToNext", AndroidPlayerIdArgs { player_id })
+        .map(|_| ()).map_err(|e| e.to_string());
+    #[cfg(not(target_os = "android"))]
+    { let _ = player_id; Err("skip_to_next is only supported on Android".to_string()) }
+}
+
+#[tauri::command]
+fn skip_to_previous<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return get_audio_handle(&app_handle)?.0
+        .run_mobile_plugin::<serde_json::Value>("skipToPrevious", AndroidPlayerIdArgs { player_id })
+        .map(|_| ()).map_err(|e| e.to_string());
+    #[cfg(not(target_os = "android"))]
+    { let _ = player_id; Err("skip_to_previous is only supported on Android".to_string()) }
+}
+
+#[tauri::command]
+fn skip_to_queue_index<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str, index: usize) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return get_audio_handle(&app_handle)?.0
+        .run_mobile_plugin::<serde_json::Value>("skipToQueueIndex", AndroidSkipToIndexArgs { player_id, index })
+        .map(|_| ()).map_err(|e| e.to_string());
+    #[cfg(not(target_os = "android"))]
+    { let _ = (player_id, index); Err("skip_to_queue_index is only supported on Android".to_string()) }
 }
 
 // ============================================================================
@@ -1050,6 +1130,10 @@ pub fn run() {
             seek_position,
             list_audio_devices,
             crossfade_to,
+            set_queue,
+            skip_to_next,
+            skip_to_previous,
+            skip_to_queue_index,
             // Now Playing notification (Android)
             update_now_playing,
             update_playback_state,

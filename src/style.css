@@ -402,11 +402,27 @@ html.is-mobile-layout.has-player .main-area {
 .artist-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 10px;
+  gap: 12px;
+  padding: 10px;
   cursor: pointer;
   transition: background var(--timing);
   touch-action: manipulation;
+}
+
+/* Circular artist photo in the artists list */
+.artist-row-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface2);
+}
+
+/* Push the album count to the right */
+.artist-row .artist-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .artist-row:hover {
@@ -2124,13 +2140,13 @@ html.is-mobile-layout .ctrl-btn.main-ctrl {
   font-size: 18px;
 }
 
-/* Lyrics panel → full-screen overlay */
+/* Lyrics panel → full-screen overlay, above MobilePlayer (z-index 300) */
 html.is-mobile-layout .lyrics-panel.open {
   position: fixed;
   inset: 0;
   width: 100%;
   min-width: unset;
-  z-index: 200;
+  z-index: 400;
   padding-bottom: calc(68px + 56px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -2446,6 +2462,15 @@ html.is-mobile-layout .player-bar .secondary-ctrl {
   display: none;
 }
 
+/* Remove the progress strip from the mini-player bar on mobile */
+html.is-mobile-layout .player-bar .progress-row {
+  display: none;
+}
+
+html.is-mobile-layout .player-bar {
+  grid-template-rows: auto;
+}
+
 /* Make the progress row a thin visual-only strip — no times, no seek handle */
 html.is-mobile-layout .player-bar .progress-row .time {
   display: none;
@@ -2618,4 +2643,364 @@ html.is-mobile-layout .player-bar .progress-row input[type="range"]::-moz-range-
   font-size: 12px;
   color: var(--muted);
   flex-shrink: 0;
+}
+
+/* ── Mobile page header ───────────────────────────────────────────────────── */
+
+.mobile-page-header {
+  display: none;
+}
+
+html.is-mobile-layout .mobile-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px;
+  background: var(--bg);
+  flex-shrink: 0;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mobile-page-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-page-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.mobile-header-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background var(--timing), color var(--timing);
+  touch-action: manipulation;
+}
+
+.mobile-header-btn:active {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+/* list-panel sits below the mobile-page-header in the flex column */
+html.is-mobile-layout .list-panel {
+  padding-top: 12px;
+}
+
+/* ── Mobile search overlay ────────────────────────────────────────────────── */
+
+.ms-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  animation: ms-slide-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ms-overlay.ms-closing {
+  animation: ms-slide-out 0.28s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+}
+
+@keyframes ms-slide-in {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes ms-slide-out {
+  from { transform: translateY(0);    opacity: 1; }
+  to   { transform: translateY(100%); opacity: 0.6; }
+}
+
+.ms-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ms-back-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  transition: background var(--timing);
+}
+
+.ms-back-btn:active { background: var(--surface2); }
+
+.ms-input-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.ms-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 16px;
+  font-family: var(--font);
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--timing);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.ms-input::placeholder { color: var(--muted); }
+.ms-input:focus { border-color: var(--accent); }
+/* Remove the native clear/search decoration */
+.ms-input::-webkit-search-cancel-button { display: none; }
+
+.ms-search-exec {
+  background: none;
+  border: none;
+  color: var(--accent);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  transition: background var(--timing);
+}
+
+.ms-search-exec:active { background: var(--surface2); }
+
+.ms-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0 env(safe-area-inset-bottom, 0px);
+}
+
+.ms-status {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.ms-error { color: var(--error); }
+
+.ms-hint {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+/* ── Mobile settings overlay ──────────────────────────────────────────────── */
+
+.mset-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  animation: ms-slide-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mset-overlay.mset-closing {
+  animation: ms-slide-out 0.28s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+}
+
+.mset-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mset-back-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  transition: background var(--timing);
+}
+
+.mset-back-btn:active { background: var(--surface2); }
+
+.mset-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--text);
+}
+
+.mset-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Settings categories (mobile) ─────────────────────────────────────────── */
+
+.settings-cat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 14px 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background var(--timing);
+  text-align: left;
+}
+
+.settings-cat-header:active { background: var(--surface2); }
+
+.settings-cat-arrow {
+  font-size: 14px;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.settings-cat-arrow.open {
+  transform: rotate(180deg);
+}
+
+/* ── Mobile play-all circle button ────────────────────────────────────────── */
+
+.mobile-play-circle-btn {
+  display: none;
+}
+
+html.is-mobile-layout .mobile-play-circle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  cursor: pointer;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  transition: opacity var(--timing), transform var(--timing);
+  margin-left: auto;
+}
+
+html.is-mobile-layout .mobile-play-circle-btn:active {
+  opacity: 0.8;
+  transform: scale(0.93);
+}
+
+/* Position within tracklist-header / pl-detail-actions */
+html.is-mobile-layout .tracklist-header {
+  position: relative;
+  align-items: center;
+}
+
+html.is-mobile-layout .pl-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Responsive font / spacing tweaks ─────────────────────────────────────── */
+
+/* Small phones (< 375px) get slightly tighter spacing */
+@media (max-width: 374px) {
+  html.is-mobile-layout .mp-art {
+    width: min(80vw, 280px);
+    height: min(80vw, 280px);
+    margin-bottom: 20px;
+  }
+  html.is-mobile-layout .mp-info {
+    margin-bottom: 18px;
+  }
+  html.is-mobile-layout .mp-progress {
+    margin-bottom: 18px;
+  }
+  html.is-mobile-layout .mp-secondary {
+    gap: 16px;
+  }
+  html.is-mobile-layout .home-card {
+    width: 110px;
+  }
+  html.is-mobile-layout .home-card-art {
+    width: 110px;
+    height: 110px;
+  }
+}
+
+/* Wider phones (> 430px) can use a bit more space */
+@media (min-width: 430px) and (max-width: 640px) {
+  html.is-mobile-layout .home-card {
+    width: 150px;
+  }
+  html.is-mobile-layout .home-card-art {
+    width: 150px;
+    height: 150px;
+  }
+  html.is-mobile-layout .home-card--artist {
+    width: 130px;
+  }
+  html.is-mobile-layout .home-card--artist .home-card-art {
+    width: 130px;
+    height: 130px;
+  }
 }

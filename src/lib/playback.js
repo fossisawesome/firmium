@@ -4,7 +4,7 @@ import {
   volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration, gaplessEnabled,
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
-  bumpToken, getPlayToken, recentlyPlayedSongs
+  bumpToken, getPlayToken, recentlyPlayedSongs, authServer, getQueryParams
 } from './stores.js'
 import { Api, OpenSubsonicRouter } from './api.js'
 import { initNowPlaying, updateNowPlaying, updateNowPlayingState, clearNowPlaying } from './nowPlaying.js'
@@ -16,6 +16,45 @@ export async function playAt(idx) {
   const bridge = get(audioBridge)
   const $queue = get(queue)
   if (!bridge || idx < 0 || idx >= $queue.length) return
+
+  if (isMobile) {
+    // Scrobble the track we're leaving before overwriting the queue player.
+    const outgoing = get(currentTrack)
+    if (outgoing) Api.scrobble(outgoing.id, true)
+
+    const currentToken = bumpToken()
+    try {
+      // Build all stream URLs in one auth round-trip so ExoPlayer gets the full
+      // playlist and can advance tracks natively even while the WebView is frozen.
+      const authParams = await getQueryParams()
+      if (currentToken !== getPlayToken()) return
+      const server = get(authServer)
+      const tracks = $queue.map(t => {
+        const url = new URL(`${server}/rest/stream`)
+        Object.entries({ ...authParams, id: t.id }).forEach(([k, v]) => url.searchParams.append(k, String(v)))
+        return {
+          streamUrl: url.toString(),
+          trackId: t.id,
+          replayGainDb: t.replayGain?.trackGain ?? t.replayGain?.albumGain ?? null,
+        }
+      })
+      await bridge.setQueue(tracks, idx)
+      const track = $queue[idx]
+      if (!track) return
+      queueIdx.set(idx)
+      Api.scrobble(track.id, false)
+      recentlyPlayedSongs.push(track)
+      await bridge.setVolume(get(volume))
+      fetchAndShowLyrics(track)
+      updateNowPlaying(track, true)
+      document.title = `▶ ${track.title} - Firmium`
+    } catch (e) {
+      if (currentToken === getPlayToken()) console.error('Queue setup error:', e)
+    }
+    return
+  }
+
+  // ── Desktop path ────────────────────────────────────────────────────────────
 
   // If gapless is promoting a preloaded track, the finished event for the outgoing
   // track will be filtered out by the player ID guard in audio-bridge, so scrobble
@@ -121,8 +160,8 @@ export function startPositionTracking() {
         if (finished) { bridge.emit('finished'); stopPositionTracking(); return }
       }
 
-      // Trigger crossfade when approaching end of track.
-      if (!_crossfadeStarted && _cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
+      // Trigger crossfade when approaching end of track (desktop only).
+      if (!isMobile && !_crossfadeStarted && _cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
         const fadeSec = get(crossfadeDuration)
         if (position >= _cachedDuration - fadeSec) {
           const $queue = get(queue)
@@ -135,9 +174,9 @@ export function startPositionTracking() {
         }
       }
 
-      // Preload next track for gapless playback — only when crossfade is off.
+      // Preload next track for gapless playback — desktop only, crossfade off.
       // Trigger 30 seconds before the end (or at track start for short tracks).
-      if (!_preloadStarted && _cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
+      if (!isMobile && !_preloadStarted && _cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
         const preloadAt = Math.max(0, _cachedDuration - 30)
         if (position >= preloadAt) {
           const $queue = get(queue)
@@ -186,12 +225,56 @@ function syncLyricsToPosition(positionSec) {
 
 // ── Bridge event wiring ───────────────────────────────────────────────────────
 
+// ── Background/foreground recovery (mobile only) ──────────────────────────────
+// On Android the WebView is throttled when backgrounded — setInterval stops,
+// so position tracking and finished-event processing stall. When the app
+// returns to the foreground we check whether playback ended while we were gone
+// and either emit 'finished' to advance the queue or restart tracking.
+
+let _visibilityHandler = null
+
+function _teardownVisibilityHandler() {
+  if (_visibilityHandler) {
+    document.removeEventListener('visibilitychange', _visibilityHandler)
+    _visibilityHandler = null
+  }
+}
+
+function _setupVisibilityHandler(bridge) {
+  _teardownVisibilityHandler()
+  if (!isMobile) return
+  _visibilityHandler = async () => {
+    if (document.visibilityState !== 'visible') return
+    // Only act when we believe a track is active — avoids spurious 'finished' emits.
+    if (!bridge.currentPlayerId) return
+    if (bridge.lastKnownState !== 'playing' && bridge.lastKnownState !== 'loading') return
+    try {
+      const finished = await bridge.isFinished()
+      if (finished) {
+        bridge.emit('finished')
+        return
+      }
+      // Still playing — restart the interval which was frozen while backgrounded.
+      const state = bridge.lastKnownState
+      if (state === 'playing') startPositionTracking()
+    } catch (e) {
+      console.error('Foreground recovery check failed:', e)
+    }
+  }
+  document.addEventListener('visibilitychange', _visibilityHandler)
+}
+
 export function wireBridgeEvents(bridge) {
+  _setupVisibilityHandler(bridge)
+
   // Wire notification button events from the lock screen / shade
   initNowPlaying((action) => {
     if (action === 'prev') {
+      // On mobile ExoPlayer owns the queue; skip natively instead of calling playAt.
+      if (isMobile) { bridge.skipToPrevious().catch(console.error); return }
       const idx = get(queueIdx); if (idx > 0) playAt(idx - 1)
     } else if (action === 'next') {
+      if (isMobile) { bridge.skipToNext().catch(console.error); return }
       const idx = get(queueIdx); const len = get(queue).length
       if (idx < len - 1) playAt(idx + 1)
       else if (get(repeatAll)) playAt(0)
@@ -215,9 +298,48 @@ export function wireBridgeEvents(bridge) {
     }
   })
 
+  // Fires on mobile when ExoPlayer advances to the next item in the playlist.
+  // Handles metadata, scrobbling, and lyrics without any JS timer involvement.
+  bridge.on('track-changed', ({ trackId, index }) => {
+    const outgoing = get(currentTrack)
+    if (outgoing) Api.scrobble(outgoing.id, true)
+
+    queueIdx.set(index)
+    const newTrack = get(currentTrack)
+    if (!newTrack) return
+
+    Api.scrobble(newTrack.id, false)
+    recentlyPlayedSongs.push(newTrack)
+    fetchAndShowLyrics(newTrack)
+    updateNowPlaying(newTrack, true)
+    document.title = `▶ ${newTrack.title} - Firmium`
+
+    // Reset per-track position state so the tracking interval picks up fresh duration.
+    _cachedDuration = null
+    currentPosition.set(0)
+    trackDuration.set(0)
+  })
+
   bridge.on('finished', () => {
     const track = get(currentTrack)
     if (track) Api.scrobble(track.id, true)
+
+    if (isMobile) {
+      // On mobile the queue is exhausted — ExoPlayer already advanced as far as it can.
+      if (get(repeatOne)) {
+        repeatOne.set(false)
+        bridge.skipToQueueIndex(get(queueIdx)).catch(console.error)
+      } else if (get(repeatAll)) {
+        bridge.skipToQueueIndex(0).catch(console.error)
+      } else {
+        stopPositionTracking()
+        playbackState.set('stopped')
+        clearNowPlaying()
+        document.title = 'Firmium'
+        currentPosition.set(0)
+      }
+      return
+    }
 
     if (get(repeatOne)) {
       repeatOne.set(false)

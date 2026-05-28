@@ -60,14 +60,40 @@ class AudioCrossfadeArgs {
     var replayGainDb: Float? = null
 }
 
+// Args for loading a full track queue into a single ExoPlayer instance.
+@InvokeArg
+class QueueTrackArg {
+    var streamUrl: String = ""
+    var trackId: String = ""
+    var replayGainDb: Float? = null
+}
+
+@InvokeArg
+class SetQueueArgs {
+    var tracks: List<QueueTrackArg> = emptyList()
+    var startIndex: Int = 0
+    var volume: Float = 1.0f
+}
+
+// Args for jumping to a specific position in the native queue.
+@InvokeArg
+class SkipToQueueIndexArgs {
+    var playerId: String = ""
+    var index: Int = 0
+}
+
 // ── Session state ─────────────────────────────────────────────────────────────
 
 private data class AudioSession(
     val player: ExoPlayer,
-    val trackId: String,
+    var currentTrackId: String,
     var baseVolume: Float = 1.0f,
     var replayGainFactor: Float = 1.0f,
     var finishWatchJob: Job? = null,
+    // Populated for queue sessions; null for single-track sessions.
+    val queueTrackIds: List<String>? = null,
+    val queueReplayGainFactors: List<Float>? = null,
+    var currentQueueIndex: Int = 0,
 )
 
 // ── Plugin ────────────────────────────────────────────────────────────────────
@@ -120,6 +146,26 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
                     else -> { /* STATE_ENDED handled by the finish watcher */ }
                 }
             }
+
+            // Fires when ExoPlayer advances to the next item in the playlist.
+            // JS listens for track-changed to update stores, NowPlaying, and scrobbles
+            // without needing the position-tracking interval to be alive.
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val queueIds = session.queueTrackIds ?: return
+                val idx = session.player.currentMediaItemIndex
+                val newTrackId = queueIds.getOrNull(idx) ?: return
+                session.currentTrackId = newTrackId
+                session.currentQueueIndex = idx
+                // Apply per-track ReplayGain for the incoming track.
+                val newGain = session.queueReplayGainFactors?.getOrNull(idx) ?: 1.0f
+                session.replayGainFactor = newGain
+                session.player.volume = session.baseVolume * newGain
+                val obj = JSObject()
+                obj.put("playerId", playerId)
+                obj.put("trackId", newTrackId)
+                obj.put("index", idx)
+                trigger("track-changed", obj)
+            }
         })
 
         // Finish watcher — polls at 100ms so we can clean up and fire the event.
@@ -169,7 +215,7 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
             player.volume = gainFactor // initial volume = ReplayGain factor; set by setVolume later
             val session = AudioSession(
                 player = player,
-                trackId = args.trackId,
+                currentTrackId = args.trackId,
                 baseVolume = 1.0f,
                 replayGainFactor = gainFactor,
             )
@@ -198,7 +244,7 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
             player.volume = gainFactor
             val session = AudioSession(
                 player = player,
-                trackId = args.trackId,
+                currentTrackId = args.trackId,
                 baseVolume = 1.0f,
                 replayGainFactor = gainFactor,
             )
@@ -361,6 +407,82 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    // Loads the entire queue into a single ExoPlayer playlist and starts playback at
+    // startIndex. ExoPlayer handles all subsequent track transitions natively — even
+    // when the WebView is backgrounded and JS timers are frozen.
+    @Command
+    fun setQueue(invoke: Invoke) {
+        val args = invoke.parseArgs(SetQueueArgs::class.java)
+        mainHandler.post {
+            // Stop any current session before creating the queue player.
+            sessions.keys.toList().forEach { releaseSession(it) }
+
+            val playerId = UUID.randomUUID().toString()
+            val player = buildPlayer()
+            val gainFactors = args.tracks.map { gainFactor(it.replayGainDb) }
+            val initialIdx = args.startIndex.coerceIn(0, (args.tracks.size - 1).coerceAtLeast(0))
+            val initialGain = gainFactors.getOrElse(initialIdx) { 1.0f }
+            player.volume = args.volume * initialGain
+
+            val session = AudioSession(
+                player = player,
+                currentTrackId = args.tracks.getOrNull(initialIdx)?.trackId ?: "",
+                baseVolume = args.volume,
+                replayGainFactor = initialGain,
+                queueTrackIds = args.tracks.map { it.trackId },
+                queueReplayGainFactors = gainFactors,
+                currentQueueIndex = initialIdx,
+            )
+            sessions[playerId] = session
+            attachListeners(playerId, session)
+
+            val mediaItems = args.tracks.map { MediaItem.fromUri(it.streamUrl) }
+            player.setMediaItems(mediaItems, initialIdx, 0L)
+            player.prepare()
+            player.playWhenReady = true
+
+            val result = JSObject()
+            result.put("playerId", playerId)
+            invoke.resolve(result)
+        }
+    }
+
+    // Skip to the next track in the native queue.
+    @Command
+    fun skipToNext(invoke: Invoke) {
+        val args = invoke.parseArgs(AudioPlayerIdArgs::class.java)
+        mainHandler.post {
+            val session = sessions[args.playerId]
+            if (session == null) { invoke.reject("Player not found"); return@post }
+            session.player.seekToNextMediaItem()
+            invoke.resolve()
+        }
+    }
+
+    // Skip to the previous track (or beginning of current track if past 3 s).
+    @Command
+    fun skipToPrevious(invoke: Invoke) {
+        val args = invoke.parseArgs(AudioPlayerIdArgs::class.java)
+        mainHandler.post {
+            val session = sessions[args.playerId]
+            if (session == null) { invoke.reject("Player not found"); return@post }
+            session.player.seekToPreviousMediaItem()
+            invoke.resolve()
+        }
+    }
+
+    // Jump directly to a specific index in the native queue.
+    @Command
+    fun skipToQueueIndex(invoke: Invoke) {
+        val args = invoke.parseArgs(SkipToQueueIndexArgs::class.java)
+        mainHandler.post {
+            val session = sessions[args.playerId]
+            if (session == null) { invoke.reject("Player not found"); return@post }
+            session.player.seekTo(args.index, 0L)
+            invoke.resolve()
+        }
+    }
+
     // Cross-fade from oldPlayerId into a new stream over fadeDurationMs.
     // Starts the new player at volume 0, then ramps old→0 and new→target simultaneously.
     @Command
@@ -373,7 +495,7 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
             newPlayer.volume = 0f // Start silent — fade task brings it up.
             val newSession = AudioSession(
                 player = newPlayer,
-                trackId = args.trackId,
+                currentTrackId = args.trackId,
                 baseVolume = args.targetVolume,
                 replayGainFactor = gainFactor,
             )

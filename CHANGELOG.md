@@ -1,3 +1,53 @@
+# v3.1.0
+
+## Added
+
+- **Native Android queue playback** (`set_queue`, `skip_to_next`, `skip_to_previous`, `skip_to_queue_index`): The full play queue is now loaded into a single ExoPlayer playlist on Android so track transitions happen in the native layer even when the WebView is backgrounded and JS timers are frozen.
+- **`track-changed` event** (Android): ExoPlayer fires `onMediaItemTransition` and Kotlin emits `track-changed` to JS, which updates stores, scrobbles, lyrics, and Now Playing without any JS timer involvement.
+- **Background/foreground recovery** (Android): A `visibilitychange` listener detects when the app returns to the foreground and either emits `finished` (if playback ended while backgrounded) or restarts position tracking.
+- **Mobile search overlay** (`MobileSearch.svelte`): Full-screen animated search overlay, replacing in-page search navigation on Android. State (query, results) is persisted between opens via new stores.
+- **Mobile settings overlay** (`MobileSettings.svelte`): Full-screen animated settings overlay for Android. Settings are organized into collapsible sections (Appearance, Playback, Services, Account, Debug) instead of a flat list.
+- **Mobile page header**: Each page on Android now shows a page title and icon-button shortcuts to Search and Settings.
+- **Android back-button handling**: Hardware/gesture back navigates through overlays (Search → Settings → Queue → Player → view history) before the OS exits the app.
+- **Artist avatar photos in ArtistList**: Circular artist photos loaded lazily from the server's MusicBrainz/Last.fm integration; falls back to a default avatar SVG.
+- **Artist image upgrades on HomeView**: Recent-artists cards fetch server artist images in the background and upgrade from album cover art when available.
+- **Mobile play-all circle button**: Album detail and playlist detail views show a floating circular play button on Android, replacing the text "Play All" button.
+- **`IconBack`, `IconPlus`, `IconPlayCircle`** icons added to `icons.js`.
+- **`mobileSearchOpen`, `mobileSettingsOpen`, `savedSearchQuery`, `savedSearchSongs`, `savedSearchAlbums`** stores added.
+- **`navBack`** exported from stores for programmatic back navigation.
+
+## Changed
+
+- **`playAt()` on Android** now calls `bridge.setQueue()` with all stream URLs pre-built in one auth round-trip, then lets ExoPlayer manage subsequent transitions natively. The desktop path is unchanged.
+- **Crossfade and gapless preload** guarded with `!isMobile` so they only run on desktop (ExoPlayer handles transitions natively on Android).
+- **Now-playing prev/next actions** on Android call `bridge.skipToPrevious()`/`bridge.skipToNext()` instead of `playAt()`.
+- **MobilePlayer**: Removed the close chevron button — swipe down is the only dismiss gesture. Queue sheet now opens *on top of* the player (player stays visible underneath). Lyrics toggle moved from secondary controls to tapping the album art. Secondary controls now show Add-to-Playlist (IconPlus) instead of Lyrics.
+- **MobilePlayer swipe**: Spring-back animation added for partial drag; `artTouchMoved` flag distinguishes taps from swipes on the cover art.
+- **Sidebar on mobile**: Search and Settings items hidden from the tab bar — they are accessed via the header icons instead.
+- **Settings view** reorganized into labeled sections (Appearance, Playback, Services, Account, Debug) that collapse on mobile.
+- **`AudioSession.trackId`** renamed to `currentTrackId` in Kotlin `AudioPlugin` (mutable; updated on each queue transition).
+- **Lyrics panel z-index** raised to 400 on mobile so it sits above MobilePlayer (z-index 300).
+- **Mini-player bar progress row** hidden on mobile (`display: none`).
+- **Artist row layout** updated: gap-based flex, circular avatar photo, `artist-info` flex-grows to push album count right.
+- **Responsive layout tweaks**: Small-phone (`< 375px`) and wider-phone (`> 430px`) breakpoints added for cover art and player sizing.
+- **`_unlistenTrackChanged`** lifecycle properly wired and torn down in `AudioBridge.destroy()`.
+
+## Fixed
+
+- Settings.svelte indentation inconsistency for `isAutoLoginEnabled` and `handleLrclib` corrected.
+- `onArtTouchEnd` now only fires the lyrics toggle on a genuine tap (no significant movement), preventing accidental lyrics open during swipes.
+- Issue #3 (hopefully)
+
+## Removed
+
+- `IconLyrics` removed from MobilePlayer imports (no longer used in secondary controls).
+- Close chevron button removed from MobilePlayer top bar.
+
+
+---
+
+# v3.0.0
+
 ## Added
 
 - **Mobile / Android support**: New `MobilePlayer.svelte` full-screen player overlay and `QueueSheet.svelte` queue bottom sheet for touch-first layouts. `platform.js` detects Android vs desktop at runtime.

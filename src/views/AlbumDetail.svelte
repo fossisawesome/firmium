@@ -1,5 +1,5 @@
 <script>
-  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
+  import { IconMusic, IconList, IconPlay, IconPlayCircle } from '../lib/icons.js'
   import { onMount, onDestroy } from 'svelte'
   import { get } from 'svelte/store'
   import { queue, queueIdx, currentTrack, navBack } from '../lib/stores.js'
@@ -8,6 +8,7 @@
   import { showPlaylistMenu } from '../lib/playlistMenu.js'
   import { lazyLoad } from '../lib/lazyLoad.js'
   import { formatDuration } from '../lib/utils.js'
+  import { isMobile } from '../lib/platform.js'
 
   let { id } = $props()
 
@@ -62,6 +63,15 @@
     <div class="tl-title">{albumName}</div>
     <div class="tl-subtitle">{albumArtist}</div>
   </div>
+  {#if isMobile && !loading && tracks.length > 0}
+    <button
+      class="mobile-play-circle-btn"
+      onclick={() => playTrack(0)}
+      aria-label="Play album"
+    >
+      <span class="icon" style="width:32px;height:32px">{@html IconPlayCircle}</span>
+    </button>
+  {/if}
 </div>
 
 {#if loading}
