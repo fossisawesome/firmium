@@ -69,6 +69,7 @@
   function playTrack(idx) {
     queue.set(songs)
     playAt(idx)
+    closeSearch()
   }
 
   function isPlaying(track) {

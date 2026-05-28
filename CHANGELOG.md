@@ -1,3 +1,23 @@
+# v3.1.4
+
+## Added
+
+- **COPR publish workflow** (`.github/workflows/copr.yml`): New CI workflow automatically builds and publishes an RPM to Fedora COPR on every GitHub release. Runs in a Fedora 42 container to ensure correct RPM macros.
+- **Artist bio toggle on mobile** (`ArtistDetail.svelte`): Bio is now hidden behind a "Show Bio" button on mobile to reduce visual clutter. Tapping reveals/hides the biography section.
+- **`packaging/` directory**: New packaging assets added to the repo.
+
+## Changed
+
+- **Mobile search auto-closes on track play** (`MobileSearch.svelte`): Selecting a track from search results now calls `closeSearch()` immediately after starting playback, dismissing the search overlay.
+- **Artist page actions layout** (`style.css`): Play-all and bio-toggle buttons are now on the same row via a new `.artist-page-actions` flexbox wrapper.
+- **Mobile tracklist header layout** (`style.css`): `.tracklist-header` on mobile changed from `flex-direction: column` to `row` so the header items stay inline.
+
+## Fixed
+
+- **Duplicate `align-items: center` removed** (`style.css`): Conflicting `align-items: center` in the mobile `.tracklist-header` rule cleaned up.
+
+---
+
 # v3.1.3
 
 ## Added

@@ -8,6 +8,7 @@
   import { lazyLoad } from '../lib/lazyLoad.js'
   import { pooledMap, SafeStorage } from '../lib/utils.js'
   import { PLAY_ALL_CONCURRENCY } from '../lib/api.js'
+  import { isMobile } from '../lib/platform.js'
 
   // Fetches artist bio from Last.fm API using the user's own key.
   // Note: Last.fm removed artist images from their API in 2019; images come from the server instead.
@@ -31,6 +32,8 @@ let { id } = $props()
   let bio = $state('Fetching biography…')
   let wikiImage = $state(null)
   let playingAll = $state(false)
+  // On mobile the bio is shown in a popup sheet instead of inline
+  let bioOpen = $state(false)
 
   onMount(async () => {
     ctrl = new AbortController()
@@ -110,12 +113,33 @@ let { id } = $props()
   />
   <div class="artist-page-info">
     <div class="artist-page-name">{name}</div>
-    <div class="artist-page-bio">{bio}</div>
-    <button class="play-all-btn" onclick={playAll} disabled={playingAll}>
-      {#if !playingAll}<span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>{/if}{playingAll ? 'Loading Queue…' : 'Play All Songs'}
-    </button>
+    {#if !isMobile}
+      <div class="artist-page-bio">{bio}</div>
+    {/if}
+    <div class="artist-page-actions">
+      <button class="play-all-btn" onclick={playAll} disabled={playingAll}>
+        {#if !playingAll}<span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>{/if}{playingAll ? 'Loading Queue…' : 'Play All Songs'}
+      </button>
+      {#if isMobile}
+        <button class="bio-toggle-btn" onclick={() => bioOpen = true}>
+          View Biography
+        </button>
+      {/if}
+    </div>
   </div>
 </div>
+
+{#if isMobile && bioOpen}
+  <!-- Full-screen bio popup sheet for mobile -->
+  <div class="bio-popup-backdrop" onclick={() => bioOpen = false}></div>
+  <div class="bio-popup-sheet">
+    <div class="bio-popup-header">
+      <span class="bio-popup-title">{name}</span>
+      <button class="bio-popup-close" onclick={() => bioOpen = false}>✕</button>
+    </div>
+    <div class="bio-popup-body">{bio}</div>
+  </div>
+{/if}
 
 {#if loading}
   <div class="loading-msg">Loading artist profile…</div>
