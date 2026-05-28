@@ -1,4 +1,5 @@
 <script>
+  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
   import { onMount, onDestroy } from 'svelte'
   import { queue, currentTrack, navToAlbum } from '../lib/stores.js'
   import { Api, Keyring, loadImage } from '../lib/api.js'
@@ -111,7 +112,7 @@ let { id } = $props()
     <div class="artist-page-name">{name}</div>
     <div class="artist-page-bio">{bio}</div>
     <button class="play-all-btn" onclick={playAll} disabled={playingAll}>
-      {playingAll ? 'Loading Queue…' : '▶ Play All Songs'}
+      {#if !playingAll}<span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>{/if}{playingAll ? 'Loading Queue…' : 'Play All Songs'}
     </button>
   </div>
 </div>
@@ -136,7 +137,7 @@ let { id } = $props()
             {#if album.coverArtId}
               <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
             {:else}
-              <div class="no-art">♪</div>
+              <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
             {/if}
           </div>
           <div class="album-info">

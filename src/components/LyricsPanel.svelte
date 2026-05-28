@@ -1,6 +1,7 @@
 <script>
   import { lyricsOpen, lyricsLines, lyricsSynced, lyricsStatus, currentTrack } from '../lib/stores.js'
   import { activeLyricIdx } from '../lib/playback.js'
+  import { IconClose } from '../lib/icons.js'
 
   let lyricsBody = $state()
 
@@ -19,9 +20,13 @@
 </script>
 
 <div class="lyrics-panel" class:open={$lyricsOpen}>
+  <!-- Fills the status bar / safe area on mobile full-screen; zero-height on desktop -->
+  <div class="lyrics-safe-top"></div>
   <div class="lyrics-header">
     <span class="lyrics-header-title">Lyrics</span>
-    <button class="lyrics-close" onclick={close}>✕</button>
+    <button class="lyrics-close" onclick={close}>
+      <span class="icon" style="width:13px;height:13px">{@html IconClose}</span>
+    </button>
   </div>
   <hr class="divider" style="margin: 0 20px;">
 

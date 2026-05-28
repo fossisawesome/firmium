@@ -65,20 +65,22 @@ Before running Firmium, install the required system libraries for your distribut
 
 **Debian / Ubuntu**
 ```bash
-sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3
+sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3 libsecret-1-0 libxdo3 libxcb1
 ```
 
 **Fedora**
 ```bash
-sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs
+sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs libsecret libxdo libxcb
 ```
 
 **Arch Linux**
 ```bash
-sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl
+sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl libsecret xdotool libxcb
 ```
 
-Firmium also requires a Secret Service provider (GNOME Keyring or KWallet) for credential storage. This is included in most desktop environments by default.
+Firmium also requires:
+- A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments. Without it, passwords won't be saved and you'll need to log in every launch.
+- **PipeWire or PulseAudio** — on modern distros ALSA routes through one of these. Run `aplay -l` to verify audio devices are visible.
 
 ### Installing the App
 
@@ -141,7 +143,7 @@ secret-tool store --label='test' key value
 If that fails, your keyring isn't running.
 
 **No audio output**
-Check that ALSA or PipeWire/PulseWire is set up correctly. Run `aplay -l` to list audio devices. If you have multiple devices, you can select the output in Firmium's Settings.
+Check that ALSA or PipeWire/PulseWire is set up correctly. Run `aplay -l` to list audio devices.
 
 **Blank window or app won't start (Wayland)**
 Try forcing XWayland: `WAYLAND_DISPLAY= ./firmium` or set `GDK_BACKEND=x11` before launching.

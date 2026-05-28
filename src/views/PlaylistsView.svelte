@@ -1,4 +1,5 @@
 <script>
+  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
   import { playlists, navToPlaylist } from '../lib/stores.js'
   import { loadImage } from '../lib/api.js'
   import { lazyLoad } from '../lib/lazyLoad.js'
@@ -56,7 +57,7 @@
 {#if $playlists.length === 0}
   <div class="section-header">Playlists</div>
   <div class="pl-empty-state">
-    <div class="pl-empty-icon">♫</div>
+    <div class="pl-empty-icon"><span class="icon" style="width:48px;height:48px;color:var(--muted);opacity:0.4">{@html IconList}</span></div>
     <div>No playlists yet</div>
     <button class="pl-new-btn" onclick={createNew}>New Playlist</button>
   </div>
@@ -79,7 +80,7 @@
         {:else if pl.coverArtId}
           <img use:lazyLoad={img => loadImage(img, pl.coverArtId, null)} alt="" />
         {:else}
-          <div class="no-art">♫</div>
+          <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconList}</span></div>
         {/if}
       </div>
       <div class="pl-card-info">

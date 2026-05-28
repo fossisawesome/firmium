@@ -3,22 +3,24 @@
   import { activeView, navToView, clearAuth, authServer, audioBridge } from '../lib/stores.js'
   import { stopPositionTracking } from '../lib/playback.js'
   import { clearAll } from '../lib/coverCache.js'
+  import {
+    IconHome, IconDisc, IconMusic, IconSearch,
+    IconList, IconSettings, IconHexagon, IconClose
+  } from '../lib/icons.js'
 
   const NAV_ITEMS = [
-    { view: 'home', label: 'Home' },
-    { view: 'albums', label: 'Albums' },
-    { view: 'artists', label: 'Artists' },
-    { view: 'search', label: 'Search' },
-    { view: 'playlists', label: 'Playlists' },
-    { view: 'settings', label: 'Settings' },
+    { view: 'home',      label: 'Home',      icon: IconHome },
+    { view: 'albums',    label: 'Albums',    icon: IconDisc },
+    { view: 'artists',   label: 'Artists',   icon: IconMusic },
+    { view: 'search',    label: 'Search',    icon: IconSearch },
+    { view: 'playlists', label: 'Playlists', icon: IconList },
+    { view: 'settings',  label: 'Settings',  icon: IconSettings },
   ]
 
-  // Derive the hostname label from the stored server URL.
   const serverLabel = $derived((() => {
     try { return new URL($authServer ?? '').hostname } catch (_) { return 'online' }
   })())
 
-  // Active nav button highlights for both top-level views and their sub-views.
   function isActive(view) {
     const t = $activeView.type
     if (view === 'home') return t === 'home'
@@ -39,7 +41,7 @@
 </script>
 
 <div class="app-brand">
-  <span class="logo">⬡</span>
+  <span class="icon logo" style="width:20px;height:20px;color:var(--accent)">{@html IconHexagon}</span>
   <span class="server-lbl">{serverLabel}</span>
 </div>
 
@@ -50,9 +52,12 @@
       class:active={isActive(item.view)}
       onclick={() => navToView(item.view)}
     >
-      {item.label}
+      <span class="icon nav-icon">{@html item.icon}</span>
+      <span class="nav-label">{item.label}</span>
     </button>
   {/each}
 </div>
 
-<button class="logout-btn" onclick={handleLogout}>✕ disconnect</button>
+<button class="logout-btn" onclick={handleLogout}>
+  <span class="icon" style="width:11px;height:11px;margin-right:4px">{@html IconClose}</span>disconnect
+</button>

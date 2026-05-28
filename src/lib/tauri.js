@@ -1,24 +1,23 @@
 import { invoke } from '@tauri-apps/api/core'
+// Import fetch from the Tauri HTTP plugin directly so it works on both desktop
+// and Android. Using window.__TAURI__?.http?.fetch was unreliable on Android —
+// the global isn't always populated before the first fetch, causing a silent
+// fallback to window.fetch which gets blocked by CORS on most Subsonic servers.
+import { fetch as pluginFetch } from '@tauri-apps/plugin-http'
 
 export { invoke as tauriInvoke }
 
 // Routes HTTP requests through the Tauri http plugin (reqwest on the Rust side)
-// rather than the WebView's native fetch. This bypasses WebKit's mixed-content
-// blocker, which silently aborts http:// requests from the secure tauri://localhost
-// origin. Falls back to window.fetch if the plugin is not available (e.g. tests).
+// rather than the WebView's native fetch. This bypasses CORS and the WebKit
+// mixed-content blocker that silently aborts http:// requests from tauri://localhost.
 // Never pass the signal to the Tauri HTTP plugin — it registers its own abort
 // listener that throws "resource id X is invalid" on a promise we can't catch.
 // Instead, race the response against the signal ourselves so callers get a clean
 // AbortError and the plugin request just completes silently in the background.
 export function tauriFetch(url, init) {
-  // Resolved at call time (not module load) so Tauri is guaranteed to be initialized.
-  const pluginFetch = window.__TAURI__?.http?.fetch
-  if (!pluginFetch) {
-    console.warn('tauri-plugin-http not available — falling back to window.fetch. http:// targets may fail.')
-  }
   const signal = init?.signal
   const pluginInit = signal ? { ...init, signal: undefined } : init
-  const p = pluginFetch ? pluginFetch(url, pluginInit) : fetch(url, init)
+  const p = pluginFetch(url, pluginInit)
 
   if (!signal) return p
 

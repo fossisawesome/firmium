@@ -1,0 +1,13 @@
+name = "Catppuccin Macchiato"
+color_scheme = "dark"
+
+[colors]
+bg = "#24273a"
+surface = "#363a4f"
+surface2 = "#494d64"
+border = "rgba(255,255,255,0.1)"
+text = "#cad3f5"
+muted = "#a5adcb"
+accent = "#a6da95"
+accent_dim = "rgba(166,218,149,0.15)"
+error = "#ee99a0"

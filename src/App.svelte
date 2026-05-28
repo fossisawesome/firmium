@@ -3,13 +3,19 @@
   import { get } from 'svelte/store'
   import {
     isAuthed, setAuth, clearAuth, navToView,
-    authServer, activeView, lyricsOpen, lyricsTrackId, lyricsLines
+    authServer, activeView, lyricsOpen, lyricsTrackId, lyricsLines, currentTrack
   } from './lib/stores.js'
   import { SafeStorage } from './lib/utils.js'
   import { Keyring } from './lib/api.js'
+  import { tauriInvoke } from './lib/tauri.js'
   import { fetchAndShowLyrics } from './lib/playback.js'
   import { playlistMenuState, hidePlaylistMenu } from './lib/playlistMenu.js'
   import { Api } from './lib/api.js'
+
+  import { isMobile } from './lib/platform.js'
+  import { mobilePlayerOpen, queueSheetOpen } from './lib/stores.js'
+  import MobilePlayer from './components/MobilePlayer.svelte'
+  import QueueSheet from './components/QueueSheet.svelte'
 
   import Setup from './components/Setup.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -27,10 +33,30 @@
   import HomeView from './views/HomeView.svelte'
 
   let setupError = $state('')
+  let loadedThemes = $state([])
 
-  function applyTheme(theme) {
-    if (!theme || theme === 'firmium') document.documentElement.removeAttribute('data-theme')
-    else document.documentElement.setAttribute('data-theme', theme)
+  // Apply a theme by setting CSS custom properties directly on :root.
+  // Falls back gracefully if the theme ID isn't in the loaded list.
+  function applyThemeById(id) {
+    const theme = loadedThemes.find(t => t.id === id)
+    if (theme) applyThemeData(theme)
+  }
+
+  function applyThemeData(theme) {
+    const root = document.documentElement
+    root.style.colorScheme = theme.color_scheme || 'dark'
+    const c = theme.colors
+    root.style.setProperty('--bg', c.bg)
+    root.style.setProperty('--surface', c.surface)
+    root.style.setProperty('--surface2', c.surface2)
+    root.style.setProperty('--border', c.border)
+    root.style.setProperty('--text', c.text)
+    root.style.setProperty('--muted', c.muted)
+    root.style.setProperty('--accent', c.accent)
+    root.style.setProperty('--accent-dim', c.accent_dim)
+    root.style.setProperty('--error', c.error)
+    root.style.setProperty('--font', c.font || "'Courier New', monospace")
+    root.style.setProperty('--timing', c.timing || '0.15s')
   }
 
   async function applyDecorations() {
@@ -50,10 +76,41 @@
     } catch (_) {}
   }
 
+  // Keep has-player in sync with whether a track is loaded.
+  $effect(() => {
+    document.documentElement.classList.toggle('has-player', !!$currentTrack)
+  })
+
+  // Apply mobile layout class when on Android or a narrow viewport.
+  // Drives the is-mobile-layout CSS rules instead of a media query so Android
+  // tablets wider than 640px also get the mobile layout.
+  $effect(() => {
+    const mql = window.matchMedia('(max-width: 640px)')
+    const syncLayout = () => {
+      document.documentElement.classList.toggle('is-mobile-layout', isMobile || mql.matches)
+    }
+    syncLayout()
+    mql.addEventListener('change', syncLayout)
+    return () => mql.removeEventListener('change', syncLayout)
+  })
+
   onMount(async () => {
-    applyTheme(SafeStorage.getItem('firmium_theme'))
+    try {
+      loadedThemes = await tauriInvoke('list_themes')
+    } catch (_) {}
+    applyThemeById(SafeStorage.getItem('firmium_theme') || 'firmium')
     applyDecorations()
     document.addEventListener('contextmenu', e => e.preventDefault())
+
+    // Block devtools shortcuts unless --debug was passed at launch.
+    const debugMode = await tauriInvoke('is_debug_mode').catch(() => false)
+    if (!debugMode) {
+      document.addEventListener('keydown', e => {
+        const devtoolsKey = e.key === 'F12' ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
+        if (devtoolsKey) e.preventDefault()
+      }, { capture: true })
+    }
 
     const savedServer = SafeStorage.getItem('firmium_server')
     const savedUser = SafeStorage.getItem('firmium_user')
@@ -83,7 +140,12 @@
     try { parsed = new URL(sUrl) } catch (_) { throw new Error('Invalid URL format') }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Protocol must be HTTP or HTTPS')
     setAuth(sUrl, uName, pWord)
-    await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 })
+    try {
+      await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 })
+    } catch (err) {
+      clearAuth()
+      throw err
+    }
     navToView('home')
   }
 
@@ -116,13 +178,21 @@
       {:else if $activeView.type === 'playlist'}
         <PlaylistDetail id={$activeView.id} />
       {:else if $activeView.type === 'settings'}
-        <Settings onapplyTheme={val => applyTheme(val)} onapplyDecorations={applyDecorations} />
+        <Settings onapplyTheme={applyThemeById} onapplyDecorations={applyDecorations} themes={loadedThemes} />
       {/if}
     </div>
   </div>
   <LyricsPanel />
-  <PlayerBar />
+  {#if $currentTrack || !isMobile}
+    <PlayerBar />
+  {/if}
   <PlaylistMenu />
+  {#if isMobile && $mobilePlayerOpen}
+    <MobilePlayer />
+  {/if}
+  {#if isMobile && $queueSheetOpen}
+    <QueueSheet />
+  {/if}
 {:else}
   <div id="setup">
     <Setup bind:error={setupError} {doConnect} />

@@ -1,0 +1,13 @@
+name = "Synthwave '84"
+color_scheme = "dark"
+
+[colors]
+bg = "#262335"
+surface = "#2a2139"
+surface2 = "#34294f"
+border = "rgba(255,255,255,0.1)"
+text = "#ffffff"
+muted = "#848bbd"
+accent = "#ff7edb"
+accent_dim = "rgba(255,126,219,0.15)"
+error = "#fe4450"

@@ -1,19 +1,24 @@
 import { tauriInvoke } from './tauri.js'
 import { listen } from '@tauri-apps/api/event'
+import { addPluginListener } from '@tauri-apps/api/core'
+import { isMobile } from './platform.js'
 
 /**
- * Audio Bridge — Frontend interface to the native Rust audio backend.
+ * Audio Bridge — Frontend interface to the native audio backend.
  *
- * State changes and track completion are delivered via Tauri events emitted
- * by the Rust layer instead of JS polling:
- *   "playback-state-changed" { playerId, state }  — 'loading' | 'playing' | 'paused'
- *   "playback-finished"      { playerId }          — track played to completion
+ * On desktop: delegates to the Rust rodio engine via Tauri IPC.
+ *   Events come from Rust via app_handle.emit() → received with listen().
  *
- * Bridge events re-emitted to callers:
+ * On Android: delegates to the Kotlin AudioPlugin (ExoPlayer) via the same
+ *   Tauri commands — the Rust layer dispatches to the plugin via JNI.
+ *   Events come from the Kotlin plugin via trigger() → received with addPluginListener().
+ *   Supports gapless via preload_stream / resume_playback, crossfade, ReplayGain.
+ *
+ * Bridge events (both modes):
  *   'statechange' (state: string)  — 'loading' | 'playing' | 'paused' | 'stopped'
  *   'finished'    ()               — track played to completion
- *   'volumechange'(vol: number)    — volume was changed
- *   'error'       (msg: string)    — a playback error occurred
+ *   'volumechange'(vol: number)    — volume changed
+ *   'error'       (msg: string)    — playback error
  */
 export class AudioBridge {
   constructor() {
@@ -21,36 +26,45 @@ export class AudioBridge {
     this.listeners = new Map()
     this.lastKnownState = null
     this._hasStartedPlaying = false
-    // Gapless preload — stores the next track's player before it's needed.
     this.preloadedPlayerId = null
     this.preloadedTrackId = null
-    // Tauri event unlisten functions — called in destroy().
     this._unlistenState = null
     this._unlistenFinished = null
+    this._statePollTimer = null
     this._initListeners()
   }
 
-  // ── Tauri event listeners ──────────────────────────────────────────────────
+  // ── Event listeners ────────────────────────────────────────────────────────
 
-  // Set up persistent listeners for Rust-emitted playback events.
-  // These replace the previous 750ms setInterval polling loop.
   async _initListeners() {
-    this._unlistenState = await listen('playback-state-changed', ({ payload }) => {
-      if (payload.playerId !== this.currentPlayerId) return
-      const state = payload.state
+    // listen() wraps data as { payload }, but addPluginListener() passes data directly.
+    // These two handlers normalise the difference so the core logic is shared.
+    const handleState = (data) => {
+      if (data.playerId !== this.currentPlayerId) return
+      const state = data.state
       if (state === 'playing') this._hasStartedPlaying = true
       if (state !== this.lastKnownState) {
         this.lastKnownState = state
         this.emit('statechange', state)
       }
-    })
+    }
 
-    this._unlistenFinished = await listen('playback-finished', ({ payload }) => {
-      if (payload.playerId !== this.currentPlayerId) return
+    const handleFinished = (data) => {
+      if (data.playerId !== this.currentPlayerId) return
       this.lastKnownState = 'finished'
       this.currentPlayerId = null
       this.emit('finished')
-    })
+    }
+
+    if (isMobile) {
+      // Kotlin AudioPlugin emits via trigger() — addPluginListener receives payload directly.
+      this._unlistenState    = await addPluginListener('audio', 'playback-state-changed', handleState)
+      this._unlistenFinished = await addPluginListener('audio', 'playback-finished', handleFinished)
+    } else {
+      // Rust emits global events via app_handle.emit() — listen() wraps data in { payload }.
+      this._unlistenState    = await listen('playback-state-changed', ({ payload }) => handleState(payload))
+      this._unlistenFinished = await listen('playback-finished', ({ payload }) => handleFinished(payload))
+    }
   }
 
   // ── Event emitter ──────────────────────────────────────────────────────────
@@ -74,12 +88,41 @@ export class AudioBridge {
     }
   }
 
+  // ── State poll (mobile fallback) ───────────────────────────────────────────
+  // On Android, plugin trigger() events via addPluginListener may not arrive
+  // reliably. This poll bridges the gap: once play_stream returns, we query
+  // get_playback_state every 400ms until the state is no longer 'loading'.
+
+  _startStatePoll(expectedPlayerId) {
+    if (this._statePollTimer) { clearInterval(this._statePollTimer); this._statePollTimer = null }
+    this._statePollTimer = setInterval(async () => {
+      // Stop polling if the track changed or state already resolved via event.
+      if (this.currentPlayerId !== expectedPlayerId ||
+          (this.lastKnownState !== 'loading' && this.lastKnownState !== null)) {
+        clearInterval(this._statePollTimer)
+        this._statePollTimer = null
+        return
+      }
+      try {
+        const state = await tauriInvoke('get_playback_state', { playerId: expectedPlayerId })
+        // Rust serialises PlaybackState enum as lowercase string.
+        const s = typeof state === 'string' ? state : (state?.state ?? null)
+        if (s && s !== 'loading' && s !== this.lastKnownState && this.currentPlayerId === expectedPlayerId) {
+          this.lastKnownState = s
+          if (s === 'playing') this._hasStartedPlaying = true
+          this.emit('statechange', s)
+          clearInterval(this._statePollTimer)
+          this._statePollTimer = null
+        }
+      } catch (_) {}
+    }, 400)
+  }
+
   // ── Playback controls ──────────────────────────────────────────────────────
 
   async play(streamUrl, trackId, replayGainDb = null) {
     try {
-      // If this track was preloaded, promote the preloaded session instead of
-      // starting a fresh fetch+decode — this is what makes gapless work.
+      // Promote a preloaded session instead of starting a fresh fetch — gapless.
       if (this.preloadedPlayerId && this.preloadedTrackId === trackId) {
         const preloadedId = this.preloadedPlayerId
         this.preloadedPlayerId = null
@@ -93,8 +136,8 @@ export class AudioBridge {
         this._hasStartedPlaying = false
         this.lastKnownState = 'loading'
         this.emit('statechange', 'loading')
-        // resume_playback emits 'playing' from Rust once the sink is unpaused.
         await tauriInvoke('resume_playback', { playerId: preloadedId })
+        if (isMobile) this._startStatePoll(preloadedId)
         return preloadedId
       }
 
@@ -103,8 +146,8 @@ export class AudioBridge {
       this.currentPlayerId = playerId
       this._hasStartedPlaying = false
       this.lastKnownState = 'loading'
-      // Rust emits 'loading' immediately on play_stream, and 'playing' after decode.
       this.emit('statechange', 'loading')
+      if (isMobile) this._startStatePoll(playerId)
       return playerId
     } catch (err) {
       this.emit('error', `Playback failed: ${err}`)
@@ -112,17 +155,14 @@ export class AudioBridge {
     }
   }
 
-  // Pre-fetch and decode a track in the background without starting audio output.
-  // Call play() with the same trackId to promote it instantly when needed.
   async preload(streamUrl, trackId, replayGainDb = null) {
-    // Drop any existing preload for a different track.
     if (this.preloadedPlayerId && this.preloadedTrackId !== trackId) {
       const old = this.preloadedPlayerId
       this.preloadedPlayerId = null
       this.preloadedTrackId = null
       try { await tauriInvoke('stop_playback', { playerId: old }) } catch (_) {}
     }
-    if (this.preloadedTrackId === trackId) return // already preloading this track
+    if (this.preloadedTrackId === trackId) return
     try {
       const playerId = await tauriInvoke('preload_stream', { streamUrl, trackId, replayGainDb })
       this.preloadedPlayerId = playerId
@@ -135,7 +175,6 @@ export class AudioBridge {
   async pause() {
     if (!this.currentPlayerId) return
     try {
-      // Rust emits 'paused' state-change event after the sink is paused.
       await tauriInvoke('pause_playback', { playerId: this.currentPlayerId })
       this.lastKnownState = 'paused'
       this.emit('statechange', 'paused')
@@ -147,7 +186,6 @@ export class AudioBridge {
   async resume() {
     if (!this.currentPlayerId) return
     try {
-      // Rust emits 'playing' state-change event after the sink resumes.
       await tauriInvoke('resume_playback', { playerId: this.currentPlayerId })
       this.lastKnownState = 'playing'
       this._hasStartedPlaying = true
@@ -158,8 +196,8 @@ export class AudioBridge {
   }
 
   async stop() {
+    if (this._statePollTimer) { clearInterval(this._statePollTimer); this._statePollTimer = null }
     if (!this.currentPlayerId) return
-    // Discard any preloaded session — user is explicitly stopping playback.
     if (this.preloadedPlayerId) {
       const preId = this.preloadedPlayerId
       this.preloadedPlayerId = null
@@ -178,8 +216,6 @@ export class AudioBridge {
     }
   }
 
-  // Cross-fade from the current session into a new stream over fadeDurationMs milliseconds.
-  // Volume ramping runs natively in a Rust async task — no per-step IPC calls.
   async startCrossfadeIn(streamUrl, trackId, targetVolume, fadeDurationMs, replayGainDb = null) {
     const oldPlayerId = this.currentPlayerId
     try {
@@ -191,7 +227,6 @@ export class AudioBridge {
         targetVolume,
         replayGainDb,
       })
-      // Guard against a concurrent play() call that changed currentPlayerId while awaiting.
       if (this.currentPlayerId !== oldPlayerId) {
         tauriInvoke('stop_playback', { playerId: newPlayerId }).catch(() => {})
         return
@@ -208,9 +243,9 @@ export class AudioBridge {
 
   // ── Volume ─────────────────────────────────────────────────────────────────
 
-  async setVolume(volume) {
+  async setVolume(vol) {
+    const normalized = Math.max(0, Math.min(1, Number(vol)))
     if (!this.currentPlayerId) return
-    const normalized = Math.max(0, Math.min(1, Number(volume)))
     try {
       await tauriInvoke('set_volume', { playerId: this.currentPlayerId, volume: normalized })
       this.emit('volumechange', normalized)
@@ -242,8 +277,6 @@ export class AudioBridge {
     }
   }
 
-  // ── State queries (kept for diagnostics; state is now driven by events) ────
-
   async getDuration() {
     if (!this.currentPlayerId) return null
     try { return await tauriInvoke('get_track_duration', { playerId: this.currentPlayerId }) } catch (err) {
@@ -252,9 +285,17 @@ export class AudioBridge {
     }
   }
 
+  async isFinished() {
+    if (!this.currentPlayerId) return true
+    try { return await tauriInvoke('is_playback_finished', { playerId: this.currentPlayerId }) } catch (err) {
+      return false
+    }
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   destroy() {
+    if (this._statePollTimer) { clearInterval(this._statePollTimer); this._statePollTimer = null }
     if (this._unlistenState) { this._unlistenState(); this._unlistenState = null }
     if (this._unlistenFinished) { this._unlistenFinished(); this._unlistenFinished = null }
     if (this.preloadedPlayerId) {

@@ -1,0 +1,13 @@
+name = "Adwaita"
+color_scheme = "light"
+
+[colors]
+bg = "#f6f5f4"
+surface = "#ffffff"
+surface2 = "#ebebeb"
+border = "rgba(0,0,0,0.12)"
+text = "#2e3436"
+muted = "#8c8c8c"
+accent = "#3584e4"
+accent_dim = "rgba(53,132,228,0.15)"
+error = "#c01c28"

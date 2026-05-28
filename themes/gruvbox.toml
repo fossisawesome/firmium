@@ -1,0 +1,13 @@
+name = "Gruvbox"
+color_scheme = "dark"
+
+[colors]
+bg = "#282828"
+surface = "#3c3836"
+surface2 = "#504945"
+border = "rgba(255,255,255,0.08)"
+text = "#ebdbb2"
+muted = "#928374"
+accent = "#b8bb26"
+accent_dim = "rgba(184,187,38,0.15)"
+error = "#fb4934"

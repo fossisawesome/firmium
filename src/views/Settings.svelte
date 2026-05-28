@@ -6,30 +6,11 @@
   import { Keyring } from '../lib/api.js'
   import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, isOpenSubsonic, openSubsonicExtensions } from '../lib/stores.js'
   import { clearAll } from '../lib/coverCache.js'
+  import { isMobile } from '../lib/platform.js'
 
   // Callback props replace createEventDispatcher.
-  let { onapplyTheme, onapplyDecorations } = $props()
-
-  const THEMES = [
-    ['firmium',             'Firmium'],
-    ['gruvbox',             'Gruvbox'],
-    ['tokyo-night',         'Tokyo Night'],
-    ['dracula',             'Dracula'],
-    ['catppuccin-mocha',    'Catppuccin Mocha'],
-    ['catppuccin-macchiato','Catppuccin Macchiato'],
-    ['catppuccin-frappe',   'Catppuccin Frappé'],
-    ['catppuccin-latte',    'Catppuccin Latte'],
-    ['nord',                'Nord'],
-    ['monokai-classic',     'Monokai Classic'],
-    ['monokai-pro',         'Monokai Pro'],
-    ['adwaita',             'Adwaita'],
-    ['adwaita-dark',        'Adwaita Dark'],
-    ['ayu',                 'ayu'],
-    ['ayu-light',           'ayu Light'],
-    ['github-dark',         'GitHub Dark Default'],
-    ['nordfox',             'Nordfox'],
-    ['synthwave',           'Synthwave'],
-  ]
+  // themes: array of { id, name, color_scheme, colors } loaded from TOML files.
+  let { onapplyTheme, onapplyDecorations, themes = [] } = $props()
 
   const SETTINGS_KEYS = [
     'firmium_server', 'firmium_user', 'firmium_save_pass',
@@ -64,7 +45,7 @@ let isAutoLoginEnabled = $state(SafeStorage.getItem('firmium_auto_login') !== 'f
     Keyring.load('lastfm_secret').then(s => { if (s) lastfmSecret = s }).catch(() => {})
   })
 
-  const themeName = $derived(THEMES.find(([v]) => v === currentTheme)?.[1] ?? 'Firmium')
+  const themeName = $derived(themes.find(t => t.id === currentTheme)?.name ?? currentTheme)
 
   function selectTheme(val) {
     currentTheme = val
@@ -127,6 +108,7 @@ function handleLrclib(e) { SafeStorage.setItem('firmium_lrclib', e.target.checke
 
 <div class="section-header">Settings</div>
 
+{#if !isMobile}
 <div class="settings-row">
   <div class="settings-info">
     <div class="settings-title">Window Decorations</div>
@@ -137,6 +119,7 @@ function handleLrclib(e) { SafeStorage.setItem('firmium_lrclib', e.target.checke
     <span class="toggle-slider"></span>
   </label>
 </div>
+{/if}
 
 <div class="settings-row">
   <div class="settings-info">
@@ -154,16 +137,16 @@ function handleLrclib(e) { SafeStorage.setItem('firmium_lrclib', e.target.checke
     <div class="theme-selector-value">{themeName}</div>
     <span class="theme-selector-arrow">▾</span>
     <div class="theme-selector-dropdown">
-      {#each THEMES as [val, label]}
+      {#each themes as theme (theme.id)}
         <div
           class="theme-option"
-          class:selected={currentTheme === val}
+          class:selected={currentTheme === theme.id}
           role="option"
           tabindex="0"
-          aria-selected={currentTheme === val}
-          onclick={e => { e.stopPropagation(); selectTheme(val) }}
-          onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && selectTheme(val) }}
-        >{label}</div>
+          aria-selected={currentTheme === theme.id}
+          onclick={e => { e.stopPropagation(); selectTheme(theme.id) }}
+          onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && selectTheme(theme.id) }}
+        >{theme.name}</div>
       {/each}
     </div>
   </div>
@@ -259,6 +242,7 @@ function handleLrclib(e) { SafeStorage.setItem('firmium_lrclib', e.target.checke
   </label>
 </div>
 
+{#if !isMobile}
 <div class="section-header">Debug</div>
 
 <div class="settings-row">
@@ -305,3 +289,4 @@ function handleLrclib(e) { SafeStorage.setItem('firmium_lrclib', e.target.checke
   </div>
   <button class="debug-btn debug-btn--danger" onclick={deleteSettings}>{deleteSettingsLabel}</button>
 </div>
+{/if}

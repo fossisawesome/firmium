@@ -2,6 +2,7 @@
   "$schema": "https://schema.tauri.app/capability/2",
   "identifier": "default-capability",
   "description": "Default permissions for the Firmium desktop application",
+  "platforms": ["linux", "windows", "macOS"],
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -26,11 +27,11 @@
     "get_password",
     "delete_password",
     "generate_auth_params",
-    "cache_cover",
     "write_log",
     "delete_logs",
     "get_log_path",
     "get_app_version",
+    "is_debug_mode",
     "get_machine_info",
     "play_stream",
     "preload_stream",
@@ -45,6 +46,7 @@
     "get_current_position",
     "seek_position",
     "list_audio_devices",
-    "crossfade_to"
+    "crossfade_to",
+    "list_themes"
   ]
 }
