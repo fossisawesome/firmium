@@ -189,7 +189,7 @@ export async function loadImage(img, coverId, signal) {
       if (!res.ok) throw new Error('Cover art unavailable')
       const blob = await res.blob()
       const objUrl = URL.createObjectURL(blob)
-      addCover(coverId, objUrl)
+      addCover(coverId, objUrl, blob.size)
       return objUrl
     })()
     // Attach a no-op catch so the shared promise never becomes an unhandled rejection

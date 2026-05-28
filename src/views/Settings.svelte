@@ -38,7 +38,6 @@
   let themeOpen = $state(false)
 
   let appVersion = $state('Loading…')
-  let systemInfo = $state('Loading…')
   let logPath = $state('Loading…')
   let wipeCacheLabel = $state('Wipe')
   let deleteLogsLabel = $state('Delete')
@@ -47,7 +46,6 @@
 
   onMount(async () => {
     tauriInvoke('get_app_version').then(v => appVersion = `v${v}`).catch(() => appVersion = 'unavailable')
-    tauriInvoke('get_machine_info').then(info => systemInfo = `${info.distro} ${info.version}`).catch(() => systemInfo = 'unavailable')
     tauriInvoke('get_log_path').then(p => logPath = p).catch(() => logPath = 'unavailable')
     Keyring.load('lastfm_api_key').then(k => { if (k) lastfmKey = k }).catch(() => {})
     Keyring.load('lastfm_secret').then(s => { if (s) lastfmSecret = s }).catch(() => {})
@@ -271,13 +269,6 @@
         <div class="settings-info">
           <div class="settings-title">App Version</div>
           <div class="settings-desc">{appVersion}</div>
-        </div>
-      </div>
-
-      <div class="settings-row">
-        <div class="settings-info">
-          <div class="settings-title">System</div>
-          <div class="settings-desc">{systemInfo}</div>
         </div>
       </div>
 

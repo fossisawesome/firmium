@@ -31,6 +31,7 @@ export class AudioBridge {
     this._unlistenState = null
     this._unlistenFinished = null
     this._unlistenTrackChanged = null
+    this._unlistenPosition = null
     this._statePollTimer = null
     this._initListeners()
   }
@@ -70,6 +71,11 @@ export class AudioBridge {
       // Rust emits global events via app_handle.emit() — listen() wraps data in { payload }.
       this._unlistenState    = await listen('playback-state-changed', ({ payload }) => handleState(payload))
       this._unlistenFinished = await listen('playback-finished', ({ payload }) => handleFinished(payload))
+      // Position events from Rust's finish-watcher thread (~300ms cadence).
+      this._unlistenPosition = await listen('playback-position', ({ payload }) => {
+        if (payload.playerId !== this.currentPlayerId) return
+        this.emit('position', { position: payload.position, duration: payload.duration })
+      })
     }
   }
 
@@ -335,6 +341,7 @@ export class AudioBridge {
     if (this._unlistenState) { this._unlistenState(); this._unlistenState = null }
     if (this._unlistenFinished) { this._unlistenFinished(); this._unlistenFinished = null }
     if (this._unlistenTrackChanged) { this._unlistenTrackChanged(); this._unlistenTrackChanged = null }
+    if (this._unlistenPosition) { this._unlistenPosition(); this._unlistenPosition = null }
     if (this.preloadedPlayerId) {
       const preId = this.preloadedPlayerId
       this.preloadedPlayerId = null
