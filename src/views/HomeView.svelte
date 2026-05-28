@@ -58,6 +58,17 @@
     if (recentRes.status === 'fulfilled') {
       recentAlbums = recentRes.value
       recentArtists = extractArtists(recentRes.value)
+      // Upgrade artist images from server (MusicBrainz/Last.fm) in the background.
+      // Falls back to album cover art already stored in coverArtId.
+      recentArtists.forEach((artist, i) => {
+        if (!artist.id) return
+        Api.getArtistInfo(artist.id, sig).then(info => {
+          if (!info?.image || sig.aborted) return
+          recentArtists = recentArtists.map((a, j) =>
+            j === i ? { ...a, artistImageUrl: info.image } : a
+          )
+        }).catch(() => {})
+      })
     }
     loadingRecent = false
 
@@ -146,7 +157,9 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div class="home-card home-card--artist" onclick={() => artist.id ? navToArtist(artist.id) : navToView('artists')}>
             <div class="home-card-art home-card-art--round">
-              {#if artist.coverArtId}
+              {#if artist.artistImageUrl}
+                <img src={artist.artistImageUrl} alt="" />
+              {:else if artist.coverArtId}
                 <img use:lazyLoad={img => loadImage(img, artist.coverArtId, ctrl?.signal)} alt="" />
               {:else}
                 <div class="home-card-no-art">♬</div>

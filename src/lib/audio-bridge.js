@@ -30,6 +30,7 @@ export class AudioBridge {
     this.preloadedTrackId = null
     this._unlistenState = null
     this._unlistenFinished = null
+    this._unlistenTrackChanged = null
     this._statePollTimer = null
     this._initListeners()
   }
@@ -60,6 +61,11 @@ export class AudioBridge {
       // Kotlin AudioPlugin emits via trigger() — addPluginListener receives payload directly.
       this._unlistenState    = await addPluginListener('audio', 'playback-state-changed', handleState)
       this._unlistenFinished = await addPluginListener('audio', 'playback-finished', handleFinished)
+      // Native queue advancement — fires for each track transition inside a setQueue session.
+      this._unlistenTrackChanged = await addPluginListener('audio', 'track-changed', (data) => {
+        if (data.playerId !== this.currentPlayerId) return
+        this.emit('track-changed', { trackId: data.trackId, index: data.index })
+      })
     } else {
       // Rust emits global events via app_handle.emit() — listen() wraps data in { payload }.
       this._unlistenState    = await listen('playback-state-changed', ({ payload }) => handleState(payload))
@@ -241,6 +247,36 @@ export class AudioBridge {
     }
   }
 
+  // ── Native queue (mobile only) ────────────────────────────────────────────
+  // Sends the full queue to ExoPlayer so track transitions happen in the native
+  // layer even when the WebView is backgrounded.
+
+  async setQueue(tracks, startIndex) {
+    if (this.currentPlayerId) await this.stop()
+    const playerId = await tauriInvoke('set_queue', { tracks, startIndex, volume: 1.0 })
+    this.currentPlayerId = playerId
+    this._hasStartedPlaying = false
+    this.lastKnownState = 'loading'
+    this.emit('statechange', 'loading')
+    this._startStatePoll(playerId)
+    return playerId
+  }
+
+  async skipToNext() {
+    if (!this.currentPlayerId) return
+    await tauriInvoke('skip_to_next', { playerId: this.currentPlayerId })
+  }
+
+  async skipToPrevious() {
+    if (!this.currentPlayerId) return
+    await tauriInvoke('skip_to_previous', { playerId: this.currentPlayerId })
+  }
+
+  async skipToQueueIndex(index) {
+    if (!this.currentPlayerId) return
+    await tauriInvoke('skip_to_queue_index', { playerId: this.currentPlayerId, index })
+  }
+
   // ── Volume ─────────────────────────────────────────────────────────────────
 
   async setVolume(vol) {
@@ -298,6 +334,7 @@ export class AudioBridge {
     if (this._statePollTimer) { clearInterval(this._statePollTimer); this._statePollTimer = null }
     if (this._unlistenState) { this._unlistenState(); this._unlistenState = null }
     if (this._unlistenFinished) { this._unlistenFinished(); this._unlistenFinished = null }
+    if (this._unlistenTrackChanged) { this._unlistenTrackChanged(); this._unlistenTrackChanged = null }
     if (this.preloadedPlayerId) {
       const preId = this.preloadedPlayerId
       this.preloadedPlayerId = null

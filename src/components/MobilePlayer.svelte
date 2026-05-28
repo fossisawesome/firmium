@@ -7,13 +7,14 @@
     lyricsOpen, setVolume, mobilePlayerOpen, queueSheetOpen
   } from '../lib/stores.js'
   import { fetchAndShowLyrics } from '../lib/playback.js'
+  import { showPlaylistMenu } from '../lib/playlistMenu.js'
   import { togglePlay, prevTrack, nextTrack, cycleRepeat, toggleShuffle } from '../lib/playerControls.js'
   import { formatDuration } from '../lib/utils.js'
   import { loadImage } from '../lib/api.js'
   import {
     IconPlay, IconPause, IconLoading, IconPrev, IconNext,
-    IconRepeat, IconLyrics, IconVolume, IconVolumeHigh, IconMusic,
-    IconShuffle, IconChevronDown, IconQueue
+    IconRepeat, IconVolume, IconVolumeHigh, IconMusic,
+    IconShuffle, IconQueue, IconPlus
   } from '../lib/icons.js'
 
   // ── Cover art + dynamic background ──────────────────────────────────────────
@@ -89,15 +90,21 @@
     })
   })
 
-  // ── Lyrics toggle ────────────────────────────────────────────────────────────
-  function toggleLyrics() {
+  // ── Lyrics (tap album art to toggle) ────────────────────────────────────────
+  // LyricsPanel renders above MobilePlayer (z-index 400 > 300 on mobile).
+  function onArtClick() {
+    const track = get(currentTrack)
+    if (!track) return
     const nowOpen = !get(lyricsOpen)
     lyricsOpen.set(nowOpen)
-    mobilePlayerOpen.set(false)
-    if (nowOpen) {
-      const track = get(currentTrack)
-      if (track) fetchAndShowLyrics(track)
-    }
+    if (nowOpen) fetchAndShowLyrics(track)
+  }
+
+  // ── Add to playlist ──────────────────────────────────────────────────────────
+  function handleAddToPlaylist(e) {
+    const track = get(currentTrack)
+    if (!track) return
+    showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] })
   }
 
   // ── Volume ───────────────────────────────────────────────────────────────────
@@ -123,9 +130,15 @@
   let touchStartX = 0
   let dragOffset = $state(0)
   let closing = $state(false)
+  let springing = $state(false)
   let overlayEl = $state()
   let closeTimer = null
-  onDestroy(() => { if (closeTimer !== null) clearTimeout(closeTimer) })
+  let springTimer = null
+
+  onDestroy(() => {
+    if (closeTimer !== null) clearTimeout(closeTimer)
+    if (springTimer !== null) clearTimeout(springTimer)
+  })
 
   // Non-passive so we can preventDefault and stop page scroll while dragging down.
   $effect(() => {
@@ -134,6 +147,7 @@
       const delta = e.touches[0].clientY - touchStartY
       if (delta > 0) {
         dragOffset = delta
+        springing = false
         e.preventDefault()
       }
     }
@@ -152,25 +166,38 @@
     touchStartY = e.touches[0].clientY
     touchStartX = e.touches[0].clientX
     dragOffset = 0
+    springing = false
   }
 
   function onTouchEnd(e) {
     const deltaY = e.changedTouches[0].clientY - touchStartY
     if (deltaY > 72) {
       closeWithAnimation()
-    } else {
+    } else if (dragOffset > 0) {
+      // Smooth spring back to resting position
+      springing = true
       dragOffset = 0
+      if (springTimer !== null) clearTimeout(springTimer)
+      springTimer = setTimeout(() => { springing = false }, 380)
     }
   }
 
   // Swipe left/right on the cover art thumbnail for prev/next.
   let artTouchStartX = 0
   let artTouchStartY = 0
+  let artTouchMoved = false
 
   function onArtTouchStart(e) {
     artTouchStartX = e.touches[0].clientX
     artTouchStartY = e.touches[0].clientY
-    // Stop propagation so the overlay drag-to-close doesn't also fire.
+    artTouchMoved = false
+    e.stopPropagation()
+  }
+
+  function onArtTouchMove(e) {
+    const dx = Math.abs(e.touches[0].clientX - artTouchStartX)
+    const dy = Math.abs(e.touches[0].clientY - artTouchStartY)
+    if (dx > 8 || dy > 8) artTouchMoved = true
     e.stopPropagation()
   }
 
@@ -178,18 +205,29 @@
     e.stopPropagation()
     const dx = e.changedTouches[0].clientX - artTouchStartX
     const dy = e.changedTouches[0].clientY - artTouchStartY
-    // Only treat as horizontal swipe if sideways motion dominates.
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      // Horizontal swipe: prev/next
       if (dx < 0) nextTrack()
       else prevTrack()
+    } else if (!artTouchMoved) {
+      // Tap with no significant movement: toggle lyrics
+      onArtClick()
     }
   }
 
-  // ── Queue sheet ──────────────────────────────────────────────────────────────
+  // ── Queue sheet — keep mobile player open underneath ─────────────────────────
   function openQueue() {
     queueSheetOpen.set(true)
-    mobilePlayerOpen.set(false)
+    // Intentionally NOT closing mobilePlayerOpen so queue overlays the player
   }
+
+  // ── Compose inline style for drag/spring animation ────────────────────────────
+  const overlayTransformStyle = $derived(() => {
+    if (dragOffset > 0 && !closing) return `transform: translateY(${dragOffset}px); transition: none`
+    if (dragOffset > 0 && closing) return `transform: translateY(${dragOffset}px)`
+    if (springing) return `transform: translateY(0); transition: transform 0.38s cubic-bezier(0.2, 0, 0, 1)`
+    return ''
+  })
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -198,24 +236,25 @@
   class="mp-overlay"
   class:mp-closing={closing}
   style:background={bgGradient ?? 'var(--bg)'}
-  style={dragOffset > 0 ? `transform: translateY(${dragOffset}px)${closing ? '' : '; transition: none'}` : ''}
+  style={overlayTransformStyle()}
   ontouchstart={onTouchStart}
   ontouchend={onTouchEnd}
 >
-  <!-- Top bar: handle + close chevron -->
+  <!-- Drag handle only (no close button — swipe down to close) -->
   <div class="mp-topbar">
     <div class="mp-handle-row">
       <div class="mp-handle"></div>
     </div>
-    <button class="mp-close-btn" onclick={closeWithAnimation} aria-label="Close player">
-      <span class="icon" style="width:26px;height:26px">{@html IconChevronDown}</span>
-    </button>
   </div>
 
-  <!-- Album art — swipe left/right for prev/next -->
+  <!-- Album art — swipe left/right for prev/next, tap for lyrics -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="mp-art"
+    role="button"
+    tabindex="0"
     ontouchstart={onArtTouchStart}
+    ontouchmove={onArtTouchMove}
     ontouchend={onArtTouchEnd}
   >
     {#if $currentTrack?.coverArtId}
@@ -274,7 +313,7 @@
     </button>
   </div>
 
-  <!-- Secondary controls: shuffle / repeat / lyrics / queue -->
+  <!-- Secondary controls: shuffle / repeat / add-to-playlist / queue -->
   <div class="mp-secondary">
     <button
       class="mp-btn mp-btn-sm"
@@ -298,11 +337,10 @@
 
     <button
       class="mp-btn mp-btn-sm"
-      class:active={$lyricsOpen}
-      onclick={toggleLyrics}
-      aria-label="Lyrics"
+      onclick={handleAddToPlaylist}
+      aria-label="Add to playlist"
     >
-      <span class="icon" style="width:22px;height:22px">{@html IconLyrics}</span>
+      <span class="icon" style="width:22px;height:22px">{@html IconPlus}</span>
     </button>
 
     <button

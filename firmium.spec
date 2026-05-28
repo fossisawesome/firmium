@@ -2,7 +2,7 @@
 %global shortcommit %(git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
 
 Name:           firmium
-Version:        3.0.4
+Version:        3.1.0
 Release:        1
 Summary:        OpenSubsonic music streaming desktop client
 

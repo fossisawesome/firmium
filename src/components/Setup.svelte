@@ -5,7 +5,7 @@
   // error is bindable so the parent can write the initial "Connecting…" message.
   let { error = $bindable(''), doConnect } = $props()
 
-  let serverUrl = $state(SafeStorage.getItem('firmium_server') ?? '')
+  let serverUrl = $state((SafeStorage.getItem('firmium_server') ?? '').replace(/\/+$/, ''))
   let username = $state(SafeStorage.getItem('firmium_user') ?? '')
   let password = $state('')
   let savePassword = $state(SafeStorage.getItem('firmium_save_pass') === 'true')
@@ -15,10 +15,12 @@
     if (!serverUrl || !username || !password) { error = 'Please fill out all fields'; return }
     connecting = true
     error = ''
+    // Strip trailing slashes so http://host/ and http://host/sub/ match the HTTP scope
+    const normalizedUrl = serverUrl.replace(/\/+$/, '')
     try {
-      await doConnect(serverUrl, username, password)
+      await doConnect(normalizedUrl, username, password)
 
-      SafeStorage.setItem('firmium_server', serverUrl)
+      SafeStorage.setItem('firmium_server', normalizedUrl)
       SafeStorage.setItem('firmium_user', username)
 
       if (savePassword) {

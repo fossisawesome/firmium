@@ -84,8 +84,17 @@ export const crossfadeDuration = writable(
 export const mobilePlayerOpen = writable(false)
 // Controls the queue bottom sheet.
 export const queueSheetOpen = writable(false)
+// Controls the full-screen search overlay on mobile.
+export const mobileSearchOpen = writable(false)
+// Controls the full-screen settings overlay on mobile.
+export const mobileSettingsOpen = writable(false)
 // Shuffle playback mode.
 export const shuffleEnabled = writable(false)
+
+// ── Saved mobile search state (persisted between search opens) ────────────────
+export const savedSearchQuery = writable('')
+export const savedSearchSongs = writable([])
+export const savedSearchAlbums = writable([])
 
 export const currentPosition = writable(0)
 export const trackDuration = writable(null)

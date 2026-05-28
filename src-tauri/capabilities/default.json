@@ -13,7 +13,9 @@
       "identifier": "http:default",
       "allow": [
         { "url": "http://**" },
-        { "url": "https://**" }
+        { "url": "http://**/**" },
+        { "url": "https://**" },
+        { "url": "https://**/**" }
       ]
     },
     "opener:default",
@@ -47,6 +49,10 @@
     "seek_position",
     "list_audio_devices",
     "crossfade_to",
+    "set_queue",
+    "skip_to_next",
+    "skip_to_previous",
+    "skip_to_queue_index",
     "list_themes"
   ]
 }
