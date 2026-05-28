@@ -64,7 +64,7 @@ Firmium is available for **Linux desktop** and **Android**.
 
 ### Android
 
-[![Get it on Obtainium](https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/https%3A%2F%2Fgithub.com%2Ffossisawesome%2Ffirmium)
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/https%3A%2F%2Fgithub.com%2Ffossisawesome%2Ffirmium"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54"></a>
 
 Or download the latest `.apk` from the [releases page](https://github.com/fossisawesome/firmium/releases/latest) and install it manually:
 
