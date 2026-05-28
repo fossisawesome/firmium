@@ -899,6 +899,97 @@ input[type="range"].volume-slider {
   opacity: 0.8;
 }
 
+/* Wraps play-all and bio-toggle on the same row */
+.artist-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Mobile-only button to reveal/hide the artist biography */
+.bio-toggle-btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  text-transform: uppercase;
+  transition: opacity var(--timing);
+  touch-action: manipulation;
+}
+
+.bio-toggle-btn:hover {
+  opacity: 0.8;
+}
+
+/* Dim backdrop behind the bio popup sheet */
+.bio-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 480;
+}
+
+/* Bottom-sheet popup containing the artist biography */
+.bio-popup-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 70vh;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  z-index: 490;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: bio-sheet-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes bio-sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.bio-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bio-popup-title {
+  font-weight: bold;
+  font-size: 16px;
+  color: var(--text);
+}
+
+/* Close button for the bio popup */
+.bio-popup-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.bio-popup-body {
+  overflow-y: auto;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
 .play-all-btn:disabled {
   opacity: 0.4;
   cursor: default;
@@ -2246,7 +2337,7 @@ html.is-mobile-layout .lyrics-panel.open .lyrics-safe-top {
 
 html.is-mobile-layout .artist-page-header { flex-direction: column; gap: 16px; }
 html.is-mobile-layout .artist-img-circle { width: 100px; height: 100px; }
-html.is-mobile-layout .tracklist-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+html.is-mobile-layout .tracklist-header { flex-direction: row; align-items: center; gap: 12px; }
 html.is-mobile-layout .tl-art { width: 64px; height: 64px; font-size: 24px; }
 html.is-mobile-layout .pl-detail-header { flex-direction: column; gap: 12px; }
 html.is-mobile-layout .settings-row { flex-direction: column; gap: 10px; align-items: flex-start; }
@@ -3070,7 +3161,6 @@ html.is-mobile-layout .mobile-play-circle-btn:active {
 /* Position within tracklist-header / pl-detail-actions */
 html.is-mobile-layout .tracklist-header {
   position: relative;
-  align-items: center;
 }
 
 html.is-mobile-layout .pl-detail-actions {
