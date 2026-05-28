@@ -43,11 +43,11 @@ rpm2cpio %{SOURCE0} | cpio -idmv --no-absolute-filenames
 cp -a %{_builddir}/usr %{buildroot}/
 
 %files
-%{_bindir}/firmium-desktop
+%{_bindir}/firmium
 %{_datadir}/applications/Firmium.desktop
-%{_datadir}/icons/hicolor/32x32/apps/firmium-desktop.png
-%{_datadir}/icons/hicolor/128x128/apps/firmium-desktop.png
-%{_datadir}/icons/hicolor/256x256@2/apps/firmium-desktop.png
+%{_datadir}/icons/hicolor/32x32/apps/firmium.png
+%{_datadir}/icons/hicolor/128x128/apps/firmium.png
+%{_datadir}/icons/hicolor/256x256@2/apps/firmium.png
 /usr/lib/Firmium/
 
 %changelog
