@@ -913,6 +913,88 @@ input[type="range"].volume-slider {
   border-bottom: 1px dashed var(--border);
 }
 
+/* ── Desktop settings two-column layout ──────────────────────────────────── */
+
+.sett-layout {
+  display: flex;
+  gap: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Left sidebar — fixed-width category list */
+.sett-sidebar {
+  width: 180px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-right: 1px solid var(--border);
+}
+
+.sett-sidebar-label {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 12px 8px 6px;
+}
+
+/* Category button in the sidebar */
+.sett-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background var(--timing), color var(--timing);
+}
+
+.sett-nav-btn:hover { background: var(--surface); }
+.sett-nav-btn:active { background: var(--surface2); }
+
+.sett-nav-btn--active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.sett-nav-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.sett-nav-btn--active .sett-nav-icon { opacity: 1; }
+
+/* Right content panel */
+.sett-panel {
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px;
+  overflow-y: auto;
+}
+
+.sett-panel-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text);
+  padding: 16px 10px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+/* ── Shared settings rows ─────────────────────────────────────────────────── */
+
 .settings-row {
   display: flex;
   align-items: flex-start;
@@ -2884,40 +2966,76 @@ html.is-mobile-layout .list-panel {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* ── Settings categories (mobile) ─────────────────────────────────────────── */
+/* ── Mobile settings: category list (folder rows) ─────────────────────────── */
 
-.settings-cat-header {
+.mset-cat-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Each category row looks like a folder entry */
+.mset-cat-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
+  gap: 14px;
+  padding: 16px 20px;
   background: none;
   border: none;
   border-bottom: 1px solid var(--border);
-  color: var(--accent);
+  color: var(--text);
   font-family: var(--font);
-  font-size: 13px;
-  font-weight: bold;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 14px 16px;
+  font-size: 15px;
   cursor: pointer;
+  text-align: left;
+  width: 100%;
   touch-action: manipulation;
   transition: background var(--timing);
-  text-align: left;
 }
 
-.settings-cat-header:active { background: var(--surface2); }
+.mset-cat-row:first-child { border-top: 1px solid var(--border); }
+.mset-cat-row:active { background: var(--surface2); }
 
-.settings-cat-arrow {
-  font-size: 14px;
+.mset-cat-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.mset-cat-label {
+  flex: 1;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.mset-cat-chevron {
   color: var(--muted);
-  transition: transform 0.2s ease;
-  display: inline-block;
+  flex-shrink: 0;
 }
 
-.settings-cat-arrow.open {
-  transform: rotate(180deg);
+/* ── Mobile settings: sub-panel slide-in ─────────────────────────────────── */
+
+/* Sub-panel slides in from the right when a category is selected */
+.mset-subpanel {
+  opacity: 0;
+  transform: translateX(32px);
+}
+
+.mset-subpanel--in {
+  animation: mset-slide-in 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes mset-slide-in {
+  from { opacity: 0.4; transform: translateX(40px); }
+  to   { opacity: 1;   transform: translateX(0);    }
+}
+
+/* Category list fades in when returning from a sub-panel */
+.mset-cat-list {
+  animation: mset-fade-in 0.18s ease forwards;
+}
+
+@keyframes mset-fade-in {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0);     }
 }
 
 /* ── Mobile play-all circle button ────────────────────────────────────────── */
