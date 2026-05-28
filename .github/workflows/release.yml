@@ -170,8 +170,9 @@ jobs:
             const fs = require('fs')
             const path = require('path')
             const apks = await glob.create('src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk').then(g => g.glob())
-            if (apks.length === 0) throw new Error('No APK found')
-            for (const apk of apks) {
+            const signed = apks.filter(f => !f.endsWith('-unsigned.apk'))
+            if (signed.length === 0) throw new Error('No signed APK found — signing may have failed')
+            for (const apk of signed) {
               await github.rest.repos.uploadReleaseAsset({
                 owner: context.repo.owner,
                 repo: context.repo.repo,

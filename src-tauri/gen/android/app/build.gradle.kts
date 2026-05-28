@@ -24,6 +24,24 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    // Read signing credentials from env vars (set in CI) or a local keystore.properties file.
+    val keystorePath = System.getenv("ANDROID_SIGNING_KEY_PATH")
+    val keystoreAlias = System.getenv("ANDROID_SIGNING_KEY_ALIAS")
+    val keystorePassword = System.getenv("ANDROID_SIGNING_STORE_PASSWORD")
+    val keyPassword = System.getenv("ANDROID_SIGNING_KEY_PASSWORD")
+    val canSign = keystorePath != null && keystoreAlias != null && keystorePassword != null && keyPassword != null
+
+    if (canSign) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = keystoreAlias
+                keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -37,6 +55,9 @@ android {
             }
         }
         getByName("release") {
+            if (canSign) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
