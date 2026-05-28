@@ -1,22 +1,27 @@
 [package]
 name = "firmium-desktop"
-version = "2.1.1"
+version = "3.0.0"
 description = "Subsonic Desktop Music Streamer"
 authors = ["you"]
 edition = "2021"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.6.2", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.2", features = [] }
+tauri = { version = "2.11.2", features = ["devtools"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tauri-plugin-shell = "2.3.5"
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-http = "2.5.9"
-reqwest = { version = "0.13.3", features = ["json", "stream", "blocking"] }
+# rustls added so Android builds don't need system OpenSSL; harmless on desktop.
+reqwest = { version = "0.13.4", features = ["json", "stream", "blocking", "rustls"] }
 sysinfo = "0.39.2"
 rodio = "0.22.2"
 tokio = { version = "1.52.3", features = ["full"] }
@@ -25,8 +30,11 @@ parking_lot = "0.12.5"
 bytes = "1"
 md5 = "0.8"
 rand = "0.10"
+toml = "0.8"
 
 # Platform-specific keyring backends: each OS uses its own secure credential store.
+# Android has no keyring dependency; the Rust commands return errors and the JS
+# layer falls back to asking the user to log in manually.
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
 

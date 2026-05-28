@@ -1,0 +1,13 @@
+name = "Catppuccin Frappé"
+color_scheme = "dark"
+
+[colors]
+bg = "#303446"
+surface = "#414559"
+surface2 = "#51576d"
+border = "rgba(255,255,255,0.1)"
+text = "#c6d0f5"
+muted = "#a5adce"
+accent = "#a6d189"
+accent_dim = "rgba(166,209,137,0.15)"
+error = "#e78284"

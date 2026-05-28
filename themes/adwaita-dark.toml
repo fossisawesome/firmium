@@ -1,0 +1,13 @@
+name = "Adwaita Dark"
+color_scheme = "dark"
+
+[colors]
+bg = "#242424"
+surface = "#303030"
+surface2 = "#3c3c3c"
+border = "rgba(255,255,255,0.1)"
+text = "#deddda"
+muted = "#9a9996"
+accent = "#3584e4"
+accent_dim = "rgba(53,132,228,0.15)"
+error = "#e01b24"

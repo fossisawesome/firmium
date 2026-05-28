@@ -1,4 +1,5 @@
 <script>
+  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
   import { onMount, onDestroy } from 'svelte'
   import { navToAlbum } from '../lib/stores.js'
   import { Api, loadImage } from '../lib/api.js'
@@ -59,7 +60,7 @@
           {#if album.coverArtId}
             <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
           {:else}
-            <div class="no-art">♪</div>
+            <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
           {/if}
         </div>
         <div class="album-info">

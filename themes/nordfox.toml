@@ -1,0 +1,13 @@
+name = "Nordfox"
+color_scheme = "dark"
+
+[colors]
+bg = "#232831"
+surface = "#2e3440"
+surface2 = "#39404f"
+border = "rgba(255,255,255,0.08)"
+text = "#cdcecf"
+muted = "#60728a"
+accent = "#81a1c1"
+accent_dim = "rgba(129,161,193,0.15)"
+error = "#bf616a"

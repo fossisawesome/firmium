@@ -7,6 +7,8 @@ import {
   bumpToken, getPlayToken, recentlyPlayedSongs
 } from './stores.js'
 import { Api, OpenSubsonicRouter } from './api.js'
+import { initNowPlaying, updateNowPlaying, updateNowPlayingState, clearNowPlaying } from './nowPlaying.js'
+import { isMobile } from './platform.js'
 
 // ── Play a track ──────────────────────────────────────────────────────────────
 
@@ -38,6 +40,8 @@ export async function playAt(idx) {
     Api.scrobble(track.id, false)
     recentlyPlayedSongs.push(track)
     await bridge.setVolume(get(volume))
+    fetchAndShowLyrics(track)
+    updateNowPlaying(track, true)
 
     document.title = `▶ ${track.title} - Firmium`
   } catch (e) {
@@ -72,6 +76,8 @@ export async function crossfadeToNext(nextIdx) {
 
     Api.scrobble(nextTrack.id, false)
     recentlyPlayedSongs.push(nextTrack)
+    fetchAndShowLyrics(nextTrack)
+    updateNowPlaying(nextTrack, true)
     document.title = `▶ ${nextTrack.title} - Firmium`
   } catch (e) {
     console.error('Crossfade error:', e)
@@ -107,6 +113,13 @@ export function startPositionTracking() {
       }
 
       if (get(lyricsOpen)) syncLyricsToPosition(position)
+
+      // On mobile, plugin finish events may not arrive — poll is_playback_finished
+      // when we're near the end as a reliable fallback.
+      if (isMobile && _cachedDuration && position >= _cachedDuration - 2) {
+        const finished = await bridge.isFinished()
+        if (finished) { bridge.emit('finished'); stopPositionTracking(); return }
+      }
 
       // Trigger crossfade when approaching end of track.
       if (!_crossfadeStarted && _cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
@@ -174,10 +187,32 @@ function syncLyricsToPosition(positionSec) {
 // ── Bridge event wiring ───────────────────────────────────────────────────────
 
 export function wireBridgeEvents(bridge) {
+  // Wire notification button events from the lock screen / shade
+  initNowPlaying((action) => {
+    if (action === 'prev') {
+      const idx = get(queueIdx); if (idx > 0) playAt(idx - 1)
+    } else if (action === 'next') {
+      const idx = get(queueIdx); const len = get(queue).length
+      if (idx < len - 1) playAt(idx + 1)
+      else if (get(repeatAll)) playAt(0)
+    } else if (action === 'togglePlayPause') {
+      const state = bridge.lastKnownState
+      if (state === 'playing') bridge.pause().catch(console.error)
+      else if (state === 'paused') bridge.resume().catch(console.error)
+    }
+  })
+
   bridge.on('statechange', (state) => {
     playbackState.set(state)
-    if (state === 'playing') startPositionTracking()
-    else stopPositionTracking()
+    if (state === 'playing') {
+      startPositionTracking()
+      updateNowPlayingState(true)
+    } else if (state === 'paused') {
+      stopPositionTracking()
+      updateNowPlayingState(false)
+    } else {
+      stopPositionTracking()
+    }
   })
 
   bridge.on('finished', () => {
@@ -194,6 +229,7 @@ export function wireBridgeEvents(bridge) {
     } else {
       stopPositionTracking()
       playbackState.set('stopped')
+      clearNowPlaying()
       document.title = 'Firmium'
       currentPosition.set(0)
     }

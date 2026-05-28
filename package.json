@@ -1,16 +1,22 @@
 {
   "name": "firmium-desktop",
   "private": true,
-  "version": "2.1.1",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "dev:app": "concurrently \"npm run dev\" \"npm run tauri:dev\"",
     "build": "vite build",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "release": "npm run build && npm run tauri:build"
+    "release": "npm run build && npm run tauri:build && tauri android build --apk && npm run android:sign",
+    "android:init": "tauri android init",
+    "android:dev": "concurrently \"npm run dev\" \"tauri android dev\"",
+    "android:build": "tauri android build",
+    "android:apk": "tauri android build --apk",
+    "android:sign": "$ANDROID_HOME/build-tools/37.0.0/apksigner sign --ks $HOME/.android/debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-signed.apk src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk",
+    "android:install": "adb install src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-signed.apk"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
@@ -20,6 +26,7 @@
     "vite": "^8.0.14"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.0"
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-http": "^2.5.9"
   }
 }

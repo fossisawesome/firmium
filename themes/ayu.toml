@@ -1,0 +1,13 @@
+name = "ayu"
+color_scheme = "dark"
+
+[colors]
+bg = "#0a0e14"
+surface = "#0d1017"
+surface2 = "#131721"
+border = "rgba(255,255,255,0.07)"
+text = "#b3b1ad"
+muted = "#686868"
+accent = "#e6b450"
+accent_dim = "rgba(230,180,80,0.15)"
+error = "#ea6c73"

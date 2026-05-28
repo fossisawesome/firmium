@@ -24,7 +24,9 @@
 
 use parking_lot::{Mutex, RwLock};
 use rodio::mixer::Mixer;
-use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
+#[cfg(not(target_os = "android"))]
+use rodio::DeviceSinkBuilder;
+use rodio::{Decoder, MixerDeviceSink, Player, Source};
 use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::sync::Arc;
 use std::time::Duration;
@@ -140,24 +142,10 @@ pub type PlayerId = String;
 const PLAYER_NOT_FOUND: &str = "Player not found";
 
 /// Represents the current playback state.
-///
-/// `Loading` is the initial state while the audio is being fetched and decoded.
-/// The frontend should not treat a Loading session as finished.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PlaybackState {
-    Loading,
-    Playing,
-    Paused,
-    Stopped,
-}
+/// Re-export so callers can use audio::PlaybackState without touching lib.rs directly.
+pub use crate::PlaybackState;
 
-/// Audio device information
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct AudioDevice {
-    pub name: String,
-    pub default: bool,
-}
+pub use crate::AudioDevice;
 
 /// Playback session data
 struct PlaybackSession {
@@ -194,6 +182,7 @@ impl AudioPlayer {
     ///
     /// Holds the OutputStream within the state context to maintain the audio
     /// connection alive for the lifetime of the application.
+    #[cfg(not(target_os = "android"))]
     pub fn new(app_handle: AppHandle) -> Result<Self, String> {
         let stream = DeviceSinkBuilder::open_default_sink()
             .map_err(|e| format!("Failed to create audio stream: {}", e))?;
@@ -307,6 +296,9 @@ impl AudioPlayer {
                     } else {
                         source
                     };
+
+                    // Fade-in over 25ms to eliminate the start-of-playback pop.
+                    let amplified = amplified.fade_in(Duration::from_millis(25));
 
                     let mut sesh = sessions.write();
                     if let Some(session) = sesh.get_mut(&player_id_clone) {
@@ -422,12 +414,20 @@ impl AudioPlayer {
             .get_mut(player_id)
             .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| {
+                // Ramp volume to 0 over ~20ms to eliminate the pause pop,
+                // then restore volume so resume plays at the correct level.
+                let vol = s.sink.volume();
+                for i in 1..=5u32 {
+                    s.sink.set_volume(vol * (1.0 - i as f32 / 5.0));
+                    std::thread::sleep(Duration::from_millis(4));
+                }
                 // Save accumulated time when pausing
                 if let Some(start) = s.playback_start_time {
                     s.accumulated_time += start.elapsed().as_secs_f64();
                     s.playback_start_time = None;
                 }
-                s.sink.pause()
+                s.sink.pause();
+                s.sink.set_volume(vol); // Restore so resume is at full volume.
             });
         if result.is_ok() {
             let _ = self.app_handle.emit("playback-state-changed", serde_json::json!({
@@ -488,6 +488,18 @@ impl AudioPlayer {
 
     /// Stop playback and remove the session entirely.
     pub fn stop(&self, player_id: &str) -> Result<(), String> {
+        // Ramp volume to 0 before stopping to eliminate the stop pop.
+        // Done under read lock so the write lock (remove) can follow cleanly.
+        {
+            let sessions = self.sessions.read();
+            if let Some(s) = sessions.get(player_id) {
+                let vol = s.sink.volume();
+                for i in 1..=5u32 {
+                    s.sink.set_volume(vol * (1.0 - i as f32 / 5.0));
+                    std::thread::sleep(Duration::from_millis(4));
+                }
+            }
+        }
         self.sessions
             .write()
             .remove(player_id)

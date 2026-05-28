@@ -1,0 +1,69 @@
+#!/bin/bash
+# Bump version across all project files and AUR packages
+
+set -e
+
+if [ -z "$1" ]; then
+  echo "Usage: ./scripts/bump-version.sh <new-version>"
+  echo "Example: ./scripts/bump-version.sh 1.5.0"
+  exit 1
+fi
+
+NEW_VERSION="$1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+echo "🔄 Bumping version to $NEW_VERSION..."
+
+# Update file based on type
+update_file() {
+  local file=$1
+  local version=$2
+
+  if [ ! -f "$file" ]; then
+    echo "⚠️  File not found: $file"
+    return
+  fi
+
+  if [[ $file == *.json ]]; then
+    sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" "$file"
+  elif [[ $file == *.toml ]]; then
+    sed -i "s/^version = \"[^\"]*\"/version = \"$version\"/" "$file"
+  elif [[ $file == *PKGBUILD ]]; then
+    sed -i "s/^pkgver=.*/pkgver=$version/" "$file"
+    sed -i "s/^pkgrel=.*/pkgrel=1/" "$file"
+  elif [[ $file == *.spec ]]; then
+    sed -i "s/^Version:        .*/Version:        $version/" "$file"
+    sed -i "s/^Release:        .*/Release:        1/" "$file"
+  elif [[ $file == *.md ]]; then
+    sed -i "s/^\*\*Version\*\*: [^*]*/\*\*Version\*\*: $version/" "$file"
+  fi
+
+  echo "✓ Updated: $file"
+}
+
+# Update main repo files
+update_file "$PROJECT_ROOT/package.json" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/CLAUDE.md" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/src-tauri/tauri.conf.json" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/src-tauri/Cargo.toml" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/PKGBUILD" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/firmium.spec" "$NEW_VERSION"
+
+# Update AUR folders
+update_file "$HOME/firmium/aur-firmium-git/PKGBUILD" "$NEW_VERSION"
+update_file "$HOME/firmium/aur-firmium-bin/PKGBUILD" "$NEW_VERSION"
+
+# Update .SRCINFO in AUR folders if they exist
+for aur_dir in "$HOME/firmium/aur-firmium-git" "$HOME/firmium/aur-firmium-bin"; do
+  if [ -d "$aur_dir" ] && [ -f "$aur_dir/PKGBUILD" ]; then
+    cd "$aur_dir"
+    makepkg --printsrcinfo > .SRCINFO 2>/dev/null || echo "⚠️  Could not generate .SRCINFO for $aur_dir"
+  fi
+done
+
+echo "✅ Version bumped to $NEW_VERSION"
+echo ""
+echo "Next steps:"
+echo "  1. Commit changes: git add . && git commit -m 'chore: bump to v$NEW_VERSION'"
+echo "  2. Push to repo: git push origin main"

@@ -1,0 +1,13 @@
+name = "Nord"
+color_scheme = "dark"
+
+[colors]
+bg = "#2e3440"
+surface = "#3b4252"
+surface2 = "#434c5e"
+border = "rgba(255,255,255,0.08)"
+text = "#eceff4"
+muted = "#81a1c1"
+accent = "#a3be8c"
+accent_dim = "rgba(163,190,140,0.15)"
+error = "#bf616a"

@@ -80,6 +80,13 @@ export const crossfadeEnabled = writable(SafeStorage.getItem('firmium_crossfade'
 export const crossfadeDuration = writable(
   Math.max(1, Math.min(12, Number(SafeStorage.getItem('firmium_crossfade_duration') ?? 5)))
 )
+// Controls the full-screen mobile player overlay.
+export const mobilePlayerOpen = writable(false)
+// Controls the queue bottom sheet.
+export const queueSheetOpen = writable(false)
+// Shuffle playback mode.
+export const shuffleEnabled = writable(false)
+
 export const currentPosition = writable(0)
 export const trackDuration = writable(null)
 export const isSeeking = writable(false)

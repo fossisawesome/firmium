@@ -1,0 +1,13 @@
+name = "Monokai Classic"
+color_scheme = "dark"
+
+[colors]
+bg = "#272822"
+surface = "#3e3d32"
+surface2 = "#49483e"
+border = "rgba(255,255,255,0.08)"
+text = "#f8f8f2"
+muted = "#75715e"
+accent = "#a6e22e"
+accent_dim = "rgba(166,226,46,0.15)"
+error = "#f92672"

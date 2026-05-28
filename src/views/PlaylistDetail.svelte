@@ -1,4 +1,5 @@
 <script>
+  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
   import { playlists, queue, currentTrack, navToView } from '../lib/stores.js'
   import { Api, loadImage } from '../lib/api.js'
   import { playAt } from '../lib/playback.js'
@@ -116,7 +117,7 @@
       {:else if pl.coverArtId}
         <img use:lazyLoad={img => loadImage(img, pl.coverArtId, null)} alt="" />
       {:else}
-        ♫
+        <span class="icon" style="width:40px;height:40px;color:var(--muted)">{@html IconList}</span>
       {/if}
       <div class="pl-detail-art-overlay">Change<br>Cover</div>
     </div>
@@ -178,7 +179,7 @@
       </div>
 
       <div class="pl-detail-actions">
-        <button class="play-all-btn" onclick={playAll} disabled={!pl.tracks.length}>▶ Play All</button>
+        <button class="play-all-btn" onclick={playAll} disabled={!pl.tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>Play All</button>
         <button class="pl-delete-btn" onclick={deletePl}>Delete</button>
       </div>
     </div>

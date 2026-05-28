@@ -1,4 +1,5 @@
 <script>
+  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
   import { onMount, onDestroy } from 'svelte'
   import { get } from 'svelte/store'
   import { queue, queueIdx, currentTrack, navBack } from '../lib/stores.js'
@@ -54,7 +55,7 @@
     {#if coverArtId}
       <img bind:this={coverImg} use:lazyLoad={img => loadImage(img, coverArtId, ctrl?.signal)} alt="" />
     {:else}
-      ♪
+      <span class="icon" style="width:32px;height:32px;color:var(--muted)">{@html IconMusic}</span>
     {/if}
   </div>
   <div class="tl-info">
