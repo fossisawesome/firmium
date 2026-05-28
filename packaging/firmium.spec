@@ -43,10 +43,12 @@ if [ -d usr ]; then
 fi
 
 %files
-%{_bindir}/firmium
-%{_datadir}/applications/firmium.desktop
-%{_datadir}/icons/hicolor/*/apps/firmium.png
-/usr/lib/firmium/
+%{_bindir}/firmium-desktop
+%{_datadir}/applications/Firmium.desktop
+%{_datadir}/icons/hicolor/32x32/apps/firmium-desktop.png
+%{_datadir}/icons/hicolor/128x128/apps/firmium-desktop.png
+%{_datadir}/icons/hicolor/256x256@2/apps/firmium-desktop.png
+/usr/lib/Firmium/
 
 %changelog
 * CHANGELOG_DATE_PLACEHOLDER GitHub Actions <actions@github.com> - VERSION_PLACEHOLDER-1
