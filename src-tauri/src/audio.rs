@@ -157,6 +157,10 @@ struct PlaybackSession {
     /// True while the network fetch + initial decode is still in progress.
     /// Prevents get_state() from falsely reporting Stopped before audio loads.
     loading: bool,
+    /// True once a finish-watcher task is running for this session.
+    /// Guards against spawning a second watcher when resume() is called on a
+    /// session that already got one from start_session().
+    has_watcher: bool,
     /// Time when playback started or resumed.
     playback_start_time: Option<std::time::Instant>,
     /// Accumulated playback time (seconds).
@@ -257,6 +261,7 @@ impl AudioPlayer {
                 duration: None,
                 buffered_bytes: Arc::new(Mutex::new(Vec::new())),
                 loading: true, // Prevents false "Stopped" state during buffering.
+                has_watcher: false,
                 playback_start_time: None,
                 accumulated_time: 0.0,
             },
@@ -388,6 +393,11 @@ impl AudioPlayer {
                         }
                     }
                 });
+                // Record that this session has a running watcher so resume() can
+                // skip spawning a duplicate.
+                if let Some(s) = sessions.write().get_mut(&player_id_clone) {
+                    s.has_watcher = true;
+                }
             }
         });
 
@@ -438,20 +448,17 @@ impl AudioPlayer {
             .get_mut(player_id)
             .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
             .map(|s| {
-                // Ramp volume to 0 over ~20ms to eliminate the pause pop,
-                // then restore volume so resume plays at the correct level.
+                // Mute instantly to eliminate the pause pop without blocking the
+                // tokio executor with thread::sleep under a write lock.
                 let vol = s.sink.volume();
-                for i in 1..=5u32 {
-                    s.sink.set_volume(vol * (1.0 - i as f32 / 5.0));
-                    std::thread::sleep(Duration::from_millis(4));
-                }
+                s.sink.set_volume(0.0);
                 // Save accumulated time when pausing
                 if let Some(start) = s.playback_start_time {
                     s.accumulated_time += start.elapsed().as_secs_f64();
                     s.playback_start_time = None;
                 }
                 s.sink.pause();
-                s.sink.set_volume(vol); // Restore so resume is at full volume.
+                s.sink.set_volume(vol); // Restore so resume plays at the correct level.
             });
         if result.is_ok() {
             let _ = self.app_handle.emit("playback-state-changed", serde_json::json!({
@@ -483,75 +490,76 @@ impl AudioPlayer {
             }));
 
             // Promoted preloads need their own finish watcher + position emitter.
-            let sessions_watch = Arc::clone(&self.sessions);
-            let app_handle_watch = self.app_handle.clone();
-            let pid = player_id.to_string();
-            tauri::async_runtime::spawn(async move {
-                let mut tick: u8 = 0;
-                loop {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                    tick = tick.wrapping_add(1);
-
-                    let (finished, pos_payload) = {
-                        let s = sessions_watch.read();
-                        match s.get(&pid) {
-                            None => break,
-                            Some(session) => {
-                                let finished = !session.loading && session.sink.empty();
-                                let pos_payload = if tick % 3 == 0 && !session.loading && session.playback_start_time.is_some() {
-                                    let pos = session.accumulated_time
-                                        + session.playback_start_time
-                                            .map(|t| t.elapsed().as_secs_f64())
-                                            .unwrap_or(0.0);
-                                    Some(serde_json::json!({
-                                        "playerId": pid,
-                                        "position": pos,
-                                        "duration": session.duration
-                                    }))
-                                } else {
-                                    None
-                                };
-                                (finished, pos_payload)
-                            }
-                        }
-                    };
-
-                    if let Some(payload) = pos_payload {
-                        let _ = app_handle_watch.emit("playback-position", payload);
-                    }
-
-                    if finished {
-                        sessions_watch.write().remove(&pid);
-                        let _ = app_handle_watch.emit("playback-finished", serde_json::json!({
-                            "playerId": pid
-                        }));
-                        break;
-                    }
+            // Non-preloaded sessions already have one from start_session(), so skip them
+            // to avoid duplicate position/finished events after pause-resume cycles.
+            let needs_watcher = sessions.get(player_id).map_or(false, |s| !s.has_watcher);
+            if needs_watcher {
+                if let Some(s) = sessions.get_mut(player_id) {
+                    s.has_watcher = true;
                 }
-            });
+                let sessions_watch = Arc::clone(&self.sessions);
+                let app_handle_watch = self.app_handle.clone();
+                let pid = player_id.to_string();
+                tauri::async_runtime::spawn(async move {
+                    let mut tick: u8 = 0;
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        tick = tick.wrapping_add(1);
+
+                        let (finished, pos_payload) = {
+                            let s = sessions_watch.read();
+                            match s.get(&pid) {
+                                None => break,
+                                Some(session) => {
+                                    let finished = !session.loading && session.sink.empty();
+                                    let pos_payload = if tick % 3 == 0 && !session.loading && session.playback_start_time.is_some() {
+                                        let pos = session.accumulated_time
+                                            + session.playback_start_time
+                                                .map(|t| t.elapsed().as_secs_f64())
+                                                .unwrap_or(0.0);
+                                        Some(serde_json::json!({
+                                            "playerId": pid,
+                                            "position": pos,
+                                            "duration": session.duration
+                                        }))
+                                    } else {
+                                        None
+                                    };
+                                    (finished, pos_payload)
+                                }
+                            }
+                        };
+
+                        if let Some(payload) = pos_payload {
+                            let _ = app_handle_watch.emit("playback-position", payload);
+                        }
+
+                        if finished {
+                            sessions_watch.write().remove(&pid);
+                            let _ = app_handle_watch.emit("playback-finished", serde_json::json!({
+                                "playerId": pid
+                            }));
+                            break;
+                        }
+                    }
+                });
+            }
         }
         result
     }
 
     /// Stop playback and remove the session entirely.
     pub fn stop(&self, player_id: &str) -> Result<(), String> {
-        // Ramp volume to 0 before stopping to eliminate the stop pop.
-        // Done under read lock so the write lock (remove) can follow cleanly.
-        {
-            let sessions = self.sessions.read();
-            if let Some(s) = sessions.get(player_id) {
-                let vol = s.sink.volume();
-                for i in 1..=5u32 {
-                    s.sink.set_volume(vol * (1.0 - i as f32 / 5.0));
-                    std::thread::sleep(Duration::from_millis(4));
-                }
-            }
-        }
+        // Mute and stop under a single write lock; avoids blocking the tokio
+        // executor with thread::sleep under a lock.
         self.sessions
             .write()
             .remove(player_id)
             .ok_or_else(|| PLAYER_NOT_FOUND.to_string())
-            .map(|s| s.sink.stop())
+            .map(|s| {
+                s.sink.set_volume(0.0);
+                s.sink.stop()
+            })
     }
 
     /// Stop all active sessions for a given track ID (used before starting a new session).

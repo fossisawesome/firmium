@@ -132,10 +132,13 @@
   let closing = $state(false)
   let springing = $state(false)
   let overlayEl = $state()
+  let topbarEl = $state()
   let closeTimer = null
   let springTimer = null
   // null = undetermined, true = tracking a vertical close gesture, false = not
   let gestureVertical = null
+  // Only allow close gesture when the touch started in the top handle area.
+  let closeGestureAllowed = false
 
   onDestroy(() => {
     if (closeTimer !== null) clearTimeout(closeTimer)
@@ -147,6 +150,7 @@
   $effect(() => {
     if (!overlayEl) return
     const handler = (e) => {
+      if (!closeGestureAllowed) return
       const dy = e.touches[0].clientY - touchStartY
       const dx = Math.abs(e.touches[0].clientX - touchStartX)
       // Determine gesture axis once the finger has moved enough to be confident
@@ -176,9 +180,17 @@
     dragOffset = 0
     springing = false
     gestureVertical = null
+    // Only track a close gesture if the finger started on the top handle bar.
+    if (topbarEl) {
+      const rect = topbarEl.getBoundingClientRect()
+      closeGestureAllowed = touchStartY >= rect.top && touchStartY <= rect.bottom
+    } else {
+      closeGestureAllowed = false
+    }
   }
 
   function onTouchEnd(e) {
+    if (!closeGestureAllowed) return
     const deltaY = e.changedTouches[0].clientY - touchStartY
     if (deltaY > 72) {
       closeWithAnimation()
@@ -231,12 +243,14 @@
   }
 
   // ── Compose inline style for drag/spring animation ────────────────────────────
-  const overlayTransformStyle = $derived(() => {
-    if (dragOffset > 0 && !closing) return `transform: translateY(${dragOffset}px); transition: none`
-    if (dragOffset > 0 && closing) return `transform: translateY(${dragOffset}px)`
-    if (springing) return `transform: translateY(0); transition: transform 0.38s cubic-bezier(0.2, 0, 0, 1)`
-    return ''
-  })
+  // Must be a plain $derived expression (not wrapped in a function) so Svelte tracks
+  // dragOffset/closing/springing as reactive dependencies and updates the style binding.
+  const overlayTransformStyle = $derived(
+    dragOffset > 0 && !closing ? `transform: translateY(${dragOffset}px); transition: none`
+    : dragOffset > 0 && closing ? `transform: translateY(${dragOffset}px)`
+    : springing ? `transform: translateY(0); transition: transform 0.38s cubic-bezier(0.2, 0, 0, 1)`
+    : ''
+  )
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -245,12 +259,12 @@
   class="mp-overlay"
   class:mp-closing={closing}
   style:background={bgGradient ?? 'var(--bg)'}
-  style={overlayTransformStyle()}
+  style={overlayTransformStyle}
   ontouchstart={onTouchStart}
   ontouchend={onTouchEnd}
 >
   <!-- Drag handle only (no close button — swipe down to close) -->
-  <div class="mp-topbar">
+  <div class="mp-topbar" bind:this={topbarEl}>
     <div class="mp-handle-row">
       <div class="mp-handle"></div>
     </div>

@@ -196,12 +196,17 @@ export function startPositionTracking() {
   // Mobile: polling interval with finish-detection fallback.
   _positionInterval = setInterval(async () => {
     const bridge = get(audioBridge)
-    if (!bridge || !get(currentTrack)) { stopPositionTracking(); return }
+    const trackAtStart = get(currentTrack)
+    if (!bridge || !trackAtStart) { stopPositionTracking(); return }
 
     try {
       const position = await bridge.getCurrentPosition()
+      // Guard: track may have changed while awaiting the IPC call.
+      if (get(currentTrack) !== trackAtStart) return
       if (!_cachedDuration) {
         _cachedDuration = await bridge.getDuration()
+        // Guard again — a second await means another opportunity for the track to change.
+        if (get(currentTrack) !== trackAtStart) { _cachedDuration = null; return }
         if (_cachedDuration) trackDuration.set(_cachedDuration)
       }
 
@@ -279,6 +284,28 @@ function _setupVisibilityHandler(bridge) {
         bridge.emit('finished')
         return
       }
+
+      // Sync the current queue index in case ExoPlayer advanced tracks while
+      // the WebView was backgrounded and track-changed events were dropped.
+      const queuePos = await bridge.getQueueIndex()
+      if (queuePos != null && queuePos.index !== get(queueIdx)) {
+        const outgoing = get(currentTrack)
+        if (outgoing) Api.scrobble(outgoing.id, true)
+
+        queueIdx.set(queuePos.index)
+        const newTrack = get(currentTrack)
+        if (newTrack) {
+          Api.scrobble(newTrack.id, false)
+          recentlyPlayedSongs.push(newTrack)
+          fetchAndShowLyrics(newTrack)
+          updateNowPlaying(newTrack, true)
+          document.title = `▶ ${newTrack.title} - Firmium`
+          _cachedDuration = null
+          currentPosition.set(0)
+          trackDuration.set(0)
+        }
+      }
+
       // Still playing — restart the interval which was frozen while backgrounded.
       const state = bridge.lastKnownState
       if (state === 'playing') startPositionTracking()
@@ -397,7 +424,7 @@ export async function fetchAndShowLyrics(song) {
   lyricsLines.set([])
   try {
     const result = await Api.getLyrics(song)
-    if (get(lyricsTrackId) !== song.id) return
+    if (get(lyricsTrackId) !== song.id) { activeLyricIdx.set(-1); return }
     if (result) {
       lyricsLines.set(result.lines)
       lyricsSynced.set(result.synced)

@@ -624,6 +624,12 @@ struct AndroidSkipToIndexArgs<'a> {
     #[serde(rename = "playerId")] player_id: &'a str,
     index: usize,
 }
+#[cfg(target_os = "android")]
+#[derive(serde::Deserialize)]
+struct AndroidQueueIndexResp {
+    index: usize,
+    #[serde(rename = "trackId")] track_id: String,
+}
 
 // Input struct for set_queue — JS sends camelCase, serde_json handles it via renames.
 #[derive(serde::Deserialize)]
@@ -846,6 +852,21 @@ fn skip_to_queue_index<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, playe
     { let _ = (player_id, index); Err("skip_to_queue_index is only supported on Android".to_string()) }
 }
 
+// Returns the current queue position tracked by the native player — used by the
+// JS visibility handler to re-sync queueIdx after tracks advanced while backgrounded.
+#[tauri::command]
+fn get_current_queue_index<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        let resp = get_audio_handle(&app_handle)?.0
+            .run_mobile_plugin::<AndroidQueueIndexResp>("getQueueIndex", AndroidPlayerIdArgs { player_id })
+            .map_err(|e| e.to_string())?;
+        return Ok(serde_json::json!({ "index": resp.index, "trackId": resp.track_id }));
+    }
+    #[cfg(not(target_os = "android"))]
+    { let _ = (app_handle, player_id); Err("get_current_queue_index is only supported on Android".to_string()) }
+}
+
 // ============================================================================
 // NOW PLAYING NOTIFICATION (Android only)
 // ============================================================================
@@ -1016,6 +1037,7 @@ pub fn run() {
             skip_to_next,
             skip_to_previous,
             skip_to_queue_index,
+            get_current_queue_index,
             // Now Playing notification (Android)
             update_now_playing,
             update_playback_state,

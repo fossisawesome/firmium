@@ -162,21 +162,20 @@ jobs:
         run: npm run tauri android build -- --apk
 
       - name: Print and publish APK certificate fingerprint
+        id: fingerprint
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           APK=$(find src-tauri/gen/android/app/build/outputs/apk/universal/release -name '*.apk' ! -name '*-unsigned.apk' | head -1)
+          [ -n "$APK" ] || { echo "No signed APK found"; exit 1; }
+          echo "apk=$APK" >> $GITHUB_OUTPUT
           FINGERPRINT=$(apksigner verify --print-certs "$APK" | grep -i 'SHA-256' | awk '{print $NF}')
+          [ -n "$FINGERPRINT" ] || { echo "Could not extract certificate fingerprint"; exit 1; }
           echo "APK SHA-256 certificate fingerprint: $FINGERPRINT"
-          gh release edit ${{ github.ref_name }} --notes-file - <<EOF
-          $(gh release view ${{ github.ref_name }} --json body -q .body)
-
-          ---
-          **APK certificate fingerprint (SHA-256):**
-          \`$FINGERPRINT\`
-
-          Verify with: \`apksigner verify --print-certs firmium.apk\`
-          EOF
+          EXISTING=$(gh release view "${{ github.ref_name }}" --json body -q .body)
+          printf '%s\n\n---\n**APK certificate fingerprint (SHA-256):**\n`%s`\n\nVerify with: `apksigner verify --print-certs firmium.apk`\n' "$EXISTING" "$FINGERPRINT" > "$RUNNER_TEMP/release_notes.md"
+          gh release edit "${{ github.ref_name }}" --notes-file "$RUNNER_TEMP/release_notes.md"
 
       - name: Upload APK to release
         uses: actions/github-script@v7
@@ -186,15 +185,12 @@ jobs:
           script: |
             const fs = require('fs')
             const path = require('path')
-            const apks = await glob.create('src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk').then(g => g.glob())
-            const signed = apks.filter(f => !f.endsWith('-unsigned.apk'))
-            if (signed.length === 0) throw new Error('No signed APK found — signing may have failed')
-            for (const apk of signed) {
-              await github.rest.repos.uploadReleaseAsset({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: ${{ needs.create-release.outputs.release_id }},
-                name: path.basename(apk),
-                data: fs.readFileSync(apk),
-              })
-            }
+            const apk = '${{ steps.fingerprint.outputs.apk }}'
+            if (!apk) throw new Error('No signed APK found — signing may have failed')
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              name: path.basename(apk),
+              data: fs.readFileSync(apk),
+            })
