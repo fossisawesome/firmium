@@ -49,6 +49,7 @@
     "skip_to_next",
     "skip_to_previous",
     "skip_to_queue_index",
+    "get_current_queue_index",
     "list_themes"
   ]
 }

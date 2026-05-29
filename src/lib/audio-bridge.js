@@ -283,6 +283,16 @@ export class AudioBridge {
     await tauriInvoke('skip_to_queue_index', { playerId: this.currentPlayerId, index })
   }
 
+  // Returns { index, trackId } for the current queue position tracked by the native player.
+  // Only meaningful on Android (queue sessions); throws on desktop.
+  async getQueueIndex() {
+    if (!this.currentPlayerId) return null
+    try { return await tauriInvoke('get_current_queue_index', { playerId: this.currentPlayerId }) } catch (err) {
+      console.error('getQueueIndex failed:', err)
+      return null
+    }
+  }
+
   // ── Volume ─────────────────────────────────────────────────────────────────
 
   async setVolume(vol) {

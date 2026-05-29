@@ -1,3 +1,25 @@
+# v3.1.6
+
+## Added
+
+- **`get_current_queue_index` command** (`src-tauri/src/lib.rs`, `AudioPlugin.kt`): New Tauri command (Android only) that returns the native ExoPlayer's current queue index and track ID. Exposed via `AudioBridge.getQueueIndex()` in `audio-bridge.js`. Used to re-sync JS state when the app returns to the foreground after track transitions happened while backgrounded.
+- **Background queue sync on visibility change** (`src/lib/playback.js`): When the app regains focus, the visibility handler now calls `getQueueIndex()` and advances `queueIdx`, triggers scrobbling, re-fetches lyrics, and updates the MediaSession notification if ExoPlayer advanced tracks while the WebView was suspended.
+- **`has_watcher` guard on audio sessions** (`src-tauri/src/audio.rs`): `PlaybackSession` now tracks whether a finish-watcher async task is already running. Prevents duplicate position/finished events from being spawned after pause-resume cycles.
+
+## Changed
+
+- **Pause no longer sleeps under write lock** (`src-tauri/src/audio.rs`): The previous 20 ms volume-ramp-to-zero used `thread::sleep` inside a `RwLock` write, blocking the tokio executor. Replaced with an instant mute (`set_volume(0.0)`) then restore after the sink pauses — same pop-free result, no blocking.
+- **`overlayTransformStyle` fixed as plain `$derived`** (`src/components/MobilePlayer.svelte`): Previously wrapped in `$derived(() => ...)` (a function), which Svelte 5 doesn't track reactively via the function form. Changed to a plain `$derived(expr)` so `dragOffset`, `closing`, and `springing` are properly tracked and the inline style updates on change.
+- **Close gesture restricted to top handle area** (`src/components/MobilePlayer.svelte`): Swipe-down-to-close now only activates when the touch originates on the `mp-topbar` element (the drag handle). Touches on the album art, lyrics, or controls no longer accidentally trigger the dismiss animation.
+- **Position tracking guards for mid-await track changes** (`src/lib/playback.js`): Added checks after each `await` in the polling interval to bail out if `currentTrack` changed while the IPC call was in flight, preventing stale position/duration values from clobbering the newly loaded track.
+- **CI: APK step hardened** (`.github/workflows/release.yml`): Print-and-publish step now uses `set -euo pipefail`, validates that a signed APK and its fingerprint were found before proceeding, shares the APK path via `$GITHUB_OUTPUT`, and writes release notes via a temp file instead of a heredoc to avoid quoting pitfalls. Upload step reuses the path from the fingerprint step instead of re-globbing.
+
+## Fixed
+
+- **`fetchAndShowLyrics` left `activeLyricIdx` stale on track change** (`src/lib/playback.js`): When a lyrics fetch was superseded by a track change, the early-return skipped resetting `activeLyricIdx`, leaving the highlighted lyric line stuck on the previous track. Now resets to `-1` on early exit.
+
+---
+
 # v3.1.5
 
 ## Fixed

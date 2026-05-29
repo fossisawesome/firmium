@@ -483,6 +483,21 @@ class AudioPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    // Returns the current queue index for the given player — used to re-sync JS state
+    // when the app returns to the foreground after track transitions happened in the background.
+    @Command
+    fun getQueueIndex(invoke: Invoke) {
+        val args = invoke.parseArgs(AudioPlayerIdArgs::class.java)
+        mainHandler.post {
+            val session = sessions[args.playerId]
+            if (session == null) { invoke.reject("Player not found"); return@post }
+            val result = JSObject()
+            result.put("index", session.currentQueueIndex)
+            result.put("trackId", session.currentTrackId)
+            invoke.resolve(result)
+        }
+    }
+
     // Cross-fade from oldPlayerId into a new stream over fadeDurationMs.
     // Starts the new player at volume 0, then ramps old→0 and new→target simultaneously.
     @Command
