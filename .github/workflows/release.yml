@@ -132,8 +132,8 @@ jobs:
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android NDK r27
-        run: sdkmanager "ndk;27.0.11902837"
+      - name: Install Android NDK r27 and build tools
+        run: sdkmanager "ndk;27.0.11902837" "build-tools;35.0.0"
 
       - name: Install npm dependencies
         run: npm install
@@ -170,7 +170,8 @@ jobs:
           APK=$(find src-tauri/gen/android/app/build/outputs/apk/universal/release -name '*.apk' ! -name '*-unsigned.apk' | head -1)
           [ -n "$APK" ] || { echo "No signed APK found"; exit 1; }
           echo "apk=$APK" >> $GITHUB_OUTPUT
-          FINGERPRINT=$(apksigner verify --print-certs "$APK" | grep -i 'SHA-256' | awk '{print $NF}')
+          APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner | sort -V | tail -1)
+          FINGERPRINT=$("$APKSIGNER" verify --print-certs "$APK" | grep -i 'SHA-256' | awk '{print $NF}')
           [ -n "$FINGERPRINT" ] || { echo "Could not extract certificate fingerprint"; exit 1; }
           echo "APK SHA-256 certificate fingerprint: $FINGERPRINT"
           EXISTING=$(gh release view "${{ github.ref_name }}" --json body -q .body)
