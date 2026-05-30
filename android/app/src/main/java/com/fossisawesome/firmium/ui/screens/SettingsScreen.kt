@@ -1,0 +1,538 @@
+package com.fossisawesome.firmium.ui.screens
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
+import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.ui.components.*
+import com.fossisawesome.firmium.ui.theme.ALL_THEMES
+import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.viewmodel.PlayerState
+
+// Settings screen — category list → sub-panel drill-down, exact port of MobileSettings.svelte.
+@Composable
+fun SettingsScreen(
+    playerState: PlayerState,
+    serverUrl: String,
+    username: String,
+    appVersion: String,
+    currentThemeId: String,
+    lrclibEnabled: Boolean,
+    lastfmEnabled: Boolean,
+    lastfmApiKey: String,
+    lastfmSecret: String,
+    autoLoginEnabled: Boolean,
+    onCrossfadeToggle: (Boolean) -> Unit,
+    onCrossfadeDurationChange: (Int) -> Unit,
+    onGaplessToggle: (Boolean) -> Unit,
+    onThemeSelected: (String) -> Unit,
+    onLrclibToggle: (Boolean) -> Unit,
+    onLastfmToggle: (Boolean) -> Unit,
+    onLastfmApiKeyChange: (String) -> Unit,
+    onLastfmSecretChange: (String) -> Unit,
+    onAutoLoginToggle: (Boolean) -> Unit,
+    onWipeCache: () -> Unit,
+    onDeleteLogs: () -> Unit,
+    onResetSettings: () -> Unit,
+    onLogout: () -> Unit,
+) {
+    FirmiumSettingsScreen(
+        playerState = playerState,
+        serverUrl = serverUrl,
+        username = username,
+        appVersion = appVersion,
+        currentThemeId = currentThemeId,
+        lrclibEnabled = lrclibEnabled,
+        lastfmEnabled = lastfmEnabled,
+        lastfmApiKey = lastfmApiKey,
+        lastfmSecret = lastfmSecret,
+        autoLoginEnabled = autoLoginEnabled,
+        onCrossfadeToggle = onCrossfadeToggle,
+        onCrossfadeDurationChange = onCrossfadeDurationChange,
+        onGaplessToggle = onGaplessToggle,
+        onThemeSelected = onThemeSelected,
+        onLrclibToggle = onLrclibToggle,
+        onLastfmToggle = onLastfmToggle,
+        onLastfmApiKeyChange = onLastfmApiKeyChange,
+        onLastfmSecretChange = onLastfmSecretChange,
+        onAutoLoginToggle = onAutoLoginToggle,
+        onWipeCache = onWipeCache,
+        onDeleteLogs = onDeleteLogs,
+        onResetSettings = onResetSettings,
+        onLogout = onLogout,
+    )
+}
+
+// ── Firmium variant ───────────────────────────────────────────────────────────
+// Exact port of MobileSettings.svelte: category list → sub-panel drill-down.
+
+private data class Category(val id: String, val label: String, val icon: ImageVector)
+
+private val CATEGORIES = listOf(
+    Category("appearance", "Appearance", Icons.Default.Palette),
+    Category("playback",   "Playback",   Icons.Default.PlayArrow),
+    Category("services",   "Services",   Icons.Default.Language),
+    Category("account",    "Account",    Icons.Default.Person),
+    Category("about",      "About",      Icons.Default.Info),
+)
+
+@Composable
+private fun FirmiumSettingsScreen(
+    playerState: PlayerState,
+    serverUrl: String,
+    username: String,
+    appVersion: String,
+    currentThemeId: String,
+    lrclibEnabled: Boolean,
+    lastfmEnabled: Boolean,
+    lastfmApiKey: String,
+    lastfmSecret: String,
+    autoLoginEnabled: Boolean,
+    onCrossfadeToggle: (Boolean) -> Unit,
+    onCrossfadeDurationChange: (Int) -> Unit,
+    onGaplessToggle: (Boolean) -> Unit,
+    onThemeSelected: (String) -> Unit,
+    onLrclibToggle: (Boolean) -> Unit,
+    onLastfmToggle: (Boolean) -> Unit,
+    onLastfmApiKeyChange: (String) -> Unit,
+    onLastfmSecretChange: (String) -> Unit,
+    onAutoLoginToggle: (Boolean) -> Unit,
+    onWipeCache: () -> Unit,
+    onDeleteLogs: () -> Unit,
+    onResetSettings: () -> Unit,
+    onLogout: () -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    val border = colors.border
+
+    // null = category list; non-null = open sub-panel id
+    var activeCategory by remember { mutableStateOf<String?>(null) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Header — matches .mset-header: padding 12dp, border-bottom, gap 12dp
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Back/close button — matches .mset-back-btn (44x44dp circle)
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(50))
+                    .clickable { if (activeCategory != null) activeCategory = null },
+                contentAlignment = Alignment.Center,
+            ) {
+                FirmiumIcon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = if (activeCategory != null) colors.text else Color.Transparent,
+                )
+            }
+            // Title — matches .mset-title: 18sp bold
+            Text(
+                text = if (activeCategory != null)
+                    CATEGORIES.find { it.id == activeCategory }?.label ?: "Settings"
+                else "Settings",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = colors.text,
+            )
+        }
+        FirmiumDivider()
+
+        // Body — slides left when opening a sub-panel, slides right when going back.
+        AnimatedContent(
+            targetState = activeCategory,
+            transitionSpec = {
+                val goingDeeper = targetState != null
+                val enter = if (goingDeeper) {
+                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(280)) +
+                        fadeIn(tween(220))
+                } else {
+                    slideInHorizontally(initialOffsetX = { -it / 4 }, animationSpec = tween(280)) +
+                        fadeIn(tween(220))
+                }
+                val exit = if (goingDeeper) {
+                    slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(280)) +
+                        fadeOut(tween(220))
+                } else {
+                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(280)) +
+                        fadeOut(tween(220))
+                }
+                enter togetherWith exit
+            },
+            label = "settingsPanel",
+            modifier = Modifier.fillMaxSize(),
+        ) { category ->
+            if (category == null) {
+                // Category list
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    CATEGORIES.forEachIndexed { i, cat ->
+                        // .mset-cat-row: padding 16/20dp, font-size 15sp, gap 14dp
+                        if (i == 0) FirmiumDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { activeCategory = cat.id }
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            // .mset-cat-icon: accent color
+                            FirmiumIcon(cat.icon, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(20.dp))
+                            // .mset-cat-label: 15sp text color
+                            Text(cat.label, fontSize = 15.sp, fontFamily = FontFamily.Monospace,
+                                color = colors.text, modifier = Modifier.weight(1f))
+                            // .mset-cat-chevron: muted color
+                            FirmiumIcon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null,
+                                tint = colors.muted, modifier = Modifier.size(16.dp))
+                        }
+                        FirmiumDivider()
+                    }
+                }
+            } else {
+                // Sub-panel — matches .mset-subpanel--in
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    when (category) {
+                        "appearance" -> FirmiumAppearancePanel(
+                            currentThemeId = currentThemeId,
+                            onThemeSelected = onThemeSelected,
+                        )
+                        "playback" -> FirmiumPlaybackPanel(
+                            playerState = playerState,
+                            onCrossfadeToggle = onCrossfadeToggle,
+                            onCrossfadeDurationChange = onCrossfadeDurationChange,
+                            onGaplessToggle = onGaplessToggle,
+                        )
+                        "services" -> FirmiumServicesPanel(
+                            lrclibEnabled = lrclibEnabled,
+                            lastfmEnabled = lastfmEnabled,
+                            lastfmApiKey = lastfmApiKey,
+                            lastfmSecret = lastfmSecret,
+                            onLrclibToggle = onLrclibToggle,
+                            onLastfmToggle = onLastfmToggle,
+                            onLastfmApiKeyChange = onLastfmApiKeyChange,
+                            onLastfmSecretChange = onLastfmSecretChange,
+                        )
+                        "account" -> FirmiumAccountPanel(
+                            serverUrl = serverUrl,
+                            username = username,
+                            autoLoginEnabled = autoLoginEnabled,
+                            onAutoLoginToggle = onAutoLoginToggle,
+                            onLogout = onLogout,
+                        )
+                        "about" -> FirmiumAboutPanel(
+                            appVersion = appVersion,
+                            onWipeCache = onWipeCache,
+                            onDeleteLogs = onDeleteLogs,
+                            onResetSettings = onResetSettings,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Firmium sub-panels ────────────────────────────────────────────────────────
+// Each panel matches the .settings-row style: title + desc on left, control on right.
+
+@Composable
+private fun FirmiumSettingsRow(
+    title: String,
+    desc: String,
+    content: @Composable () -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+            Spacer(Modifier.height(2.dp))
+            Text(desc, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        }
+        Spacer(Modifier.width(12.dp))
+        content()
+    }
+    FirmiumDivider()
+}
+
+@Composable
+private fun FirmiumAppearancePanel(
+    currentThemeId: String,
+    onThemeSelected: (String) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Color Theme", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            color = colors.muted, modifier = Modifier.padding(bottom = 4.dp))
+        ThemeDropdown(currentThemeId = currentThemeId, onThemeSelected = onThemeSelected)
+    }
+}
+
+@Composable
+private fun FirmiumPlaybackPanel(
+    playerState: PlayerState,
+    onCrossfadeToggle: (Boolean) -> Unit,
+    onCrossfadeDurationChange: (Int) -> Unit,
+    onGaplessToggle: (Boolean) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    FirmiumSettingsRow("Crossfade", "Smoothly blend between tracks") {
+        FirmiumSwitch(checked = playerState.crossfadeEnabled, onCheckedChange = onCrossfadeToggle)
+    }
+    if (playerState.crossfadeEnabled) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            Text("Crossfade: ${playerState.crossfadeDurationMs / 1000}s",
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            FirmiumSlider(
+                value = playerState.crossfadeDurationMs.toFloat(),
+                onValueChange = { onCrossfadeDurationChange(it.toInt()) },
+                valueRange = 1000f..12000f,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        FirmiumDivider()
+    }
+    FirmiumSettingsRow("Gapless Playback", "Pre-buffer the next track for seamless transitions") {
+        FirmiumSwitch(checked = playerState.gaplessEnabled, onCheckedChange = onGaplessToggle)
+    }
+}
+
+@Composable
+private fun FirmiumServicesPanel(
+    lrclibEnabled: Boolean,
+    lastfmEnabled: Boolean,
+    lastfmApiKey: String,
+    lastfmSecret: String,
+    onLrclibToggle: (Boolean) -> Unit,
+    onLastfmToggle: (Boolean) -> Unit,
+    onLastfmApiKeyChange: (String) -> Unit,
+    onLastfmSecretChange: (String) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    var showSecret by remember { mutableStateOf(false) }
+
+    FirmiumSettingsRow("External Lyrics (LRCLIB)",
+        "Fetch synced lyrics from lrclib.net when your server has none") {
+        FirmiumSwitch(checked = lrclibEnabled, onCheckedChange = onLrclibToggle)
+    }
+    FirmiumSettingsRow("Last.fm Integration",
+        "Fetch artist biography and photo via Last.fm") {
+        FirmiumSwitch(checked = lastfmEnabled, onCheckedChange = onLastfmToggle)
+    }
+    if (lastfmEnabled) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FirmiumTextField(
+                value = lastfmApiKey,
+                onValueChange = onLastfmApiKeyChange,
+                label = "Last.fm API Key",
+                modifier = Modifier.fillMaxWidth(),
+            )
+            FirmiumTextField(
+                value = lastfmSecret,
+                onValueChange = onLastfmSecretChange,
+                label = "Last.fm Secret",
+                visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    Box(modifier = Modifier.size(36.dp).clip(CircleShape)
+                        .clickable { showSecret = !showSecret },
+                        contentAlignment = Alignment.Center) {
+                        FirmiumIcon(
+                            if (showSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        FirmiumDivider()
+    }
+}
+
+@Composable
+private fun FirmiumAccountPanel(
+    serverUrl: String,
+    username: String,
+    autoLoginEnabled: Boolean,
+    onAutoLoginToggle: (Boolean) -> Unit,
+    onLogout: () -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Text(serverUrl, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+        Spacer(Modifier.height(2.dp))
+        Text("Logged in as $username", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+    }
+    FirmiumDivider()
+    FirmiumSettingsRow("Auto-Login",
+        "Automatically connect on startup when credentials are saved") {
+        FirmiumSwitch(checked = autoLoginEnabled, onCheckedChange = onAutoLoginToggle)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clickable { onLogout() }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+    ) {
+        Text("Disconnect server", fontSize = 15.sp, fontFamily = FontFamily.Monospace,
+            color = colors.error)
+    }
+    FirmiumDivider()
+}
+
+@Composable
+private fun FirmiumAboutPanel(
+    appVersion: String,
+    onWipeCache: () -> Unit,
+    onDeleteLogs: () -> Unit,
+    onResetSettings: () -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    var wipeCacheLabel by remember { mutableStateOf("Wipe") }
+    var deleteLogsLabel by remember { mutableStateOf("Delete") }
+    var resetLabel by remember { mutableStateOf("Reset") }
+
+    FirmiumSettingsRow("App Version", appVersion) {}
+    FirmiumSettingsRow("Wipe Cache", "Clear in-memory and disk cover art cache") {
+        Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable {
+            onWipeCache(); wipeCacheLabel = "Wiped!"
+        }.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Text(wipeCacheLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+        }
+    }
+    FirmiumSettingsRow("Delete Logs", "Remove cached app data and log files") {
+        Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable {
+            onDeleteLogs(); deleteLogsLabel = "Deleted!"
+        }.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Text(deleteLogsLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.error)
+        }
+    }
+    FirmiumSettingsRow("Reset Settings", "Reset all preferences to defaults") {
+        Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable {
+            onResetSettings(); resetLabel = "Done!"
+        }.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Text(resetLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.error)
+        }
+    }
+}
+
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
+// Dropdown selector matching the desktop version — shows current theme in a bordered row,
+// expands to an inline scrollable list when tapped. Closes after selection.
+@Composable
+private fun ThemeDropdown(currentThemeId: String, onThemeSelected: (String) -> Unit) {
+    val colors = LocalFirmiumColors.current
+    val currentTheme = ALL_THEMES.find { it.id == currentThemeId } ?: ALL_THEMES.first()
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Trigger row — shows selected theme name + colour swatches
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(6.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Colour preview swatches
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.bg).border(0.5.dp, colors.border, CircleShape))
+                Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.accent))
+                Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.surface2))
+            }
+            Text(currentTheme.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                color = colors.text, modifier = Modifier.weight(1f))
+            FirmiumIcon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp),
+            )
+        }
+
+        // Expanded theme list
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .background(colors.surface),
+            ) {
+                ALL_THEMES.forEachIndexed { i, theme ->
+                    if (i > 0) FirmiumDivider(color = colors.border)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onThemeSelected(theme.id); expanded = false }
+                            .background(if (theme.id == currentThemeId) colors.surface2.copy(alpha = 0.5f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Box(Modifier.size(12.dp).clip(CircleShape).background(theme.bg).border(0.5.dp, colors.border, CircleShape))
+                            Box(Modifier.size(12.dp).clip(CircleShape).background(theme.accent))
+                            Box(Modifier.size(12.dp).clip(CircleShape).background(theme.surface2))
+                        }
+                        Text(
+                            theme.name, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            color = if (theme.id == currentThemeId) colors.accent else colors.text,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (theme.id == currentThemeId) {
+                            FirmiumIcon(Icons.Default.Check, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

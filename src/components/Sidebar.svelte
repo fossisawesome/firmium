@@ -3,7 +3,6 @@
   import { activeView, navToView, clearAuth, authServer, audioBridge } from '../lib/stores.js'
   import { stopPositionTracking } from '../lib/playback.js'
   import { clearAll } from '../lib/coverCache.js'
-  import { isMobile } from '../lib/platform.js'
   import {
     IconHome, IconDisc, IconMusic, IconSearch,
     IconList, IconSettings, IconHexagon, IconClose
@@ -18,12 +17,7 @@
     { view: 'settings',  label: 'Settings',  icon: IconSettings },
   ]
 
-  // Search and Settings are hidden from the mobile tab bar — they're accessed
-  // via the header icons on each page instead.
-  const MOBILE_HIDDEN_TABS = new Set(['search', 'settings'])
-  const visibleItems = $derived(
-    isMobile ? NAV_ITEMS.filter(item => !MOBILE_HIDDEN_TABS.has(item.view)) : NAV_ITEMS
-  )
+  const visibleItems = $derived(NAV_ITEMS)
 
   const serverLabel = $derived((() => {
     try { return new URL($authServer ?? '').hostname } catch (_) { return 'online' }

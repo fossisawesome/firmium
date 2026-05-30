@@ -1,10 +1,8 @@
 <script>
   import { onMount } from 'svelte'
-  import { get } from 'svelte/store'
   import {
-    isAuthed, setAuth, clearAuth, navToView, navBack,
-    authServer, activeView, lyricsOpen, lyricsTrackId, lyricsLines, currentTrack,
-    mobilePlayerOpen, queueSheetOpen, mobileSearchOpen, mobileSettingsOpen
+    isAuthed, setAuth, clearAuth, navToView,
+    authServer, activeView, lyricsOpen, currentTrack,
   } from './lib/stores.js'
   import { SafeStorage } from './lib/utils.js'
   import { Keyring } from './lib/api.js'
@@ -12,12 +10,6 @@
   import { fetchAndShowLyrics } from './lib/playback.js'
   import { playlistMenuState, hidePlaylistMenu } from './lib/playlistMenu.js'
   import { Api } from './lib/api.js'
-
-  import { isMobile } from './lib/platform.js'
-  import MobilePlayer from './components/MobilePlayer.svelte'
-  import QueueSheet from './components/QueueSheet.svelte'
-  import MobileSearch from './components/MobileSearch.svelte'
-  import MobileSettings from './components/MobileSettings.svelte'
 
   import Setup from './components/Setup.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -33,8 +25,6 @@
   import PlaylistDetail from './views/PlaylistDetail.svelte'
   import Settings from './views/Settings.svelte'
   import HomeView from './views/HomeView.svelte'
-
-  import { IconSearch, IconSettings } from './lib/icons.js'
 
   let setupError = $state('')
   let loadedThemes = $state([])
@@ -85,38 +75,6 @@
     document.documentElement.classList.toggle('has-player', !!$currentTrack)
   })
 
-  // Apply mobile layout class when on Android or a narrow viewport.
-  $effect(() => {
-    const mql = window.matchMedia('(max-width: 640px)')
-    const syncLayout = () => {
-      document.documentElement.classList.toggle('is-mobile-layout', isMobile || mql.matches)
-    }
-    syncLayout()
-    mql.addEventListener('change', syncLayout)
-    return () => mql.removeEventListener('change', syncLayout)
-  })
-
-  // On mobile, redirect search/settings view navigations to overlays instead.
-  $effect(() => {
-    if (!isMobile) return
-    if ($activeView.type === 'search') {
-      mobileSearchOpen.set(true)
-      navToView('home')
-    }
-    if ($activeView.type === 'settings') {
-      mobileSettingsOpen.set(true)
-      navToView('home')
-    }
-  })
-
-  // Page title derived from current view
-  const viewTitles = {
-    home: 'Home', albums: 'Albums', artists: 'Artists',
-    search: 'Search', playlists: 'Playlists', settings: 'Settings',
-    album: 'Album', artist: 'Artist', playlist: 'Playlist'
-  }
-  const mobilePageTitle = $derived(viewTitles[$activeView.type] ?? '')
-
   onMount(async () => {
     try {
       loadedThemes = await tauriInvoke('list_themes')
@@ -154,23 +112,6 @@
         }
       } catch (_) {}
     }
-
-    // Android back button handling: intercept popstate to close overlays instead of exiting.
-    if (isMobile) {
-      // Push a sentinel state so the first back press triggers popstate rather than exiting.
-      window.history.pushState({ firmium: true }, '')
-
-      window.addEventListener('popstate', () => {
-        // Always push a new state to keep the back button available for future presses.
-        window.history.pushState({ firmium: true }, '')
-
-        if (get(mobileSearchOpen)) { mobileSearchOpen.set(false); return }
-        if (get(mobileSettingsOpen)) { mobileSettingsOpen.set(false); return }
-        if (get(queueSheetOpen)) { queueSheetOpen.set(false); return }
-        if (get(mobilePlayerOpen)) { mobilePlayerOpen.set(false); return }
-        navBack()
-      })
-    }
   })
 
   async function doConnect(sUrl, uName, pWord) {
@@ -198,29 +139,6 @@
     <Sidebar />
   </div>
   <div class="main-area">
-    <!-- Mobile page header with search and settings icons -->
-    {#if isMobile}
-      <div class="mobile-page-header">
-        <span class="mobile-page-title">{mobilePageTitle}</span>
-        <div class="mobile-page-actions">
-          <button
-            class="mobile-header-btn"
-            onclick={() => mobileSearchOpen.set(true)}
-            aria-label="Search"
-          >
-            <span class="icon" style="width:22px;height:22px">{@html IconSearch}</span>
-          </button>
-          <button
-            class="mobile-header-btn"
-            onclick={() => mobileSettingsOpen.set(true)}
-            aria-label="Settings"
-          >
-            <span class="icon" style="width:22px;height:22px">{@html IconSettings}</span>
-          </button>
-        </div>
-      </div>
-    {/if}
-
     <div class="list-panel">
       {#if $activeView.type === 'home'}
         <HomeView />
@@ -244,22 +162,8 @@
     </div>
   </div>
   <LyricsPanel />
-  {#if $currentTrack || !isMobile}
-    <PlayerBar />
-  {/if}
+  <PlayerBar />
   <PlaylistMenu />
-  {#if isMobile && $mobilePlayerOpen}
-    <MobilePlayer />
-  {/if}
-  {#if isMobile && $queueSheetOpen}
-    <QueueSheet />
-  {/if}
-  {#if isMobile && $mobileSearchOpen}
-    <MobileSearch />
-  {/if}
-  {#if isMobile && $mobileSettingsOpen}
-    <MobileSettings onapplyTheme={applyThemeById} onapplyDecorations={applyDecorations} themes={loadedThemes} />
-  {/if}
 {:else}
   <div id="setup">
     <Setup bind:error={setupError} {doConnect} />

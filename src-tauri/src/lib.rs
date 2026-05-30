@@ -2,42 +2,13 @@
 #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
 use keyring::Entry;
 use std::io::Write as _;
-#[cfg(not(target_os = "android"))]
 use std::sync::Arc;
 use tauri::Manager;
-
-// ============================================================================
-// ANDROID SECURE STORAGE PLUGIN
-// ============================================================================
-
-/// Holds the JNI handle to the Android SecureStoragePlugin (EncryptedSharedPreferences).
-/// Only exists on Android; desktop uses the OS keyring directly.
-#[cfg(target_os = "android")]
-struct SecureStorageHandle<R: tauri::Runtime>(tauri::plugin::PluginHandle<R>);
-
-/// Tauri plugin that registers the Kotlin SecureStoragePlugin on Android
-/// and stores its handle in managed app state for use by credential commands.
-fn secure_storage_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    tauri::plugin::Builder::new("secure-storage")
-        .setup(|app, api| {
-            #[cfg(target_os = "android")]
-            {
-                let handle = api.register_android_plugin(
-                    "com.fossisawesome.firmium",
-                    "SecureStoragePlugin",
-                )?;
-                app.manage(SecureStorageHandle(handle));
-            }
-            let _ = (app, api);
-            Ok(())
-        })
-        .build()
-}
 
 /// Whether the app was launched with --debug. Stored in managed state so commands can read it.
 pub struct DebugMode(pub bool);
 
-/// Playback state reported by both the Rust (rodio) and Kotlin (ExoPlayer) audio engines.
+/// Playback state reported by the rodio audio engine.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PlaybackState {
@@ -47,62 +18,15 @@ pub enum PlaybackState {
     Stopped,
 }
 
-/// Audio device information, shared between the Rust audio engine and the Android stub.
+/// Audio device information.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AudioDevice {
     pub name: String,
     pub default: bool,
 }
 
-#[cfg(not(target_os = "android"))]
 mod audio;
-#[cfg(not(target_os = "android"))]
 use audio::AudioPlayer;
-
-/// Holds the JNI handle to the Android AudioPlugin (ExoPlayer).
-#[cfg(target_os = "android")]
-struct AudioHandle<R: tauri::Runtime>(tauri::plugin::PluginHandle<R>);
-
-/// Registers the Kotlin AudioPlugin on Android. On desktop this is a no-op —
-/// the Rust rodio engine is used directly via AudioPlayer managed state.
-fn audio_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    tauri::plugin::Builder::new("audio")
-        .setup(|app, api| {
-            #[cfg(target_os = "android")]
-            {
-                let handle = api.register_android_plugin(
-                    "com.fossisawesome.firmium",
-                    "AudioPlugin",
-                )?;
-                app.manage(AudioHandle(handle));
-            }
-            let _ = (app, api);
-            Ok(())
-        })
-        .build()
-}
-
-/// Holds the JNI handle to the Android NowPlayingPlugin (MediaSession + notification).
-#[cfg(target_os = "android")]
-struct NowPlayingHandle<R: tauri::Runtime>(tauri::plugin::PluginHandle<R>);
-
-/// Registers the Kotlin NowPlayingPlugin on Android so its commands are callable from JS.
-fn now_playing_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    tauri::plugin::Builder::new("now-playing")
-        .setup(|app, api| {
-            #[cfg(target_os = "android")]
-            {
-                let handle = api.register_android_plugin(
-                    "com.fossisawesome.firmium",
-                    "NowPlayingPlugin",
-                )?;
-                app.manage(NowPlayingHandle(handle));
-            }
-            let _ = (app, api);
-            Ok(())
-        })
-        .build()
-}
 
 // ============================================================================
 // THEME LOADING
@@ -189,29 +113,16 @@ fn list_themes(app_handle: tauri::AppHandle) -> Vec<ThemeEntry> {
         }
     }
 
-    // On Android use the compile-time embedded themes; on desktop read from disk.
-    #[cfg(target_os = "android")]
-    {
-        for (id, content) in EMBEDDED_THEMES {
-            if !seen.contains(*id) {
-                if let Some(t) = parse_theme(id, content) {
-                    themes.push(t);
-                }
-            }
-        }
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        #[cfg(debug_assertions)]
-        let bundled_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../themes");
-        #[cfg(not(debug_assertions))]
-        let bundled_dir = app_handle.path().resource_dir()
-            .map(|d| d.join("themes"))
-            .unwrap_or_default();
+    // Read themes from disk (release: resource dir; debug: source themes/ dir).
+    #[cfg(debug_assertions)]
+    let bundled_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../themes");
+    #[cfg(not(debug_assertions))]
+    let bundled_dir = app_handle.path().resource_dir()
+        .map(|d| d.join("themes"))
+        .unwrap_or_default();
 
-        for t in load_themes_from_dir(&bundled_dir) {
-            if !seen.contains(&t.id) { themes.push(t); }
-        }
+    for t in load_themes_from_dir(&bundled_dir) {
+        if !seen.contains(&t.id) { themes.push(t); }
     }
 
     // Keep Firmium first; sort the rest alphabetically by display name.
@@ -373,91 +284,37 @@ fn map_songs(songs: Vec<serde_json::Value>) -> Vec<Song> {
 // KEYRING / CREDENTIALS MANAGEMENT
 // ============================================================================
 
-/// Save a password to the OS keyring (desktop) or Android Keystore-backed
-/// EncryptedSharedPreferences (Android).
+/// Save a password to the OS keyring.
 #[tauri::command]
-fn save_password<R: tauri::Runtime>(
-    #[allow(unused_variables)] app: tauri::AppHandle<R>,
-    _service: &str,
-    _user: &str,
-    _pass: &str,
-) -> Result<(), String> {
+fn save_password(_service: &str, _user: &str, _pass: &str) -> Result<(), String> {
     #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
     {
         let entry = Entry::new(_service, _user).map_err(|e| e.to_string())?;
         entry.set_password(_pass).map_err(|e| e.to_string())?;
-        return Ok(());
     }
-    #[cfg(target_os = "android")]
-    {
-        #[derive(serde::Serialize)]
-        struct Args<'a> { service: &'a str, user: &'a str, pass: &'a str }
-        #[derive(serde::Deserialize)]
-        struct Empty {}
-        app.state::<SecureStorageHandle<R>>()
-            .0
-            .run_mobile_plugin::<Empty>("savePassword", Args { service: _service, user: _user, pass: _pass })
-            .map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-    #[allow(unreachable_code)]
     Ok(())
 }
 
-/// Retrieve a password from the OS keyring (desktop) or Android EncryptedSharedPreferences.
+/// Retrieve a password from the OS keyring.
 #[tauri::command]
-fn get_password<R: tauri::Runtime>(
-    #[allow(unused_variables)] app: tauri::AppHandle<R>,
-    _service: &str,
-    _user: &str,
-) -> Result<String, String> {
+fn get_password(_service: &str, _user: &str) -> Result<String, String> {
     #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
     {
         let entry = Entry::new(_service, _user).map_err(|e| e.to_string())?;
         return entry.get_password().map_err(|e| e.to_string());
     }
-    #[cfg(target_os = "android")]
-    {
-        #[derive(serde::Serialize)]
-        struct Args<'a> { service: &'a str, user: &'a str }
-        #[derive(serde::Deserialize)]
-        struct Response { value: String }
-        let resp = app.state::<SecureStorageHandle<R>>()
-            .0
-            .run_mobile_plugin::<Response>("getPassword", Args { service: _service, user: _user })
-            .map_err(|e| e.to_string())?;
-        return Ok(resp.value);
-    }
     #[allow(unreachable_code)]
-    Err("Unsupported platform".to_string())
+    Err("Keyring not available on this platform".to_string())
 }
 
-/// Delete a password from the OS keyring (desktop) or Android EncryptedSharedPreferences.
+/// Delete a password from the OS keyring.
 #[tauri::command]
-fn delete_password<R: tauri::Runtime>(
-    #[allow(unused_variables)] app: tauri::AppHandle<R>,
-    _service: &str,
-    _user: &str,
-) -> Result<(), String> {
+fn delete_password(_service: &str, _user: &str) -> Result<(), String> {
     #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
     {
         let entry = Entry::new(_service, _user).map_err(|e| e.to_string())?;
         entry.delete_credential().map_err(|e| e.to_string())?;
-        return Ok(());
     }
-    #[cfg(target_os = "android")]
-    {
-        #[derive(serde::Serialize)]
-        struct Args<'a> { service: &'a str, user: &'a str }
-        #[derive(serde::Deserialize)]
-        struct Empty {}
-        app.state::<SecureStorageHandle<R>>()
-            .0
-            .run_mobile_plugin::<Empty>("deletePassword", Args { service: _service, user: _user })
-            .map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-    #[allow(unreachable_code)]
     Ok(())
 }
 
@@ -542,243 +399,78 @@ fn get_app_version() -> &'static str {
 // ============================================================================
 // AUDIO STREAM PLAYBACK INTERACTION HANDLERS
 // ============================================================================
-//
-// Each command has two paths selected at compile time:
-//   #[cfg(target_os = "android")] → delegates to the Kotlin AudioPlugin via JNI
-//   #[cfg(not(...))]              → delegates to the Rust rodio AudioPlayer
-//
-// The JS AudioBridge calls these commands identically on both platforms.
+// Delegates to the Rust rodio AudioPlayer. The JS AudioBridge calls these via Tauri IPC.
 
-/// Desktop-only helper: retrieves the managed rodio AudioPlayer.
-#[cfg(not(target_os = "android"))]
+/// Helper: retrieves the managed rodio AudioPlayer.
 fn get_player<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>) -> Result<tauri::State<'_, Arc<AudioPlayer>>, String> {
     app_handle
         .try_state::<Arc<AudioPlayer>>()
         .ok_or_else(|| "Audio Player state not registered".to_string())
 }
 
-// Serializable arg structs reused across Android audio command dispatch calls.
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidPlayStreamArgs<'a> {
-    #[serde(rename = "streamUrl")]  stream_url:     &'a str,
-    #[serde(rename = "trackId")]    track_id:       &'a str,
-    #[serde(rename = "replayGainDb")] replay_gain_db: Option<f32>,
-}
-#[cfg(target_os = "android")]
-#[derive(serde::Deserialize)]
-struct AndroidPlayerIdResp { #[serde(rename = "playerId")] player_id: String }
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidPlayerIdArgs<'a> { #[serde(rename = "playerId")] player_id: &'a str }
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidSeekArgs<'a> { #[serde(rename = "playerId")] player_id: &'a str, position: f64 }
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidVolumeArgs<'a> { #[serde(rename = "playerId")] player_id: &'a str, volume: f32 }
-#[cfg(target_os = "android")]
-#[derive(serde::Deserialize)]
-struct AndroidVolumeResp { volume: f32 }
-#[cfg(target_os = "android")]
-#[derive(serde::Deserialize)]
-struct AndroidStateResp { state: String }
-#[cfg(target_os = "android")]
-#[derive(serde::Deserialize)]
-struct AndroidFinishedResp { finished: bool }
-#[cfg(target_os = "android")]
-#[derive(serde::Deserialize)]
-struct AndroidPositionResp { position: f64 }
-#[cfg(target_os = "android")]
-#[derive(serde::Deserialize)]
-struct AndroidDurationResp { duration: Option<f64> }
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidCrossfadeArgs<'a> {
-    #[serde(rename = "oldPlayerId")]    old_player_id:    &'a str,
-    #[serde(rename = "streamUrl")]      stream_url:       &'a str,
-    #[serde(rename = "trackId")]        track_id:         &'a str,
-    #[serde(rename = "fadeDurationMs")] fade_duration_ms: u64,
-    #[serde(rename = "targetVolume")]   target_volume:    f32,
-    #[serde(rename = "replayGainDb")]   replay_gain_db:   Option<f32>,
-}
-
-// Args for the native queue commands (Android only).
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidQueueTrack {
-    #[serde(rename = "streamUrl")]    stream_url:     String,
-    #[serde(rename = "trackId")]      track_id:       String,
-    #[serde(rename = "replayGainDb")] replay_gain_db: Option<f32>,
-}
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidSetQueueArgs {
-    tracks:       Vec<AndroidQueueTrack>,
-    #[serde(rename = "startIndex")] start_index: usize,
-    volume:       f32,
-}
-#[cfg(target_os = "android")]
-#[derive(serde::Serialize)]
-struct AndroidSkipToIndexArgs<'a> {
-    #[serde(rename = "playerId")] player_id: &'a str,
-    index: usize,
-}
-#[cfg(target_os = "android")]
-#[derive(serde::Deserialize)]
-struct AndroidQueueIndexResp {
-    index: usize,
-    #[serde(rename = "trackId")] track_id: String,
-}
-
-// Input struct for set_queue — JS sends camelCase, serde_json handles it via renames.
-#[derive(serde::Deserialize)]
-struct QueueTrackInput {
-    #[serde(rename = "streamUrl")]    stream_url:     String,
-    #[serde(rename = "trackId")]      track_id:       String,
-    #[serde(rename = "replayGainDb")] replay_gain_db: Option<f32>,
-}
-
-/// Helper: get the AudioHandle state on Android.
-#[cfg(target_os = "android")]
-fn get_audio_handle<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<tauri::State<'_, AudioHandle<R>>, String> {
-    app.try_state::<AudioHandle<R>>()
-        .ok_or_else(|| "Audio plugin not registered".to_string())
-}
 
 #[tauri::command]
 fn play_stream<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, stream_url: &str, track_id: &str, replay_gain_db: Option<f32>) -> Result<String, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidPlayerIdResp>("playStream", AndroidPlayStreamArgs { stream_url, track_id, replay_gain_db })
-        .map(|r| r.player_id).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.play_stream(stream_url, track_id.to_string(), replay_gain_db)
 }
 
 #[tauri::command]
 fn preload_stream<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, stream_url: &str, track_id: &str, replay_gain_db: Option<f32>) -> Result<String, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidPlayerIdResp>("preloadStream", AndroidPlayStreamArgs { stream_url, track_id, replay_gain_db })
-        .map(|r| r.player_id).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.preload_stream(stream_url, track_id.to_string(), replay_gain_db)
 }
 
 #[tauri::command]
 fn pause_playback<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("pausePlayback", AndroidPlayerIdArgs { player_id })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.pause(player_id)
 }
 
 #[tauri::command]
 fn resume_playback<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("resumePlayback", AndroidPlayerIdArgs { player_id })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.resume(player_id)
 }
 
 #[tauri::command]
 fn stop_playback<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("stopPlayback", AndroidPlayerIdArgs { player_id })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.stop(player_id)
 }
 
 #[tauri::command]
 fn set_volume<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str, volume: f32) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("setVolume", AndroidVolumeArgs { player_id, volume })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.set_volume(player_id, volume)
 }
 
 #[tauri::command]
 fn get_volume<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<f32, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidVolumeResp>("getVolume", AndroidPlayerIdArgs { player_id })
-        .map(|r| r.volume).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.get_volume(player_id)
 }
 
 #[tauri::command]
 fn get_playback_state<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<PlaybackState, String> {
-    #[cfg(target_os = "android")]
-    {
-        let state_str = get_audio_handle(&app_handle)?.0
-            .run_mobile_plugin::<AndroidStateResp>("getPlaybackState", AndroidPlayerIdArgs { player_id })
-            .map(|r| r.state).map_err(|e| e.to_string())?;
-        return match state_str.as_str() {
-            "loading"  => Ok(PlaybackState::Loading),
-            "playing"  => Ok(PlaybackState::Playing),
-            "paused"   => Ok(PlaybackState::Paused),
-            _          => Ok(PlaybackState::Stopped),
-        };
-    }
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.get_state(player_id)
 }
 
 #[tauri::command]
 fn is_playback_finished<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<bool, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidFinishedResp>("isPlaybackFinished", AndroidPlayerIdArgs { player_id })
-        .map(|r| r.finished).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.is_finished(player_id)
 }
 
 #[tauri::command]
 fn get_track_duration<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<Option<f64>, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidDurationResp>("getTrackDuration", AndroidPlayerIdArgs { player_id })
-        .map(|r| r.duration).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.get_duration(player_id)
 }
 
 #[tauri::command]
 fn get_current_position<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<f64, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidPositionResp>("getCurrentPosition", AndroidPlayerIdArgs { player_id })
-        .map(|r| r.position).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.get_current_position(player_id)
 }
 
 #[tauri::command]
 fn seek_position<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str, position: f64) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("seekPosition", AndroidSeekArgs { player_id, position })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.seek(player_id, position)
 }
 
 #[tauri::command]
-fn list_audio_devices<R: tauri::Runtime>(_app_handle: tauri::AppHandle<R>) -> Result<Vec<AudioDevice>, String> {
-    #[cfg(target_os = "android")]
-    return Ok(vec![AudioDevice { name: "Default Output".to_string(), default: true }]);
-    #[cfg(not(target_os = "android"))]
+fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
     Ok(AudioPlayer::list_devices())
 }
 
@@ -792,171 +484,15 @@ fn crossfade_to<R: tauri::Runtime>(
     target_volume: f32,
     replay_gain_db: Option<f32>,
 ) -> Result<String, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidPlayerIdResp>("crossfadeTo", AndroidCrossfadeArgs {
-            old_player_id, stream_url, track_id, fade_duration_ms, target_volume, replay_gain_db,
-        })
-        .map(|r| r.player_id).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
     get_player(&app_handle)?.crossfade_to(old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db)
 }
 
-// ── Native queue commands (Android only) ──────────────────────────────────────
-
-// Loads all tracks into a single ExoPlayer playlist and starts at startIndex.
-// Returns a playerId usable with all standard playback commands.
-#[tauri::command]
-fn set_queue<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, tracks: Vec<QueueTrackInput>, start_index: usize, volume: f32) -> Result<String, String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<AndroidPlayerIdResp>("setQueue", AndroidSetQueueArgs {
-            tracks: tracks.into_iter().map(|t| AndroidQueueTrack {
-                stream_url: t.stream_url, track_id: t.track_id, replay_gain_db: t.replay_gain_db,
-            }).collect(),
-            start_index,
-            volume,
-        })
-        .map(|r| r.player_id).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
-    Err("set_queue is only supported on Android".to_string())
-}
-
-#[tauri::command]
-fn skip_to_next<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("skipToNext", AndroidPlayerIdArgs { player_id })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
-    { let _ = player_id; Err("skip_to_next is only supported on Android".to_string()) }
-}
-
-#[tauri::command]
-fn skip_to_previous<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("skipToPrevious", AndroidPlayerIdArgs { player_id })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
-    { let _ = player_id; Err("skip_to_previous is only supported on Android".to_string()) }
-}
-
-#[tauri::command]
-fn skip_to_queue_index<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str, index: usize) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return get_audio_handle(&app_handle)?.0
-        .run_mobile_plugin::<serde_json::Value>("skipToQueueIndex", AndroidSkipToIndexArgs { player_id, index })
-        .map(|_| ()).map_err(|e| e.to_string());
-    #[cfg(not(target_os = "android"))]
-    { let _ = (player_id, index); Err("skip_to_queue_index is only supported on Android".to_string()) }
-}
-
-// Returns the current queue position tracked by the native player — used by the
-// JS visibility handler to re-sync queueIdx after tracks advanced while backgrounded.
-#[tauri::command]
-fn get_current_queue_index<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "android")]
-    {
-        let resp = get_audio_handle(&app_handle)?.0
-            .run_mobile_plugin::<AndroidQueueIndexResp>("getQueueIndex", AndroidPlayerIdArgs { player_id })
-            .map_err(|e| e.to_string())?;
-        return Ok(serde_json::json!({ "index": resp.index, "trackId": resp.track_id }));
-    }
-    #[cfg(not(target_os = "android"))]
-    { let _ = (app_handle, player_id); Err("get_current_queue_index is only supported on Android".to_string()) }
-}
-
-// ============================================================================
-// NOW PLAYING NOTIFICATION (Android only)
-// ============================================================================
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[allow(dead_code)]
-struct NowPlayingArgs {
-    title: String,
-    artist: String,
-    album: String,
-    #[serde(rename = "coverUrl")]
-    cover_url: String,
-    #[serde(rename = "isPlaying")]
-    is_playing: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[allow(dead_code)]
-struct PlaybackStateArgs {
-    #[serde(rename = "isPlaying")]
-    is_playing: bool,
-}
-
-#[derive(serde::Deserialize)]
-#[allow(dead_code)]
-struct NowPlayingEmpty {}
-
-// Individual params match the JS payload keys (Tauri maps camelCase↔snake_case).
-// A struct param named `args` would require the JS to nest fields under an `args` key.
-#[tauri::command]
-fn update_now_playing<R: tauri::Runtime>(
-    #[allow(unused_variables)] app_handle: tauri::AppHandle<R>,
-    #[allow(unused_variables)] title: String,
-    #[allow(unused_variables)] artist: String,
-    #[allow(unused_variables)] album: String,
-    #[allow(unused_variables)] cover_url: String,
-    #[allow(unused_variables)] is_playing: bool,
-) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        let args = NowPlayingArgs { title, artist, album, cover_url, is_playing };
-        app_handle
-            .state::<NowPlayingHandle<R>>()
-            .0
-            .run_mobile_plugin::<NowPlayingEmpty>("updateNowPlaying", &args)
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn update_playback_state<R: tauri::Runtime>(
-    #[allow(unused_variables)] app_handle: tauri::AppHandle<R>,
-    #[allow(unused_variables)] is_playing: bool,
-) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        let args = PlaybackStateArgs { is_playing };
-        app_handle
-            .state::<NowPlayingHandle<R>>()
-            .0
-            .run_mobile_plugin::<NowPlayingEmpty>("updatePlaybackState", &args)
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn clear_now_playing<R: tauri::Runtime>(
-    #[allow(unused_variables)] app_handle: tauri::AppHandle<R>,
-) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        #[derive(serde::Serialize)]
-        struct Empty {}
-        app_handle
-            .state::<NowPlayingHandle<R>>()
-            .0
-            .run_mobile_plugin::<NowPlayingEmpty>("clearNowPlaying", Empty {})
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
 
 // ============================================================================
 // APPLICATION ENTRY POINT
 // ============================================================================
 
-/// App entry point — called by main() on desktop and by the Android JNI bridge on mobile.
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// App entry point.
 pub fn run() {
     let debug_mode = std::env::args().any(|a| a == "--debug");
 
@@ -970,27 +506,16 @@ pub fn run() {
 
     let builder = tauri::Builder::default()
         .manage(DebugMode(debug_mode))
-        .plugin(secure_storage_plugin())
-        .plugin(audio_plugin())
-        .plugin(now_playing_plugin())
         .plugin(tauri_plugin_http::init());
 
     builder
         .setup(move |_app| {
-            // rodio/cpal cannot open a default sink on Android without the oboe
-            // C++ toolchain configured — skip audio init there.
-            // Audio commands return Err("Audio Player state not registered") on Android,
-            // which the JS layer already handles gracefully.
-            #[cfg(not(target_os = "android"))]
-            {
-                let audio_player = Arc::new(
-                    AudioPlayer::new(_app.handle().clone()).expect("Failed to initialize audio player"),
-                );
-                _app.manage(audio_player);
-            }
+            let audio_player = Arc::new(
+                AudioPlayer::new(_app.handle().clone()).expect("Failed to initialize audio player"),
+            );
+            _app.manage(audio_player);
 
             // Open DevTools immediately when --debug is passed.
-            #[cfg(not(mobile))]
             if debug_mode {
                 if let Some(win) = _app.get_webview_window("main") {
                     win.open_devtools();
@@ -1033,15 +558,6 @@ pub fn run() {
             seek_position,
             list_audio_devices,
             crossfade_to,
-            set_queue,
-            skip_to_next,
-            skip_to_previous,
-            skip_to_queue_index,
-            get_current_queue_index,
-            // Now Playing notification (Android)
-            update_now_playing,
-            update_playback_state,
-            clear_now_playing,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,7 +1,7 @@
 {
   "name": "firmium",
   "private": true,
-  "version": "3.1.6",
+  "version": "4.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -10,13 +10,10 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "release": "npm run build && npm run tauri:build && tauri android build --apk && npm run android:sign",
-    "android:init": "tauri android init",
-    "android:dev": "concurrently \"npm run dev\" \"tauri android dev\"",
-    "android:build": "tauri android build",
-    "android:apk": "tauri android build --apk",
-    "android:sign": "$ANDROID_HOME/build-tools/37.0.0/apksigner sign --ks $HOME/.android/debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-signed.apk src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk",
-    "android:install": "adb install src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-signed.apk"
+    "release": "npm run build && npm run tauri:build",
+    "android:build": "cd android && ./gradlew assembleRelease",
+    "android:debug": "cd android && ./gradlew assembleDebug",
+    "android:install": "cd android && ./gradlew installDebug"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
