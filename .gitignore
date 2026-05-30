@@ -35,9 +35,17 @@ npm-debug.log*
 Thumbs.db
 
 # PKG
-pkg
-pkg/firmium-desktop
+pkg/
+pkg/firmium-desktop/
+
+# Android build cache and output
+android/.gradle/
+android/build/
+android/app/build/
+
+# Android signing key
+release.keystore
 
 # misc
 extra
-scriptsrelease.keystore
+scripts
