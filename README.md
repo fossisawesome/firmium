@@ -153,29 +153,41 @@ This produces `.deb` and `.rpm` packages under `src-tauri/target/release/bundle/
 
 ### Building for Android
 
+The Android app is a native Kotlin + Jetpack Compose app in the `android/` directory, built with Gradle independently of the desktop Tauri project.
+
 #### Additional Prerequisites
 
-- Android SDK and NDK (install via Android Studio or `sdkmanager`)
-- `ANDROID_HOME` and `NDK_HOME` environment variables set
-- Rust Android targets:
-  ```bash
-  rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-  ```
+- JDK 17 or later
+- Android SDK with build tools 35 (install via Android Studio or `sdkmanager`)
+- `ANDROID_HOME` environment variable set
 
 #### Steps
 
 ```bash
-# Initialize Android project (first time only)
-npx tauri android init
+cd android
 
-# Development build (requires connected device or emulator)
-npx tauri android dev
+# Development build
+./gradlew assembleDebug
 
-# Release APK
-npx tauri android build
+# Install debug build on connected device / emulator
+./gradlew installDebug
+
+# Release APK (requires signing env vars — see below)
+./gradlew assembleRelease
 ```
 
-The release APK is output to `src-tauri/gen/android/app/build/outputs/apk/`.
+The release APK is output to `android/app/build/outputs/apk/release/`.
+
+To sign the release build, set these environment variables before running `assembleRelease`:
+
+```bash
+export ANDROID_SIGNING_KEY_PATH=/path/to/your.keystore
+export ANDROID_SIGNING_KEY_ALIAS=your-key-alias
+export ANDROID_SIGNING_STORE_PASSWORD=store-password
+export ANDROID_SIGNING_KEY_PASSWORD=key-password
+```
+
+If these are not set, Gradle will build an unsigned APK.
 
 ## Troubleshooting (Android)
 

@@ -8,17 +8,11 @@
   import { fetchAndShowLyrics } from '../lib/playback.js'
   import { formatDuration } from '../lib/utils.js'
   import { loadImage } from '../lib/api.js'
-  import { isMobile } from '../lib/platform.js'
-  import { mobilePlayerOpen } from '../lib/stores.js'
   import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls.js'
   import {
     IconPlay, IconPause, IconLoading, IconPrev, IconNext,
-    IconRepeat, IconLyrics, IconVolume, IconMusic, IconChevronDown
+    IconRepeat, IconLyrics, IconVolume, IconMusic
   } from '../lib/icons.js'
-
-  function openFullPlayer() {
-    if (isMobile && $currentTrack) mobilePlayerOpen.set(true)
-  }
 
   const playIcon = $derived(
     $playbackState === 'loading' ? IconLoading : $playbackState === 'playing' ? IconPause : IconPlay
@@ -63,9 +57,7 @@
 </script>
 
 <div class="player-bar">
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="now-playing" role={isMobile ? 'button' : undefined} onclick={openFullPlayer}>
+  <div class="now-playing">
     <div class="np-art">
       {#if $currentTrack?.coverArtId}
         <img bind:this={npCoverImg} class="np-cover-img" alt="" />
@@ -77,9 +69,6 @@
       <div class="np-title">{$currentTrack?.title ?? '—'}</div>
       <div class="np-artist">{$currentTrack?.artist ?? 'No track selected'}</div>
     </div>
-    {#if isMobile && $currentTrack}
-      <span class="np-chevron icon" style="width:18px;height:18px;color:var(--muted);transform:rotate(-90deg);flex-shrink:0">{@html IconChevronDown}</span>
-    {/if}
     <div class="vol-row">
       <span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconVolume}</span>
       <input

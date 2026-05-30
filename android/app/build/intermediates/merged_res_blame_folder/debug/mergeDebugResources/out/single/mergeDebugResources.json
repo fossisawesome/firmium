@@ -1,0 +1,66 @@
+[
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-mdpi_ic_launcher_foreground.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-mdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-hdpi_ic_launcher_foreground.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-hdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xxxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xxxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/xml_file_paths.xml.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.fossisawesome.firmium.app-debug-63:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.fossisawesome.firmium.app-main-65:/mipmap-xxhdpi/ic_launcher_round.png"
+    }
+]

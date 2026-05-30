@@ -1,22 +1,20 @@
 # CLAUDE.md
 
-**Version**: 3.1.6
+**Version**: 4.0.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-**Firmium** is a cross-platform OpenSubsonic music streaming client built with Tauri 2 (Rust backend + JavaScript frontend). It targets Linux desktop and Android. It provides low-latency audio playback, OS-level credential storage, and integrates with OpenSubsonic-compatible servers (e.g. Navidrome).
+**Firmium** is a desktop OpenSubsonic music streaming client built with Tauri 2 (Rust backend + JavaScript frontend). It targets Linux and Windows, providing low-latency audio playback, OS-level credential storage, and integrating with OpenSubsonic-compatible servers (e.g. Navidrome). A separate native Android app lives in `android/`.
 
 ### Tech Stack
 - **Frontend**: Svelte 5, bundled via Vite
 - **Backend**: Rust 2021 edition, Tauri 2.11+
-- **Audio (desktop)**: `rodio` 0.22 for native OS audio engine integration
-- **Audio (Android)**: ExoPlayer via Kotlin `AudioPlugin`
+- **Audio**: `rodio` 0.22 for native OS audio engine integration
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
-- **Credentials (desktop)**: OS keyring (libsecret on Linux) via `keyring` crate
-- **Credentials (Android)**: Android Keystore-backed `EncryptedSharedPreferences` via Kotlin `SecureStoragePlugin`
-- **Packaging**: Linux (deb, rpm, Arch makepkg), Android APK via GitHub Actions
+- **Credentials**: OS keyring via `keyring` crate (libsecret on Linux, Windows Credential Manager on Windows)
+- **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer)
 
 ## Architecture
 
@@ -24,33 +22,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The backend exposes Tauri commands that the frontend invokes via `src/lib/audio-bridge.js` and `src/lib/tauri.js`. Key modules:
 
-- **lib.rs**: Main command file and Tauri app entry point. Contains all `#[tauri::command]` functions and the `run()` function. Registers Android plugins. Key commands:
-  - Themes: `list_themes()` — reads `.toml` theme files; on Android uses compile-time embedded themes
+- **lib.rs**: Main command file and Tauri app entry point. Contains all `#[tauri::command]` functions and the `run()` function. Key commands:
+  - Themes: `list_themes()` — reads `.toml` theme files
   - Data mappers: `map_albums()`, `map_artists()`, `map_songs()` — Rust-side mapping of raw Subsonic JSON to typed structs (including `infer_release_type()`)
   - Auth: `generate_auth_params()` — MD5 token hashing
-  - Credentials: `save_password()`, `get_password()`, `delete_password()` — OS keyring on desktop, `SecureStoragePlugin` on Android
-  - Audio: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()` — delegates to rodio `AudioPlayer` on desktop, `AudioPlugin` (ExoPlayer) on Android
+  - Credentials: `save_password()`, `get_password()`, `delete_password()` — OS keyring
+  - Audio: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()` — delegates to rodio `AudioPlayer`
   - Audio state: `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`
-  - Now Playing (Android only): `update_now_playing()`, `update_playback_state()`, `clear_now_playing()` — delegates to `NowPlayingPlugin` (MediaSession + notification)
   - Diagnostics: `get_machine_info()`, `list_audio_devices()`
   - Logging: `write_log()`, `delete_logs()`, `get_log_path()`, `is_debug_mode()`, `get_app_version()`
 
 - **audio.rs**: Desktop-only audio playback module. Core design:
   - `StreamingReader`: Implements Read+Seek over HTTP response body. Bytes buffered locally to keep Subsonic "Now Playing" status during playback.
   - `AudioPlayer`: Manages session lifecycle (loading → playing → paused/stopped). Uses `rodio::MixerDeviceSink` for per-device volume control. Thread-safe via `parking_lot::Mutex`.
-  - Session state: `PlaybackState` enum (Loading, Playing, Paused, Stopped) — also defined in lib.rs for cross-platform use
+  - Session state: `PlaybackState` enum (Loading, Playing, Paused, Stopped)
   - Sessions stored in `Arc<RwLock<HashMap>>` — playback events fire via Tauri `emit()` to frontend
   - Supports `preload_stream()` and `crossfade_to()` for gapless playback
-  - Not compiled on Android (`#[cfg(not(target_os = "android"))]`)
 
 - **main.rs**: Thin entry point that calls `lib::run()`. No commands defined here.
-
-### Android Kotlin Plugins (src-tauri/gen/android/)
-
-Three Kotlin plugins bridge Tauri commands to Android APIs:
-- **AudioPlugin**: ExoPlayer-based audio playback. Mirrors the rodio AudioPlayer API (play, pause, seek, crossfade, preload).
-- **SecureStoragePlugin**: `EncryptedSharedPreferences` for credential storage (replaces OS keyring).
-- **NowPlayingPlugin**: Android MediaSession + persistent notification with prev/play/next controls. JS uses `src/lib/nowPlaying.js` to drive it.
 
 ### Svelte Frontend (src/)
 
@@ -58,9 +47,7 @@ Single-page Svelte 5 app bundled by Vite. Hot reload works for all frontend chan
 
 - **App.svelte**: Root component. Handles auth check on mount, theme/decorations, view routing, and global overlay components (LyricsPanel, PlaylistMenu).
 - **components/**: Shared UI components
-  - `PlayerBar.svelte` — persistent bottom player with controls, seek bar, volume (desktop)
-  - `MobilePlayer.svelte` — full-screen now-playing player for Android
-  - `QueueSheet.svelte` — bottom-sheet queue view for Android
+  - `PlayerBar.svelte` — persistent bottom player with controls, seek bar, volume
   - `Sidebar.svelte` — navigation sidebar
   - `LyricsPanel.svelte` — synced/unsynced lyrics overlay
   - `PlaylistMenu.svelte` — context menu for adding tracks to playlists
@@ -73,9 +60,7 @@ Single-page Svelte 5 app bundled by Vite. Hot reload works for all frontend chan
   - `playback.js` — `playAt()`, `crossfadeToNext()`, position tracking, lyrics sync, bridge event wiring
   - `audio-bridge.js` — `AudioBridge` class: wraps Tauri IPC calls for play/pause/seek/volume, status polling loop
   - `api.js` — `Api` (OpenSubsonic REST client), `OpenSubsonicRouter` (URL builder), `Keyring`, `WikiApi`
-  - `nowPlaying.js` — Android MediaSession notification helpers (`initNowPlaying`, `updateNowPlaying`, `clearNowPlaying`)
-  - `platform.js` — `isMobile` flag (detects Android vs desktop); gates mobile-only code
-  - `playerControls.js` — shared player control logic (used by both PlayerBar and MobilePlayer)
+  - `playerControls.js` — shared player control logic
   - `icons.js` — SVG icon helpers
   - `coverCache.js` — in-memory blob URL cache (max 150 entries, LRU eviction)
   - `utils.js` — `SafeStorage` (localStorage wrapper), misc helpers
@@ -117,8 +102,8 @@ Svelte stores (playbackState, currentPosition, …) → reactive UI
 ### Prerequisites
 - Rust 1.70+ (for MSRV)
 - Node.js 18+ (for npm)
-- On Linux: `libssl-dev`, `libxdo-dev`, `libxcb-render0-dev`, `libxcb-shape0-dev`, `libxcb-xfixes0-dev` for Tauri dependencies
-- On Linux: `libsecret-1-dev` for keyring integration
+- On Linux: `libssl-dev`, `libxdo-dev`, `libxcb-render0-dev`, `libxcb-shape0-dev`, `libxcb-xfixes0-dev`, `libsecret-1-dev` for Tauri + keyring
+- On Windows: no extra system dependencies needed (rustls handles TLS, Windows Credential Manager is built-in)
 
 ### Commands
 
@@ -130,9 +115,14 @@ npm install
 npm run dev:app
 # Rust recompiles on .rs changes; Svelte/CSS/JS changes hot-reload instantly via Vite.
 
-# Release build
+# Release build (Linux only)
 npm run release
 # Builds .deb + .rpm, then runs makepkg in src-tauri/target/release/bundle/arch/
+
+# Android (separate native app in android/)
+npm run android:build   # assembleRelease via Gradle
+npm run android:debug   # assembleDebug via Gradle
+npm run android:install # installDebug via adb
 ```
 
 ### First-Time Setup
@@ -149,7 +139,6 @@ npm run release
 ### Modifying Rust Commands
 - Add new `#[tauri::command]` functions in `lib.rs`
 - Register them in the `tauri::generate_handler![]` macro inside `run()` in `lib.rs`
-- For Android-specific commands, use `#[cfg(target_os = "android")]` / `#[cfg(not(target_os = "android"))]`
 - Update `capabilities/default.json` to add the command to the allowed list
 - Restart dev server: `npm run dev:app`
 
@@ -194,21 +183,20 @@ Currently no automated tests. Manual testing workflow:
 
 ## Key Files
 
-- `src-tauri/src/lib.rs` — All Tauri command definitions, Android plugin registration, app entry point
+- `src-tauri/src/lib.rs` — All Tauri command definitions, app entry point
 - `src-tauri/src/main.rs` — Thin entry point that calls `lib::run()`
-- `src-tauri/src/audio.rs` — Desktop-only audio playback engine (rodio)
+- `src-tauri/src/audio.rs` — Audio playback engine (rodio)
 - `src/App.svelte` — Root component, auth bootstrap, view routing
 - `src/lib/stores.js` — All Svelte stores (single source of truth for app state)
 - `src/lib/playback.js` — Playback orchestration, position tracking, lyrics sync
 - `src/lib/audio-bridge.js` — Tauri IPC bridge (`AudioBridge` class)
 - `src/lib/api.js` — OpenSubsonic API client, URL builder, keyring, WikiApi
-- `src/lib/nowPlaying.js` — Android MediaSession notification (mobile only)
-- `src/lib/platform.js` — `isMobile` platform detection
 - `src-tauri/tauri.conf.json` — App metadata, bundler config, updater settings
 - `src-tauri/capabilities/default.json` — Tauri permissions (security scoping)
-- `themes/` — TOML theme files (embedded at compile time for Android via `build.rs`)
+- `themes/` — TOML theme files
 - `vite.config.js` — Vite + Svelte plugin config
 - `package.json` — npm scripts for build/dev
+- `android/` — Separate native Android app (not part of the Tauri build)
 
 ## OpenSubsonic API Integration
 

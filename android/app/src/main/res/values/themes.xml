@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme required by the manifest; actual theming is handled by Compose. -->
+    <!-- Compose handles all theming; this is just required for the window/system bars at launch. -->
+    <style name="Theme.Firmium" parent="android:Theme.Material.NoActionBar" />
+</resources>

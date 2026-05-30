@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.fossisawesome.firmium.app-mergeReleaseResources-55:/values-night-v8/values-night-v8.xml",
+            "map": [
+                {
+                    "source": "/home/larper/.gradle/caches/8.14.3/transforms/c933a41473d6baba6b40ac125773e0cc/transformed/core-splashscreen-1.0.1/res/values-night-v8/values-night-v8.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "85",
+                        "endOffsets": "136"
+                    }
+                }
+            ]
+        }
+    ]
+}

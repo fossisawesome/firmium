@@ -1,0 +1,234 @@
+package com.fossisawesome.firmium.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.data.model.Playlist
+import com.fossisawesome.firmium.data.model.Song
+import com.fossisawesome.firmium.ui.components.*
+import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.viewmodel.AlbumDetailState
+
+@Composable
+fun AlbumDetailScreen(
+    albumId: String,
+    state: AlbumDetailState,
+    coverUrlFor: (String?) -> String?,
+    playlists: List<Playlist>,
+    onLoad: (String) -> Unit,
+    onPlayAll: (List<Song>, Int) -> Unit,
+    onAddToPlaylist: (playlistId: String, songs: List<Song>) -> Unit,
+    onCreatePlaylistAndAdd: (name: String, songs: List<Song>) -> Unit,
+    onBack: () -> Unit,
+) {
+    LaunchedEffect(albumId) { onLoad(albumId) }
+
+    var pendingSong by remember { mutableStateOf<Song?>(null) }
+    var pendingAllSongs by remember { mutableStateOf(false) }
+    val colors = LocalFirmiumColors.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        FirmiumDetailHeader(title = state.album?.name ?: "", onBack = onBack)
+
+        when {
+            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                FirmiumSpinner(color = colors.accent, modifier = Modifier.size(24.dp))
+            }
+            state.error != null -> Column(
+                Modifier.fillMaxSize().padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(state.error, color = colors.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                FirmiumTextButton(onClick = { onLoad(albumId) }) {
+                    Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
+                }
+            }
+            state.album != null -> {
+                val album = state.album
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 32.dp),
+                ) {
+                    item {
+                        // Album header: art + info + Play All
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            CoverImage(
+                                url = coverUrlFor(album.coverArt),
+                                contentDescription = album.name,
+                                modifier = Modifier.size(220.dp).clip(RoundedCornerShape(12.dp))
+                                    .background(colors.surface2),
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                album.name, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace, color = colors.text,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(album.artist, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                            if (album.year != null) {
+                                val meta = listOfNotNull(
+                                    album.year.toString(),
+                                    album.releaseType.takeIf { it.isNotEmpty() && it != "Album" }
+                                ).joinToString(" · ")
+                                Text(meta, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                            }
+                            if (album.tracks.isNotEmpty()) {
+                                Spacer(Modifier.height(16.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Box(
+                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(2.dp))
+                                            .background(colors.accent).clickable { onPlayAll(album.tracks, 0) }
+                                            .padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            FirmiumIcon(Icons.Default.PlayArrow, null, tint = colors.bg, modifier = Modifier.size(16.dp))
+                                            Text("Play All", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.bg, letterSpacing = 0.5.sp)
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier.clip(RoundedCornerShape(2.dp))
+                                            .background(colors.surface2).clickable { pendingAllSongs = true }
+                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        FirmiumIcon(Icons.Default.Add, contentDescription = "Add all to playlist", tint = colors.text, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                        }
+                        FirmiumDivider()
+                    }
+
+                    itemsIndexed(album.tracks, key = { _, s -> s.id }) { index, song ->
+                        AlbumTrackRow(
+                            track = song,
+                            index = index + 1,
+                            coverUrl = coverUrlFor(song.coverArt),
+                            onClick = { onPlayAll(album.tracks, index) },
+                            onAddClick = { pendingSong = song },
+                        )
+                        FirmiumDivider()
+                    }
+                }
+            }
+        }
+    }
+
+    if (pendingSong != null) {
+        val song = pendingSong!!
+        AddToPlaylistDialog(
+            playlists = playlists,
+            onAddTo = { id -> onAddToPlaylist(id, listOf(song)); pendingSong = null },
+            onCreateAndAdd = { name -> onCreatePlaylistAndAdd(name, listOf(song)); pendingSong = null },
+            onDismiss = { pendingSong = null },
+        )
+    }
+
+    val album = state.album
+    if (pendingAllSongs && album != null) {
+        AddToPlaylistDialog(
+            playlists = playlists,
+            onAddTo = { id -> onAddToPlaylist(id, album.tracks); pendingAllSongs = false },
+            onCreateAndAdd = { name -> onCreatePlaylistAndAdd(name, album.tracks); pendingAllSongs = false },
+            onDismiss = { pendingAllSongs = false },
+        )
+    }
+}
+
+// Track row with thumbnail, title, optional artist, duration, and a visible + add button.
+@Composable
+private fun AlbumTrackRow(track: Song, index: Int, coverUrl: String?, onClick: () -> Unit, onAddClick: () -> Unit) {
+    val colors = LocalFirmiumColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            "$index", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+            color = colors.muted, modifier = Modifier.width(24.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+        )
+        CoverImage(
+            url = coverUrl,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                track.title, fontFamily = FontFamily.Monospace, fontSize = 14.sp,
+                color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            if (track.displayArtist != null && track.displayArtist != track.artist) {
+                Text(
+                    track.displayArtist, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        FirmiumIconButton(onClick = onAddClick, modifier = Modifier.size(32.dp)) {
+            FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+// Shared TrackRow used by PlaylistDetailScreen
+@Composable
+fun TrackRow(track: Song, index: Int?, isCurrentlyPlaying: Boolean, onClick: () -> Unit) {
+    val colors = LocalFirmiumColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (index != null) {
+            Text(
+                "$index", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                color = if (isCurrentlyPlaying) colors.accent else colors.muted,
+                modifier = Modifier.width(28.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                track.title, fontFamily = FontFamily.Monospace, fontSize = 14.sp,
+                color = if (isCurrentlyPlaying) colors.accent else colors.text,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            if (track.displayArtist != null && track.displayArtist != track.artist) {
+                Text(
+                    track.displayArtist, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+    }
+}
+
+private fun formatDuration(seconds: Int): String {
+    val m = seconds / 60; val s = seconds % 60
+    return "%d:%02d".format(m, s)
+}

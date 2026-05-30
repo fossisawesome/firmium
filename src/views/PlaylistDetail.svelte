@@ -1,12 +1,11 @@
 <script>
-  import { IconMusic, IconList, IconPlay, IconPlayCircle } from '../lib/icons.js'
+  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
   import { playlists, queue, currentTrack, navToView } from '../lib/stores.js'
   import { Api, loadImage } from '../lib/api.js'
   import { playAt } from '../lib/playback.js'
   import { showPlaylistMenu } from '../lib/playlistMenu.js'
   import { lazyLoad } from '../lib/lazyLoad.js'
   import { formatDuration } from '../lib/utils.js'
-  import { isMobile } from '../lib/platform.js'
 
   let { id } = $props()
 
@@ -180,17 +179,7 @@
       </div>
 
       <div class="pl-detail-actions">
-        {#if isMobile && pl.tracks.length > 0}
-          <button
-            class="mobile-play-circle-btn"
-            onclick={playAll}
-            aria-label="Play playlist"
-          >
-            <span class="icon" style="width:32px;height:32px">{@html IconPlayCircle}</span>
-          </button>
-        {:else}
-          <button class="play-all-btn" onclick={playAll} disabled={!pl.tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>Play All</button>
-        {/if}
+        <button class="play-all-btn" onclick={playAll} disabled={!pl.tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>Play All</button>
         <button class="pl-delete-btn" onclick={deletePl}>Delete</button>
       </div>
     </div>

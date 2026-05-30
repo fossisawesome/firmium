@@ -1,0 +1,94 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.fossisawesome.firmium.app-mergeDebugResources-61:/values-lo/values-lo.xml",
+            "map": [
+                {
+                    "source": "/home/larper/.gradle/caches/8.14.3/transforms/355fcea043725ad38463cc72bf6b195f/transformed/ui-release/res/values-lo/values-lo.xml",
+                    "from": {
+                        "startLines": "3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "193,283,360,469,567,656,745,835,921,1004,1084,1168,1242,1330,1411,1486,1561,1639,1705",
+                        "endColumns": "89,76,108,97,88,88,89,85,82,79,83,73,87,80,74,74,77,65,120",
+                        "endOffsets": "278,355,464,562,651,740,830,916,999,1079,1163,1237,1325,1406,1481,1556,1634,1700,1821"
+                    },
+                    "to": {
+                        "startLines": "10,11,12,13,14,24,25,27,28,29,30,31,32,33,34,35,37,38,39",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "898,988,1065,1174,1272,2018,2107,2289,2375,2458,2538,2622,2696,2784,2865,2940,3116,3194,3260",
+                        "endColumns": "89,76,108,97,88,88,89,85,82,79,83,73,87,80,74,74,77,65,120",
+                        "endOffsets": "983,1060,1169,1267,1356,2102,2192,2370,2453,2533,2617,2691,2779,2860,2935,3010,3189,3255,3376"
+                    }
+                },
+                {
+                    "source": "/home/larper/.gradle/caches/8.14.3/transforms/ceb4396271990bea632a820884357316/transformed/material-release/res/values-lo/values-lo.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "91",
+                        "endOffsets": "142"
+                    },
+                    "to": {
+                        "startLines": "26",
+                        "startColumns": "4",
+                        "startOffsets": "2197",
+                        "endColumns": "91",
+                        "endOffsets": "2284"
+                    }
+                },
+                {
+                    "source": "/home/larper/.gradle/caches/8.14.3/transforms/2929c57053249bc06aac30349dfb771d/transformed/foundation-release/res/values-lo/values-lo.xml",
+                    "from": {
+                        "startLines": "2,3,4",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,142,228",
+                        "endColumns": "86,85,84",
+                        "endOffsets": "137,223,308"
+                    },
+                    "to": {
+                        "startLines": "2,40,41",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "105,3381,3467",
+                        "endColumns": "86,85,84",
+                        "endOffsets": "187,3462,3547"
+                    }
+                },
+                {
+                    "source": "/home/larper/.gradle/caches/8.14.3/transforms/06f79564606b7c90534a5f4a5472b3b8/transformed/core-1.13.1/res/values-lo/values-lo.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,151,254,353,451,552,650,761",
+                        "endColumns": "95,102,98,97,100,97,110,100",
+                        "endOffsets": "146,249,348,446,547,645,756,857"
+                    },
+                    "to": {
+                        "startLines": "3,4,5,6,7,8,9,36",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "192,288,391,490,588,689,787,3015",
+                        "endColumns": "95,102,98,97,100,97,110,100",
+                        "endOffsets": "283,386,485,583,684,782,893,3111"
+                    }
+                },
+                {
+                    "source": "/home/larper/.gradle/caches/8.14.3/transforms/b7af75193ca8786b35e633dd752ff60d/transformed/media3-exoplayer-1.4.1/res/values-lo/values-lo.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9,10",
+                        "startColumns": "4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,124,185,251,316,391,461,553,640",
+                        "endColumns": "68,60,65,64,74,69,91,86,71",
+                        "endOffsets": "119,180,246,311,386,456,548,635,707"
+                    },
+                    "to": {
+                        "startLines": "15,16,17,18,19,20,21,22,23",
+                        "startColumns": "4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "1361,1430,1491,1557,1622,1697,1767,1859,1946",
+                        "endColumns": "68,60,65,64,74,69,91,86,71",
+                        "endOffsets": "1425,1486,1552,1617,1692,1762,1854,1941,2013"
+                    }
+                }
+            ]
+        }
+    ]
+}

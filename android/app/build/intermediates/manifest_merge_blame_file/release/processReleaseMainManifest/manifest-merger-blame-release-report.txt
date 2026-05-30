@@ -1,0 +1,183 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.fossisawesome.firmium"
+4    android:versionCode="1"
+5    android:versionName="3.1.6" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="36" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:4:5-67
+11-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+12-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:5:5-77
+12-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:5:22-74
+13    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+13-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:6:5-92
+13-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:6:22-89
+14    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+14-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:7:5-77
+14-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:7:22-74
+15
+16    <uses-feature
+16-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:9:5-90
+17        android:name="android.hardware.touchscreen"
+17-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:9:19-62
+18        android:required="false" />
+18-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:9:63-87
+19
+20    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+20-->[androidx.media3:media3-common:1.4.1] /home/larper/.gradle/caches/8.14.3/transforms/037795cf8f71384d102e6e348e414be5/transformed/media3-common-1.4.1/AndroidManifest.xml:22:5-79
+20-->[androidx.media3:media3-common:1.4.1] /home/larper/.gradle/caches/8.14.3/transforms/037795cf8f71384d102e6e348e414be5/transformed/media3-common-1.4.1/AndroidManifest.xml:22:22-76
+21
+22    <permission
+22-->[androidx.core:core:1.13.1] /home/larper/.gradle/caches/8.14.3/transforms/06f79564606b7c90534a5f4a5472b3b8/transformed/core-1.13.1/AndroidManifest.xml:22:5-24:47
+23        android:name="com.fossisawesome.firmium.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+23-->[androidx.core:core:1.13.1] /home/larper/.gradle/caches/8.14.3/transforms/06f79564606b7c90534a5f4a5472b3b8/transformed/core-1.13.1/AndroidManifest.xml:23:9-81
+24        android:protectionLevel="signature" />
+24-->[androidx.core:core:1.13.1] /home/larper/.gradle/caches/8.14.3/transforms/06f79564606b7c90534a5f4a5472b3b8/transformed/core-1.13.1/AndroidManifest.xml:24:9-44
+25
+26    <uses-permission android:name="com.fossisawesome.firmium.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+26-->[androidx.core:core:1.13.1] /home/larper/.gradle/caches/8.14.3/transforms/06f79564606b7c90534a5f4a5472b3b8/transformed/core-1.13.1/AndroidManifest.xml:26:5-97
+26-->[androidx.core:core:1.13.1] /home/larper/.gradle/caches/8.14.3/transforms/06f79564606b7c90534a5f4a5472b3b8/transformed/core-1.13.1/AndroidManifest.xml:26:22-94
+27
+28    <application
+29        android:name="com.fossisawesome.firmium.FirmiumApplication"
+29-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:12:9-43
+30        android:allowBackup="false"
+30-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:18:9-36
+31        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+31-->[androidx.core:core:1.13.1] /home/larper/.gradle/caches/8.14.3/transforms/06f79564606b7c90534a5f4a5472b3b8/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
+32        android:extractNativeLibs="false"
+33        android:icon="@mipmap/ic_launcher"
+33-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:14:9-43
+34        android:label="Firmium"
+34-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:13:9-32
+35        android:roundIcon="@mipmap/ic_launcher_round"
+35-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:15:9-54
+36        android:supportsRtl="true"
+36-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:19:9-35
+37        android:theme="@style/Theme.Firmium"
+37-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:16:9-45
+38        android:usesCleartextTraffic="false" >
+38-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:17:9-63
+39        <activity
+39-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:21:9-31:20
+40            android:name="com.fossisawesome.firmium.MainActivity"
+40-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:22:13-41
+41            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+41-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:25:13-144
+42            android:exported="true"
+42-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:23:13-36
+43            android:launchMode="singleTask"
+43-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:24:13-44
+44            android:windowSoftInputMode="adjustResize" >
+44-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:26:13-55
+45            <intent-filter>
+45-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:27:13-30:29
+46                <action android:name="android.intent.action.MAIN" />
+46-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:28:17-69
+46-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:28:25-66
+47
+48                <category android:name="android.intent.category.LAUNCHER" />
+48-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:29:17-77
+48-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:29:27-74
+49            </intent-filter>
+50        </activity>
+51
+52        <!-- Foreground service keeps the Now Playing notification alive when app is backgrounded -->
+53        <service
+53-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:34:9-37:40
+54            android:name="com.fossisawesome.firmium.audio.NowPlayingService"
+54-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:35:13-52
+55            android:exported="false"
+55-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:37:13-37
+56            android:foregroundServiceType="mediaPlayback" />
+56-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:36:13-58
+57
+58        <provider
+59            android:name="androidx.core.content.FileProvider"
+59-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:40:13-62
+60            android:authorities="com.fossisawesome.firmium.fileprovider"
+60-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:41:13-64
+61            android:exported="false"
+61-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:42:13-37
+62            android:grantUriPermissions="true" >
+62-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:43:13-47
+63            <meta-data
+63-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:44:13-46:54
+64                android:name="android.support.FILE_PROVIDER_PATHS"
+64-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:45:17-67
+65                android:resource="@xml/file_paths" />
+65-->/home/larper/k/firmium-desktop/android/app/src/main/AndroidManifest.xml:46:17-51
+66        </provider>
+67        <provider
+67-->[androidx.emoji2:emoji2:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/d90ca0c0e2e4116981a4f67a8319908c/transformed/emoji2-1.4.0/AndroidManifest.xml:24:9-32:20
+68            android:name="androidx.startup.InitializationProvider"
+68-->[androidx.emoji2:emoji2:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/d90ca0c0e2e4116981a4f67a8319908c/transformed/emoji2-1.4.0/AndroidManifest.xml:25:13-67
+69            android:authorities="com.fossisawesome.firmium.androidx-startup"
+69-->[androidx.emoji2:emoji2:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/d90ca0c0e2e4116981a4f67a8319908c/transformed/emoji2-1.4.0/AndroidManifest.xml:26:13-68
+70            android:exported="false" >
+70-->[androidx.emoji2:emoji2:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/d90ca0c0e2e4116981a4f67a8319908c/transformed/emoji2-1.4.0/AndroidManifest.xml:27:13-37
+71            <meta-data
+71-->[androidx.emoji2:emoji2:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/d90ca0c0e2e4116981a4f67a8319908c/transformed/emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+72                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+72-->[androidx.emoji2:emoji2:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/d90ca0c0e2e4116981a4f67a8319908c/transformed/emoji2-1.4.0/AndroidManifest.xml:30:17-75
+73                android:value="androidx.startup" />
+73-->[androidx.emoji2:emoji2:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/d90ca0c0e2e4116981a4f67a8319908c/transformed/emoji2-1.4.0/AndroidManifest.xml:31:17-49
+74            <meta-data
+74-->[androidx.lifecycle:lifecycle-process:2.9.0] /home/larper/.gradle/caches/8.14.3/transforms/c8a256ca44c53e11026507d39e521871/transformed/lifecycle-process-2.9.0/AndroidManifest.xml:29:13-31:52
+75                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+75-->[androidx.lifecycle:lifecycle-process:2.9.0] /home/larper/.gradle/caches/8.14.3/transforms/c8a256ca44c53e11026507d39e521871/transformed/lifecycle-process-2.9.0/AndroidManifest.xml:30:17-78
+76                android:value="androidx.startup" />
+76-->[androidx.lifecycle:lifecycle-process:2.9.0] /home/larper/.gradle/caches/8.14.3/transforms/c8a256ca44c53e11026507d39e521871/transformed/lifecycle-process-2.9.0/AndroidManifest.xml:31:17-49
+77            <meta-data
+77-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+78                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+78-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+79                android:value="androidx.startup" />
+79-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+80        </provider>
+81
+82        <receiver
+82-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+83            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+83-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+84            android:directBootAware="false"
+84-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+85            android:enabled="true"
+85-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+86            android:exported="true"
+86-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+87            android:permission="android.permission.DUMP" >
+87-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+88            <intent-filter>
+88-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+89                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+89-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+89-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+90            </intent-filter>
+91            <intent-filter>
+91-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+92                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+92-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+92-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+93            </intent-filter>
+94            <intent-filter>
+94-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+95                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+95-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+95-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+96            </intent-filter>
+97            <intent-filter>
+97-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+98                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+98-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+98-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larper/.gradle/caches/8.14.3/transforms/8083699de07fad2dca59dd942a9953e4/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+99            </intent-filter>
+100        </receiver>
+101    </application>
+102
+103</manifest>

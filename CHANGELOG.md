@@ -1,3 +1,30 @@
+# v4.0.0
+
+## Removed
+
+- **Mobile/Android Tauri layer entirely** (`src/components/MobilePlayer.svelte`, `MobileSearch.svelte`, `MobileSettings.svelte`, `src/components/QueueSheet.svelte`): All four mobile-specific overlay components deleted. The Android app now lives as a separate native Compose app in `android/` and no longer shares UI code with the Tauri desktop app.
+- **`src/lib/nowPlaying.js`**: OS now-playing metadata module removed; it was only wired up on Android via the Kotlin `NowPlayingPlugin`.
+- **`src/lib/platform.js`**: Runtime Android/desktop detection helper removed; no longer needed without dual-platform UI code.
+- **Android Tauri plugins from `lib.rs`**: `SecureStoragePlugin`, `AudioPlugin`, and `NowPlayingPlugin` registration blocks (all `#[cfg(target_os = "android")]`) removed. `lib.rs` is now desktop-only.
+- **Android CI steps** (`.github/workflows/release.yml`): Android NDK installation, Android target cross-compilation, and APK build/publish steps removed from the release workflow.
+
+## Changed
+
+- **`src/lib/audio-bridge.js`** simplified: Mobile-specific methods (`setQueue`, `skipToNext`, `skipToPrevious`, `skipToQueueIndex`, `getQueueIndex`, `startNowPlaying`) and Android event listeners (`track-changed`, unlisten wiring) removed. Bridge is now desktop-only.
+- **`src/lib/playback.js`** simplified: `isMobile` guards, `visibilitychange` background-recovery handler, and Android queue-sync logic (`getQueueIndex` call on foreground) removed. Crossfade/gapless preload no longer conditionally disabled for mobile.
+- **`src/lib/stores.js`**: `mobilePlayerOpen`, `queueSheetOpen`, `mobileSearchOpen`, `mobileSettingsOpen`, `savedSearchQuery`, `savedSearchSongs`, `savedSearchAlbums`, and `navBack` stores removed.
+- **`src/App.svelte`**: Mobile overlay mounts (`MobilePlayer`, `MobileSearch`, `MobileSettings`), back-button handler, and `is-mobile-layout` class logic removed. Root component is now leaner and desktop-focused.
+- **`src/components/PlayerBar.svelte`**: Mobile player open tap handler removed; bar is always the primary playback control surface.
+- **`src/components/Sidebar.svelte`**: Mobile header icon shortcuts (Search, Settings) removed.
+- **`src/views/AlbumDetail.svelte`, `ArtistDetail.svelte`, `PlaylistDetail.svelte`**: Mobile-specific floating play button and header layout variants removed.
+- **`package.json`**: Android build/install npm scripts removed.
+
+## Fixed
+
+- **CI release workflow** (`.github/workflows/release.yml`): Removed broken NDK r27 install step and Android-target Rust toolchain setup that were no longer needed after the Android split, reducing CI failure surface.
+
+---
+
 # v3.1.6
 
 ## Added

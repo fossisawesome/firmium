@@ -1,0 +1,18 @@
+<lint-module
+    format="1"
+    dir="/home/larper/k/firmium-desktop/android/app"
+    name=":app"
+    type="APP"
+    maven="firmium:app:unspecified"
+    agpVersion="8.9.0"
+    buildFolder="build"
+    bootClassPath="/home/larper/Android/Sdk/platforms/android-36/android.jar:/home/larper/Android/Sdk/build-tools/35.0.0/core-lambda-stubs.jar"
+    javaSourceLevel="11"
+    compileTarget="android-36">
+  <lintOptions
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="release"/>
+</lint-module>
