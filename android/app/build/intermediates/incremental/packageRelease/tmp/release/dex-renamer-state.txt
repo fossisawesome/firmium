@@ -1,4 +1,0 @@
-#Fri May 29 12:35:57 EDT 2026
-base.0=/home/larper/k/firmium-desktop/android/app/build/intermediates/dex/release/minifyReleaseWithR8/classes.dex
-path.0=classes.dex
-renamed.0=classes.dex
