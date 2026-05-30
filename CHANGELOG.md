@@ -1,3 +1,14 @@
+# v4.0.1
+
+## Fixed
+
+- **Android: FullScreenPlayer drag handle z-order** (`android/app/.../FullScreenPlayer.kt`): Drag handle is now drawn last (above scrollable content) so its `pointerInput` wins over scroll gestures when swiping down from the top. The handle box now has an explicit `height(56.dp)` hit target instead of relying on padding.
+- **Android: bottom-navigation pop-back with fallback** (`android/app/.../AppNavGraph.kt`): `popBackStack()` could silently fail when the destination route was not in the back stack (e.g. an artist page opened from a different tab). The nav handler now calls `navController.navigate()` as a fallback when `popBackStack` returns `false`, so tapping a nav item always works.
+- **Android: media controls restart playback after queue ends** (`android/app/.../PlayerViewModel.kt`): `MediaSession.onPlay` and the `"stopped"` playback state branch now call `playAt()` to restart the current track instead of doing nothing. Repeat-once (`"one"`) mode also uses `playAt()` after resetting repeat to `"none"`, since the ExoPlayer session is already released at that point and `seek+resume` would be no-ops.
+- **Android: media session kept alive on queue end** (`android/app/.../PlayerViewModel.kt`): On playback finish, `nowPlaying` metadata is updated with `updatePlaybackState(false)` rather than cleared, so OS media controls (lock screen, headset buttons) remain functional and can trigger the new restart-on-play behaviour.
+
+---
+
 # v4.0.0
 
 ## Removed

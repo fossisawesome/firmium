@@ -131,7 +131,17 @@ fun AppNavGraph(
     val onNavigate: (String) -> Unit = { destRoute ->
         when {
             currentRoute == destRoute -> Unit
-            currentSection == destRoute -> navController.popBackStack(destRoute, inclusive = false)
+            currentSection == destRoute -> {
+                // Pop back to the section root. If the route isn't in the back stack (e.g. an
+                // artist page opened from the home tab), popBackStack returns false — fall through
+                // to a normal navigate so the button still works.
+                val popped = navController.popBackStack(destRoute, inclusive = false)
+                if (!popped) navController.navigate(destRoute) {
+                    popUpTo("home") { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
             else -> navController.navigate(destRoute) {
                 popUpTo("home") { saveState = true }
                 launchSingleTop = true
@@ -456,8 +466,9 @@ fun AppNavGraph(
             onSeekEnd = { playerViewModel.setSeekingFlag(false) },
             onVolumeChange = { playerViewModel.setVolume(it) },
             onRepeatCycle = {
+                // Cycle: none → one (repeat once) → all (repeat forever) → none
                 playerViewModel.setRepeatMode(when (playerState.repeatMode) {
-                    "none" -> "all"; "all" -> "one"; else -> "none"
+                    "none" -> "one"; "one" -> "all"; else -> "none"
                 })
             },
             onShuffleToggle = { playerViewModel.toggleShuffle() },

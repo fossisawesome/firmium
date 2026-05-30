@@ -106,7 +106,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         nowPlaying.listener = object : NowPlayingController.Listener {
-            override fun onPlay() { resume() }
+            override fun onPlay() {
+                // When the queue ended and state is stopped, restart the current track.
+                val s = _state.value
+                if (s.playbackState == "stopped" && s.currentTrack != null) playAt(s.queue, s.queueIndex)
+                else resume()
+            }
             override fun onPause() { pause() }
             override fun onNext() { skipToNext() }
             override fun onPrevious() { skipToPrevious() }
@@ -150,6 +155,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         when (_state.value.playbackState) {
             "playing" -> pause()
             "paused" -> resume()
+            // Queue ended — restart the last track instead of doing nothing.
+            "stopped" -> {
+                val s = _state.value
+                if (s.currentTrack != null) playAt(s.queue, s.queueIndex)
+            }
         }
     }
 
@@ -279,11 +289,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private fun onTrackEnded() {
         val s = _state.value
         when (s.repeatMode) {
-            "one" -> seek(0.0).also { resume() }
+            // "one" = repeat once then stop. The ExoPlayer session is already released when
+            // onPlaybackFinished fires, so seek+resume would be no-ops — use playAt instead.
+            "one" -> {
+                setRepeatMode("none")
+                if (s.currentTrack != null) playAt(s.queue, s.queueIndex)
+            }
             "all" -> if (s.queue.isNotEmpty()) skipToIndex(0)
             else -> if (s.hasNext) skipToNext() else {
                 _state.update { it.copy(playbackState = "stopped") }
-                nowPlaying.clear()
+                // Keep the media session and notification alive so OS media controls
+                // (lock screen, headset buttons) still function and can restart playback.
+                nowPlaying.updatePlaybackState(false)
             }
         }
     }

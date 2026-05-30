@@ -156,48 +156,6 @@ fun FullScreenPlayer(
             )
         }
 
-        // Drag handle — sits at the top of the screen regardless of orientation.
-        // Dragging downward initiates the dismiss animation.
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(top = 14.dp, bottom = 8.dp)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val startY = down.position.y
-                        val startOffset = dragOffsetY.value
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull() ?: break
-                            val dy = change.position.y - startY
-                            if (!change.pressed) {
-                                if (dragOffsetY.value > 160f) animateDismiss()
-                                else scope.launch {
-                                    dragOffsetY.animateTo(0f, spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ))
-                                }
-                                break
-                            }
-                            scope.launch { dragOffsetY.snapTo((startOffset + dy).coerceAtLeast(0f)) }
-                            change.consume()
-                        }
-                    }
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(36.dp).height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(colors.surface2),
-            )
-        }
-
         if (isLandscape) {
             // Landscape layout: art left, controls right — avoids the "tall stack" problem.
             Row(
@@ -287,6 +245,49 @@ fun FullScreenPlayer(
 
                 Spacer(Modifier.height(8.dp))
             }
+        }
+
+        // Drag handle drawn last so it sits above the scrollable content in z-order.
+        // This ensures its pointerInput wins over the scroll gesture when swiping down from the top.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(56.dp)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startY = down.position.y
+                        val startOffset = dragOffsetY.value
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            val dy = change.position.y - startY
+                            if (!change.pressed) {
+                                if (dragOffsetY.value > 160f) animateDismiss()
+                                else scope.launch {
+                                    dragOffsetY.animateTo(0f, spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ))
+                                }
+                                break
+                            }
+                            scope.launch { dragOffsetY.snapTo((startOffset + dy).coerceAtLeast(0f)) }
+                            change.consume()
+                        }
+                    }
+                },
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 14.dp)
+                    .width(36.dp).height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(colors.surface2),
+            )
         }
     }
 
