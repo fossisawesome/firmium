@@ -13,8 +13,12 @@
       "allow": [
         { "url": "http://**" },
         { "url": "http://**/**" },
+        { "url": "http://**:*" },
+        { "url": "http://**:*/**" },
         { "url": "https://**" },
-        { "url": "https://**/**" }
+        { "url": "https://**/**" },
+        { "url": "https://**:*" },
+        { "url": "https://**:*/**" }
       ]
     }
   ],

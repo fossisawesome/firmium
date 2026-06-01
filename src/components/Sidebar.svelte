@@ -25,9 +25,10 @@
 
   function isActive(view) {
     const t = $activeView.type
-    if (view === 'home') return t === 'home'
-    if (view === 'albums') return t === 'albums' || t === 'album'
-    if (view === 'artists') return t === 'artists' || t === 'artist'
+    const parent = $activeView.parentType
+    if (view === 'home')    return t === 'home' || parent === 'home'
+    if (view === 'albums')  return (t === 'albums') || (t === 'album' && parent !== 'home')
+    if (view === 'artists') return (t === 'artists') || (t === 'artist' && parent !== 'home')
     if (view === 'playlists') return t === 'playlists' || t === 'playlist'
     return t === view
   }

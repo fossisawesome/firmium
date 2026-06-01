@@ -1,4 +1,5 @@
 <script>
+  import { get } from 'svelte/store'
   import { playlistMenuState, hidePlaylistMenu, switchToCreate } from '../lib/playlistMenu.js'
   import { playlists } from '../lib/stores.js'
   import { Api } from '../lib/api.js'
@@ -35,16 +36,27 @@
     hidePlaylistMenu()
   }
 
+  // Adds tracks to a local playlist and syncs new track IDs to server if the playlist is linked.
+  async function syncAddTracks(playlistId, tracks) {
+    const { newTracks } = playlists.addTracks(playlistId, tracks)
+    if (newTracks.length) {
+      const pl = get(playlists).find(p => p.id === playlistId)
+      if (pl?.serverId) {
+        Api.updatePlaylist(pl.serverId, { songIdsToAdd: newTracks.map(t => t.id) }).catch(console.error)
+      }
+    }
+  }
+
   async function addTo(playlistId) {
     const pending = $playlistMenuState.pending
     hidePlaylistMenu()
     if (!pending) return
     if (pending.type === 'tracks') {
-      playlists.addTracks(playlistId, pending.tracks)
+      await syncAddTracks(playlistId, pending.tracks)
     } else if (pending.type === 'album') {
       try {
         const { tracks } = await Api.getAlbumTracks(pending.albumId)
-        playlists.addTracks(playlistId, tracks)
+        await syncAddTracks(playlistId, tracks)
       } catch (err) {
         console.error('Failed to add album to playlist:', err)
       }
@@ -58,13 +70,20 @@
     const newPl = playlists.create(name)
     hidePlaylistMenu()
     newPlaylistName = ''
+    // Create on server and record the server ID, then add tracks.
+    try {
+      const serverPl = await Api.createPlaylist(name)
+      if (serverPl.id) playlists.setServerId(newPl.id, serverPl.id)
+    } catch (e) {
+      console.error('Failed to create playlist on server:', e)
+    }
     if (!pending) return
     if (pending.type === 'tracks') {
-      playlists.addTracks(newPl.id, pending.tracks)
+      await syncAddTracks(newPl.id, pending.tracks)
     } else if (pending.type === 'album') {
       try {
         const { tracks } = await Api.getAlbumTracks(pending.albumId)
-        playlists.addTracks(newPl.id, tracks)
+        await syncAddTracks(newPl.id, tracks)
       } catch (err) {
         console.error('Failed to add album to new playlist:', err)
       }

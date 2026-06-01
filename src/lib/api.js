@@ -27,7 +27,12 @@ export const OpenSubsonicRouter = {
     const url = new URL(`${server}/rest/${action}`)
     const combined = { ...await getQueryParams(), ...params }
     Object.entries(combined).forEach(([k, v]) => {
-      if (v !== null && v !== undefined) url.searchParams.append(k, String(v))
+      if (v === null || v === undefined) return
+      if (Array.isArray(v)) {
+        v.forEach(item => url.searchParams.append(k, String(item)))
+      } else {
+        url.searchParams.append(k, String(v))
+      }
     })
     return url.toString()
   }
@@ -138,6 +143,43 @@ export const Api = {
         })
         .catch(e => console.error('Scrobble network error:', e))
     })
+  },
+
+  // ── Playlist API (OpenSubsonic) ───────────────────────────────────────────────
+
+  // Returns all playlists visible to the current user from the server.
+  getPlaylists: async (signal) => {
+    const d = await Api.fetch('getPlaylists', {}, signal)
+    return d.playlists?.playlist ?? []
+  },
+
+  // Fetches a playlist's full track list from the server.
+  getPlaylistTracks: async (id, signal) => {
+    const d = await Api.fetch('getPlaylist', { id }, signal)
+    const pl = d.playlist ?? {}
+    const tracks = await tauriInvoke('map_songs', { songs: pl.entry ?? [] })
+    return { id: pl.id, name: pl.name, comment: pl.comment ?? '', songCount: pl.songCount, tracks }
+  },
+
+  // Creates a new playlist on the server and returns the created playlist object.
+  createPlaylist: async (name) => {
+    const d = await Api.fetch('createPlaylist', { name })
+    return d.playlist ?? {}
+  },
+
+  // Updates playlist metadata and/or adds/removes tracks by server-side ID.
+  updatePlaylist: async (id, { name, comment, songIdsToAdd = [], songIndicesToRemove = [] } = {}) => {
+    const params = { playlistId: id }
+    if (name !== undefined) params.name = name
+    if (comment !== undefined) params.comment = comment
+    if (songIdsToAdd.length) params.songIdToAdd = songIdsToAdd
+    if (songIndicesToRemove.length) params.songIndexToRemove = songIndicesToRemove
+    await Api.fetch('updatePlaylist', params)
+  },
+
+  // Deletes a playlist from the server.
+  deletePlaylist: async (id) => {
+    await Api.fetch('deletePlaylist', { id })
   },
 
   getLyrics: async (song) => {

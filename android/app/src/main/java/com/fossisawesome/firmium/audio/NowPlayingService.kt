@@ -10,13 +10,18 @@ import android.os.IBinder
 class NowPlayingService : Service() {
 
     companion object {
-        // Set before startForegroundService() so onStartCommand can immediately call startForeground().
+        // Passed in the Intent so rapid track skips cannot race on this field before onStartCommand
+        // reads it. The field is kept as fallback for updatePosition/updatePlaybackState callers
+        // that notify without restarting the service.
+        const val EXTRA_NOTIFICATION = "notification"
         @Volatile
         var pendingNotification: Notification? = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = pendingNotification
+        @Suppress("DEPRECATION")
+        val notification = intent?.getParcelableExtra<Notification>(EXTRA_NOTIFICATION)
+            ?: pendingNotification
             ?: return START_NOT_STICKY
         startForeground(NOTIFICATION_ID, notification)
         return START_STICKY

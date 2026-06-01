@@ -1,6 +1,7 @@
 <script>
-  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
-  import { playlists, queue, currentTrack, navToView } from '../lib/stores.js'
+  import { onMount } from 'svelte'
+  import { IconMusic, IconList, IconPlay, IconCloud } from '../lib/icons.js'
+  import { playlists, queue, currentTrack, navToView, serverPlaylists } from '../lib/stores.js'
   import { Api, loadImage } from '../lib/api.js'
   import { playAt } from '../lib/playback.js'
   import { showPlaylistMenu } from '../lib/playlistMenu.js'
@@ -9,6 +10,10 @@
 
   let { id } = $props()
 
+  // Detect whether this is a server-only playlist (id prefixed with 'server-').
+  const isServerOnly = id.startsWith('server-')
+  const serverId = isServerOnly ? id.slice('server-'.length) : null
+
   let editingName = $state(false)
   let editingDesc = $state(false)
   let nameValue = $state('')
@@ -16,7 +21,45 @@
   let showCoverPicker = $state(false)
   let fileInput = $state()
 
-  const pl = $derived($playlists.find(p => p.id === id) ?? null)
+  // For server-only playlists, tracks are loaded on mount.
+  let serverTracks = $state(null)
+  let serverLoading = $state(false)
+
+  onMount(async () => {
+    if (isServerOnly && serverId) {
+      serverLoading = true
+      try {
+        const result = await Api.getPlaylistTracks(serverId)
+        serverTracks = result.tracks ?? []
+      } catch (e) {
+        console.error('Failed to load server playlist tracks:', e)
+        serverTracks = []
+      } finally {
+        serverLoading = false
+      }
+    }
+  })
+
+  // For local playlists: look up from the local store.
+  // For server-only: build a synthetic object from serverPlaylists metadata + loaded tracks.
+  const localPl = $derived(isServerOnly ? null : ($playlists.find(p => p.id === id) ?? null))
+  const serverMeta = $derived(isServerOnly ? ($serverPlaylists.find(sp => sp.id === serverId) ?? null) : null)
+
+  const pl = $derived((() => {
+    if (!isServerOnly) return localPl
+    if (!serverMeta) return null
+    return {
+      id,
+      name: serverMeta.name ?? 'Server Playlist',
+      description: serverMeta.comment ?? '',
+      coverArtId: serverMeta.coverArt ?? null,
+      coverDataUrl: null,
+      tracks: serverTracks ?? [],
+      serverId: serverMeta.id,
+      isServerOnly: true
+    }
+  })())
+
   const totalDuration = $derived(pl ? pl.tracks.reduce((s, t) => s + (t.duration || 0), 0) : 0)
   const uniqueCovers = $derived(pl ? (() => {
     const seen = new Set()
@@ -24,25 +67,33 @@
   })() : [])
 
   function startEditName() {
-    if (!pl) return
+    if (!pl || pl.isServerOnly) return
     nameValue = pl.name
     editingName = true
   }
 
   function commitName() {
     const val = nameValue.trim() || pl?.name
-    if (val && pl) playlists.updatePlaylist(id, { name: val })
+    if (val && pl && !pl.isServerOnly) {
+      playlists.updatePlaylist(id, { name: val })
+      // Sync to server if this local playlist is linked.
+      if (pl.serverId) Api.updatePlaylist(pl.serverId, { name: val }).catch(console.error)
+    }
     editingName = false
   }
 
   function startEditDesc() {
-    if (!pl) return
+    if (!pl || pl.isServerOnly) return
     descValue = pl.description
     editingDesc = true
   }
 
   function commitDesc() {
-    if (pl) playlists.updatePlaylist(id, { description: descValue.trim() })
+    if (pl && !pl.isServerOnly) {
+      playlists.updatePlaylist(id, { description: descValue.trim() })
+      // Sync comment to server if linked.
+      if (pl.serverId) Api.updatePlaylist(pl.serverId, { comment: descValue.trim() }).catch(console.error)
+    }
     editingDesc = false
   }
 
@@ -65,23 +116,37 @@
   function deletePl() {
     if (!pl) return
     if (confirm(`Delete "${pl.name}"? This cannot be undone.`)) {
-      playlists.delete(id)
+      if (!pl.isServerOnly) playlists.delete(id)
+      // Delete from server if linked.
+      const sid = pl.serverId
+      if (sid) Api.deletePlaylist(sid).catch(console.error)
       navToView('playlists')
     }
   }
 
-  function removeTrack(trackId) {
-    playlists.removeTrack(id, trackId)
+  function removeTrack(track, trackIdx) {
+    if (pl.isServerOnly) {
+      // Server-only: remove from local serverTracks state and sync index to server.
+      serverTracks = serverTracks.filter((_, i) => i !== trackIdx)
+      Api.updatePlaylist(serverId, { songIndicesToRemove: [trackIdx] }).catch(console.error)
+    } else {
+      const removedIdx = playlists.removeTrack(id, track.id)
+      if (pl.serverId && removedIdx >= 0) {
+        Api.updatePlaylist(pl.serverId, { songIndicesToRemove: [removedIdx] }).catch(console.error)
+      }
+    }
   }
 
   function setCover(coverId) {
-    playlists.updatePlaylist(id, { coverArtId: coverId, coverDataUrl: null })
+    if (pl && !pl.isServerOnly) {
+      playlists.updatePlaylist(id, { coverArtId: coverId, coverDataUrl: null })
+    }
     showCoverPicker = false
   }
 
   function handleFileUpload(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || pl?.isServerOnly) return
     const reader = new FileReader()
     reader.onload = ev => {
       playlists.updatePlaylist(id, { coverDataUrl: ev.target.result, coverArtId: null })
@@ -100,7 +165,9 @@
   }
 </script>
 
-{#if !pl}
+{#if isServerOnly && serverLoading}
+  <div class="loading-msg">Loading playlist from server…</div>
+{:else if !pl}
   <div class="loading-msg">Playlist not found.</div>
 {:else}
   <div class="pl-detail-header">
@@ -108,9 +175,9 @@
       class="pl-detail-art"
       role="button"
       tabindex="0"
-      onclick={() => showCoverPicker = !showCoverPicker}
-      onkeydown={e => (e.key === 'Enter' || e.key === ' ') && (showCoverPicker = !showCoverPicker)}
-      title="Change cover"
+      onclick={() => !pl.isServerOnly && (showCoverPicker = !showCoverPicker)}
+      onkeydown={e => !pl.isServerOnly && (e.key === 'Enter' || e.key === ' ') && (showCoverPicker = !showCoverPicker)}
+      title={pl.isServerOnly ? '' : 'Change cover'}
     >
       {#if pl.coverDataUrl}
         <img src={pl.coverDataUrl} alt="" />
@@ -119,11 +186,11 @@
       {:else}
         <span class="icon" style="width:40px;height:40px;color:var(--muted)">{@html IconList}</span>
       {/if}
-      <div class="pl-detail-art-overlay">Change<br>Cover</div>
+      {#if !pl.isServerOnly}<div class="pl-detail-art-overlay">Change<br>Cover</div>{/if}
     </div>
 
     <div class="pl-detail-info">
-      {#if editingName}
+      {#if editingName && !pl.isServerOnly}
         <!-- svelte-ignore a11y_autofocus -->
         <input
           class="pl-inline-edit"
@@ -137,15 +204,20 @@
       {:else}
         <div
           class="pl-detail-name"
-          role="button"
-          tabindex="0"
+          role={pl.isServerOnly ? 'text' : 'button'}
+          tabindex={pl.isServerOnly ? -1 : 0}
           onclick={startEditName}
           onkeydown={e => (e.key === 'Enter' || e.key === ' ') && startEditName()}
-          title="Click to rename"
-        >{pl.name}</div>
+          title={pl.isServerOnly ? '' : 'Click to rename'}
+        >
+          {pl.name}
+          {#if pl.serverId || pl.isServerOnly}
+            <span class="pl-server-indicator" title="Synced with server"><span class="icon" style="width:11px;height:11px">{@html IconCloud}</span></span>
+          {/if}
+        </div>
       {/if}
 
-      {#if editingDesc}
+      {#if editingDesc && !pl.isServerOnly}
         <!-- svelte-ignore a11y_autofocus -->
         <input
           class="pl-inline-edit pl-inline-edit--desc"
@@ -160,15 +232,15 @@
       {:else}
         <div
           class="pl-detail-desc"
-          role="button"
-          tabindex="0"
+          role={pl.isServerOnly ? 'text' : 'button'}
+          tabindex={pl.isServerOnly ? -1 : 0}
           onclick={startEditDesc}
-          onkeydown={e => (e.key === 'Enter' || e.key === ' ') && startEditDesc()}
-          title="Click to edit description"
+          onkeydown={e => !pl.isServerOnly && (e.key === 'Enter' || e.key === ' ') && startEditDesc()}
+          title={pl.isServerOnly ? '' : 'Click to edit description'}
         >
           {#if pl.description}
             {pl.description}
-          {:else}
+          {:else if !pl.isServerOnly}
             <span class="pl-detail-desc-hint">Add description…</span>
           {/if}
         </div>
@@ -216,7 +288,7 @@
   {/if}
 
   {#if pl.tracks.length === 0}
-    <div class="loading-msg">No tracks yet — use the + button on any song or album.</div>
+    <div class="loading-msg">{pl.isServerOnly ? 'No tracks in this playlist.' : 'No tracks yet — use the + button on any song or album.'}</div>
   {:else}
     <div class="track-list">
       {#each pl.tracks as track, idx}
@@ -239,15 +311,17 @@
             <div class="track-artist">{track.artist}</div>
           </div>
           <div class="track-duration">{formatDuration(track.duration)}</div>
-          <button
-            class="track-add-btn"
-            title="Add to playlist"
-            onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
-          >+</button>
+          {#if !pl.isServerOnly}
+            <button
+              class="track-add-btn"
+              title="Add to playlist"
+              onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
+            >+</button>
+          {/if}
           <button
             class="track-remove-btn"
             title="Remove from playlist"
-            onclick={e => { e.stopPropagation(); removeTrack(track.id) }}
+            onclick={e => { e.stopPropagation(); removeTrack(track, idx) }}
           >×</button>
         </div>
       {/each}

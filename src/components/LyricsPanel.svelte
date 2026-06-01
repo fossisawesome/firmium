@@ -17,12 +17,46 @@
   function close() {
     lyricsOpen.set(false)
   }
+
+  // Swipe-down-to-close: drag the header bar downward to dismiss the panel.
+  let dragOffset = $state(0)
+  let dragStartY = 0
+  let isDragging = false
+
+  function onDragStart(e) {
+    dragStartY = (e.touches ?? [e])[0].clientY
+    isDragging = true
+  }
+
+  function onDragMove(e) {
+    if (!isDragging) return
+    const dy = (e.touches ?? [e])[0].clientY - dragStartY
+    dragOffset = Math.max(0, dy)
+  }
+
+  function onDragEnd() {
+    isDragging = false
+    if (dragOffset > window.innerHeight * 0.25) {
+      close()
+    }
+    dragOffset = 0
+  }
 </script>
 
-<div class="lyrics-panel" class:open={$lyricsOpen}>
+<div
+  class="lyrics-panel"
+  class:open={$lyricsOpen}
+  style={dragOffset > 0 ? `transform: translateY(${dragOffset}px); transition: none` : ''}
+>
   <!-- Fills the status bar / safe area on mobile full-screen; zero-height on desktop -->
   <div class="lyrics-safe-top"></div>
-  <div class="lyrics-header">
+  <div
+    class="lyrics-header"
+    role="presentation"
+    ontouchstart={onDragStart}
+    ontouchmove={onDragMove}
+    ontouchend={onDragEnd}
+  >
     <span class="lyrics-header-title">Lyrics</span>
     <button class="lyrics-close" onclick={close}>
       <span class="icon" style="width:13px;height:13px">{@html IconClose}</span>

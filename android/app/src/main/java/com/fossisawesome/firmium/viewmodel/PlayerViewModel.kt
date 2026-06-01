@@ -236,9 +236,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         lyricsJob?.cancel()
         _lyricsState.update { it.copy(isLoading = true, lines = emptyList(), synced = false, activeLine = -1, trackId = track.id) }
         lyricsJob = viewModelScope.launch {
+            val trackId = track.id
             val result = try {
                 api.getLyrics(track.id, track.artist, track.title, track.album, track.duration)
-            } catch (_: Exception) { null }
+            } catch (e: Exception) { if (e is CancellationException) throw e; null }
+            // Guard against a stale fetch racing ahead of a newer track that started before this
+            // coroutine was cancelled.
+            if (_lyricsState.value.trackId != trackId) return@launch
             if (result != null) {
                 _lyricsState.update { it.copy(isLoading = false, lines = result.lines, synced = result.synced) }
             } else {

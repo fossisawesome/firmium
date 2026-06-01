@@ -3,6 +3,7 @@ package com.fossisawesome.firmium.data.api
 import com.fossisawesome.firmium.data.model.*
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -193,7 +194,7 @@ class ApiClient(private val auth: AuthManager) {
                 } ?: emptyList()
                 if (lines.isNotEmpty()) return LyricsResult(lines, synced)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) { if (e is CancellationException) throw e }
 
         // 2. Legacy getLyrics endpoint (Subsonic, no timestamps).
         try {
@@ -203,7 +204,7 @@ class ApiClient(private val auth: AuthManager) {
                 val lines = text.lines().map { LyricLine(null, it) }
                 if (lines.isNotEmpty()) return LyricsResult(lines, false)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) { if (e is CancellationException) throw e }
 
         // 3. LrcLib — free community lyrics database, supports synced LRC format.
         if (useLrclib) {
@@ -230,7 +231,7 @@ class ApiClient(private val auth: AuthManager) {
                         if (lines.isNotEmpty()) return LyricsResult(lines, false)
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) { if (e is CancellationException) throw e }
         }
 
         return null

@@ -2316,13 +2316,21 @@ html.is-mobile-layout .ctrl-btn.main-ctrl {
 }
 
 /* Lyrics panel → full-screen overlay, above MobilePlayer (z-index 300) */
-html.is-mobile-layout .lyrics-panel.open {
-  position: fixed;
+/* Mobile: lyrics panel is always fixed, hidden below the viewport when closed,
+   slides up via transform instead of width so the close animation never flashes in layout flow. */
+html.is-mobile-layout .lyrics-panel {
+  position: fixed !important;
   inset: 0;
-  width: 100%;
+  width: 100% !important;
   min-width: unset;
   z-index: 400;
   padding-bottom: calc(68px + 56px + env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+html.is-mobile-layout .lyrics-panel.open {
+  transform: translateY(0);
 }
 
 /* Spacer that reserves the status bar / notch area at the top of the full-screen

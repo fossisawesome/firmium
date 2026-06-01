@@ -40,6 +40,12 @@ update_file() {
     sed -i "s/^\* .* - .*$/\* $CHANGELOG_DATE fossisawesome <fossisawesome AT github DOT com> - $version-1/" "$file"
   elif [[ $file == *.md ]]; then
     sed -i "s/^\*\*Version\*\*: [^*]*/\*\*Version\*\*: $version/" "$file"
+  elif [[ $file == *.kts ]]; then
+    # Increment versionCode by 1 and set versionName to the new version
+    CURRENT_CODE=$(grep -oP 'versionCode = \K[0-9]+' "$file")
+    NEW_CODE=$((CURRENT_CODE + 1))
+    sed -i "s/versionCode = [0-9]*/versionCode = $NEW_CODE/" "$file"
+    sed -i "s/versionName = \"[^\"]*\"/versionName = \"$version\"/" "$file"
   fi
 
   echo "✓ Updated: $file"
@@ -52,6 +58,9 @@ update_file "$PROJECT_ROOT/src-tauri/tauri.conf.json" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/src-tauri/Cargo.toml" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/PKGBUILD" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/firmium.spec" "$NEW_VERSION"
+
+# Update Android app
+update_file "$PROJECT_ROOT/android/app/build.gradle.kts" "$NEW_VERSION"
 
 # Update AUR folders
 update_file "$HOME/firmium/aur-firmium-git/PKGBUILD" "$NEW_VERSION"

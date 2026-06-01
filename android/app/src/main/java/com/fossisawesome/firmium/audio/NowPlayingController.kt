@@ -21,6 +21,7 @@ import com.fossisawesome.firmium.MainActivity
 import com.fossisawesome.firmium.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -43,6 +44,8 @@ class NowPlayingController(private val context: Context) {
     var listener: Listener? = null
 
     private val scope = CoroutineScope(Dispatchers.Main)
+    // Tracks the current art-fetch coroutine so it can be cancelled on track change or clear().
+    private var artJob: Job? = null
     private var mediaSession: MediaSessionCompat? = null
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -105,6 +108,15 @@ class NowPlayingController(private val context: Context) {
         )
     }
 
+    // Builds a MediaMetadataCompat with common fields; art is optional.
+    private fun buildMetadata(title: String, artist: String, album: String, art: Bitmap? = null): MediaMetadataCompat =
+        MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
+            .apply { if (art != null) putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art) }
+            .build()
+
     private fun buildNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long): Notification {
         val session = ensureMediaSession()
         val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
@@ -149,10 +161,46 @@ class NowPlayingController(private val context: Context) {
 
     fun update(title: String, artist: String, album: String, coverUrl: String?, isPlaying: Boolean) {
         ensureChannel()
-        scope.launch {
-            // Use Coil to load album art — benefits from the app-wide disk/memory cache.
-            val art: Bitmap? = if (!coverUrl.isNullOrBlank()) {
-                withContext(Dispatchers.IO) {
+        val session = ensureMediaSession()
+
+        // Update metadata immediately (no art yet) so the session reflects the new track at once.
+        session.setMetadata(buildMetadata(title, artist, album))
+
+        // Start the foreground service synchronously so it fires before the app can move to the
+        // background. Deferring this behind the async art fetch caused an IllegalStateException
+        // on Android O+ ("Not allowed to start service; app is in background").
+        val noArtNotification = buildNotification(title, artist, isPlaying, null, 0L, 0L)
+        NowPlayingService.pendingNotification = noArtNotification
+        // Pass the notification in the Intent itself so rapid track skips cannot overwrite the
+        // static pendingNotification field before onStartCommand reads it.
+        val serviceIntent = Intent(context, NowPlayingService::class.java).apply {
+            putExtra(NowPlayingService.EXTRA_NOTIFICATION, noArtNotification)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                context.startForegroundService(serviceIntent)
+            } catch (_: IllegalStateException) {
+                // App moved to background before this call — service cannot start. Non-fatal;
+                // playback continues but without a media notification until the app resumes.
+                return
+            }
+        } else {
+            try {
+                context.startService(serviceIntent)
+            } catch (_: Exception) {
+                // Some restricted OEM builds (pre-O) enforce background start rules too.
+                return
+            }
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, noArtNotification)
+        }
+
+        // Cancel any in-flight art fetch for the previous track before launching a new one.
+        artJob?.cancel()
+
+        // Fetch album art asynchronously and refresh the notification once it arrives.
+        if (!coverUrl.isNullOrBlank()) {
+            artJob = scope.launch {
+                val art: Bitmap? = withContext(Dispatchers.IO) {
                     runCatching {
                         val req = ImageRequest.Builder(context)
                             .data(coverUrl)
@@ -161,26 +209,28 @@ class NowPlayingController(private val context: Context) {
                         (context.imageLoader.execute(req).drawable as? BitmapDrawable)?.bitmap
                     }.getOrNull()
                 }
-            } else null
-
-            val session = ensureMediaSession()
-            session.setMetadata(
-                MediaMetadataCompat.Builder()
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
-                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art)
-                    .build()
-            )
-
-            val notification = buildNotification(title, artist, isPlaying, art, 0L, 0L)
-            NowPlayingService.pendingNotification = notification
-            val serviceIntent = Intent(context, NowPlayingService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
-                NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+                // Guard against clear() having been called (mediaSession released) or a newer
+                // track having started while art was loading.
+                if (session !== mediaSession) return@launch
+                if (art != null) {
+                    session.setMetadata(buildMetadata(title, artist, album, art))
+                    val artNotification = buildNotification(title, artist, isPlaying, art, 0L, 0L)
+                    NowPlayingService.pendingNotification = artNotification
+                    // Re-promote the foreground service with the art notification so it stays
+                    // alive even if Android killed it while the fetch was in progress.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val artIntent = Intent(context, NowPlayingService::class.java).apply {
+                            putExtra(NowPlayingService.EXTRA_NOTIFICATION, artNotification)
+                        }
+                        try {
+                            context.startForegroundService(artIntent)
+                        } catch (_: IllegalStateException) {
+                            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, artNotification)
+                        }
+                    } else {
+                        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, artNotification)
+                    }
+                }
             }
         }
     }
@@ -219,6 +269,10 @@ class NowPlayingController(private val context: Context) {
     }
 
     fun clear() {
+        // Cancel in-flight art fetch before releasing the session so the coroutine cannot
+        // call setMetadata() or notify() on a dead session after this returns.
+        artJob?.cancel()
+        artJob = null
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
         context.stopService(Intent(context, NowPlayingService::class.java))
         mediaSession?.release()

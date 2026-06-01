@@ -33,7 +33,7 @@
         Keyring.remove(username).catch(() => {})
       }
     } catch (err) {
-      error = err.message ?? 'Authentication rejected'
+      error = (typeof err === 'string' ? err : err?.message || (err instanceof Error ? err.toString() : null)) || 'Connection failed — check the server URL and try again'
     } finally {
       connecting = false
     }

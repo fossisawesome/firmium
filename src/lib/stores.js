@@ -49,12 +49,12 @@ export function navToView(type) {
 
 export function navToAlbum(id) {
   const parent = get(activeView).type
-  activeView.set({ type: 'album', id, parentType: ['albums', 'artists', 'search'].includes(parent) ? parent : 'albums' })
+  activeView.set({ type: 'album', id, parentType: ['albums', 'artists', 'search', 'home'].includes(parent) ? parent : 'albums' })
 }
 
 export function navToArtist(id) {
   const parent = get(activeView).type
-  activeView.set({ type: 'artist', id, parentType: ['albums', 'artists'].includes(parent) ? parent : 'artists' })
+  activeView.set({ type: 'artist', id, parentType: ['albums', 'artists', 'home'].includes(parent) ? parent : 'artists' })
 }
 
 export function navToPlaylist(id) {
@@ -180,7 +180,8 @@ function createPlaylistsStore() {
   return {
     subscribe,
     create(name = 'New Playlist') {
-      const pl = { id: _uuid(), name: String(name).trim() || 'New Playlist', description: '', coverArtId: null, coverDataUrl: null, tracks: [] }
+      // serverId is set later once the playlist is created on the server.
+      const pl = { id: _uuid(), name: String(name).trim() || 'New Playlist', description: '', coverArtId: null, coverDataUrl: null, tracks: [], serverId: null }
       update(pls => { const next = [...pls, pl]; _savePlaylists(next); return next })
       return pl
     },
@@ -189,9 +190,17 @@ function createPlaylistsStore() {
         const next = pls.map(p => {
           if (p.id !== id) return p
           const updated = { ...p };
-          ['name', 'description', 'coverArtId', 'coverDataUrl'].forEach(k => { if (k in changes) updated[k] = changes[k] })
+          ['name', 'description', 'coverArtId', 'coverDataUrl', 'serverId'].forEach(k => { if (k in changes) updated[k] = changes[k] })
           return updated
         })
+        _savePlaylists(next)
+        return next
+      })
+    },
+    // Records the server-side ID returned after creating/syncing a playlist.
+    setServerId(id, serverId) {
+      update(pls => {
+        const next = pls.map(p => p.id === id ? { ...p, serverId } : p)
         _savePlaylists(next)
         return next
       })
@@ -201,11 +210,12 @@ function createPlaylistsStore() {
     },
     addTracks(id, tracks) {
       let added = 0
+      let newTracks = []
       update(pls => {
         const next = pls.map(p => {
           if (p.id !== id) return p
           const existingIds = new Set(p.tracks.map(t => t.id))
-          const newTracks = tracks.filter(t => !existingIds.has(t.id))
+          newTracks = tracks.filter(t => !existingIds.has(t.id))
           added = newTracks.length
           const updatedTracks = [...p.tracks, ...newTracks]
           const coverArtId = (!p.coverArtId && !p.coverDataUrl)
@@ -216,16 +226,25 @@ function createPlaylistsStore() {
         _savePlaylists(next)
         return next
       })
-      return added
+      return { added, newTracks }
     },
     removeTrack(id, trackId) {
+      let removedIndex = -1
       update(pls => {
-        const next = pls.map(p => p.id === id ? { ...p, tracks: p.tracks.filter(t => t.id !== trackId) } : p)
+        const next = pls.map(p => {
+          if (p.id !== id) return p
+          removedIndex = p.tracks.findIndex(t => t.id === trackId)
+          return { ...p, tracks: p.tracks.filter(t => t.id !== trackId) }
+        })
         _savePlaylists(next)
         return next
       })
+      return removedIndex
     }
   }
 }
 
 export const playlists = createPlaylistsStore()
+
+// Server-fetched playlists (in-memory, populated when the Playlists view is opened).
+export const serverPlaylists = writable([])

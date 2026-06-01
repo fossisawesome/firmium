@@ -12,8 +12,8 @@ android {
         applicationId = "com.fossisawesome.firmium"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "3.1.6"
+        versionCode = 3
+        versionName = "4.0.2"
         manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
