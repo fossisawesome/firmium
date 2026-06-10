@@ -52,6 +52,12 @@ android {
     }
     kotlinOptions { jvmTarget = "11" }
     buildFeatures { compose = true; buildConfig = true }
+
+    packaging {
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 dependencies {
@@ -71,8 +77,8 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
 
     // HTTP + JSON
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.4.0")
     implementation("com.google.code.gson:gson:2.11.0")
 
     // Image loading
@@ -95,7 +101,7 @@ dependencies {
     implementation("androidx.window:window:1.3.0")
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
 }

@@ -21,7 +21,7 @@ tauri-plugin-http = "2.5.9"
 reqwest = { version = "0.13.4", features = ["json", "stream", "blocking", "rustls"] }
 rodio = "0.22.2"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time"] }
-uuid = { version = "1.23.1", features = ["v4", "serde"] }
+uuid = { version = "1.23.3", features = ["v4", "serde"] }
 parking_lot = "0.12.5"
 bytes = "1"
 md5 = "0.8"
