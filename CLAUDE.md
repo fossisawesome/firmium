@@ -6,15 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Firmium** is a desktop OpenSubsonic music streaming client built with Tauri 2 (Rust backend + JavaScript frontend). It targets Linux and Windows, providing low-latency audio playback, OS-level credential storage, and integrating with OpenSubsonic-compatible servers (e.g. Navidrome). A separate native Android app lives in `android/`.
+**Firmium** is an OpenSubsonic music streaming client. The desktop app (Linux + Windows) is built with Tauri 2 (Rust backend + Svelte frontend), providing low-latency audio playback, OS-level credential storage, and integration with OpenSubsonic-compatible servers (e.g. Navidrome). A separate native Android app lives in `android/`, built with Kotlin + Jetpack Compose.
 
 ### Tech Stack
+
+**Desktop (Linux, Windows)**
 - **Frontend**: Svelte 5, bundled via Vite
 - **Backend**: Rust 2021 edition, Tauri 2.11+
 - **Audio**: `rodio` 0.22 for native OS audio engine integration
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
 - **Credentials**: OS keyring via `keyring` crate (libsecret on Linux, Windows Credential Manager on Windows)
 - **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer)
+
+**Android**
+- **Language**: Kotlin
+- **UI**: Jetpack Compose
+- **Audio**: Media3/ExoPlayer-based player + foreground `NowPlayingService`
+- **HTTP**: OkHttp/Retrofit-style `ApiClient` for OpenSubsonic API calls
+- **Credentials**: `SecureStorage` (Android Keystore-backed)
+- **Packaging**: Gradle (`assembleDebug` / `assembleRelease`)
 
 ## Architecture
 
@@ -84,6 +94,19 @@ Rust Commands (main.rs)
     ↓ (status polling every 750ms via AudioBridge)
 Svelte stores (playbackState, currentPosition, …) → reactive UI
 ```
+
+### Android App (android/app/src/main/java/com/fossisawesome/firmium/)
+
+Native Kotlin/Compose app, independent of the Tauri build, sharing the OpenSubsonic API contract with the desktop app.
+
+- **MainActivity.kt / FirmiumApplication.kt**: App entry points
+- **viewmodel/**: `AuthViewModel`, `LibraryViewModel`, `PlayerViewModel`, `PlaylistViewModel`, `SearchViewModel` — state holders feeding Compose UI
+- **audio/**: `AudioPlayer`, `NowPlayingService` (foreground media service), `NowPlayingController`
+- **data/api/**: `ApiClient`, `AuthManager` — OpenSubsonic REST client and auth/token handling
+- **data/model/**: `Artist`, `Album`, `Song`, `Playlist` data classes
+- **data/storage/**: `AppPreferences`, `PlaylistRepository`, `SecureStorage` (Keystore-backed credential storage)
+- **ui/components/**: Compose UI — `PlayerBar`, `FullScreenPlayer`, `QueueSheet`, `LyricsSheet`, `AddToPlaylistDialog`, `FirmiumUi`/`FirmiumHeader`/`FirmiumTextField`/`FirmiumSwitch`/`FirmiumSlider`/`FirmiumBottomSheet`, `CoverImage`
+- **ui/theme/**: `Theme.kt` — Compose theming
 
 ### Key Design Decisions
 
@@ -196,7 +219,11 @@ Currently no automated tests. Manual testing workflow:
 - `themes/` — TOML theme files
 - `vite.config.js` — Vite + Svelte plugin config
 - `package.json` — npm scripts for build/dev
-- `android/` — Separate native Android app (not part of the Tauri build)
+- `android/app/src/main/java/com/fossisawesome/firmium/MainActivity.kt` — Android app entry point
+- `android/app/src/main/java/com/fossisawesome/firmium/data/api/ApiClient.kt` — Android OpenSubsonic API client
+- `android/app/src/main/java/com/fossisawesome/firmium/audio/AudioPlayer.kt` — Android audio playback engine
+- `android/app/src/main/java/com/fossisawesome/firmium/audio/NowPlayingService.kt` — Foreground media service
+- `android/` — Separate native Kotlin/Compose Android app (not part of the Tauri build)
 
 ## OpenSubsonic API Integration
 
@@ -225,6 +252,91 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 - **Search**: Limited to 40 albums, 100 songs per query (configurable in `src/lib/api.js` constants)
 - **Playback Concurrency**: Only one audio stream per device active at a time; multiple devices can play different streams concurrently
 - **CPU**: Release build has `opt-level = 2` + LTO enabled; `strip = false` keeps debug symbols for crash reporting
+
+# Foundational Thinking Principles
+
+These principles apply to all interactions: conversations, code, debugging, planning, anything.
+
+## 1. Think Before Acting
+
+**Don't assume. Surface confusion. Present tradeoffs explicitly.**
+
+Before committing to a direction:
+- State your assumptions explicitly—especially about constraints: Is this for production or a one-off? Any performance targets? Does it need to integrate with existing code? Does it need to work in a specific environment?
+- If uncertain, name it. Don't hide confusion behind confident-sounding recommendations.
+- If multiple interpretations exist, present them—don't pick silently.
+- If a simpler approach exists, mention it. Suggest it.
+- If something is unclear, stop. Say what's confusing. Ask.
+
+This applies to code, architecture, debugging, and conversations. Clarity first.
+
+## 2. Simplicity First
+
+**Minimum code/explanation that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it—don't delete it.
+
+When your changes create orphans (unused imports, dead variables):
+- Remove them.
+- Verify pre-existing "dead" code really is dead code - and then remove it.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+If you can't write a test for it, the goal isn't clear enough. That's a forcing function—it surfaces vague requirements before you waste time coding.
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**For autonomous tool use and multi-step workflows, see `agents.md`.**
+
+## Meta: Guidelines Are Defaults, Not Laws
+
+If you explicitly say "I want this abstracted," "I need error handling for X," or "performance matters more than simplicity here," that overrides the guidelines above. The principles are defaults for when direction is unclear. Your judgment always wins.
+
+## 5. Verify, Don't Assume Implementation Details
+
+**Don't assume the user's environment, tools, or IDE capabilities.**
+
+Before recommending something, consider:
+- Does their IDE support X? (Ask or check, don't assume.)
+- Is tool Y installed in their environment? (Verify or provide install steps.)
+- Can their OS do Z? (Check constraints first—especially true for macOS, Linux kernels, terminal emulators.)
+- Are they on a supported version? (Test environment assumptions.)
+
+This catches silent failures. A recommendation that works on your machine but breaks on theirs is worse than no recommendation.
 
 ## Future Considerations
 

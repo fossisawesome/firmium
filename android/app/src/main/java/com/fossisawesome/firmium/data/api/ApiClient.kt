@@ -216,9 +216,11 @@ class ApiClient(private val auth: AuthManager) {
                     if (albumName.isNotBlank()) append("&album_name=${java.net.URLEncoder.encode(albumName, "UTF-8")}")
                     if (durationSec > 0) append("&duration=$durationSec")
                 }
-                val response = http.newCall(Request.Builder().url(url).build()).execute()
-                val body = response.body?.string()
-                if (body != null && response.isSuccessful) {
+                val (body, isSuccessful) = withContext(Dispatchers.IO) {
+                    val response = http.newCall(Request.Builder().url(url).build()).execute()
+                    response.body?.string() to response.isSuccessful
+                }
+                if (body != null && isSuccessful) {
                     val obj = JsonParser.parseString(body).asJsonObject
                     val synced = obj.get("syncedLyrics")?.takeIf { !it.isJsonNull }?.asString
                     if (!synced.isNullOrBlank()) {
