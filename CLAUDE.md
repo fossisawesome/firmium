@@ -19,12 +19,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer)
 
 **Android**
-- **Language**: Kotlin
-- **UI**: Jetpack Compose
-- **Audio**: Media3/ExoPlayer-based player + foreground `NowPlayingService`
-- **HTTP**: OkHttp/Retrofit-style `ApiClient` for OpenSubsonic API calls
-- **Credentials**: `SecureStorage` (Android Keystore-backed)
-- **Packaging**: Gradle (`assembleDebug` / `assembleRelease`)
+
+See [android/CLAUDE.md](android/CLAUDE.md) for the Android tech stack and architecture.
 
 ## Architecture
 
@@ -95,18 +91,9 @@ Rust Commands (main.rs)
 Svelte stores (playbackState, currentPosition, …) → reactive UI
 ```
 
-### Android App (android/app/src/main/java/com/fossisawesome/firmium/)
+### Android App
 
-Native Kotlin/Compose app, independent of the Tauri build, sharing the OpenSubsonic API contract with the desktop app.
-
-- **MainActivity.kt / FirmiumApplication.kt**: App entry points
-- **viewmodel/**: `AuthViewModel`, `LibraryViewModel`, `PlayerViewModel`, `PlaylistViewModel`, `SearchViewModel` — state holders feeding Compose UI
-- **audio/**: `AudioPlayer`, `NowPlayingService` (foreground media service), `NowPlayingController`
-- **data/api/**: `ApiClient`, `AuthManager` — OpenSubsonic REST client and auth/token handling
-- **data/model/**: `Artist`, `Album`, `Song`, `Playlist` data classes
-- **data/storage/**: `AppPreferences`, `PlaylistRepository`, `SecureStorage` (Keystore-backed credential storage)
-- **ui/components/**: Compose UI — `PlayerBar`, `FullScreenPlayer`, `QueueSheet`, `LyricsSheet`, `AddToPlaylistDialog`, `FirmiumUi`/`FirmiumHeader`/`FirmiumTextField`/`FirmiumSwitch`/`FirmiumSlider`/`FirmiumBottomSheet`, `CoverImage`
-- **ui/theme/**: `Theme.kt` — Compose theming
+Native Kotlin/Compose app in `android/`, independent of the Tauri build, sharing the OpenSubsonic API contract with the desktop app. See [android/CLAUDE.md](android/CLAUDE.md) for its architecture, build commands, and conventions.
 
 ### Key Design Decisions
 
@@ -204,6 +191,11 @@ Currently no automated tests. Manual testing workflow:
 - Linux .desktop file for app launcher: `firmium.desktop` (bundled by Tauri)
 - Icon files in `src-tauri/icons/` (32x32, 128x128, 128x128@2x, icon.icns, icon.ico)
 
+## Documentation
+
+- End-user documentation (installing, building from source, usage, custom themes, and a settings reference) lives in the `firmium-docs` repo, in `src/content/*.md`, built with Vite + Svelte and deployed via GitHub Pages
+- When changing settings (`Settings.svelte`), themes (`themes/*.toml`, theme loading code), or build/packaging commands, update the corresponding `.md` file in `firmium-docs/src/content/`
+
 ## Key Files
 
 - `src-tauri/src/lib.rs` — All Tauri command definitions, app entry point
@@ -219,11 +211,7 @@ Currently no automated tests. Manual testing workflow:
 - `themes/` — TOML theme files
 - `vite.config.js` — Vite + Svelte plugin config
 - `package.json` — npm scripts for build/dev
-- `android/app/src/main/java/com/fossisawesome/firmium/MainActivity.kt` — Android app entry point
-- `android/app/src/main/java/com/fossisawesome/firmium/data/api/ApiClient.kt` — Android OpenSubsonic API client
-- `android/app/src/main/java/com/fossisawesome/firmium/audio/AudioPlayer.kt` — Android audio playback engine
-- `android/app/src/main/java/com/fossisawesome/firmium/audio/NowPlayingService.kt` — Foreground media service
-- `android/` — Separate native Kotlin/Compose Android app (not part of the Tauri build)
+- `android/` — Separate native Kotlin/Compose Android app (not part of the Tauri build); see [android/CLAUDE.md](android/CLAUDE.md)
 
 ## OpenSubsonic API Integration
 
@@ -242,8 +230,8 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 
 ## Comments
 
-- Whenever creating something new - add a comment above it explaining what it does
-- Use previous comments to get a better understanding of the code
+- Add a comment above new code only when the WHY is non-obvious (a hidden constraint, a workaround, a subtle invariant). Well-named code doesn't need a comment explaining WHAT it does.
+- Use existing comments to understand surrounding code.
 
 ## Performance Considerations
 

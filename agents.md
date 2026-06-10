@@ -108,6 +108,10 @@ Then loop:
 
 Strong criteria let you operate independently. Vague criteria ("make it work") require constant back-and-forth.
 
+## 7. Keep Docs in Sync
+
+If a change touches settings (`Settings.svelte`, `stores.js`), themes (`themes/*.toml`, theme loading code), or build/packaging commands (`package.json` scripts, `PKGBUILD`, `firmium.spec`), update the matching page in the `firmium-docs` repo (`src/content/settings.md`, `src/content/custom-themes.md`, `src/content/building-from-source.md`) in the same change.
+
 ## When to Use These Guidelines
 
 - Iterative debugging (audio playback, Tauri IPC, keyring/SecureStorage credential issues, Compose UI state bugs)
