@@ -13,6 +13,9 @@ on:
         description: 'Release tag (e.g. v3.1.4)'
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   copr-publish:
     # For workflow_run: only proceed if the Release workflow succeeded.
@@ -32,13 +35,15 @@ jobs:
       - name: Fix git safe directory
         run: git config --global --add safe.directory '*'
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Extract version from tag
         id: version
         # workflow_run exposes the tag in head_branch; workflow_dispatch uses the input
+        env:
+          TAG_INPUT: ${{ github.event.workflow_run.head_branch || inputs.tag }}
         run: |
-          TAG="${{ github.event.workflow_run.head_branch || inputs.tag }}"
+          TAG="$TAG_INPUT"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
@@ -48,11 +53,12 @@ jobs:
         id: rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          RPM=$(gh release view "${{ steps.version.outputs.tag }}" --json assets \
+          RPM=$(gh release view "$TAG" --json assets \
             -q '.assets[].name' | grep -i '\.rpm$' | head -1)
           if [ -z "$RPM" ]; then
-            echo "No RPM asset found in release ${{ steps.version.outputs.tag }}" >&2
+            echo "No RPM asset found in release $TAG" >&2
             exit 1
           fi
           echo "filename=$RPM" >> $GITHUB_OUTPUT
@@ -73,21 +79,26 @@ jobs:
       - name: Build SRPM
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RPM_FILENAME: ${{ steps.rpm.outputs.filename }}
         run: |
           mkdir -p ~/rpmbuild/{SPECS,SOURCES,SRPMS}
           DATE=$(date "+%a %b %d %Y")
           sed \
-            -e "s/VERSION_PLACEHOLDER/${{ steps.version.outputs.version }}/g" \
-            -e "s/RPM_FILENAME_PLACEHOLDER/${{ steps.rpm.outputs.filename }}/g" \
+            -e "s/VERSION_PLACEHOLDER/$VERSION/g" \
+            -e "s/RPM_FILENAME_PLACEHOLDER/$RPM_FILENAME/g" \
             -e "s/CHANGELOG_DATE_PLACEHOLDER/$DATE/g" \
             packaging/firmium.spec > ~/rpmbuild/SPECS/firmium.spec
           # Download the pre-built RPM so rpmbuild can include it in the SRPM.
-          gh release download "${{ steps.version.outputs.tag }}" \
-            --pattern "${{ steps.rpm.outputs.filename }}" \
+          gh release download "$TAG" \
+            --pattern "$RPM_FILENAME" \
             --dir ~/rpmbuild/SOURCES/
           rpmbuild -bs --nodeps ~/rpmbuild/SPECS/firmium.spec
 
       - name: Submit to COPR
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          SRPM=$(ls ~/rpmbuild/SRPMS/firmium-${{ steps.version.outputs.version }}-1.*.src.rpm)
+          SRPM=$(ls ~/rpmbuild/SRPMS/firmium-"$VERSION"-1.*.src.rpm)
           copr-cli build fossisawesome/Firmium "$SRPM"
