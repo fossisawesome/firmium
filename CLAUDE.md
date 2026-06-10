@@ -194,7 +194,7 @@ Currently no automated tests. Manual testing workflow:
 ## Documentation
 
 - End-user documentation (installing, building from source, usage, custom themes, and a settings reference) lives in the `firmium-docs` repo, in `src/content/*.md`, built with Vite + Svelte and deployed via GitHub Pages
-- When changing settings (`Settings.svelte`), themes (`themes/*.toml`, theme loading code), or build/packaging commands, update the corresponding `.md` file in `firmium-docs/src/content/`
+- For which changes require updating which docs page, see agents.md "Keep Docs in Sync"
 
 ## Key Files
 
@@ -226,7 +226,7 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 
 ## Versioning
 
-- Always use semantic verisoning
+- Always use semantic versioning
 
 ## Comments
 
@@ -325,10 +325,3 @@ Before recommending something, consider:
 - Are they on a supported version? (Test environment assumptions.)
 
 This catches silent failures. A recommendation that works on your machine but breaks on theirs is worse than no recommendation.
-
-## Future Considerations
-
-- Automated test suite (unit tests for audio module, integration tests for API)
-- Equalizer or DSP effects (extend audio.rs)
-- Playlist persistence beyond session
-- Scrobbling to ListenBrainz (API already supports it; UI not yet wired)
