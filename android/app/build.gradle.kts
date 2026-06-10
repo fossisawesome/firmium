@@ -52,6 +52,12 @@ android {
     }
     kotlinOptions { jvmTarget = "11" }
     buildFeatures { compose = true; buildConfig = true }
+
+    packaging {
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 dependencies {
@@ -71,8 +77,8 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
 
     // HTTP + JSON
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.4.0")
     implementation("com.google.code.gson:gson:2.11.0")
 
     // Image loading
