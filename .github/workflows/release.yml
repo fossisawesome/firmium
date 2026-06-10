@@ -24,7 +24,7 @@ jobs:
 
       - name: Create draft release
         id: create-release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { data } = await github.rest.repos.createRelease({
@@ -155,7 +155,7 @@ jobs:
           gh release edit "${{ github.ref_name }}" --notes-file "$RUNNER_TEMP/release_notes.md"
 
       - name: Upload APK to release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
