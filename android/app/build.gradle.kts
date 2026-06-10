@@ -52,6 +52,12 @@ android {
     }
     kotlinOptions { jvmTarget = "11" }
     buildFeatures { compose = true; buildConfig = true }
+
+    packaging {
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 dependencies {
