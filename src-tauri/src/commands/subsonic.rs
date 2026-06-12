@@ -263,7 +263,7 @@ pub async fn get_genres_list(app: AppHandle, state: State<'_, Arc<AppState>>) ->
             })
         })
         .collect();
-    genres.sort_by(|a, b| b.album_count.cmp(&a.album_count));
+    genres.sort_by_key(|g| std::cmp::Reverse(g.album_count));
     Ok(genres)
 }
 
