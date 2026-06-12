@@ -20,6 +20,7 @@ private fun song(id: String) = Song(
     id = id, title = id, artist = "Artist", displayArtist = null, album = "Album",
     albumId = "album-$id", artistId = "artist-1", duration = 180, track = null, year = null,
     genre = null, genres = emptyList(), coverArt = null, size = null, bitRate = null,
+    samplingRate = null, bitDepth = null, suffix = null,
     replayGainTrack = null, replayGainAlbum = null, bpm = null,
 )
 
