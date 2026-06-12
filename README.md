@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="readme/favicon.svg" alt="Firmium logo" width="96">
+</p>
+
 <h1 align="center">Firmium</h1>
 <p align="center"><i>Smooth, fast, simple. Forever.</i></p>
 
@@ -22,18 +26,17 @@ Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) mu
 
 ## Features
 
-**What makes Firmium stand out:**
-- Native OS audio engine via Rodio (Linux) / ExoPlayer (Android) — no Electron, no Chromium audio stack
-- Crossfade between tracks with configurable overlap
-- Credentials stored securely in the OS keyring (GNOME Keyring / KWallet on Linux) or Android Keystore-backed EncryptedSharedPreferences — never written to disk in plaintext
-- Android MediaSession integration: lock screen controls and persistent playback notification
-
-**Everything else:**
-- Synced and unsynced lyrics
-- Pretty UI with 18 built-in color themes, plus support for custom user themes
-- Cover art caching
-- Per-device volume control
-- Full OpenSubsonic API support (scrobbling, search, playlists, and more)
+| Feature | Desktop | Android |
+| --- | :---: | :---: |
+| Native audio engine (no Electron/Chromium audio stack) | Rodio | ExoPlayer |
+| Crossfade between tracks with configurable overlap | ✅ | ✅ |
+| Credentials stored in OS keyring / Keystore — never plaintext on disk | ✅ | ✅ |
+| Lock screen controls & persistent playback notification | — | ✅ |
+| Synced and unsynced lyrics | ✅ | ✅ |
+| 18 built-in color themes + custom user themes | ✅ | ✅ |
+| Cover art caching | ✅ | ✅ |
+| Per-device volume control | ✅ | ✅ |
+| Full OpenSubsonic API support (scrobbling, search, playlists, more) | ✅ | ✅ |
 
 ## Gallery
 
@@ -81,20 +84,29 @@ Or transfer the APK to your device and open it with a file manager. You may need
 
 Before running Firmium, install the required system libraries for your distribution.
 
-**Debian / Ubuntu**
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
+
 ```bash
 sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3 libsecret-1-0 libxdo3 libxcb1
 ```
+</details>
 
-**Fedora**
+<details>
+<summary><b>Fedora</b></summary>
+
 ```bash
 sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs libsecret libxdo libxcb
 ```
+</details>
 
-**Arch Linux**
+<details>
+<summary><b>Arch Linux</b></summary>
+
 ```bash
 sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl libsecret xdotool libxcb
 ```
+</details>
 
 Firmium also requires:
 - A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments. Without it, passwords won't be saved and you'll need to log in every launch.
@@ -102,26 +114,36 @@ Firmium also requires:
 
 ### Installing the App
 
-Download the latest release from the [releases page](https://github.com/fossisawesome/firmium/releases/latest). (Unless you use Arch)
+<table>
+  <tr>
+    <td valign="top"><b>Arch Linux</b><br>
 
-**Arch Linux**
 ```bash
 yay -S firmium-desktop-bin # or paru -S firmium-desktop-bin
 ```
+</td>
+    <td valign="top"><b>Fedora (COPR)</b><br>
 
-**Fedora (COPR)**
 ```bash
 sudo dnf copr enable fossisawesome/Firmium
 sudo dnf install firmium
 ```
+</td>
+  </tr>
+  <tr>
+    <td valign="top" colspan="2"><b>Debian / Ubuntu / other</b><br>
 
-**Debian / Ubuntu**
+Download the `.deb` from the [releases page](https://github.com/fossisawesome/firmium/releases/latest), then:
+
 ```bash
-# Download the .deb from the releases page, then:
 sudo dpkg -i ./firmium_*.deb
 ```
+</td>
+  </tr>
+</table>
 
-## Building from Source
+<details>
+<summary><h2 style="display:inline">Building from Source</h2></summary>
 
 ### Prerequisites
 
@@ -189,7 +211,10 @@ export ANDROID_SIGNING_KEY_PASSWORD=key-password
 
 If these are not set, Gradle will build an unsigned APK.
 
-## Troubleshooting (Android)
+</details>
+
+<details>
+<summary><h2 style="display:inline">Troubleshooting (Android)</h2></summary>
 
 **App installed but won't open**
 Ensure your device runs Android 8.0 (API 26) or later. If you sideloaded the APK, confirm you have allowed installs from unknown sources.
@@ -203,7 +228,10 @@ Credential storage is tied to the app's Android Keystore entry. A full uninstall
 **No audio through Bluetooth / certain output devices**
 ExoPlayer routes audio through the Android audio system. If a specific output device isn't working, check that it is selected as the active output in your system's audio settings.
 
-## Troubleshooting (Linux)
+</details>
+
+<details>
+<summary><h2 style="display:inline">Troubleshooting (Linux)</h2></summary>
 
 **App launches but credentials aren't saved / login fails every restart**
 Your system's Secret Service daemon isn't running or isn't unlocked. On GNOME, ensure GNOME Keyring is started. On KDE, ensure KWallet is enabled and unlocked. You can test with:
@@ -220,6 +248,8 @@ Try forcing XWayland: `WAYLAND_DISPLAY= ./firmium` or set `GDK_BACKEND=x11` befo
 
 **Server connection refused**
 Make sure your server URL includes the port (e.g. `http://192.168.1.10:4533`) and that Firmium can reach it on your network. Check your server's logs if the URL looks correct.
+
+</details>
 
 ## Contributing
 
