@@ -60,7 +60,7 @@ fun SettingsScreen(
     onLastfmSecretChange: (String) -> Unit,
     onAutoLoginToggle: (Boolean) -> Unit,
     onWipeCache: () -> Unit,
-    onDeleteLogs: () -> Unit,
+    onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -85,7 +85,7 @@ fun SettingsScreen(
         onLastfmSecretChange = onLastfmSecretChange,
         onAutoLoginToggle = onAutoLoginToggle,
         onWipeCache = onWipeCache,
-        onDeleteLogs = onDeleteLogs,
+        onClearCache = onClearCache,
         onResetSettings = onResetSettings,
         onLogout = onLogout,
     )
@@ -126,7 +126,7 @@ private fun FirmiumSettingsScreen(
     onLastfmSecretChange: (String) -> Unit,
     onAutoLoginToggle: (Boolean) -> Unit,
     onWipeCache: () -> Unit,
-    onDeleteLogs: () -> Unit,
+    onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -262,7 +262,7 @@ private fun FirmiumSettingsScreen(
                         "about" -> FirmiumAboutPanel(
                             appVersion = appVersion,
                             onWipeCache = onWipeCache,
-                            onDeleteLogs = onDeleteLogs,
+                            onClearCache = onClearCache,
                             onResetSettings = onResetSettings,
                         )
                     }
@@ -428,12 +428,12 @@ private fun FirmiumAccountPanel(
 private fun FirmiumAboutPanel(
     appVersion: String,
     onWipeCache: () -> Unit,
-    onDeleteLogs: () -> Unit,
+    onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     var wipeCacheLabel by remember { mutableStateOf("Wipe") }
-    var deleteLogsLabel by remember { mutableStateOf("Delete") }
+    var clearCacheLabel by remember { mutableStateOf("Clear") }
     var resetLabel by remember { mutableStateOf("Reset") }
 
     FirmiumSettingsRow("App Version", appVersion) {}
@@ -444,11 +444,11 @@ private fun FirmiumAboutPanel(
             Text(wipeCacheLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
         }
     }
-    FirmiumSettingsRow("Delete Logs", "Remove cached app data and log files") {
+    FirmiumSettingsRow("Clear Cache", "Remove all cached app data from disk") {
         Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable {
-            onDeleteLogs(); deleteLogsLabel = "Deleted!"
+            onClearCache(); clearCacheLabel = "Cleared!"
         }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text(deleteLogsLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.error)
+            Text(clearCacheLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.error)
         }
     }
     FirmiumSettingsRow("Reset Settings", "Reset all preferences to defaults") {

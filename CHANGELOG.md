@@ -1,3 +1,23 @@
+# v5.1.0
+
+## Added
+
+- **Bit-perfect audio output** (`src-tauri/src/audio.rs`): On desktop, the output stream is now reopened to match each track's native sample rate and channel count when possible, avoiding rodio's forced resampling. New `set_bit_perfect_enabled` command and a "Bit-perfect Audio" toggle in Settings > Playback (`src/views/Settings.svelte`, `src/lib/stores.ts`). Reopens are skipped while a crossfade is in flight to avoid silencing the outgoing track.
+- **Track format display**: The player bar now shows a "FLAC · 96 kHz · 24-bit · 1411 kbps"-style summary of the current track's format, plus "Bit-perfect" when the output device is running at the track's native rate. Added to desktop (`src/components/PlayerBar.svelte`, `src/lib/utils.ts`: `formatTrackInfo`) and Android (`PlayerBar.kt`, `FullScreenPlayer.kt`, `Song.kt`: `formatTrackInfo()`).
+- **Extra song metadata from OpenSubsonic** (`samplingRate`, `bitDepth`, `suffix`, `contentType`): now mapped through on both desktop (`src-tauri/src/commands/mappers.rs`, `src/lib/types/tauri-commands.ts`) and Android (`ApiClient.kt`, `Song.kt`).
+- **Release workflow CI gate** (`.github/workflows/release.yml`): A new `check-ci` job verifies the `CI` workflow passed for the tagged commit before `create-release` runs.
+
+## Removed
+
+- **`--debug` flag and in-app logging**: Removed `write_log`/`delete_logs`/`get_log_path`/`is_debug_mode` Tauri commands (`src-tauri/src/commands/logging.rs` → `app_info.rs`), the `app-logs.txt` file/console patching (`src/lib/utils.ts`: `AppLogger`), the Settings > Debug "Log File"/"Delete Logs" rows, and the `DebugMode` state, DevTools auto-open, and Windows console allocation in `lib.rs`/`main.rs`. Devtools shortcuts are now always blocked.
+
+## Changed
+
+- **`AudioPlayer` playback/crossfade methods** (`src-tauri/src/audio.rs`) now take `&Arc<Self>` instead of `&self`, and the output stream/mixer are wrapped in an `RwLock` to support bit-perfect reopening.
+- **Android: "Delete Logs" renamed to "Clear Cache"** (`SettingsScreen.kt`, `AppNavGraph.kt`): now clears the app's cache directory instead of referring to removed log files.
+
+---
+
 # v5.0.0
 
 ## Added

@@ -1,9 +1,6 @@
 use std::sync::Arc;
 use tauri::Manager;
 
-/// Whether the app was launched with --debug. Stored in managed state so commands can read it.
-pub struct DebugMode(pub bool);
-
 /// Playback state reported by the rodio audio engine.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -32,18 +29,7 @@ use commands::*;
 
 /// App entry point.
 pub fn run() {
-    let debug_mode = std::env::args().any(|a| a == "--debug");
-
-    if debug_mode {
-        eprintln!("[firmium] debug mode — frontend console and Rust output will appear here");
-        // Surface Tauri/wry internal logs if RUST_LOG isn't already set by the caller.
-        if std::env::var("RUST_LOG").is_err() {
-            std::env::set_var("RUST_LOG", "tauri=debug,wry=debug,firmium=debug");
-        }
-    }
-
     let builder = tauri::Builder::default()
-        .manage(DebugMode(debug_mode))
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
@@ -54,13 +40,6 @@ pub fn run() {
                 AudioPlayer::new(_app.handle().clone()).expect("Failed to initialize audio player"),
             );
             _app.manage(audio_player);
-
-            // Open DevTools immediately when --debug is passed.
-            if debug_mode {
-                if let Some(win) = _app.get_webview_window("main") {
-                    win.open_devtools();
-                }
-            }
 
             Ok(())
         })
@@ -77,12 +56,8 @@ pub fn run() {
             delete_password,
             // Auth
             generate_auth_params,
-            // Logging
-            write_log,
-            delete_logs,
-            get_log_path,
+            // App info
             get_app_version,
-            is_debug_mode,
             // Audio playback
             play_stream,
             preload_stream,
@@ -98,6 +73,7 @@ pub fn run() {
             seek_position,
             list_audio_devices,
             crossfade_to,
+            set_bit_perfect_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

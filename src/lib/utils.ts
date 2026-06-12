@@ -1,5 +1,4 @@
 import { onDestroy } from 'svelte'
-import { tauriInvoke } from './tauri'
 
 export const formatDuration = (secs: number | string): string => {
   const s = Number(secs)
@@ -42,58 +41,6 @@ export const SafeStorage = {
   }
 }
 
-// Buffer log lines and flush them as a single `write_log` IPC call, so a burst
-// of console output (e.g. framework warnings) doesn't trigger one IPC
-// round-trip per line.
-const LOG_FLUSH_INTERVAL_MS = 1000
-const LOG_FLUSH_SIZE = 20
-let _logBuffer: string[] = []
-let _logFlushTimer: ReturnType<typeof setTimeout> | null = null
-
-const _flushLogBuffer = (): void => {
-  if (_logFlushTimer !== null) { clearTimeout(_logFlushTimer); _logFlushTimer = null }
-  if (_logBuffer.length === 0) return
-  const entry = _logBuffer.join('\n')
-  _logBuffer = []
-  try { tauriInvoke('write_log', { entry }) } catch (_) {}
-}
-
-// Strip the OpenSubsonic auth token (t=) and salt (s=) from any URLs before
-// they're written to app-logs.txt, so the log file can be shared for support
-// without leaking credentials.
-const _redactAuthParams = (s: string): string =>
-  s.replace(/([?&](?:t|s)=)[^&\s"]+/g, '$1[redacted]')
-
-const _writeLog = (level: string, ...args: unknown[]): void => {
-  const msg = args.map(a => {
-    if (a instanceof Error) return `${a.name}: ${a.message}`
-    if (typeof a === 'object' && a !== null) {
-      try { return JSON.stringify(a) } catch (_) { return String(a) }
-    }
-    return String(a)
-  }).join(' ')
-  const ts = new Date().toISOString()
-  _logBuffer.push(`[${ts}] [${level}] ${_redactAuthParams(msg)}`)
-  if (_logBuffer.length >= LOG_FLUSH_SIZE) {
-    _flushLogBuffer()
-  } else if (_logFlushTimer === null) {
-    _logFlushTimer = setTimeout(_flushLogBuffer, LOG_FLUSH_INTERVAL_MS)
-  }
-}
-
-export const AppLogger = {
-  info: (...args: unknown[]) => _writeLog('INFO', ...args),
-  warn: (...args: unknown[]) => _writeLog('WARN', ...args),
-  error: (...args: unknown[]) => _writeLog('ERROR', ...args),
-}
-
-// Patch console so existing log calls are also persisted to disk.
-const _log = console.log.bind(console)
-const _warn = console.warn.bind(console)
-const _error = console.error.bind(console)
-console.log = (...a: unknown[]) => { _log(...a); AppLogger.info(...a) }
-console.warn = (...a: unknown[]) => { _warn(...a); AppLogger.warn(...a) }
-console.error = (...a: unknown[]) => { _error(...a); AppLogger.error(...a) }
 
 // Manages a single AbortController for a component's in-flight requests:
 // renew() aborts any previous request and returns a fresh signal; the
@@ -115,3 +62,17 @@ export const safeText = (str: unknown): string =>
   String(str ?? '').replace(/[&<>"']/g, m => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   } as Record<string, string>)[m])
+
+// Builds a "FLAC · 96 kHz · 24-bit · 1411 kbps" style summary from a song's metadata.
+// Parts with missing data are omitted.
+export const formatTrackInfo = (
+  song?: { suffix?: string; samplingRate?: number; bitDepth?: number; bitRate?: number } | null
+): string => {
+  if (!song) return ''
+  const parts: string[] = []
+  if (song.suffix) parts.push(song.suffix.toUpperCase())
+  if (song.samplingRate) parts.push(`${(song.samplingRate / 1000).toFixed(1).replace(/\.0$/, '')} kHz`)
+  if (song.bitDepth) parts.push(`${song.bitDepth}-bit`)
+  if (song.bitRate) parts.push(`${song.bitRate} kbps`)
+  return parts.join(' · ')
+}

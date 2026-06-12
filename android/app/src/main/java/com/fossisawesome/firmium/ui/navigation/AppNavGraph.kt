@@ -394,7 +394,7 @@ fun AppNavGraph(
                             context.imageLoader.diskCache?.clear()
                             context.imageLoader.memoryCache?.clear()
                         },
-                        onDeleteLogs = {
+                        onClearCache = {
                             context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
                         },
                         onResetSettings = {

@@ -632,6 +632,16 @@ html.is-mobile-layout.has-player .main-area {
   text-overflow: ellipsis;
 }
 
+.np-format {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: monospace;
+  opacity: 0.7;
+}
+
 .progress-row {
   display: flex;
   align-items: center;
@@ -1263,11 +1273,6 @@ input[type="range"].volume-slider {
 .debug-btn--danger:hover {
   background: color-mix(in srgb, #e05 15%, transparent);
   border-color: #e05;
-}
-
-.debug-path {
-  word-break: break-all;
-  max-width: 340px;
 }
 
 .theme-selector {

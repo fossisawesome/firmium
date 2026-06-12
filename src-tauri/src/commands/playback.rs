@@ -19,12 +19,20 @@ fn get_player<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>) -> Result<tau
 
 #[tauri::command]
 pub fn play_stream<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, stream_url: &str, track_id: &str, replay_gain_db: Option<f32>) -> Result<String, String> {
-    get_player(&app_handle)?.play_stream(stream_url, track_id.to_string(), replay_gain_db)
+    let player = get_player(&app_handle)?;
+    AudioPlayer::play_stream(&*player, stream_url, track_id.to_string(), replay_gain_db)
 }
 
 #[tauri::command]
 pub fn preload_stream<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, stream_url: &str, track_id: &str, replay_gain_db: Option<f32>) -> Result<String, String> {
-    get_player(&app_handle)?.preload_stream(stream_url, track_id.to_string(), replay_gain_db)
+    let player = get_player(&app_handle)?;
+    AudioPlayer::preload_stream(&*player, stream_url, track_id.to_string(), replay_gain_db)
+}
+
+#[tauri::command]
+pub fn set_bit_perfect_enabled<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, enabled: bool) -> Result<(), String> {
+    get_player(&app_handle)?.set_bit_perfect_enabled(enabled);
+    Ok(())
 }
 
 #[tauri::command]
@@ -92,5 +100,6 @@ pub fn crossfade_to<R: tauri::Runtime>(
     target_volume: f32,
     replay_gain_db: Option<f32>,
 ) -> Result<String, String> {
-    get_player(&app_handle)?.crossfade_to(old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db)
+    let player = get_player(&app_handle)?;
+    AudioPlayer::crossfade_to(&*player, old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db)
 }

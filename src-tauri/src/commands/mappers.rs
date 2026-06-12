@@ -46,6 +46,11 @@ pub struct Song {
     bpm: Option<f64>,
     comment: Option<String>,
     genres: Option<serde_json::Value>,
+    bit_rate: Option<u32>,
+    sampling_rate: Option<u32>,
+    bit_depth: Option<u32>,
+    suffix: Option<String>,
+    content_type: Option<String>,
 }
 
 /// Infer release type from explicit server fields, title keywords, and song count.
@@ -123,6 +128,11 @@ fn map_song(s: &serde_json::Value) -> Song {
         bpm: s.get("bpm").and_then(|v| v.as_f64()),
         comment: s.get("comment").and_then(|v| v.as_str()).map(|v| v.to_string()),
         genres: s.get("genres").cloned(),
+        bit_rate: s.get("bitRate").and_then(|v| v.as_u64()).map(|n| n as u32),
+        sampling_rate: s.get("samplingRate").and_then(|v| v.as_u64()).map(|n| n as u32),
+        bit_depth: s.get("bitDepth").and_then(|v| v.as_u64()).map(|n| n as u32),
+        suffix: s.get("suffix").and_then(|v| v.as_str()).map(|v| v.to_string()),
+        content_type: s.get("contentType").and_then(|v| v.as_str()).map(|v| v.to_string()),
     }
 }
 

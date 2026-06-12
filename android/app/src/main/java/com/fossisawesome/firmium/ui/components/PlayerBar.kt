@@ -68,6 +68,17 @@ fun PlayerBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                val trackInfo = track.formatTrackInfo()
+                if (trackInfo.isNotEmpty()) {
+                    Text(
+                        text = trackInfo,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = colors.muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             FirmiumIconButton(onClick = onPlayPause, modifier = Modifier.size(44.dp)) {

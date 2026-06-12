@@ -85,15 +85,12 @@
     applyDecorations()
     document.addEventListener('contextmenu', e => e.preventDefault())
 
-    // Block devtools shortcuts unless --debug was passed at launch.
-    const debugMode = await tauriInvoke<boolean>('is_debug_mode').catch(() => false)
-    if (!debugMode) {
-      document.addEventListener('keydown', e => {
-        const devtoolsKey = e.key === 'F12' ||
-          ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
-        if (devtoolsKey) e.preventDefault()
-      }, { capture: true })
-    }
+    // Block devtools shortcuts.
+    document.addEventListener('keydown', e => {
+      const devtoolsKey = e.key === 'F12' ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
+      if (devtoolsKey) e.preventDefault()
+    }, { capture: true })
 
     const savedServer = SafeStorage.getItem('firmium_server')
     const savedUser = SafeStorage.getItem('firmium_user')

@@ -33,6 +33,11 @@ export interface Song {
   bpm?: number
   comment?: string
   genres?: unknown
+  bitRate?: number
+  samplingRate?: number
+  bitDepth?: number
+  suffix?: string
+  contentType?: string
 }
 
 export type PlaybackState = 'loading' | 'playing' | 'paused' | 'stopped'

@@ -25,17 +25,24 @@
 use parking_lot::{Mutex, RwLock};
 use rodio::mixer::Mixer;
 #[cfg(not(target_os = "android"))]
+use rodio::cpal;
+#[cfg(not(target_os = "android"))]
+use rodio::cpal::traits::{DeviceTrait, HostTrait};
+#[cfg(not(target_os = "android"))]
 use rodio::DeviceSinkBuilder;
 use rodio::{Decoder, MixerDeviceSink, Player, Source};
 use std::io::{self, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
-/// Decoded audio source plus its duration (if known) and the raw byte buffer
-/// backing the streaming reader (kept alive for the lifetime of playback).
-type DecodedSource = (Box<dyn Source<Item = f32> + Send>, Option<f64>, Arc<Mutex<Vec<u8>>>);
+/// Decoded audio source plus its duration (if known), the raw byte buffer
+/// backing the streaming reader (kept alive for the lifetime of playback),
+/// and the source's native sample rate/channel count (used for bit-perfect
+/// output device reopening).
+type DecodedSource = (Box<dyn Source<Item = f32> + Send>, Option<f64>, Arc<Mutex<Vec<u8>>>, u32, u16);
 
 /// A Read+Seek wrapper over a streaming HTTP response body.
 ///
@@ -134,11 +141,23 @@ unsafe impl Send for StreamingReader {}
 unsafe impl Sync for StreamingReader {}
 
 /// Wrapper to make rodio's MixerDeviceSink Send + Sync for Tauri state management.
-/// Safe because: (1) accessed through Mutex synchronization, (2) MixerDeviceSink
+/// Safe because: (1) accessed through RwLock synchronization, (2) MixerDeviceSink
 /// itself is thread-safe in practice, just not marked as such in the type system.
 struct SafeOutputStream(#[allow(dead_code)] MixerDeviceSink);
 unsafe impl Send for SafeOutputStream {}
 unsafe impl Sync for SafeOutputStream {}
+
+/// The currently open OS audio output stream plus the mixer feeding it.
+///
+/// Bundled together so a "bit-perfect" reopen (matching the device's sample
+/// rate to the playing track's native rate) swaps both atomically under a
+/// single write lock — sessions connect new `Player`s via `mixer.clone()`.
+struct OutputDevice {
+    mixer: Mixer,
+    stream: SafeOutputStream,
+    sample_rate: u32,
+    channel_count: u16,
+}
 
 /// Unique identifier for each playback session
 pub type PlayerId = String;
@@ -181,12 +200,20 @@ struct PlaybackSession {
 /// premature audio device drop-offs by the operating system.
 pub struct AudioPlayer {
     sessions: SessionMap,
-    mixer: Mixer,
-    _stream: parking_lot::Mutex<SafeOutputStream>,
+    /// The OS output stream + mixer. Wrapped in RwLock so a track with a
+    /// different native sample rate can trigger a "bit-perfect" reopen.
+    output: RwLock<OutputDevice>,
     /// Reused HTTP client — avoids rebuilding a connection pool and TLS context on every track.
     http_client: reqwest::blocking::Client,
     /// Tauri app handle for emitting state-change events to the frontend.
     app_handle: AppHandle,
+    /// User setting: when true, reopen the output stream to match each
+    /// track's native sample rate (avoiding rodio's forced resampling).
+    bit_perfect_enabled: AtomicBool,
+    /// True while a crossfade's volume ramp is in flight. Reopening the
+    /// stream mid-crossfade would silence whichever session is on the old
+    /// mixer, so reopens are deferred until the fade completes.
+    crossfade_in_progress: AtomicBool,
 }
 
 impl AudioPlayer {
@@ -199,6 +226,9 @@ impl AudioPlayer {
         let stream = DeviceSinkBuilder::open_default_sink()
             .map_err(|e| format!("Failed to create audio stream: {}", e))?;
         let mixer = stream.mixer().clone();
+        let config = stream.config();
+        let sample_rate = config.sample_rate().get();
+        let channel_count = config.channel_count().get();
         let http_client = reqwest::blocking::Client::builder()
             .user_agent(concat!("firmium-desktop/", env!("CARGO_PKG_VERSION")))
             .build()
@@ -206,11 +236,83 @@ impl AudioPlayer {
 
         Ok(AudioPlayer {
             sessions: Arc::new(RwLock::new(std::collections::HashMap::new())),
-            mixer,
-            _stream: parking_lot::Mutex::new(SafeOutputStream(stream)),
+            output: RwLock::new(OutputDevice {
+                mixer,
+                stream: SafeOutputStream(stream),
+                sample_rate,
+                channel_count,
+            }),
             http_client,
             app_handle,
+            bit_perfect_enabled: AtomicBool::new(true),
+            crossfade_in_progress: AtomicBool::new(false),
         })
+    }
+
+    /// Enable or disable bit-perfect output stream reopening.
+    pub fn set_bit_perfect_enabled(&self, enabled: bool) {
+        self.bit_perfect_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Reopen the output device to match `target_rate`/`target_channels` if they
+    /// differ from the currently open stream. Returns `Ok(true)` if a reopen
+    /// happened (callers must reconnect their `Player` to the new mixer).
+    ///
+    /// No-ops (returns `Ok(false)`) if: rates already match, bit-perfect mode is
+    /// disabled, or a crossfade is in flight (reopening would silence whichever
+    /// session is still attached to the old mixer).
+    #[cfg(not(target_os = "android"))]
+    fn reopen_stream_if_needed(&self, target_rate: u32, target_channels: u16) -> Result<bool, String> {
+        {
+            let out = self.output.read();
+            if out.sample_rate == target_rate && out.channel_count == target_channels {
+                return Ok(false);
+            }
+        }
+        if !self.bit_perfect_enabled.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
+        if self.crossfade_in_progress.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
+
+        let device = cpal::default_host()
+            .default_output_device()
+            .ok_or_else(|| "No output device".to_string())?;
+
+        let supported = device.supported_output_configs().map_err(|e| e.to_string())?;
+        let exact = supported
+            .into_iter()
+            .find(|c| {
+                target_rate >= c.min_sample_rate() && target_rate <= c.max_sample_rate() && c.channels() as u16 == target_channels
+            })
+            .map(|c| c.with_sample_rate(target_rate));
+
+        let builder = DeviceSinkBuilder::from_device(device).map_err(|e| e.to_string())?;
+        let new_stream = if let Some(cfg) = exact {
+            builder
+                .with_supported_config(&cfg)
+                .open_sink_or_fallback()
+                .map_err(|e| format!("Failed to reopen stream: {e}"))?
+        } else {
+            // Device doesn't support the track's exact rate — fall back to the
+            // nearest supported config (rodio resamples, same as before).
+            builder
+                .open_sink_or_fallback()
+                .map_err(|e| format!("Failed to reopen stream: {e}"))?
+        };
+
+        let new_mixer = new_stream.mixer().clone();
+        let new_config = new_stream.config();
+        let new_sample_rate = new_config.sample_rate().get();
+        let new_channel_count = new_config.channel_count().get();
+
+        let mut out = self.output.write();
+        out.mixer = new_mixer;
+        out.stream = SafeOutputStream(new_stream);
+        out.sample_rate = new_sample_rate;
+        out.channel_count = new_channel_count;
+        Ok(true)
     }
 
     /// Get available audio output devices.
@@ -234,8 +336,8 @@ impl AudioPlayer {
     ///
     /// # Returns
     /// A unique player ID for this playback session.
-    pub fn play_stream(&self, stream_url: &str, track_id: String, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
-        self.start_session(stream_url, track_id, false, replay_gain_db)
+    pub fn play_stream(self_arc: &Arc<Self>, stream_url: &str, track_id: String, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
+        Self::start_session(self_arc, stream_url, track_id, false, replay_gain_db)
     }
 
     /// Pre-fetch and decode a track without starting audio output.
@@ -243,25 +345,25 @@ impl AudioPlayer {
     /// The session is created in a paused state so it occupies no audible output.
     /// Call `resume()` on the returned player ID to begin playback instantly,
     /// with no HTTP fetch or decode delay — enabling gapless track transitions.
-    pub fn preload_stream(&self, stream_url: &str, track_id: String, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
-        self.start_session(stream_url, track_id, true, replay_gain_db)
+    pub fn preload_stream(self_arc: &Arc<Self>, stream_url: &str, track_id: String, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
+        Self::start_session(self_arc, stream_url, track_id, true, replay_gain_db)
     }
 
     /// Shared logic for play_stream and preload_stream.
     /// `start_paused = true` leaves the sink paused after decode completes (gapless preload).
-    fn start_session(&self, stream_url: &str, track_id: String, start_paused: bool, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
+    fn start_session(self_arc: &Arc<Self>, stream_url: &str, track_id: String, start_paused: bool, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
         let player_id = Uuid::new_v4().to_string();
 
         // Stop any existing session for this track before starting a new one.
-        self.stop_track(&track_id);
+        self_arc.stop_track(&track_id);
 
         // Create the player before inserting the session so failures surface early.
-        let sink = Player::connect_new(&self.mixer);
+        let sink = Player::connect_new(&self_arc.output.read().mixer);
 
         // ── CRITICAL: Insert the session BEFORE spawning the async task. ─────────
         // The async decode task looks up this player_id to append the source.
         // If we insert after spawn, a fast decode could find nothing and discard audio.
-        self.sessions.write().insert(
+        self_arc.sessions.write().insert(
             player_id.clone(),
             PlaybackSession {
                 sink,
@@ -277,7 +379,7 @@ impl AudioPlayer {
 
         // Only emit events for actively playing sessions, not silent preloads.
         if !start_paused {
-            let _ = self.app_handle.emit("playback-state-changed", serde_json::json!({
+            let _ = self_arc.app_handle.emit("playback-state-changed", serde_json::json!({
                 "playerId": player_id,
                 "state": "loading"
             }));
@@ -286,9 +388,10 @@ impl AudioPlayer {
         // Clone everything the async task needs — Arc clone is cheap.
         let stream_url = stream_url.to_string();
         let player_id_clone = player_id.clone();
-        let sessions = Arc::clone(&self.sessions);
-        let http_client = self.http_client.clone();
-        let app_handle = self.app_handle.clone();
+        let player = Arc::clone(self_arc);
+        let sessions = Arc::clone(&self_arc.sessions);
+        let http_client = self_arc.http_client.clone();
+        let app_handle = self_arc.app_handle.clone();
 
         tauri::async_runtime::spawn(async move {
             // Use spawn_blocking because reqwest blocking I/O and rodio Decoder
@@ -299,7 +402,23 @@ impl AudioPlayer {
             .await;
 
             match decode_result {
-                Ok(Ok((source, duration, shared_buffer))) => {
+                Ok(Ok((source, duration, shared_buffer, native_rate, native_channels))) => {
+                    // Try to match the output device to this track's native rate before
+                    // appending — avoids rodio resampling for bit-perfect playback.
+                    // Only safe when this is the sole active session (no crossfade/preload
+                    // overlap on the old mixer); reopen_stream_if_needed() enforces that.
+                    #[cfg(not(target_os = "android"))]
+                    let reopened = if sessions.read().len() <= 1 {
+                        player.reopen_stream_if_needed(native_rate, native_channels).unwrap_or_else(|e| {
+                            eprintln!("Bit-perfect stream reopen failed: {e}");
+                            false
+                        })
+                    } else {
+                        false
+                    };
+                    #[cfg(target_os = "android")]
+                    let reopened = false;
+
                     // Apply ReplayGain by wrapping the source in an amplify chain.
                     // This scales sample amplitudes so the sink's volume knob remains
                     // a pure master-volume control unaffected by per-track gain.
@@ -315,6 +434,12 @@ impl AudioPlayer {
 
                     let mut sesh = sessions.write();
                     if let Some(session) = sesh.get_mut(&player_id_clone) {
+                        if reopened {
+                            // The old mixer/stream was just dropped — the session's
+                            // sink was connected to it and is now silent. Reconnect
+                            // to the freshly opened mixer before appending.
+                            session.sink = Player::connect_new(&player.output.read().mixer);
+                        }
                         session.sink.append(amplified);
                         session.duration = duration;
                         session.buffered_bytes = shared_buffer;
@@ -326,9 +451,15 @@ impl AudioPlayer {
                             session.playback_start_time = Some(std::time::Instant::now());
                             session.accumulated_time = 0.0;
                             session.sink.play();
+                            let output_rate = player.output.read().sample_rate;
                             let _ = app_handle.emit("playback-state-changed", serde_json::json!({
                                 "playerId": player_id_clone,
-                                "state": "playing"
+                                "state": "playing",
+                                "audioInfo": {
+                                    "sampleRate": native_rate,
+                                    "channels": native_channels,
+                                    "bitPerfect": native_rate == output_rate,
+                                }
                             }));
                         }
                     }
@@ -454,8 +585,10 @@ impl AudioPlayer {
             Decoder::try_from(reader).map_err(|e| format!("Failed to decode audio: {}", e))?;
 
         let duration = source.total_duration().map(|d| d.as_secs_f64());
+        let sample_rate = source.sample_rate().get();
+        let channel_count = source.channels().get();
 
-        Ok((Box::new(source), duration, shared_buffer))
+        Ok((Box::new(source), duration, shared_buffer, sample_rate, channel_count))
     }
 
     /// Pause playback for a session.
@@ -555,7 +688,7 @@ impl AudioPlayer {
     ///
     /// Returns the new player ID so the caller can track the incoming session.
     pub fn crossfade_to(
-        &self,
+        self_arc: &Arc<Self>,
         old_player_id: &str,
         stream_url: &str,
         track_id: String,
@@ -563,11 +696,15 @@ impl AudioPlayer {
         target_volume: f32,
         replay_gain_db: Option<f32>,
     ) -> Result<PlayerId, String> {
-        let new_player_id = self.start_session(stream_url, track_id, false, replay_gain_db)?;
+        // Both old and new sessions must stay on the same mixer for the
+        // duration of the fade — defer any bit-perfect reopen until it ends.
+        self_arc.crossfade_in_progress.store(true, Ordering::Relaxed);
+
+        let new_player_id = Self::start_session(self_arc, stream_url, track_id, false, replay_gain_db)?;
 
         // Mute the new player immediately — the fade task will bring it up.
         {
-            let sessions = self.sessions.read();
+            let sessions = self_arc.sessions.read();
             if let Some(s) = sessions.get(&new_player_id) {
                 s.sink.set_volume(0.0);
             }
@@ -575,8 +712,8 @@ impl AudioPlayer {
 
         let old_id = old_player_id.to_string();
         let new_id = new_player_id.clone();
-        let sessions = Arc::clone(&self.sessions);
-        let old_exists = !old_player_id.is_empty() && self.sessions.read().contains_key(old_player_id);
+        let player = Arc::clone(self_arc);
+        let old_exists = !old_player_id.is_empty() && self_arc.sessions.read().contains_key(old_player_id);
 
         tauri::async_runtime::spawn(async move {
             const STEPS: u32 = 25;
@@ -587,7 +724,7 @@ impl AudioPlayer {
                 let progress = step as f32 / STEPS as f32;
 
                 // Acquire and release the read lock each step so other operations aren't blocked.
-                let s = sessions.read();
+                let s = player.sessions.read();
                 if old_exists {
                     if let Some(sess) = s.get(&old_id) {
                         sess.sink.set_volume((target_volume * (1.0 - progress)).max(0.0));
@@ -600,10 +737,12 @@ impl AudioPlayer {
 
             // Stop old session after fade.
             if old_exists {
-                if let Some(s) = sessions.write().remove(&old_id) {
+                if let Some(s) = player.sessions.write().remove(&old_id) {
                     s.sink.stop();
                 }
             }
+
+            player.crossfade_in_progress.store(false, Ordering::Relaxed);
         });
 
         Ok(new_player_id)
@@ -756,7 +895,7 @@ impl AudioPlayer {
             .try_seek(pos)
             .map_err(|e| format!("Seek failed: {}", e))?;
 
-        let new_sink = Player::connect_new(&self.mixer);
+        let new_sink = Player::connect_new(&self.output.read().mixer);
         new_sink.append(source);
         if was_paused {
             new_sink.pause();

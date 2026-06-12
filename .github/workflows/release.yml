@@ -14,7 +14,30 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  check-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify CI passed for this commit
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+            });
+            const ci = data.check_runs.filter(run => run.name.startsWith('CI /'));
+            if (ci.length === 0) {
+              core.setFailed('No CI check runs found for this commit.');
+              return;
+            }
+            const failed = ci.filter(run => run.conclusion !== 'success');
+            if (failed.length > 0) {
+              core.setFailed(`CI did not pass for this commit: ${failed.map(r => `${r.name} (${r.conclusion})`).join(', ')}`);
+            }
+
   create-release:
+    needs: check-ci
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create-release.outputs.result }}

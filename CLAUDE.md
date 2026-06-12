@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 5.0.0
+**Version**: 5.1.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -36,7 +36,7 @@ The backend exposes Tauri commands that the frontend invokes via `src/lib/audio-
   - `auth.rs`: `generate_auth_params()` — MD5 token hashing
   - `credentials.rs`: `save_password()`, `get_password()`, `delete_password()` — OS keyring
   - `playback.rs`: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()`, `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`, `list_audio_devices()` — delegate to rodio `AudioPlayer`
-  - `logging.rs`: `write_log()`, `delete_logs()`, `get_log_path()`, `is_debug_mode()`, `get_app_version()`
+  - `app_info.rs`: `get_app_version()`
 
 - **audio.rs**: Desktop-only audio playback module. Core design:
   - `StreamingReader`: Implements Read+Seek over HTTP response body. Bytes buffered locally to keep Subsonic "Now Playing" status during playback.

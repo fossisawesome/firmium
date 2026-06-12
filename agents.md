@@ -43,7 +43,7 @@ Proceed without asking:
 - Run `npm run dev:app`, `cargo check`, `cargo build`, `npm run android:debug`
 - Search for error messages or known issues (Tauri, Svelte 5, rodio, reqwest, Kotlin, Jetpack Compose, Media3/ExoPlayer)
 - Check documentation for configuration options (`tauri.conf.json`, `capabilities/default.json`, `android/app/build.gradle*`)
-- Diagnose system state (check audio devices, keyring availability, log files via `get_log_path()`, Android logcat)
+- Diagnose system state (check audio devices, keyring availability, Android logcat)
 - Propose fixes based on clear patterns (Tauri command registration, Svelte store wiring, MD5 auth token format, Compose state hoisting, ViewModel wiring)
 
 Ask before acting:
@@ -121,7 +121,7 @@ If a change touches settings (`Settings.svelte`, `stores.ts`), themes (`themes/*
 
 - Iterative debugging (audio playback, Tauri IPC, keyring/SecureStorage credential issues, Compose UI state bugs)
 - Multi-step research (finding solutions to OpenSubsonic API quirks, rodio/Tauri bugs, Media3/ExoPlayer or Compose issues)
-- System diagnostics (checking machine info, audio devices, log files, Android logcat)
+- System diagnostics (checking machine info, audio devices, Android logcat)
 - Testing and verification workflows (manual playback testing per the Testing section in CLAUDE.md, on desktop and Android)
 
 For one-off questions, quick answers, or clarifications, these are overkill. Use judgment.

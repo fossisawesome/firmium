@@ -3,10 +3,10 @@
   import {
     currentTrack, playbackState, currentPosition, trackDuration, isSeeking,
     volume, repeatOne, repeatAll, audioBridge,
-    lyricsOpen, setVolume
+    lyricsOpen, setVolume, activeStreamInfo
   } from '../lib/stores'
   import { fetchAndShowLyrics } from '../lib/playback'
-  import { formatDuration } from '../lib/utils'
+  import { formatDuration, formatTrackInfo } from '../lib/utils'
   import { loadImage } from '../lib/api'
   import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls'
   import {
@@ -17,6 +17,12 @@
   const playIcon = $derived(
     $playbackState === 'loading' ? IconLoading : $playbackState === 'playing' ? IconPause : IconPlay
   )
+
+  const trackInfo = $derived.by(() => {
+    const base = formatTrackInfo($currentTrack)
+    if ($activeStreamInfo?.bitPerfect) return base ? `${base} · Bit-perfect` : 'Bit-perfect'
+    return base
+  })
 
   const posDisplay = $derived(formatDuration($currentPosition))
   const durDisplay = $derived(formatDuration($trackDuration ?? $currentTrack?.duration ?? 0))
@@ -68,6 +74,9 @@
     <div class="np-info">
       <div class="np-title">{$currentTrack?.title ?? '—'}</div>
       <div class="np-artist">{$currentTrack?.artist ?? 'No track selected'}</div>
+      {#if trackInfo}
+        <div class="np-format">{trackInfo}</div>
+      {/if}
     </div>
     <div class="vol-row">
       <span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconVolume}</span>

@@ -130,6 +130,18 @@ export function setGaplessEnabled(v: unknown): void {
   SafeStorage.setItem('firmium_gapless', val ? 'true' : 'false')
 }
 
+// Bit-perfect audio — reopens the output device at each track's native sample rate.
+export const bitPerfectEnabled = writable(SafeStorage.getItem('firmium_bit_perfect') !== 'false')
+
+export function setBitPerfectEnabled(v: unknown): void {
+  const val = Boolean(v)
+  bitPerfectEnabled.set(val)
+  SafeStorage.setItem('firmium_bit_perfect', val ? 'true' : 'false')
+}
+
+// Info about the currently-playing stream's actual output format, emitted by the Rust backend.
+export const activeStreamInfo = writable<{ sampleRate: number; channels: number; bitPerfect: boolean } | null>(null)
+
 // ── Lyrics ────────────────────────────────────────────────────────────────────
 export const lyricsOpen = writable(false)
 export const lyricsLines = writable<LyricLine[]>([])

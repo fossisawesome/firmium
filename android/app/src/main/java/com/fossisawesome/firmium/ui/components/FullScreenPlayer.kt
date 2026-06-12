@@ -349,6 +349,18 @@ private fun PlayerControls(
             maxLines = 1,
             modifier = Modifier.basicMarquee(),
         )
+        val trackInfo = track.formatTrackInfo()
+        if (trackInfo.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = trackInfo,
+                fontFamily = FontFamily.Monospace,
+                fontSize = if (compact) 10.sp else 11.sp,
+                color = colors.muted,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
     }
 
     Spacer(Modifier.height(gap))

@@ -19,7 +19,24 @@ data class Song(
     val coverArt: String?,
     val size: Long?,
     val bitRate: Int?,
+    val samplingRate: Int?,
+    val bitDepth: Int?,
+    val suffix: String?,
     val replayGainTrack: Double?,
     val replayGainAlbum: Double?,
     val bpm: Int?,
-)
+) {
+    // Builds a "FLAC · 96 kHz · 24-bit · 1411 kbps" style summary, omitting missing parts.
+    fun formatTrackInfo(): String {
+        val parts = mutableListOf<String>()
+        suffix?.let { parts.add(it.uppercase()) }
+        samplingRate?.let {
+            val khz = it / 1000.0
+            val formatted = if (khz == khz.toLong().toDouble()) "${khz.toLong()}" else "%.1f".format(khz)
+            parts.add("$formatted kHz")
+        }
+        bitDepth?.let { parts.add("$it-bit") }
+        bitRate?.let { parts.add("$it kbps") }
+        return parts.joinToString(" · ")
+    }
+}

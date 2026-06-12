@@ -26,11 +26,7 @@
     "get_password",
     "delete_password",
     "generate_auth_params",
-    "write_log",
-    "delete_logs",
-    "get_log_path",
     "get_app_version",
-    "is_debug_mode",
     "play_stream",
     "preload_stream",
     "pause_playback",
@@ -45,6 +41,7 @@
     "seek_position",
     "list_audio_devices",
     "crossfade_to",
+    "set_bit_perfect_enabled",
     "list_themes"
   ]
 }

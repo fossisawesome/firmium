@@ -4,9 +4,11 @@ import {
   volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration, gaplessEnabled,
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
-  bumpToken, getPlayToken, recentlyPlayedSongs
+  bumpToken, getPlayToken, recentlyPlayedSongs,
+  bitPerfectEnabled, activeStreamInfo
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
+import { tauriInvoke } from './tauri'
 import type { Song, PlaybackState } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 
@@ -216,6 +218,15 @@ export function wireBridgeEvents(bridge: AudioBridge): void {
 
   bridge.on('volumechange', (vol: number) => {
     volume.set(vol)
+  })
+
+  bridge.on('audioinfo', (info: { sampleRate: number; channels: number; bitPerfect: boolean }) => {
+    activeStreamInfo.set(info)
+  })
+
+  tauriInvoke('set_bit_perfect_enabled', { enabled: get(bitPerfectEnabled) }).catch(() => {})
+  bitPerfectEnabled.subscribe(enabled => {
+    tauriInvoke('set_bit_perfect_enabled', { enabled }).catch(() => {})
   })
 }
 

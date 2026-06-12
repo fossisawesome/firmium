@@ -3,7 +3,7 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, clearAuth, navToView } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, bitPerfectEnabled, setBitPerfectEnabled, clearAuth, navToView } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
@@ -22,7 +22,7 @@
     'firmium_server', 'firmium_user', 'firmium_save_pass',
     'firmium_auto_login', 'firmium_lrclib', 'firmium_theme',
     'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
-    'firmium_volume', 'firmium_gapless', 'firmium_lastfm',
+    'firmium_volume', 'firmium_gapless', 'firmium_lastfm', 'firmium_bit_perfect',
   ]
 
   // ── Active category ───────────────────────────────────────────────────────────
@@ -47,10 +47,7 @@
   let themeOpen = $state(false)
 
   let appVersion = $state('Loading…')
-  let logPath = $state('Loading…')
   let wipeCacheLabel = $state('Wipe')
-  let deleteLogsLabel = $state('Delete')
-  let deleteLogsDisabled = $state(false)
   let deleteSettingsLabel = $state('Delete')
 
   let updateLabel = $state('Check for Updates')
@@ -59,7 +56,6 @@
 
   onMount(async () => {
     tauriInvoke<string>('get_app_version').then(v => appVersion = `v${v}`).catch(() => appVersion = 'unavailable')
-    tauriInvoke<string>('get_log_path').then(p => logPath = p).catch(() => logPath = 'unavailable')
     Keyring.load('lastfm_api_key').then(k => { if (k) lastfmKey = k as string }).catch(() => {})
     Keyring.load('lastfm_secret').then(s => { if (s) lastfmSecret = s as string }).catch(() => {})
   })
@@ -97,16 +93,11 @@
     setGaplessEnabled(checked)
     if (checked) setCrossfadeEnabled(false)
   }
+  function handleBitPerfectToggle(e: Event) { setBitPerfectEnabled((e.target as HTMLInputElement).checked) }
 
   function wipeCache() {
     clearAll(); clearListCache(); wipeCacheLabel = 'Wiped!'
     setTimeout(() => wipeCacheLabel = 'Wipe', 1500)
-  }
-  async function deleteLogs() {
-    deleteLogsDisabled = true
-    try { await tauriInvoke<void>('delete_logs'); deleteLogsLabel = 'Deleted!' }
-    catch { deleteLogsLabel = 'Failed' }
-    setTimeout(() => { deleteLogsLabel = 'Delete'; deleteLogsDisabled = false }, 1500)
   }
   function deleteSettings() {
     SETTINGS_KEYS.forEach(k => SafeStorage.removeItem(k))
@@ -260,6 +251,17 @@
         </label>
       </div>
 
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Bit-perfect Audio</div>
+          <div class="settings-desc">Reopens the audio output at each track's native sample rate when possible. May cause a brief click on track changes with mismatched rates.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" checked={$bitPerfectEnabled} onchange={handleBitPerfectToggle} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
     {:else if activeCategory === 'services'}
       <div class="sett-panel-title">Services</div>
 
@@ -344,25 +346,10 @@
 
       <div class="settings-row">
         <div class="settings-info">
-          <div class="settings-title">Log File</div>
-          <div class="settings-desc debug-path">{logPath}</div>
-        </div>
-      </div>
-
-      <div class="settings-row">
-        <div class="settings-info">
           <div class="settings-title">Wipe Cache</div>
           <div class="settings-desc">Clear in-memory cover art cache</div>
         </div>
         <button class="debug-btn" onclick={wipeCache}>{wipeCacheLabel}</button>
-      </div>
-
-      <div class="settings-row">
-        <div class="settings-info">
-          <div class="settings-title">Delete Logs</div>
-          <div class="settings-desc">Remove the app-logs.txt file from disk</div>
-        </div>
-        <button class="debug-btn debug-btn--danger" onclick={deleteLogs} disabled={deleteLogsDisabled}>{deleteLogsLabel}</button>
       </div>
 
       <div class="settings-row">
