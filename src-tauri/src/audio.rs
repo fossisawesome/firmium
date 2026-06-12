@@ -284,7 +284,7 @@ impl AudioPlayer {
         let exact = supported
             .into_iter()
             .find(|c| {
-                target_rate >= c.min_sample_rate() && target_rate <= c.max_sample_rate() && c.channels() as u16 == target_channels
+                target_rate >= c.min_sample_rate() && target_rate <= c.max_sample_rate() && c.channels() == target_channels
             })
             .map(|c| c.with_sample_rate(target_rate));
 

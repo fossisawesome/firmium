@@ -20,13 +20,13 @@ fn get_player<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>) -> Result<tau
 #[tauri::command]
 pub fn play_stream<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, stream_url: &str, track_id: &str, replay_gain_db: Option<f32>) -> Result<String, String> {
     let player = get_player(&app_handle)?;
-    AudioPlayer::play_stream(&*player, stream_url, track_id.to_string(), replay_gain_db)
+    AudioPlayer::play_stream(&player, stream_url, track_id.to_string(), replay_gain_db)
 }
 
 #[tauri::command]
 pub fn preload_stream<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, stream_url: &str, track_id: &str, replay_gain_db: Option<f32>) -> Result<String, String> {
     let player = get_player(&app_handle)?;
-    AudioPlayer::preload_stream(&*player, stream_url, track_id.to_string(), replay_gain_db)
+    AudioPlayer::preload_stream(&player, stream_url, track_id.to_string(), replay_gain_db)
 }
 
 #[tauri::command]
@@ -101,5 +101,5 @@ pub fn crossfade_to<R: tauri::Runtime>(
     replay_gain_db: Option<f32>,
 ) -> Result<String, String> {
     let player = get_player(&app_handle)?;
-    AudioPlayer::crossfade_to(&*player, old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db)
+    AudioPlayer::crossfade_to(&player, old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db)
 }
