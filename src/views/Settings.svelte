@@ -95,8 +95,8 @@
   }
   function handleBitPerfectToggle(e: Event) { setBitPerfectEnabled((e.target as HTMLInputElement).checked) }
 
-  function wipeCache() {
-    clearAll(); clearListCache(); wipeCacheLabel = 'Wiped!'
+  async function wipeCache() {
+    await clearAll(); clearListCache(); wipeCacheLabel = 'Wiped!'
     setTimeout(() => wipeCacheLabel = 'Wipe', 1500)
   }
   function deleteSettings() {
@@ -137,8 +137,8 @@
     }
   }
 
-  function logout() {
-    clearAll()
+  async function logout() {
+    await clearAll()
     clearListCache()
     clearAuth()
     navToView('settings')

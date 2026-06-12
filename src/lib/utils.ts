@@ -62,17 +62,3 @@ export const safeText = (str: unknown): string =>
   String(str ?? '').replace(/[&<>"']/g, m => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   } as Record<string, string>)[m])
-
-// Builds a "FLAC · 96 kHz · 24-bit · 1411 kbps" style summary from a song's metadata.
-// Parts with missing data are omitted.
-export const formatTrackInfo = (
-  song?: { suffix?: string; samplingRate?: number; bitDepth?: number; bitRate?: number } | null
-): string => {
-  if (!song) return ''
-  const parts: string[] = []
-  if (song.suffix) parts.push(song.suffix.toUpperCase())
-  if (song.samplingRate) parts.push(`${(song.samplingRate / 1000).toFixed(1).replace(/\.0$/, '')} kHz`)
-  if (song.bitDepth) parts.push(`${song.bitDepth}-bit`)
-  if (song.bitRate) parts.push(`${song.bitRate} kbps`)
-  return parts.join(' · ')
-}

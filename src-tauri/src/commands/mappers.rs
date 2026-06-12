@@ -51,6 +51,41 @@ pub struct Song {
     bit_depth: Option<u32>,
     suffix: Option<String>,
     content_type: Option<String>,
+    track_info: Option<String>,
+}
+
+/// Formats a "FLAC · 44.1 kHz · 16-bit · 1234 kbps"-style summary of a song's
+/// audio format, for display in the player bar.
+fn format_track_info(s: &serde_json::Value) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(suffix) = s.get("suffix").and_then(|v| v.as_str()) {
+        if !suffix.is_empty() {
+            parts.push(suffix.to_uppercase());
+        }
+    }
+    if let Some(rate) = s.get("samplingRate").and_then(|v| v.as_f64()) {
+        if rate != 0.0 {
+            let khz = rate / 1000.0;
+            let formatted = format!("{khz:.1}");
+            let formatted = formatted.strip_suffix(".0").unwrap_or(&formatted);
+            parts.push(format!("{formatted} kHz"));
+        }
+    }
+    if let Some(depth) = s.get("bitDepth").and_then(|v| v.as_u64()) {
+        if depth != 0 {
+            parts.push(format!("{depth}-bit"));
+        }
+    }
+    if let Some(rate) = s.get("bitRate").and_then(|v| v.as_u64()) {
+        if rate != 0 {
+            parts.push(format!("{rate} kbps"));
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" · "))
+    }
 }
 
 /// Infer release type from explicit server fields, title keywords, and song count.
@@ -133,6 +168,7 @@ fn map_song(s: &serde_json::Value) -> Song {
         bit_depth: s.get("bitDepth").and_then(|v| v.as_u64()).map(|n| n as u32),
         suffix: s.get("suffix").and_then(|v| v.as_str()).map(|v| v.to_string()),
         content_type: s.get("contentType").and_then(|v| v.as_str()).map(|v| v.to_string()),
+        track_info: format_track_info(s),
     }
 }
 

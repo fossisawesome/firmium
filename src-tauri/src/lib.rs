@@ -22,6 +22,8 @@ mod audio;
 use audio::AudioPlayer;
 mod commands;
 use commands::*;
+mod state;
+use state::AppState;
 
 // ============================================================================
 // APPLICATION ENTRY POINT
@@ -40,6 +42,7 @@ pub fn run() {
                 AudioPlayer::new(_app.handle().clone()).expect("Failed to initialize audio player"),
             );
             _app.manage(audio_player);
+            _app.manage(Arc::new(AppState::new()));
 
             Ok(())
         })
@@ -74,6 +77,32 @@ pub fn run() {
             list_audio_devices,
             crossfade_to,
             set_bit_perfect_enabled,
+            // Lyrics
+            parse_lrc,
+            fetch_lrclib_lyrics,
+            // Cover art cache
+            get_cover_art,
+            clear_cover_cache,
+            // OpenSubsonic API
+            set_connection,
+            validate_connection,
+            get_albums,
+            get_artists,
+            get_album_tracks,
+            get_artist_details,
+            get_artist_info,
+            search,
+            get_recent_albums,
+            get_random_albums,
+            get_newest_albums,
+            get_genres_list,
+            get_playlists,
+            get_playlist_tracks,
+            create_playlist,
+            update_playlist,
+            delete_playlist,
+            scrobble,
+            get_song_lyrics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

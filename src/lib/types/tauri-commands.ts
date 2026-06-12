@@ -38,6 +38,7 @@ export interface Song {
   bitDepth?: number
   suffix?: string
   contentType?: string
+  trackInfo?: string
 }
 
 export type PlaybackState = 'loading' | 'playing' | 'paused' | 'stopped'
@@ -66,4 +67,14 @@ export interface Theme {
   name: string
   color_scheme?: string
   colors: ThemeColors
+}
+
+export interface LyricLine {
+  start: number
+  value: string
+}
+
+export interface LyricsResult {
+  lines: LyricLine[]
+  synced: boolean
 }

@@ -1,8 +1,7 @@
 import { writable, derived, get, type Writable } from 'svelte/store'
 import { SafeStorage } from './utils'
 import { tauriInvoke } from './tauri'
-import type { Song, PlaybackState } from './types/tauri-commands'
-import type { LyricLine } from './lyrics'
+import type { Song, PlaybackState, LyricLine } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 import type { ServerPlaylist } from './api'
 
@@ -18,15 +17,18 @@ export const isAuthed = derived(
 )
 
 export function setAuth(s: string | null, u: string | null, p: string | null): void {
-  authServer.set(s ? String(s).trim().replace(/\/+$/, '') : null)
+  const server = s ? String(s).trim().replace(/\/+$/, '') : null
+  authServer.set(server)
   authUsername.set(u)
   authPassword.set(p)
+  tauriInvoke('set_connection', { server, username: u, password: p })
 }
 
 export function clearAuth(): void {
   authServer.set(null)
   authUsername.set(null)
   authPassword.set(null)
+  tauriInvoke('set_connection', { server: null, username: null, password: null })
 }
 
 export async function getQueryParams(): Promise<Record<string, unknown>> {

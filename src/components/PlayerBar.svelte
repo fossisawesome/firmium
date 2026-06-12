@@ -6,7 +6,7 @@
     lyricsOpen, setVolume, activeStreamInfo
   } from '../lib/stores'
   import { fetchAndShowLyrics } from '../lib/playback'
-  import { formatDuration, formatTrackInfo } from '../lib/utils'
+  import { formatDuration } from '../lib/utils'
   import { loadImage } from '../lib/api'
   import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls'
   import {
@@ -19,7 +19,7 @@
   )
 
   const trackInfo = $derived.by(() => {
-    const base = formatTrackInfo($currentTrack)
+    const base = $currentTrack?.trackInfo ?? ''
     if ($activeStreamInfo?.bitPerfect) return base ? `${base} · Bit-perfect` : 'Bit-perfect'
     return base
   })

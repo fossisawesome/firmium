@@ -1,3 +1,19 @@
+# v5.2.0
+
+## Added
+
+- **OpenSubsonic API moved to Rust backend** (`src-tauri/src/commands/subsonic.rs`, new `src-tauri/src/state.rs`): `set_connection`/`validate_connection`/`get_albums`/`get_artists`/`get_album_tracks`/`get_artist_details`/`get_artist_info`/`search`/`get_recent_albums`/`get_random_albums`/`get_newest_albums`/`get_genres_list`/`get_playlists`/`get_playlist_tracks`/`create_playlist`/`update_playlist`/`delete_playlist`/`scrobble`/`get_song_lyrics` are now Tauri commands backed by a shared async `reqwest::Client` in `AppState`. `src/lib/api.ts`'s `Api` object is now a thin set of `tauriInvoke` wrappers; `OpenSubsonicRouter`/`Api.fetch` and the raw response-shape interfaces are removed. `stores.ts`'s `setAuth`/`clearAuth` now call `set_connection` to push credentials into Rust.
+- **Disk-based cover art cache** (`src-tauri/src/commands/cover_cache.rs`): cover art is now cached on disk under the app cache dir (200MB budget, mtime-based LRU eviction) and served to the frontend via Tauri's asset protocol (`assetProtocol` enabled in `tauri.conf.json`, scoped to `$APPCACHE/covers/*`, with `protocol-asset` Cargo feature). `src/lib/coverCache.ts` is now a thin wrapper (`getCoverArt`/`clearAll`) around `get_cover_art`/`clear_cover_cache`, converting paths via `convertFileSrc`. The old in-memory blob-URL LRU cache is removed.
+- **Lyrics cascade moved to Rust** (`src-tauri/src/commands/lyrics.rs`, `subsonic.rs::get_song_lyrics`): structured OpenSubsonic lyrics → legacy `getLyrics` → LRCLIB fallback now runs entirely in Rust. `src/lib/lyrics.ts` and `src/lib/api.test.ts` are removed; `LyricLine`/`LyricsResult` types moved to `src/lib/types/tauri-commands.ts`.
+- **`Song.trackInfo`** (`src-tauri/src/commands/mappers.rs::format_track_info`): the "FLAC · 96 kHz · 24-bit · 1411 kbps" format summary is now computed once on the Rust side and included on every mapped `Song`, instead of being recomputed in `PlayerBar.svelte`. `formatTrackInfo` is removed from `src/lib/utils.ts`.
+- **`firmium:session-expired` now a Tauri event**: emitted from `subsonic.rs` on HTTP 401 / OpenSubsonic error codes 40/41, and listened for in `App.svelte` via `@tauri-apps/api/event` instead of a `window` `CustomEvent`.
+
+## Changed
+
+- `Sidebar.svelte`/`Settings.svelte`: `clearAll()` (cover cache wipe) is now async and awaited before clearing list cache/auth on logout and cache wipe.
+
+---
+
 # v5.1.0
 
 ## Added

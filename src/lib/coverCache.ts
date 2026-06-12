@@ -1,50 +1,21 @@
-// In-memory LRU cache for cover art blob URLs.
-// Evicts oldest entries when total estimated byte size exceeds the budget.
-const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
-let _totalBytes = 0
+// Thin wrapper around the Rust disk-based cover art cache (commands/cover_cache.rs).
+// Dedupes concurrent requests for the same cover id on the frontend, since
+// multiple <img> elements may request the same cover during a single render.
+import { tauriInvoke } from './tauri'
+import { convertFileSrc } from '@tauri-apps/api/core'
 
-interface CoverEntry {
-  url: string
-  size: number
-}
+const _pending = new Map<string, Promise<string>>()
 
-const _covers = new Map<string, CoverEntry>()
-const _pending = new Map<string, Promise<unknown>>()
-
-export function getCover(id: string): string | null {
-  const entry = _covers.get(id) || null
-  if (entry) { _covers.delete(id); _covers.set(id, entry) } // LRU touch
-  return entry ? entry.url : null
-}
-
-// sizeBytes is the original blob.size — pass 0 if unknown (falls back to count guard).
-export function addCover(id: string, url: string, sizeBytes = 0): void {
-  if (!id || !url) return
-  if (_covers.has(id)) {
-    _totalBytes -= _covers.get(id)!.size
-    _covers.delete(id)
+export function getCoverArt(coverId: string, url: string): Promise<string> {
+  let promise = _pending.get(coverId)
+  if (!promise) {
+    promise = tauriInvoke<string>('get_cover_art', { coverId, url }).then(convertFileSrc)
+    promise.finally(() => _pending.delete(coverId))
+    _pending.set(coverId, promise)
   }
-  _covers.set(id, { url, size: sizeBytes })
-  _totalBytes += sizeBytes
-
-  while (_totalBytes > MAX_BYTES && _covers.size > 0) {
-    const oldest = _covers.keys().next().value as string
-    const old = _covers.get(oldest)!
-    if (old.url?.startsWith('blob:')) { try { URL.revokeObjectURL(old.url) } catch (_) {} }
-    _totalBytes -= old.size
-    _covers.delete(oldest)
-  }
+  return promise
 }
 
-export const getPending = (id: string): Promise<unknown> | null => _pending.get(id) || null
-export const setPending = (id: string, p: Promise<unknown>): void => { if (id && p) _pending.set(id, p) }
-export const clearPending = (id: string): void => { _pending.delete(id) }
-
-export function clearAll(): void {
-  _covers.forEach(entry => {
-    if (entry.url?.startsWith('blob:')) { try { URL.revokeObjectURL(entry.url) } catch (_) {} }
-  })
-  _covers.clear()
-  _pending.clear()
-  _totalBytes = 0
+export function clearAll(): Promise<void> {
+  return tauriInvoke('clear_cover_cache')
 }

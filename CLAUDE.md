@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 5.1.1
+**Version**: 5.2.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -30,11 +30,16 @@ The backend exposes Tauri commands that the frontend invokes via `src/lib/audio-
 
 - **lib.rs**: Tauri app entry point. Defines `run()`, sets up the app, and registers all commands via `tauri::generate_handler![]`. Command implementations live in `commands/`.
 
+- **state.rs**: `AppState` — holds `ConnectionState` (server URL, username, password, detected `openSubsonicExtensions`) behind a `parking_lot::RwLock`, plus a shared async `reqwest::Client` used by `commands/subsonic.rs` and `commands/lyrics.rs`. Set via `set_connection`, called from `stores.ts`'s `setAuth`/`clearAuth`.
+
 - **commands/**: Command modules, re-exported via `commands/mod.rs`:
   - `themes.rs`: `list_themes()` — reads `.toml` theme files
-  - `mappers.rs`: `map_albums()`, `map_artists()`, `map_songs()` — Rust-side mapping of raw Subsonic JSON to typed structs (including `infer_release_type()`)
+  - `mappers.rs`: `map_albums()`, `map_artists()`, `map_songs()` — Rust-side mapping of raw Subsonic JSON to typed structs (including `infer_release_type()` and `format_track_info()` for `Song.trackInfo`)
   - `auth.rs`: `generate_auth_params()` — MD5 token hashing
   - `credentials.rs`: `save_password()`, `get_password()`, `delete_password()` — OS keyring
+  - `subsonic.rs`: `set_connection()`, `validate_connection()`, and the OpenSubsonic API itself — album/artist/search/genre reads, playlist CRUD, `scrobble()`, `get_song_lyrics()` (structured → legacy → LRCLIB cascade). Internal `subsonic_request()` helper builds authenticated requests and emits `firmium:session-expired` on HTTP 401 or OpenSubsonic error codes 40/41.
+  - `lyrics.rs`: `parse_lrc()`, `fetch_lrclib_lyrics()` — LRC parsing and the LRCLIB fallback used by `get_song_lyrics()`
+  - `cover_cache.rs`: `get_cover_art()`, `clear_cover_cache()` — disk-based cover art cache (200MB budget, mtime-based LRU eviction), served to the frontend via Tauri's asset protocol
   - `playback.rs`: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()`, `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`, `list_audio_devices()` — delegate to rodio `AudioPlayer`
   - `app_info.rs`: `get_app_version()`
 
@@ -65,10 +70,10 @@ Single-page Svelte 5 app bundled by Vite. Hot reload works for all frontend chan
   - `stores.ts` — all Svelte writable/derived stores (auth, queue, playback state, lyrics, playlists, etc.)
   - `playback.ts` — `playAt()`, `crossfadeToNext()`, position tracking, lyrics sync, bridge event wiring
   - `audio-bridge.ts` — `AudioBridge` class: wraps Tauri IPC calls for play/pause/seek/volume, status polling loop
-  - `api.ts` — `Api` (OpenSubsonic REST client), `OpenSubsonicRouter` (URL builder), `Keyring`, `WikiApi`
+  - `api.ts` — `Api`: thin `invoke()` wrappers around `commands/subsonic.rs`/`lyrics.rs` (albums, artists, search, playlists, scrobble, lyrics); `OpenSubsonicRouter` (URL builder, used for cover art and streaming), `Keyring`
   - `playerControls.ts` — shared player control logic
   - `icons.ts` — SVG icon helpers
-  - `coverCache.ts` — in-memory blob URL cache (50MB byte budget, LRU eviction)
+  - `coverCache.ts` — thin wrapper around the Rust disk-based cover art cache (`get_cover_art`/`clear_cover_cache`), converts cached file paths via `convertFileSrc()`
   - `utils.ts` — `SafeStorage` (localStorage wrapper), misc helpers
   - `tauri.ts` — thin `tauriInvoke()` wrapper
   - `lazyLoad.ts` — IntersectionObserver-based lazy image loading
@@ -79,12 +84,16 @@ Single-page Svelte 5 app bundled by Vite. Hot reload works for all frontend chan
 ### Data Flow
 
 ```
-Svelte components / lib/playback.ts
-    ↓ (AudioBridge → tauriInvoke)
-Rust Commands (main.rs)
-    ├─ OpenSubsonic API calls (reqwest) → reqwest::blocking::Response
-    ├─ MD5 auth token generation
-    └─ Audio playback (audio.rs)
+Svelte components / lib/api.ts / lib/playback.ts
+    ↓ (tauriInvoke)
+Rust Commands (commands/)
+    ├─ OpenSubsonic API calls (subsonic.rs, async reqwest::Client in AppState)
+    │    ├─ MD5 auth token generation (auth.rs)
+    │    ├─ JSON → typed structs (mappers.rs)
+    │    └─ 401 / error 40/41 → emit("firmium:session-expired")
+    ├─ Cover art → disk cache (cover_cache.rs) → asset:// URL
+    ├─ Lyrics cascade (subsonic.rs::get_song_lyrics → lyrics.rs)
+    └─ Audio playback (audio.rs, AudioBridge → tauriInvoke)
          └─ StreamingReader (HTTP→rodio)
               └─ OS audio device (rodio)
     ↓ (status polling every 750ms via AudioBridge)
@@ -273,9 +282,9 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 
 ## Performance Considerations
 
-- **Cover Art Caching**: Blob URLs cached in memory up to a 50MB total budget (`MAX_BYTES` in `coverCache.ts`); least-recently-used entries evicted when the budget is exceeded
-- **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit)
-- **Search**: Limited to 40 albums, 100 songs per query (configurable in `src/lib/api.ts` constants)
+- **Cover Art Caching**: Disk-based cache under the app cache dir (`commands/cover_cache.rs`), up to a 200MB total budget; least-recently-used files (by mtime) evicted when the budget is exceeded. Persists across restarts; served to the frontend via Tauri's asset protocol.
+- **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit, `src-tauri/src/commands/subsonic.rs`)
+- **Search**: Limited to 40 albums, 100 songs per query (`commands/subsonic.rs::search`)
 - **Playback Concurrency**: Only one audio stream per device active at a time; multiple devices can play different streams concurrently
 - **CPU**: Release build has `opt-level = 3` + LTO + `codegen-units = 1`; `strip = false` keeps debug symbols for crash reporting
 

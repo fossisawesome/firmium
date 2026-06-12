@@ -7,9 +7,9 @@
   import { SafeStorage } from './lib/utils'
   import { Keyring } from './lib/api'
   import { tauriInvoke } from './lib/tauri'
+  import { listen } from '@tauri-apps/api/event'
   import { fetchAndShowLyrics } from './lib/playback'
   import { playlistMenuState, hidePlaylistMenu } from './lib/playlistMenu'
-  import { Api } from './lib/api'
   import type { Theme } from './lib/types/tauri-commands'
 
   import Setup from './components/Setup.svelte'
@@ -119,10 +119,10 @@
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Protocol must be HTTP or HTTPS')
     setAuth(sUrl, uName, pWord)
     try {
-      await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 }, null, { silentSessionExpiry: true })
+      await tauriInvoke('validate_connection')
     } catch (err: any) {
       clearAuth()
-      if (err?.code === 'SESSION_EXPIRED') throw new Error('Wrong username or password')
+      if (err === 'SESSION_EXPIRED') throw new Error('Wrong username or password')
       throw err
     }
     navToView('home')
@@ -134,8 +134,8 @@
   }
 
   onMount(() => {
-    window.addEventListener('firmium:session-expired', handleSessionExpired)
-    return () => window.removeEventListener('firmium:session-expired', handleSessionExpired)
+    const unlisten = listen('firmium:session-expired', handleSessionExpired)
+    return () => { unlisten.then(f => f()) }
   })
 </script>
 

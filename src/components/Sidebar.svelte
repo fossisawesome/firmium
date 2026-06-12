@@ -38,7 +38,7 @@
     const bridge = get(audioBridge)
     if (bridge) { bridge.destroy() }
     stopPositionTracking()
-    clearAll()
+    await clearAll()
     clearListCache()
     clearAuth()
     document.title = 'Firmium'
