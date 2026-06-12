@@ -21,17 +21,18 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            const { data } = await github.rest.checks.listForRef({
+            const { data } = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: context.sha,
+              workflow_id: 'ci.yml',
+              head_sha: context.sha,
             });
-            const ci = data.check_runs.filter(run => run.name.startsWith('CI /'));
-            if (ci.length === 0) {
-              core.setFailed('No CI check runs found for this commit.');
+            const runs = data.workflow_runs;
+            if (runs.length === 0) {
+              core.setFailed('No CI workflow runs found for this commit.');
               return;
             }
-            const failed = ci.filter(run => run.conclusion !== 'success');
+            const failed = runs.filter(run => run.conclusion !== 'success');
             if (failed.length > 0) {
               core.setFailed(`CI did not pass for this commit: ${failed.map(r => `${r.name} (${r.conclusion})`).join(', ')}`);
             }
