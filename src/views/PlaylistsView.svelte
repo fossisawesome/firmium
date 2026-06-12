@@ -1,13 +1,13 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
-  import { IconList, IconCloud } from '../lib/icons.js'
-  import { playlists, navToPlaylist, serverPlaylists } from '../lib/stores.js'
-  import { Api, loadImage } from '../lib/api.js'
-  import { lazyLoad } from '../lib/lazyLoad.js'
+  import { IconList, IconCloud } from '../lib/icons'
+  import { playlists, navToPlaylist, serverPlaylists } from '../lib/stores'
+  import { Api, loadImage, type ServerPlaylist } from '../lib/api'
+  import { lazyLoad } from '../lib/lazyLoad'
 
-  let showDialog = false
-  let nameInput = ''
-  let inputEl
+  let showDialog = $state(false)
+  let nameInput = $state('')
+  let inputEl: HTMLInputElement | undefined = $state()
   let serverLoading = $state(false)
   let serverError = $state('')
 
@@ -18,7 +18,7 @@
     try {
       const fetched = await Api.getPlaylists()
       serverPlaylists.set(fetched)
-    } catch (e) {
+    } catch (e: any) {
       serverError = e.message ?? 'Failed to load server playlists'
     } finally {
       serverLoading = false
@@ -56,13 +56,13 @@
     showDialog = false
   }
 
-  function onKeydown(e) {
+  function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') confirm()
     if (e.key === 'Escape') cancel()
   }
 
   // Navigate to a server-only playlist using a prefixed ID so PlaylistDetail can detect it.
-  function openServerPlaylist(sp) {
+  function openServerPlaylist(sp: ServerPlaylist) {
     navToPlaylist('server-' + sp.id)
   }
 </script>
@@ -148,7 +148,7 @@
     >
       <div class="pl-card-art">
         {#if sp.coverArt}
-          <img use:lazyLoad={img => loadImage(img, sp.coverArt, null)} alt="" />
+          <img use:lazyLoad={img => loadImage(img, sp.coverArt as string, null)} alt="" />
         {:else}
           <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconList}</span></div>
         {/if}

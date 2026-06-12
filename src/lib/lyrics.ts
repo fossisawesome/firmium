@@ -1,12 +1,28 @@
+export interface LyricLine {
+  start: number
+  value: string
+}
+
+export interface LyricsResult {
+  lines: LyricLine[]
+  synced: boolean
+}
+
+interface LyricsSong {
+  title: string
+  artist: string
+  duration?: number
+}
+
 // Converts an LRC timestamp "[mm:ss.xx]" or "[mm:ss.xxx]" to milliseconds.
-export const parseLrcTimestamp = (mm, ss, frac) => {
+export const parseLrcTimestamp = (mm: string, ss: string, frac: string): number => {
   const fracMs = frac.length === 2 ? parseInt(frac, 10) * 10 : parseInt(frac, 10)
   return (parseInt(mm, 10) * 60 + parseInt(ss, 10)) * 1000 + fracMs
 }
 
 // Parse an LRC-format string into an array of { start: ms, value: string }.
-export const parseLrc = (lrcText) => {
-  const lines = []
+export const parseLrc = (lrcText: string): LyricLine[] => {
+  const lines: LyricLine[] = []
   for (const raw of lrcText.split('\n')) {
     const m = raw.match(/^\[(\d{1,2}):(\d{2})\.(\d{2,3})\]\s*(.*)/)
     if (m) lines.push({ start: parseLrcTimestamp(m[1], m[2], m[3]), value: m[4] })
@@ -15,7 +31,7 @@ export const parseLrc = (lrcText) => {
 }
 
 // Normalize song title and artist for better lrclib matching.
-const normalizeLrclibQuery = (song) => {
+const normalizeLrclibQuery = (song: LyricsSong): { artist: string; title: string } => {
   let title = song.title.replace(/\s*[\(\[](?:Remix|Live|Extended|Acoustic|Instrumental|Remaster|Cover|Edit|Version|feat\.?|featuring)[^\)\]]*[\)\]]/gi, '').trim()
   title = title.replace(/\s*-\s*(?:feat\.|featuring).*$/i, '').trim()
   let artist = song.artist.split(/\s*(?:feat\.|feat|featuring|ft\.?|\/)\s*/i)[0].trim()
@@ -24,7 +40,7 @@ const normalizeLrclibQuery = (song) => {
 
 // lrclib.net — free, no API key, returns synced LRC lyrics.
 export const LrclibApi = {
-  getLyrics: async (song) => {
+  getLyrics: async (song: LyricsSong): Promise<LyricsResult | null> => {
     const { artist, title } = normalizeLrclibQuery(song)
     const params = new URLSearchParams({
       artist_name: artist,
@@ -44,7 +60,7 @@ export const LrclibApi = {
     }
     if (data.plainLyrics) {
       return {
-        lines: data.plainLyrics.split('\n').map(v => ({ start: 0, value: v })),
+        lines: data.plainLyrics.split('\n').map((v: string) => ({ start: 0, value: v })),
         synced: false
       }
     }

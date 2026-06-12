@@ -1,21 +1,27 @@
-<script>
-  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
-  import { onMount, onDestroy } from 'svelte'
-  import { navToAlbum } from '../lib/stores.js'
-  import { Api, loadImage } from '../lib/api.js'
-  import { showPlaylistMenu } from '../lib/playlistMenu.js'
-  import { lazyLoad } from '../lib/lazyLoad.js'
+<script lang="ts">
+  import { IconMusic, IconList, IconPlay } from '../lib/icons'
+  import { onMount } from 'svelte'
+  import { navToAlbum } from '../lib/stores'
+  import { Api, loadImage } from '../lib/api'
+  import { showPlaylistMenu } from '../lib/playlistMenu'
+  import { lazyLoad } from '../lib/lazyLoad'
+  import { getCached, setCached } from '../lib/listCache'
+  import { createAbortController } from '../lib/utils'
+  import VirtualList from '../lib/VirtualList.svelte'
+  import type { Album } from '../lib/types/tauri-commands'
 
-  let albums = $state([])
-  let loading = $state(true)
+  const ALBUM_ROW_HEIGHT = 60
+
+  let albums = $state<Album[]>(getCached<Album[]>('albums') ?? [])
+  let loading = $state(albums.length === 0)
   let error = $state('')
-  let ctrl
+  const abortCtrl = createAbortController()
 
   const RELEASE_ORDER = ['album', 'ep', 'single', 'live', 'compilation', 'other']
-  const RELEASE_LABELS = { album: 'Albums', ep: 'EPs', single: 'Singles', live: 'Live', compilation: 'Compilations', other: 'Other' }
+  const RELEASE_LABELS: Record<string, string> = { album: 'Albums', ep: 'EPs', single: 'Singles', live: 'Live', compilation: 'Compilations', other: 'Other' }
 
   const grouped = $derived.by(() => {
-    const map = {}
+    const map: Record<string, Album[]> = {}
     for (const a of albums) {
       const rt = (a.releaseType ?? 'album').toLowerCase()
       const key = RELEASE_ORDER.includes(rt) ? rt : 'other'
@@ -26,18 +32,20 @@
     return RELEASE_ORDER.filter(k => k === 'album' && map[k]?.length).map(k => ({ key: k, label: RELEASE_LABELS[k], items: map[k] }))
   })
 
+  const flatAlbums = $derived(grouped.flatMap(section => section.items))
+
   onMount(async () => {
-    ctrl = new AbortController()
+    if (albums.length > 0) return
+    const signal = abortCtrl.renew()
     try {
-      albums = await Api.getAlbums(ctrl.signal)
-    } catch (e) {
-      if (!ctrl.signal.aborted) error = e.message
+      albums = await Api.getAlbums(signal)
+      setCached('albums', albums)
+    } catch (e: any) {
+      if (!signal.aborted) error = e.message
     } finally {
-      if (!ctrl.signal.aborted) loading = false
+      if (!signal.aborted) loading = false
     }
   })
-
-  onDestroy(() => ctrl?.abort())
 </script>
 
 {#if loading}
@@ -47,8 +55,8 @@
 {:else if albums.length === 0}
   <div class="loading-msg">No albums found.</div>
 {:else}
-  {#each grouped as section}
-    {#each section.items as album}
+  <VirtualList items={flatAlbums} itemHeight={ALBUM_ROW_HEIGHT}>
+    {#snippet children(album, _index)}
       <div
         class="album-row"
         role="button"
@@ -58,7 +66,7 @@
       >
         <div class="album-art-sm">
           {#if album.coverArtId}
-            <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
+            <img use:lazyLoad={img => loadImage(img, album.coverArtId, abortCtrl.signal)} alt="" />
           {:else}
             <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
           {/if}
@@ -73,6 +81,6 @@
           onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'album', albumId: album.id, albumName: album.name }) }}
         >+</button>
       </div>
-    {/each}
-  {/each}
+    {/snippet}
+  </VirtualList>
 {/if}

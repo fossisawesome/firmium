@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 4.0.2
+**Version**: 5.0.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Tech Stack
 
 **Desktop (Linux, Windows)**
-- **Frontend**: Svelte 5, bundled via Vite
+- **Frontend**: Svelte 5 + TypeScript, bundled via Vite
 - **Backend**: Rust 2021 edition, Tauri 2.11+
 - **Audio**: `rodio` 0.22 for native OS audio engine integration
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
@@ -26,17 +26,17 @@ See [android/CLAUDE.md](android/CLAUDE.md) for the Android tech stack and archit
 
 ### Rust Backend (src-tauri/src/)
 
-The backend exposes Tauri commands that the frontend invokes via `src/lib/audio-bridge.js` and `src/lib/tauri.js`. Key modules:
+The backend exposes Tauri commands that the frontend invokes via `src/lib/audio-bridge.ts` and `src/lib/tauri.ts`. Key modules:
 
-- **lib.rs**: Main command file and Tauri app entry point. Contains all `#[tauri::command]` functions and the `run()` function. Key commands:
-  - Themes: `list_themes()` — reads `.toml` theme files
-  - Data mappers: `map_albums()`, `map_artists()`, `map_songs()` — Rust-side mapping of raw Subsonic JSON to typed structs (including `infer_release_type()`)
-  - Auth: `generate_auth_params()` — MD5 token hashing
-  - Credentials: `save_password()`, `get_password()`, `delete_password()` — OS keyring
-  - Audio: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()` — delegates to rodio `AudioPlayer`
-  - Audio state: `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`
-  - Diagnostics: `get_machine_info()`, `list_audio_devices()`
-  - Logging: `write_log()`, `delete_logs()`, `get_log_path()`, `is_debug_mode()`, `get_app_version()`
+- **lib.rs**: Tauri app entry point. Defines `run()`, sets up the app, and registers all commands via `tauri::generate_handler![]`. Command implementations live in `commands/`.
+
+- **commands/**: Command modules, re-exported via `commands/mod.rs`:
+  - `themes.rs`: `list_themes()` — reads `.toml` theme files
+  - `mappers.rs`: `map_albums()`, `map_artists()`, `map_songs()` — Rust-side mapping of raw Subsonic JSON to typed structs (including `infer_release_type()`)
+  - `auth.rs`: `generate_auth_params()` — MD5 token hashing
+  - `credentials.rs`: `save_password()`, `get_password()`, `delete_password()` — OS keyring
+  - `playback.rs`: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()`, `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`, `list_audio_devices()` — delegate to rodio `AudioPlayer`
+  - `logging.rs`: `write_log()`, `delete_logs()`, `get_log_path()`, `is_debug_mode()`, `get_app_version()`
 
 - **audio.rs**: Desktop-only audio playback module. Core design:
   - `StreamingReader`: Implements Read+Seek over HTTP response body. Bytes buffered locally to keep Subsonic "Now Playing" status during playback.
@@ -62,24 +62,24 @@ Single-page Svelte 5 app bundled by Vite. Hot reload works for all frontend chan
   - `HomeView.svelte`, `AlbumList.svelte`, `AlbumDetail.svelte`, `ArtistList.svelte`, `ArtistDetail.svelte`
   - `SearchView.svelte`, `PlaylistsView.svelte`, `PlaylistDetail.svelte`, `Settings.svelte`
 - **lib/**: Logic modules (no UI)
-  - `stores.js` — all Svelte writable/derived stores (auth, queue, playback state, lyrics, playlists, etc.)
-  - `playback.js` — `playAt()`, `crossfadeToNext()`, position tracking, lyrics sync, bridge event wiring
-  - `audio-bridge.js` — `AudioBridge` class: wraps Tauri IPC calls for play/pause/seek/volume, status polling loop
-  - `api.js` — `Api` (OpenSubsonic REST client), `OpenSubsonicRouter` (URL builder), `Keyring`, `WikiApi`
-  - `playerControls.js` — shared player control logic
-  - `icons.js` — SVG icon helpers
-  - `coverCache.js` — in-memory blob URL cache (max 150 entries, LRU eviction)
-  - `utils.js` — `SafeStorage` (localStorage wrapper), misc helpers
-  - `tauri.js` — thin `tauriInvoke()` wrapper
-  - `lazyLoad.js` — IntersectionObserver-based lazy image loading
-  - `lyrics.js` — lyrics fetch + parse logic
-  - `playlistMenu.js` — playlist context menu state helpers
+  - `stores.ts` — all Svelte writable/derived stores (auth, queue, playback state, lyrics, playlists, etc.)
+  - `playback.ts` — `playAt()`, `crossfadeToNext()`, position tracking, lyrics sync, bridge event wiring
+  - `audio-bridge.ts` — `AudioBridge` class: wraps Tauri IPC calls for play/pause/seek/volume, status polling loop
+  - `api.ts` — `Api` (OpenSubsonic REST client), `OpenSubsonicRouter` (URL builder), `Keyring`, `WikiApi`
+  - `playerControls.ts` — shared player control logic
+  - `icons.ts` — SVG icon helpers
+  - `coverCache.ts` — in-memory blob URL cache (50MB byte budget, LRU eviction)
+  - `utils.ts` — `SafeStorage` (localStorage wrapper), misc helpers
+  - `tauri.ts` — thin `tauriInvoke()` wrapper
+  - `lazyLoad.ts` — IntersectionObserver-based lazy image loading
+  - `lyrics.ts` — lyrics fetch + parse logic
+  - `playlistMenu.ts` — playlist context menu state helpers
 - **style.css**: Light/dark mode support, responsive layout; includes mobile-specific styles
 
 ### Data Flow
 
 ```
-Svelte components / lib/playback.js
+Svelte components / lib/playback.ts
     ↓ (AudioBridge → tauriInvoke)
 Rust Commands (main.rs)
     ├─ OpenSubsonic API calls (reqwest) → reqwest::blocking::Response
@@ -106,6 +106,30 @@ Native Kotlin/Compose app in `android/`, independent of the Tauri build, sharing
 4. **UUID-Based Session Tracking**: Each audio playback gets a UUID. Multiple devices can play concurrently; each has its own session in the `AudioPlayer` map.
 
 5. **Volume Isolation Per Device**: `MixerDeviceSink` allows independent volume control per audio output device, not just global volume.
+
+### Known Cross-Platform Divergences
+
+Desktop (Tauri/Rust/Svelte) and Android (Kotlin/Compose) implement the same
+features independently and have drifted in some areas. These are intentional
+or at least currently-accepted differences — don't "fix" one to match the
+other without checking with the user first:
+
+1. **Release type inference**: `commands/mappers.rs::infer_release_type()`
+   (desktop) returns lowercase `"single"/"ep"/"album"` with title-text and
+   songCount fallback heuristics. `ApiClient.kt::inferReleaseType()` (Android)
+   returns Title Case `"Single"/"EP"/"Album"/"Compilation"/"Live"/"Remix"`,
+   checks `isCompilation` first, and has no title/songCount fallback at that
+   layer — `AlbumListScreen.kt::effectiveType()` does separate songCount-based
+   reclassification on the Android side.
+
+2. **Crossfade gain handling**: Desktop's `AudioPlayer::crossfade_to` (Rust,
+   `audio.rs`) does not apply ReplayGain during the fade ramp. Android's
+   `AudioPlayer.crossfadeTo` multiplies by `gain` during the ramp.
+
+3. **Queue/playback model**: Android runs a single ExoPlayer instance with the
+   full playlist loaded (native gapless/queue management). Desktop runs
+   per-track `rodio` sessions with manual preload-and-promote to the next
+   session for gapless/crossfade transitions.
 
 ## Build & Run
 
@@ -156,18 +180,17 @@ npm run android:install # installDebug via adb
 - Playback logic lives in `audio.rs`. New playback methods (e.g., equalizer) belong there.
 - All changes must maintain thread-safety (Arc, Mutex, RwLock).
 - Sessions are identified by UUID; use `AudioPlayer::get_state(session_id)` to query state.
-- Crossfade is implemented entirely in the JS layer (`AudioBridge.startCrossfadeIn` in `lib/audio-bridge.js`).
+- Crossfade is implemented in Rust: `AudioPlayer::crossfade_to()` in `audio.rs` ramps volume between the outgoing and incoming sessions. The frontend (`src/lib/playback.ts`) decides *when* to trigger it and calls into Rust via `AudioBridge`; it does not perform the fade itself.
 
 ### Frontend State Management
-- All mutable app state lives in Svelte stores (`src/lib/stores.js`).
+- All mutable app state lives in Svelte stores (`src/lib/stores.ts`).
 - Components subscribe reactively — update the store, the UI updates automatically.
-- Playback orchestration (play, crossfade, position tracking, lyrics sync) is in `src/lib/playback.js`.
-- API calls use `Api` from `src/lib/api.js`; responses are type-checked manually (no TypeScript).
+- Playback orchestration (play, crossfade, position tracking, lyrics sync) is in `src/lib/playback.ts`.
+- API calls use `Api` from `src/lib/api.ts`; the frontend is written in TypeScript, with response types defined in `src/lib/types/`.
 
 ### Debugging Rust Backend
 - `eprintln!()` prints to dev server console
 - Use `RUST_BACKTRACE=1 npm run dev:app` for panic backtraces
-- `sysinfo` crate queries hardware; check `get_machine_info()` for diagnostics output
 
 ### Debugging Frontend
 - Dev window has DevTools: press F12 or `Ctrl+Shift+I`
@@ -182,12 +205,27 @@ Currently no automated tests. Manual testing workflow:
 2. Log into a local Subsonic/Navidrome instance
 3. Test playback, seeking, pause/resume, volume control
 4. Test cover art caching (should be cached on second view)
-5. Test search and artist Wikipedia bio fetches
+5. Test search and artist bio fetches
 
 ## Packaging & Distribution
 
-- `tauri.conf.json` defines the build, bundles (deb, rpm), and updater endpoints
-- Updater signature in `tauri.conf.json` points to GitHub releases; update the pubkey if rotating signing keys
+- `tauri.conf.json` defines the build, bundles (deb, rpm, nsis), and the in-app updater config
+- `bundle.createUpdaterArtifacts: true` makes `tauri-action` (in `release.yml`) generate `.sig`
+  files and a `latest.json` manifest for each tagged release
+- The in-app updater (`@tauri-apps/plugin-updater` + `src/lib/updater.ts`, surfaced under
+  Settings > Debug > Software Update) only covers **nsis (Windows)** and **AppImage (Linux)**
+  bundles — the updater protocol can't self-update `.deb`/`.rpm` packages (no privilege
+  escalation), so those users continue to update via their package manager / COPR. The
+  current `bundle.targets` (`deb`, `rpm`, `nsis`) means the in-app updater is effectively a
+  Windows-only feature today; adding an `appimage` target would extend it to Linux
+  AppImage users.
+- `plugins.updater.endpoints` in `tauri.conf.json` points at
+  `https://github.com/fossisawesome/firmium/releases/latest/download/latest.json`;
+  `plugins.updater.pubkey` must match the public half of the keypair whose private key is
+  stored in the `TAURI_SIGNING_PRIVATE_KEY`/`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` GitHub
+  secrets used by `release.yml`. Rotate both together with `npm run tauri signer generate`.
+- Android: no in-app updater (native Kotlin app, not part of the Tauri build) — updates via
+  Play Store or manual APK install, which is the standard/expected Android update path
 - Linux .desktop file for app launcher: `firmium.desktop` (bundled by Tauri)
 - Icon files in `src-tauri/icons/` (32x32, 128x128, 128x128@2x, icon.icns, icon.ico)
 
@@ -202,14 +240,14 @@ Currently no automated tests. Manual testing workflow:
 - `src-tauri/src/main.rs` — Thin entry point that calls `lib::run()`
 - `src-tauri/src/audio.rs` — Audio playback engine (rodio)
 - `src/App.svelte` — Root component, auth bootstrap, view routing
-- `src/lib/stores.js` — All Svelte stores (single source of truth for app state)
-- `src/lib/playback.js` — Playback orchestration, position tracking, lyrics sync
-- `src/lib/audio-bridge.js` — Tauri IPC bridge (`AudioBridge` class)
-- `src/lib/api.js` — OpenSubsonic API client, URL builder, keyring, WikiApi
+- `src/lib/stores.ts` — All Svelte stores (single source of truth for app state)
+- `src/lib/playback.ts` — Playback orchestration, position tracking, lyrics sync
+- `src/lib/audio-bridge.ts` — Tauri IPC bridge (`AudioBridge` class)
+- `src/lib/api.ts` — OpenSubsonic API client, URL builder, keyring, WikiApi
 - `src-tauri/tauri.conf.json` — App metadata, bundler config, updater settings
 - `src-tauri/capabilities/default.json` — Tauri permissions (security scoping)
 - `themes/` — TOML theme files
-- `vite.config.js` — Vite + Svelte plugin config
+- `vite.config.ts` — Vite + Svelte plugin config
 - `package.json` — npm scripts for build/dev
 - `android/` — Separate native Kotlin/Compose Android app (not part of the Tauri build); see [android/CLAUDE.md](android/CLAUDE.md)
 
@@ -235,11 +273,11 @@ Common endpoints used: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverA
 
 ## Performance Considerations
 
-- **Cover Art Caching**: Blob URLs cached in memory (limit: 150 entries); oldest entries evicted when limit exceeded
+- **Cover Art Caching**: Blob URLs cached in memory up to a 50MB total budget (`MAX_BYTES` in `coverCache.ts`); least-recently-used entries evicted when the budget is exceeded
 - **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit)
-- **Search**: Limited to 40 albums, 100 songs per query (configurable in `src/lib/api.js` constants)
+- **Search**: Limited to 40 albums, 100 songs per query (configurable in `src/lib/api.ts` constants)
 - **Playback Concurrency**: Only one audio stream per device active at a time; multiple devices can play different streams concurrently
-- **CPU**: Release build has `opt-level = 2` + LTO enabled; `strip = false` keeps debug symbols for crash reporting
+- **CPU**: Release build has `opt-level = 3` + LTO + `codegen-units = 1`; `strip = false` keeps debug symbols for crash reporting
 
 # Foundational Thinking Principles
 
@@ -317,7 +355,7 @@ If you explicitly say "I want this abstracted," "I need error handling for X," o
 ## 5. Verify, Don't Assume Implementation Details
 
 **Don't assume the user's environment, tools, or IDE capabilities.**
-
+*
 Before recommending something, consider:
 - Does their IDE support X? (Ask or check, don't assume.)
 - Is tool Y installed in their environment? (Verify or provide install steps.)
@@ -325,3 +363,17 @@ Before recommending something, consider:
 - Are they on a supported version? (Test environment assumptions.)
 
 This catches silent failures. A recommendation that works on your machine but breaks on theirs is worse than no recommendation.
+
+# Extra (still important)
+
+These also apply to anything
+
+## Dependancys
+
+**Always research/web search dependancys before you add them.**
+
+This helps:
+- Make dependancys are up to date.
+- Confirms dependancys are still safe to use - no supply chain attacks.
+- Also - dont use a dependancy if you dont have to. Unless theres a real need for a dependancy - most of them can be easily be remade here. Expections apply if doing it here - woukd be geneiunlly a stupid, and unmainatble task.
+

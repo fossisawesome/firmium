@@ -1,51 +1,48 @@
-<script>
-  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
-  import { onDestroy } from 'svelte'
-  import { queue, currentTrack, navToAlbum } from '../lib/stores.js'
-  import { Api, loadImage } from '../lib/api.js'
-  import { playAt } from '../lib/playback.js'
-  import { showPlaylistMenu } from '../lib/playlistMenu.js'
-  import { lazyLoad } from '../lib/lazyLoad.js'
-  import { formatDuration } from '../lib/utils.js'
+<script lang="ts">
+  import { IconMusic, IconList, IconPlay } from '../lib/icons'
+  import { queue, currentTrack, navToAlbum } from '../lib/stores'
+  import { Api, loadImage } from '../lib/api'
+  import { playAt } from '../lib/playback'
+  import { showPlaylistMenu } from '../lib/playlistMenu'
+  import { lazyLoad } from '../lib/lazyLoad'
+  import { formatDuration, createAbortController } from '../lib/utils'
+  import type { Song, Album } from '../lib/types/tauri-commands'
 
   const SEARCH_INPUT_MAX_LENGTH = 500
 
   let query = $state('')
-  let songs = $state([])
-  let albums = $state([])
+  let songs = $state<Song[]>([])
+  let albums = $state<Album[]>([])
   let loading = $state(false)
   let error = $state('')
   let searched = $state(false)
-  let ctrl
-
-  onDestroy(() => ctrl?.abort())
+  const abortCtrl = createAbortController()
 
   async function executeSearch() {
     if (!query.trim()) return
-    ctrl?.abort()
-    ctrl = new AbortController()
+    const signal = abortCtrl.renew()
     loading = true
     error = ''
     searched = false
     try {
-      const results = await Api.search(query.trim(), ctrl.signal)
-      if (ctrl.signal.aborted) return
+      const results = await Api.search(query.trim(), signal)
+      if (signal.aborted) return
       songs = results.songs
       albums = results.albums
       searched = true
-    } catch (e) {
-      if (!ctrl.signal.aborted) error = e.message
+    } catch (e: any) {
+      if (!signal.aborted) error = e.message
     } finally {
-      if (!ctrl.signal.aborted) loading = false
+      if (!signal.aborted) loading = false
     }
   }
 
-  function playTrack(idx) {
+  function playTrack(idx: number) {
     queue.set(songs)
     playAt(idx)
   }
 
-  function isPlaying(track) {
+  function isPlaying(track: Song) {
     return $currentTrack?.id === track.id
   }
 </script>
@@ -87,7 +84,7 @@
               <div class="track-num">{track.trackNumber ?? idx + 1}</div>
               <div class="track-thumb">
                 {#if track.coverArtId}
-                  <img use:lazyLoad={img => loadImage(img, track.coverArtId, ctrl?.signal)} alt="" />
+                  <img use:lazyLoad={img => loadImage(img, track.coverArtId, abortCtrl.signal)} alt="" />
                 {/if}
               </div>
               <div class="track-info">
@@ -117,7 +114,7 @@
           >
             <div class="album-art-sm">
               {#if album.coverArtId}
-                <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
+                <img use:lazyLoad={img => loadImage(img, album.coverArtId, abortCtrl.signal)} alt="" />
               {:else}
                 <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
               {/if}

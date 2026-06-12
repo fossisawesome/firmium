@@ -1,3 +1,21 @@
+# v5.0.0
+
+## Added
+
+- **CodeQL security scanning** (`.github/workflows/codeql.yml`): New CI workflow runs CodeQL analysis across the JS/TS and Java/Kotlin codebases on push, PR, and a weekly schedule, with the Android build run manually via Gradle to satisfy the Java/Kotlin analysis.
+- **Dependabot** (`.github/dependabot.yml`): Automated dependency update PRs for npm, Cargo, Gradle, and GitHub Actions.
+- **`CONTRIBUTING.md`**: New contributor guide covering setup, branching, and PR conventions.
+- **`android/CLAUDE.md`**: Dedicated guidance file for the Android app's tech stack and architecture, referenced from the root `CLAUDE.md`.
+- **App icon redesign**: All icon assets (Linux, Windows, macOS, iOS) regenerated from a new `icon-source.svg` at higher resolution.
+
+## Changed
+
+- **`copr.yml` hardened**: Untrusted GitHub Actions expressions (PR titles, branch names) no longer interpolated directly into shell scripts, closing a script-injection vector. Explicit workflow permissions added.
+- **Dependency updates**: `vite`, `svelte`, `concurrently`, `uuid`, `toml` (Rust), `androidx.compose:compose-bom`, `androidx.lifecycle:lifecycle-runtime-compose`, `org.jetbrains.kotlinx:kotlinx-coroutines-android`, `com.squareup.okhttp3:logging-interceptor`, and the Gradle wrapper all bumped to their latest compatible versions. GitHub Actions (`actions/checkout`, `actions/setup-node`, `actions/setup-java`, `actions/github-script`, `android-actions/setup-android`) updated to their latest major versions.
+- **`CLAUDE.md` and `agents.md`** restructured: project guidance split between the root `CLAUDE.md` and the new `android/CLAUDE.md`, with `agents.md` updated for autonomy/escalation rules.
+
+---
+
 # v4.0.1
 
 ## Fixed

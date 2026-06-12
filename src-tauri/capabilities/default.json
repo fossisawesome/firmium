@@ -8,17 +8,13 @@
     "core:default",
     "core:window:allow-set-decorations",
     "core:window:allow-is-decorated",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "http:default",
       "allow": [
         { "url": "http://**" },
-        { "url": "http://**/**" },
-        { "url": "http://**:*" },
-        { "url": "http://**:*/**" },
-        { "url": "https://**" },
-        { "url": "https://**/**" },
-        { "url": "https://**:*" },
-        { "url": "https://**:*/**" }
+        { "url": "https://**" }
       ]
     }
   ],
@@ -49,11 +45,6 @@
     "seek_position",
     "list_audio_devices",
     "crossfade_to",
-    "set_queue",
-    "skip_to_next",
-    "skip_to_previous",
-    "skip_to_queue_index",
-    "get_current_queue_index",
     "list_themes"
   ]
 }

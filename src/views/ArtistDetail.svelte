@@ -1,75 +1,84 @@
-<script>
-  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
-  import { onMount, onDestroy } from 'svelte'
-  import { queue, currentTrack, navToAlbum } from '../lib/stores.js'
-  import { Api, Keyring, loadImage } from '../lib/api.js'
-  import { playAt } from '../lib/playback.js'
-  import { showPlaylistMenu } from '../lib/playlistMenu.js'
-  import { lazyLoad } from '../lib/lazyLoad.js'
-  import { pooledMap, SafeStorage } from '../lib/utils.js'
-  import { PLAY_ALL_CONCURRENCY } from '../lib/api.js'
+<script lang="ts">
+  import { IconMusic, IconList, IconPlay } from '../lib/icons'
+  import { onMount } from 'svelte'
+  import { queue, currentTrack, navToAlbum } from '../lib/stores'
+  import { Api, Keyring, loadImage } from '../lib/api'
+  import { playAt } from '../lib/playback'
+  import { showPlaylistMenu } from '../lib/playlistMenu'
+  import { lazyLoad } from '../lib/lazyLoad'
+  import { pooledMap, SafeStorage, createAbortController } from '../lib/utils'
+  import { PLAY_ALL_CONCURRENCY } from '../lib/api'
+  import { tauriFetch } from '../lib/tauri'
+  import VirtualList from '../lib/VirtualList.svelte'
+  import type { Album } from '../lib/types/tauri-commands'
+
+  const ALBUM_ROW_HEIGHT = 60
+
+  interface ReleaseGroups {
+    Albums: Album[]
+    EPs: Album[]
+    Singles: Album[]
+  }
 
   // Fetches artist bio from Last.fm API using the user's own key.
   // Note: Last.fm removed artist images from their API in 2019; images come from the server instead.
-  async function fetchLastfmBio(artistName, apiKey, signal) {
+  async function fetchLastfmBio(artistName: string, apiKey: string, signal?: AbortSignal | null): Promise<string | null> {
     try {
       const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getInfo&artist=${encodeURIComponent(artistName)}&api_key=${encodeURIComponent(apiKey)}&format=json`
-      const res = await fetch(url, { signal })
+      const res = await tauriFetch(url, { signal: signal ?? undefined })
       const data = await res.json()
       const bio = data.artist?.bio?.summary || null
       return bio
     } catch { return null }
   }
 
-let { id } = $props()
+let { id }: { id: string } = $props()
 
   let name = $state('')
-  let groups = $state({ Albums: [], EPs: [], Singles: [] })
+  let groups = $state<ReleaseGroups>({ Albums: [], EPs: [], Singles: [] })
   let loading = $state(true)
   let error = $state('')
-  let ctrl
+  const abortCtrl = createAbortController()
   let bio = $state('Fetching biography…')
-  let wikiImage = $state(null)
+  let wikiImage = $state<string | null>(null)
   let playingAll = $state(false)
 
   onMount(async () => {
-    ctrl = new AbortController()
+    const signal = abortCtrl.renew()
     try {
-      const result = await Api.getArtistDetails(id, ctrl.signal)
-      if (ctrl.signal.aborted) return
+      const result = await Api.getArtistDetails(id, signal)
+      if (signal.aborted) return
       name = result.name
       buildGroups(result.albums)
       const lastfmEnabled = SafeStorage.getItem('firmium_lastfm') === 'true'
-      const lastfmKey = lastfmEnabled ? (await Keyring.load('lastfm_api_key').catch(() => '')) || '' : ''
+      const lastfmKey = lastfmEnabled ? ((await Keyring.load('lastfm_api_key').catch(() => '')) as string) || '' : ''
       // Always fetch image from the server (Last.fm removed images from their API in 2019).
-      Api.getArtistInfo(id, ctrl.signal).then(info => {
-        if (ctrl.signal.aborted || !info?.image) return
+      Api.getArtistInfo(id, signal).then(info => {
+        if (signal.aborted || !info?.image) return
         wikiImage = info.image
       })
       // Fetch bio: Last.fm client-side if configured, otherwise server's getArtistInfo2.
       const resolveBio = async () => {
         if (lastfmEnabled && lastfmKey) {
-          const lfmBio = await fetchLastfmBio(name, lastfmKey, ctrl.signal)
-          if (ctrl.signal.aborted) return
+          const lfmBio = await fetchLastfmBio(name, lastfmKey, signal)
+          if (signal.aborted) return
           if (lfmBio) { bio = lfmBio.replace(/<[^>]+>/g, '').trim(); return }
         } else {
-          const serverInfo = await Api.getArtistInfo(id, ctrl.signal)
-          if (ctrl.signal.aborted) return
+          const serverInfo = await Api.getArtistInfo(id, signal)
+          if (signal.aborted) return
           if (serverInfo?.bio) { bio = serverInfo.bio.replace(/<[^>]+>/g, '').trim(); return }
         }
         bio = 'Biography not available.'
       }
       resolveBio()
-    } catch (e) {
-      if (!ctrl.signal.aborted) error = e.message
+    } catch (e: any) {
+      if (!signal.aborted) error = e.message
     } finally {
-      if (!ctrl.signal.aborted) loading = false
+      if (!signal.aborted) loading = false
     }
   })
 
-  onDestroy(() => ctrl?.abort())
-
-  function buildGroups(albums) {
+  function buildGroups(albums: Album[]) {
     groups = { Albums: [], EPs: [], Singles: [] }
     albums.forEach(a => {
       const type = String(a.releaseType || '').toLowerCase()
@@ -125,35 +134,37 @@ let { id } = $props()
 {:else if error}
   <div class="loading-msg error-msg">{error}</div>
 {:else}
-  {#each ['Albums', 'EPs', 'Singles'] as category}
+  {#each ['Albums', 'EPs', 'Singles'] as const as category}
     {#if groups[category].length > 0}
       <div class="release-group-title">{category}</div>
-      {#each groups[category] as album}
-        <div
-          class="album-row"
-          role="button"
-          tabindex="0"
-          onclick={() => navToAlbum(album.id)}
-          onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navToAlbum(album.id)}
-        >
-          <div class="album-art-sm">
-            {#if album.coverArtId}
-              <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
-            {:else}
-              <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
-            {/if}
+      <VirtualList items={groups[category]} itemHeight={ALBUM_ROW_HEIGHT}>
+        {#snippet children(album, _index)}
+          <div
+            class="album-row"
+            role="button"
+            tabindex="0"
+            onclick={() => navToAlbum(album.id)}
+            onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navToAlbum(album.id)}
+          >
+            <div class="album-art-sm">
+              {#if album.coverArtId}
+                <img use:lazyLoad={img => loadImage(img, album.coverArtId, abortCtrl.signal)} alt="" />
+              {:else}
+                <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
+              {/if}
+            </div>
+            <div class="album-info">
+              <div class="album-title">{album.name}</div>
+              <div class="album-artist">{album.albumArtist}</div>
+            </div>
+            <button
+              class="album-add-btn"
+              title="Add album to playlist"
+              onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'album', albumId: album.id, albumName: album.name }) }}
+            >+</button>
           </div>
-          <div class="album-info">
-            <div class="album-title">{album.name}</div>
-            <div class="album-artist">{album.albumArtist}</div>
-          </div>
-          <button
-            class="album-add-btn"
-            title="Add album to playlist"
-            onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'album', albumId: album.id, albumName: album.name }) }}
-          >+</button>
-        </div>
-      {/each}
+        {/snippet}
+      </VirtualList>
     {/if}
   {/each}
 {/if}

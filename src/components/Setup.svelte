@@ -1,15 +1,37 @@
-<script>
-  import { SafeStorage } from '../lib/utils.js'
-  import { Keyring } from '../lib/api.js'
+<script lang="ts">
+  import { SafeStorage } from '../lib/utils'
+  import { Keyring } from '../lib/api'
+
+  interface Props {
+    error?: string
+    doConnect: (server: string, username: string, password: string) => Promise<void>
+  }
 
   // error is bindable so the parent can write the initial "Connecting…" message.
-  let { error = $bindable(''), doConnect } = $props()
+  let { error = $bindable(''), doConnect }: Props = $props()
 
   let serverUrl = $state((SafeStorage.getItem('firmium_server') ?? '').replace(/\/+$/, ''))
   let username = $state(SafeStorage.getItem('firmium_user') ?? '')
   let password = $state('')
   let savePassword = $state(SafeStorage.getItem('firmium_save_pass') === 'true')
   let connecting = $state(false)
+
+  // Warn (non-blocking) when credentials would be sent in cleartext over a
+  // non-local network — LAN/localhost http is fine, but http to a hostname
+  // implies the auth token travels unencrypted.
+  const isLocalHost = (host: string): boolean =>
+    host === 'localhost' || host === '127.0.0.1' || host === '::1' ||
+    /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|\.local$/.test(host)
+
+  const cleartextWarning = $derived.by(() => {
+    try {
+      const url = new URL(serverUrl)
+      if (url.protocol === 'http:' && !isLocalHost(url.hostname)) {
+        return 'Connecting over plain HTTP to a non-local server sends your credentials unencrypted. Use HTTPS if possible.'
+      }
+    } catch (_) {}
+    return ''
+  })
 
   async function handleConnect() {
     if (!serverUrl || !username || !password) { error = 'Please fill out all fields'; return }
@@ -32,7 +54,7 @@
         SafeStorage.setItem('firmium_save_pass', 'false')
         Keyring.remove(username).catch(() => {})
       }
-    } catch (err) {
+    } catch (err: any) {
       error = (typeof err === 'string' ? err : err?.message || (err instanceof Error ? err.toString() : null)) || 'Connection failed — check the server URL and try again'
     } finally {
       connecting = false
@@ -46,6 +68,9 @@
   <div class="field">
     <label for="setup-server">Server URL</label>
     <input id="setup-server" type="url" bind:value={serverUrl} placeholder="https://navidrome.music:4533" />
+    {#if cleartextWarning}
+      <div class="warning-msg">{cleartextWarning}</div>
+    {/if}
   </div>
   <div class="field">
     <label for="setup-username">Username</label>

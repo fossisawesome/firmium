@@ -1,51 +1,53 @@
-<script>
-  import { IconMusic, IconList, IconPlay } from '../lib/icons.js'
-  import { onMount, onDestroy } from 'svelte'
+<script lang="ts">
+  import { IconMusic, IconList, IconPlay } from '../lib/icons'
+  import { onMount } from 'svelte'
   import { get } from 'svelte/store'
-  import { queue, queueIdx, currentTrack, navBack } from '../lib/stores.js'
-  import { Api, loadImage } from '../lib/api.js'
-  import { playAt } from '../lib/playback.js'
-  import { showPlaylistMenu } from '../lib/playlistMenu.js'
-  import { lazyLoad } from '../lib/lazyLoad.js'
-  import { formatDuration } from '../lib/utils.js'
+  import { queue, queueIdx, currentTrack, navBack } from '../lib/stores'
+  import { Api, loadImage } from '../lib/api'
+  import { playAt } from '../lib/playback'
+  import { showPlaylistMenu } from '../lib/playlistMenu'
+  import { lazyLoad } from '../lib/lazyLoad'
+  import { formatDuration, createAbortController } from '../lib/utils'
+  import VirtualList from '../lib/VirtualList.svelte'
+  import type { Song } from '../lib/types/tauri-commands'
 
-  let { id } = $props()
+  const TRACK_ROW_HEIGHT = 56
 
-  let tracks = $state([])
+  let { id }: { id: string } = $props()
+
+  let tracks = $state<Song[]>([])
   let albumName = $state('')
   let albumArtist = $state('')
-  let coverArtId = $state(null)
+  let coverArtId = $state<string | undefined>(undefined)
   let loading = $state(true)
   let error = $state('')
-  let ctrl
-  let coverImg = $state()
+  const abortCtrl = createAbortController()
+  let coverImg = $state<HTMLImageElement>()
 
-  const isCurrentTrackHere = $derived($currentTrack && tracks.some(t => t.id === $currentTrack.id))
+  const isCurrentTrackHere = $derived($currentTrack && tracks.some(t => t.id === $currentTrack!.id))
 
   onMount(async () => {
-    ctrl = new AbortController()
+    const signal = abortCtrl.renew()
     try {
-      const result = await Api.getAlbumTracks(id, ctrl.signal)
-      if (ctrl.signal.aborted) return
+      const result = await Api.getAlbumTracks(id, signal)
+      if (signal.aborted) return
       tracks = result.tracks
       albumName = result.albumName
       albumArtist = result.albumArtist
       coverArtId = result.coverArtId
-    } catch (e) {
-      if (!ctrl.signal.aborted) error = e.message
+    } catch (e: any) {
+      if (!signal.aborted) error = e.message
     } finally {
-      if (!ctrl.signal.aborted) loading = false
+      if (!signal.aborted) loading = false
     }
   })
 
-  onDestroy(() => ctrl?.abort())
-
-  function playTrack(idx) {
+  function playTrack(idx: number) {
     queue.set(tracks)
     playAt(idx)
   }
 
-  function isPlaying(track) {
+  function isPlaying(track: Song) {
     return $currentTrack?.id === track.id
   }
 </script>
@@ -53,7 +55,7 @@
 <div class="tracklist-header">
   <div class="tl-art">
     {#if coverArtId}
-      <img bind:this={coverImg} use:lazyLoad={img => loadImage(img, coverArtId, ctrl?.signal)} alt="" />
+      <img bind:this={coverImg} use:lazyLoad={img => loadImage(img, coverArtId, abortCtrl.signal)} alt="" />
     {:else}
       <span class="icon" style="width:32px;height:32px;color:var(--muted)">{@html IconMusic}</span>
     {/if}
@@ -71,32 +73,34 @@
   <div class="loading-msg error-msg">{error}</div>
 {:else}
   <div class="track-list">
-    {#each tracks as track, idx}
-      <div
-        class="track-row"
-        class:playing={isPlaying(track)}
-        role="button"
-        tabindex="0"
-        onclick={() => playTrack(idx)}
-        onkeydown={e => (e.key === 'Enter' || e.key === ' ') && playTrack(idx)}
-      >
-        <div class="track-num">{track.trackNumber ?? idx + 1}</div>
-        <div class="track-thumb">
-          {#if track.coverArtId}
-            <img use:lazyLoad={img => loadImage(img, track.coverArtId, ctrl?.signal)} alt="" />
-          {/if}
+    <VirtualList items={tracks} itemHeight={TRACK_ROW_HEIGHT}>
+      {#snippet children(track, idx)}
+        <div
+          class="track-row"
+          class:playing={isPlaying(track)}
+          role="button"
+          tabindex="0"
+          onclick={() => playTrack(idx)}
+          onkeydown={e => (e.key === 'Enter' || e.key === ' ') && playTrack(idx)}
+        >
+          <div class="track-num">{track.trackNumber ?? idx + 1}</div>
+          <div class="track-thumb">
+            {#if track.coverArtId}
+              <img use:lazyLoad={img => loadImage(img, track.coverArtId, abortCtrl.signal)} alt="" />
+            {/if}
+          </div>
+          <div class="track-info">
+            <div class="track-title">{track.title}</div>
+            <div class="track-artist">{track.artist}</div>
+          </div>
+          <div class="track-duration">{formatDuration(track.duration)}</div>
+          <button
+            class="track-add-btn"
+            title="Add to playlist"
+            onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
+          >+</button>
         </div>
-        <div class="track-info">
-          <div class="track-title">{track.title}</div>
-          <div class="track-artist">{track.artist}</div>
-        </div>
-        <div class="track-duration">{formatDuration(track.duration)}</div>
-        <button
-          class="track-add-btn"
-          title="Add to playlist"
-          onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
-        >+</button>
-      </div>
-    {/each}
+      {/snippet}
+    </VirtualList>
   </div>
 {/if}

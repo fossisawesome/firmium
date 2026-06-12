@@ -1,11 +1,12 @@
-<script>
+<script lang="ts">
   import { get } from 'svelte/store'
-  import { playlistMenuState, hidePlaylistMenu, switchToCreate } from '../lib/playlistMenu.js'
-  import { playlists } from '../lib/stores.js'
-  import { Api } from '../lib/api.js'
+  import { playlistMenuState, hidePlaylistMenu, switchToCreate } from '../lib/playlistMenu'
+  import { playlists } from '../lib/stores'
+  import { Api } from '../lib/api'
+  import type { Song } from '../lib/types/tauri-commands'
 
   let newPlaylistName = $state('')
-  let popupEl = $state()
+  let popupEl: HTMLDivElement | undefined = $state()
 
   // Position the popup relative to the anchor button rect, keeping it on screen.
   $effect(() => {
@@ -29,15 +30,16 @@
     return () => document.removeEventListener('click', handleDocumentClick, true)
   })
 
-  function handleDocumentClick(e) {
+  function handleDocumentClick(e: MouseEvent) {
     if (!$playlistMenuState.visible) return
-    if (popupEl && popupEl.contains(e.target)) return
-    if (e.target.closest('.track-add-btn') || e.target.closest('.album-add-btn')) return
+    const target = e.target as HTMLElement
+    if (popupEl && popupEl.contains(target)) return
+    if (target.closest('.track-add-btn') || target.closest('.album-add-btn')) return
     hidePlaylistMenu()
   }
 
   // Adds tracks to a local playlist and syncs new track IDs to server if the playlist is linked.
-  async function syncAddTracks(playlistId, tracks) {
+  async function syncAddTracks(playlistId: string, tracks: Song[]) {
     const { newTracks } = playlists.addTracks(playlistId, tracks)
     if (newTracks.length) {
       const pl = get(playlists).find(p => p.id === playlistId)
@@ -47,7 +49,7 @@
     }
   }
 
-  async function addTo(playlistId) {
+  async function addTo(playlistId: string) {
     const pending = $playlistMenuState.pending
     hidePlaylistMenu()
     if (!pending) return
@@ -90,7 +92,7 @@
     }
   }
 
-  function handleKeydown(e) {
+  function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') { e.preventDefault(); confirmCreate() }
     if (e.key === 'Escape') { e.stopPropagation(); hidePlaylistMenu() }
   }

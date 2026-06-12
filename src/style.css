@@ -802,6 +802,12 @@ input[type="range"].volume-slider {
   margin-top: 6px;
 }
 
+.warning-msg {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 6px;
+}
+
 .loading-msg {
   color: var(--muted);
   padding: 16px 8px;

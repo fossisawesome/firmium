@@ -5,6 +5,7 @@
   <a href="https://github.com/fossisawesome/firmium/releases/latest"><img src="https://img.shields.io/github/v/release/fossisawesome/firmium?label=version&color=blue" alt="Latest release"></a>
   <a href="https://aur.archlinux.org/packages/firmium-desktop-bin"><img src="https://img.shields.io/aur/version/firmium-desktop-bin?label=AUR" alt="AUR version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License: GPL-3.0"></a>
+  <a href="https://github.com/sponsors/fossisawesome"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-db61a2?logo=githubsponsors" alt="Sponsor on GitHub"></a>
 </p>
 
 ---
@@ -29,8 +30,7 @@ Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) mu
 
 **Everything else:**
 - Synced and unsynced lyrics
-- Wikipedia artist biographies
-- Pretty UI with 8 color themes
+- Pretty UI with 18 built-in color themes, plus support for custom user themes
 - Cover art caching
 - Per-device volume control
 - Full OpenSubsonic API support (scrobbling, search, playlists, and more)

@@ -1,31 +1,35 @@
-import { writable, derived, get } from 'svelte/store'
-import { SafeStorage } from './utils.js'
-import { tauriInvoke } from './tauri.js'
+import { writable, derived, get, type Writable } from 'svelte/store'
+import { SafeStorage } from './utils'
+import { tauriInvoke } from './tauri'
+import type { Song, PlaybackState } from './types/tauri-commands'
+import type { LyricLine } from './lyrics'
+import type { AudioBridge } from './audio-bridge'
+import type { ServerPlaylist } from './api'
 
 const DEFAULT_VOLUME = 0.8
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-export const authServer = writable(null)
-export const authUsername = writable(null)
-export const authPassword = writable(null)
+export const authServer = writable<string | null>(null)
+export const authUsername = writable<string | null>(null)
+export const authPassword = writable<string | null>(null)
 export const isAuthed = derived(
   [authServer, authUsername, authPassword],
   ([$s, $u, $p]) => Boolean($s && $u && $p)
 )
 
-export function setAuth(s, u, p) {
+export function setAuth(s: string | null, u: string | null, p: string | null): void {
   authServer.set(s ? String(s).trim().replace(/\/+$/, '') : null)
   authUsername.set(u)
   authPassword.set(p)
 }
 
-export function clearAuth() {
+export function clearAuth(): void {
   authServer.set(null)
   authUsername.set(null)
   authPassword.set(null)
 }
 
-export async function getQueryParams() {
+export async function getQueryParams(): Promise<Record<string, unknown>> {
   const username = get(authUsername)
   const password = get(authPassword)
   if (!username || !password) return {}
@@ -33,35 +37,40 @@ export async function getQueryParams() {
 }
 
 // ── Server info ───────────────────────────────────────────────────────────────
-export const openSubsonicExtensions = writable(null)
+export const openSubsonicExtensions = writable<unknown>(null)
 export const isOpenSubsonic = derived(openSubsonicExtensions, $ext => $ext !== null)
 
 // ── View routing ──────────────────────────────────────────────────────────────
-// type: 'albums' | 'artists' | 'search' | 'playlists' | 'settings'
-//     | 'album'   (id, parentType)
-//     | 'artist'  (id, parentType)
-//     | 'playlist'(id)
-export const activeView = writable({ type: 'albums' })
+export type ViewType = 'albums' | 'artists' | 'search' | 'playlists' | 'settings' | 'home'
+  | 'album' | 'artist' | 'playlist'
 
-export function navToView(type) {
+export interface ActiveView {
+  type: ViewType
+  id?: string
+  parentType?: ViewType
+}
+
+export const activeView = writable<ActiveView>({ type: 'albums' })
+
+export function navToView(type: ViewType): void {
   activeView.set({ type })
 }
 
-export function navToAlbum(id) {
+export function navToAlbum(id: string): void {
   const parent = get(activeView).type
-  activeView.set({ type: 'album', id, parentType: ['albums', 'artists', 'search', 'home'].includes(parent) ? parent : 'albums' })
+  activeView.set({ type: 'album', id, parentType: (['albums', 'artists', 'search', 'home'] as ViewType[]).includes(parent) ? parent : 'albums' })
 }
 
-export function navToArtist(id) {
+export function navToArtist(id: string): void {
   const parent = get(activeView).type
-  activeView.set({ type: 'artist', id, parentType: ['albums', 'artists', 'home'].includes(parent) ? parent : 'artists' })
+  activeView.set({ type: 'artist', id, parentType: (['albums', 'artists', 'home'] as ViewType[]).includes(parent) ? parent : 'artists' })
 }
 
-export function navToPlaylist(id) {
+export function navToPlaylist(id: string): void {
   activeView.set({ type: 'playlist', id })
 }
 
-export function navBack() {
+export function navBack(): void {
   const view = get(activeView)
   if (view.parentType) activeView.set({ type: view.parentType })
   else if (view.type === 'playlist') activeView.set({ type: 'playlists' })
@@ -69,14 +78,14 @@ export function navBack() {
 }
 
 // ── Playback ──────────────────────────────────────────────────────────────────
-export const queue = writable([])
+export const queue = writable<Song[]>([])
 export const queueIdx = writable(-1)
 export const currentTrack = derived([queue, queueIdx], ([$q, $i]) => $q[$i] || null)
-export const playbackState = writable('stopped')
+export const playbackState = writable<PlaybackState>('stopped')
 export const volume = writable(Number(SafeStorage.getItem('firmium_volume') ?? DEFAULT_VOLUME))
 export const repeatOne = writable(false)
 export const repeatAll = writable(false)
-export const crossfadeEnabled = writable(SafeStorage.getItem('firmium_crossfade') !== 'false')
+export const crossfadeEnabled = writable(SafeStorage.getItem('firmium_crossfade') === 'true')
 export const crossfadeDuration = writable(
   Math.max(1, Math.min(12, Number(SafeStorage.getItem('firmium_crossfade_duration') ?? 5)))
 )
@@ -84,28 +93,28 @@ export const crossfadeDuration = writable(
 export const shuffleEnabled = writable(false)
 
 export const currentPosition = writable(0)
-export const trackDuration = writable(null)
+export const trackDuration = writable<number | null>(null)
 export const isSeeking = writable(false)
 
 // Used to cancel stale play requests when a new one supersedes them.
 let _playToken = 0
-export const bumpToken = () => ++_playToken
-export const getPlayToken = () => _playToken
+export const bumpToken = (): number => ++_playToken
+export const getPlayToken = (): number => _playToken
 
-export function setVolume(v) {
+export function setVolume(v: number): number {
   const normalized = Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : DEFAULT_VOLUME))
   volume.set(normalized)
   SafeStorage.setItem('firmium_volume', String(normalized))
   return normalized
 }
 
-export function setCrossfadeEnabled(v) {
+export function setCrossfadeEnabled(v: unknown): void {
   const val = Boolean(v)
   crossfadeEnabled.set(val)
   SafeStorage.setItem('firmium_crossfade', val ? 'true' : 'false')
 }
 
-export function setCrossfadeDuration(v) {
+export function setCrossfadeDuration(v: number): void {
   const val = Math.max(1, Math.min(12, Number(v) || 5))
   crossfadeDuration.set(val)
   SafeStorage.setItem('firmium_crossfade_duration', String(val))
@@ -115,7 +124,7 @@ export function setCrossfadeDuration(v) {
 // Mutually exclusive with crossfade; gapless is skipped when crossfade is active.
 export const gaplessEnabled = writable(SafeStorage.getItem('firmium_gapless') !== 'false')
 
-export function setGaplessEnabled(v) {
+export function setGaplessEnabled(v: unknown): void {
   const val = Boolean(v)
   gaplessEnabled.set(val)
   SafeStorage.setItem('firmium_gapless', val ? 'true' : 'false')
@@ -123,39 +132,29 @@ export function setGaplessEnabled(v) {
 
 // ── Lyrics ────────────────────────────────────────────────────────────────────
 export const lyricsOpen = writable(false)
-export const lyricsLines = writable([])
+export const lyricsLines = writable<LyricLine[]>([])
 export const lyricsSynced = writable(false)
-export const lyricsTrackId = writable(null)
+export const lyricsTrackId = writable<string | null>(null)
 export const lyricsStatus = writable('No track playing')
 
 // ── Audio bridge ──────────────────────────────────────────────────────────────
-export const audioBridge = writable(null)
-
-// ── Active AbortController for list-panel requests ────────────────────────────
-let _activeCtrl = null
-export const abortActive = () => { if (_activeCtrl) { _activeCtrl.abort(); _activeCtrl = null } }
-export const newAbortCtrl = () => { abortActive(); _activeCtrl = new AbortController(); return _activeCtrl }
-export const getActiveSignal = () => _activeCtrl?.signal ?? null
-
-let _searchCtrl = null
-export const abortSearch = () => { if (_searchCtrl) { _searchCtrl.abort(); _searchCtrl = null } }
-export const newSearchCtrl = () => { abortSearch(); _searchCtrl = new AbortController(); return _searchCtrl }
+export const audioBridge: Writable<AudioBridge | null> = writable(null)
 
 // ── Recently Played Songs (persisted to localStorage, max 20) ────────────────
 const RECENT_SONGS_KEY = 'firmium_recent_songs'
 const RECENT_SONGS_MAX = 20
 
-function _loadFromStorage(key, fallback = []) {
+function _loadFromStorage<T>(key: string, fallback: T): T {
   try { const raw = SafeStorage.getItem(key); return raw ? JSON.parse(raw) : fallback } catch (_) { return fallback }
 }
 
 function createRecentSongsStore() {
-  const { subscribe, update } = writable(_loadFromStorage(RECENT_SONGS_KEY))
+  const { subscribe, update } = writable<Song[]>(_loadFromStorage(RECENT_SONGS_KEY, []))
 
   return {
     subscribe,
     // Adds a track to the front, dedupes by id, trims to max length, persists.
-    push(track) {
+    push(track: Song) {
       update(songs => {
         const filtered = songs.filter(s => s.id !== track.id)
         const next = [track, ...filtered].slice(0, RECENT_SONGS_MAX)
@@ -169,28 +168,40 @@ function createRecentSongsStore() {
 export const recentlyPlayedSongs = createRecentSongsStore()
 
 // ── Playlists (persisted to localStorage) ─────────────────────────────────────
-const PLAYLISTS_KEY = 'firmium_playlists'
-const _uuid = () => 'pl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)
+export interface Playlist {
+  id: string
+  name: string
+  description: string
+  coverArtId: string | null
+  coverDataUrl: string | null
+  tracks: Song[]
+  serverId: string | null
+}
 
-function _savePlaylists(pls) { SafeStorage.setItem(PLAYLISTS_KEY, JSON.stringify(pls)) }
+type PlaylistChanges = Partial<Pick<Playlist, 'name' | 'description' | 'coverArtId' | 'coverDataUrl' | 'serverId'>>
+
+const PLAYLISTS_KEY = 'firmium_playlists'
+const _uuid = (): string => 'pl-' + crypto.randomUUID()
+
+function _savePlaylists(pls: Playlist[]): void { SafeStorage.setItem(PLAYLISTS_KEY, JSON.stringify(pls)) }
 
 function createPlaylistsStore() {
-  const { subscribe, update } = writable(_loadFromStorage(PLAYLISTS_KEY))
+  const { subscribe, update } = writable<Playlist[]>(_loadFromStorage(PLAYLISTS_KEY, []))
 
   return {
     subscribe,
-    create(name = 'New Playlist') {
+    create(name = 'New Playlist'): Playlist {
       // serverId is set later once the playlist is created on the server.
-      const pl = { id: _uuid(), name: String(name).trim() || 'New Playlist', description: '', coverArtId: null, coverDataUrl: null, tracks: [], serverId: null }
+      const pl: Playlist = { id: _uuid(), name: String(name).trim() || 'New Playlist', description: '', coverArtId: null, coverDataUrl: null, tracks: [], serverId: null }
       update(pls => { const next = [...pls, pl]; _savePlaylists(next); return next })
       return pl
     },
-    updatePlaylist(id, changes) {
+    updatePlaylist(id: string, changes: PlaylistChanges): void {
       update(pls => {
         const next = pls.map(p => {
           if (p.id !== id) return p
           const updated = { ...p };
-          ['name', 'description', 'coverArtId', 'coverDataUrl', 'serverId'].forEach(k => { if (k in changes) updated[k] = changes[k] })
+          (['name', 'description', 'coverArtId', 'coverDataUrl', 'serverId'] as const).forEach(k => { if (k in changes) (updated as any)[k] = (changes as any)[k] })
           return updated
         })
         _savePlaylists(next)
@@ -198,19 +209,19 @@ function createPlaylistsStore() {
       })
     },
     // Records the server-side ID returned after creating/syncing a playlist.
-    setServerId(id, serverId) {
+    setServerId(id: string, serverId: string): void {
       update(pls => {
         const next = pls.map(p => p.id === id ? { ...p, serverId } : p)
         _savePlaylists(next)
         return next
       })
     },
-    delete(id) {
+    delete(id: string): void {
       update(pls => { const next = pls.filter(p => p.id !== id); _savePlaylists(next); return next })
     },
-    addTracks(id, tracks) {
+    addTracks(id: string, tracks: Song[]): { added: number; newTracks: Song[] } {
       let added = 0
-      let newTracks = []
+      let newTracks: Song[] = []
       update(pls => {
         const next = pls.map(p => {
           if (p.id !== id) return p
@@ -228,7 +239,7 @@ function createPlaylistsStore() {
       })
       return { added, newTracks }
     },
-    removeTrack(id, trackId) {
+    removeTrack(id: string, trackId: string): number {
       let removedIndex = -1
       update(pls => {
         const next = pls.map(p => {
@@ -247,4 +258,4 @@ function createPlaylistsStore() {
 export const playlists = createPlaylistsStore()
 
 // Server-fetched playlists (in-memory, populated when the Playlists view is opened).
-export const serverPlaylists = writable([])
+export const serverPlaylists = writable<ServerPlaylist[]>([])

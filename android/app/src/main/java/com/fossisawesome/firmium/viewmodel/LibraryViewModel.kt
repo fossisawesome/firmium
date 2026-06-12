@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 // Lightweight artist entry derived from recent albums — id, display name, cover art.
 data class RecentArtist(val id: String, val name: String, val coverArt: String?)
 
-// Home screen data — mirrors getRecentAlbums / getRandomAlbums from api.js.
+// Home screen data — equivalent to getRecentAlbums / getRandomAlbums in src/lib/api.ts (desktop).
 data class HomeState(
     val recentAlbums: List<Album> = emptyList(),
     val recentArtists: List<RecentArtist> = emptyList(),

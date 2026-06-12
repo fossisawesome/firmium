@@ -1,14 +1,29 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
-  import { IconMusic, IconList, IconPlay, IconCloud } from '../lib/icons.js'
-  import { playlists, queue, currentTrack, navToView, serverPlaylists } from '../lib/stores.js'
-  import { Api, loadImage } from '../lib/api.js'
-  import { playAt } from '../lib/playback.js'
-  import { showPlaylistMenu } from '../lib/playlistMenu.js'
-  import { lazyLoad } from '../lib/lazyLoad.js'
-  import { formatDuration } from '../lib/utils.js'
+  import { IconMusic, IconList, IconPlay, IconCloud } from '../lib/icons'
+  import { playlists, queue, currentTrack, navToView, serverPlaylists, type Playlist } from '../lib/stores'
+  import { Api, loadImage } from '../lib/api'
+  import { playAt } from '../lib/playback'
+  import { showPlaylistMenu } from '../lib/playlistMenu'
+  import { lazyLoad } from '../lib/lazyLoad'
+  import { formatDuration } from '../lib/utils'
+  import VirtualList from '../lib/VirtualList.svelte'
+  import type { Song } from '../lib/types/tauri-commands'
 
-  let { id } = $props()
+  const TRACK_ROW_HEIGHT = 56
+
+  type DetailPlaylist = (Playlist & { isServerOnly?: false }) | {
+    id: string
+    name: string
+    description: string
+    coverArtId: string | null
+    coverDataUrl: string | null
+    tracks: Song[]
+    serverId: string
+    isServerOnly: true
+  }
+
+  let { id }: { id: string } = $props()
 
   // Detect whether this is a server-only playlist (id prefixed with 'server-').
   const isServerOnly = id.startsWith('server-')
@@ -19,10 +34,10 @@
   let nameValue = $state('')
   let descValue = $state('')
   let showCoverPicker = $state(false)
-  let fileInput = $state()
+  let fileInput = $state<HTMLInputElement>()
 
   // For server-only playlists, tracks are loaded on mount.
-  let serverTracks = $state(null)
+  let serverTracks = $state<Song[] | null>(null)
   let serverLoading = $state(false)
 
   onMount(async () => {
@@ -31,7 +46,7 @@
       try {
         const result = await Api.getPlaylistTracks(serverId)
         serverTracks = result.tracks ?? []
-      } catch (e) {
+      } catch (e: any) {
         console.error('Failed to load server playlist tracks:', e)
         serverTracks = []
       } finally {
@@ -45,14 +60,14 @@
   const localPl = $derived(isServerOnly ? null : ($playlists.find(p => p.id === id) ?? null))
   const serverMeta = $derived(isServerOnly ? ($serverPlaylists.find(sp => sp.id === serverId) ?? null) : null)
 
-  const pl = $derived((() => {
+  const pl = $derived<DetailPlaylist | null>((() => {
     if (!isServerOnly) return localPl
     if (!serverMeta) return null
     return {
       id,
       name: serverMeta.name ?? 'Server Playlist',
       description: serverMeta.comment ?? '',
-      coverArtId: serverMeta.coverArt ?? null,
+      coverArtId: (serverMeta.coverArt as string | undefined) ?? null,
       coverDataUrl: null,
       tracks: serverTracks ?? [],
       serverId: serverMeta.id,
@@ -62,7 +77,7 @@
 
   const totalDuration = $derived(pl ? pl.tracks.reduce((s, t) => s + (t.duration || 0), 0) : 0)
   const uniqueCovers = $derived(pl ? (() => {
-    const seen = new Set()
+    const seen = new Set<string>()
     return pl.tracks.filter(t => t.coverArtId && !seen.has(t.coverArtId) && seen.add(t.coverArtId))
   })() : [])
 
@@ -97,12 +112,12 @@
     editingDesc = false
   }
 
-  function handleNameKey(e) {
+  function handleNameKey(e: KeyboardEvent) {
     if (e.key === 'Enter') { e.preventDefault(); commitName() }
     if (e.key === 'Escape') { editingName = false }
   }
 
-  function handleDescKey(e) {
+  function handleDescKey(e: KeyboardEvent) {
     if (e.key === 'Enter') { e.preventDefault(); commitDesc() }
     if (e.key === 'Escape') { editingDesc = false }
   }
@@ -124,11 +139,12 @@
     }
   }
 
-  function removeTrack(track, trackIdx) {
+  function removeTrack(track: Song, trackIdx: number) {
+    if (!pl) return
     if (pl.isServerOnly) {
       // Server-only: remove from local serverTracks state and sync index to server.
-      serverTracks = serverTracks.filter((_, i) => i !== trackIdx)
-      Api.updatePlaylist(serverId, { songIndicesToRemove: [trackIdx] }).catch(console.error)
+      serverTracks = (serverTracks ?? []).filter((_, i) => i !== trackIdx)
+      Api.updatePlaylist(serverId!, { songIndicesToRemove: [trackIdx] }).catch(console.error)
     } else {
       const removedIdx = playlists.removeTrack(id, track.id)
       if (pl.serverId && removedIdx >= 0) {
@@ -137,28 +153,28 @@
     }
   }
 
-  function setCover(coverId) {
+  function setCover(coverId: string) {
     if (pl && !pl.isServerOnly) {
       playlists.updatePlaylist(id, { coverArtId: coverId, coverDataUrl: null })
     }
     showCoverPicker = false
   }
 
-  function handleFileUpload(e) {
-    const file = e.target.files?.[0]
+  function handleFileUpload(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0]
     if (!file || pl?.isServerOnly) return
     const reader = new FileReader()
     reader.onload = ev => {
-      playlists.updatePlaylist(id, { coverDataUrl: ev.target.result, coverArtId: null })
+      playlists.updatePlaylist(id, { coverDataUrl: ev.target?.result as string, coverArtId: null })
     }
     reader.readAsDataURL(file)
   }
 
-  function isPlaying(track) {
+  function isPlaying(track: Song) {
     return $currentTrack?.id === track.id
   }
 
-  function playTrack(idx) {
+  function playTrack(idx: number) {
     if (!pl) return
     queue.set(pl.tracks)
     playAt(idx)
@@ -275,8 +291,8 @@
               class="pl-cover-option"
               role="button"
               tabindex="0"
-              onclick={() => setCover(t.coverArtId)}
-              onkeydown={e => (e.key === 'Enter' || e.key === ' ') && setCover(t.coverArtId)}
+              onclick={() => setCover(t.coverArtId!)}
+              onkeydown={e => (e.key === 'Enter' || e.key === ' ') && setCover(t.coverArtId!)}
               title={t.title}
             >
               <img use:lazyLoad={img => loadImage(img, t.coverArtId, null)} alt={t.title} />
@@ -291,40 +307,42 @@
     <div class="loading-msg">{pl.isServerOnly ? 'No tracks in this playlist.' : 'No tracks yet — use the + button on any song or album.'}</div>
   {:else}
     <div class="track-list">
-      {#each pl.tracks as track, idx}
-        <div
-          class="track-row"
-          class:playing={isPlaying(track)}
-          role="button"
-          tabindex="0"
-          onclick={() => playTrack(idx)}
-          onkeydown={e => (e.key === 'Enter' || e.key === ' ') && playTrack(idx)}
-        >
-          <div class="track-num">{idx + 1}</div>
-          <div class="track-thumb">
-            {#if track.coverArtId}
-              <img use:lazyLoad={img => loadImage(img, track.coverArtId, null)} alt="" />
+      <VirtualList items={pl.tracks} itemHeight={TRACK_ROW_HEIGHT}>
+        {#snippet children(track, idx)}
+          <div
+            class="track-row"
+            class:playing={isPlaying(track)}
+            role="button"
+            tabindex="0"
+            onclick={() => playTrack(idx)}
+            onkeydown={e => (e.key === 'Enter' || e.key === ' ') && playTrack(idx)}
+          >
+            <div class="track-num">{idx + 1}</div>
+            <div class="track-thumb">
+              {#if track.coverArtId}
+                <img use:lazyLoad={img => loadImage(img, track.coverArtId, null)} alt="" />
+              {/if}
+            </div>
+            <div class="track-info">
+              <div class="track-title">{track.title}</div>
+              <div class="track-artist">{track.artist}</div>
+            </div>
+            <div class="track-duration">{formatDuration(track.duration)}</div>
+            {#if !pl.isServerOnly}
+              <button
+                class="track-add-btn"
+                title="Add to playlist"
+                onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
+              >+</button>
             {/if}
-          </div>
-          <div class="track-info">
-            <div class="track-title">{track.title}</div>
-            <div class="track-artist">{track.artist}</div>
-          </div>
-          <div class="track-duration">{formatDuration(track.duration)}</div>
-          {#if !pl.isServerOnly}
             <button
-              class="track-add-btn"
-              title="Add to playlist"
-              onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
-            >+</button>
-          {/if}
-          <button
-            class="track-remove-btn"
-            title="Remove from playlist"
-            onclick={e => { e.stopPropagation(); removeTrack(track, idx) }}
-          >×</button>
-        </div>
-      {/each}
+              class="track-remove-btn"
+              title="Remove from playlist"
+              onclick={e => { e.stopPropagation(); removeTrack(track, idx) }}
+            >×</button>
+          </div>
+        {/snippet}
+      </VirtualList>
     </div>
   {/if}
 {/if}

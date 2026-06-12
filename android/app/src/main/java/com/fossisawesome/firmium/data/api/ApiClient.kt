@@ -1,5 +1,6 @@
 package com.fossisawesome.firmium.data.api
 
+import com.fossisawesome.firmium.BuildConfig
 import com.fossisawesome.firmium.data.model.*
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -13,16 +14,22 @@ import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
-// OpenSubsonic REST client. Mirrors the Api object from api.js.
+// OpenSubsonic REST client. Equivalent to the Api object in src/lib/api.ts (desktop).
 // All endpoints return parsed domain models; raw JSON parsing is contained here.
 class ApiClient(private val auth: AuthManager) {
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        })
+        .apply {
+            // BASIC logging includes the request URL, which carries the OpenSubsonic
+            // auth token (t=) and salt (s=) as query params — keep this out of release logcat.
+            if (BuildConfig.DEBUG) {
+                addInterceptor(HttpLoggingInterceptor().apply {
+                    level = HttpLoggingInterceptor.Level.BASIC
+                })
+            }
+        }
         .build()
 
     // ── Core fetch ─────────────────────────────────────────────────────────────
@@ -173,42 +180,51 @@ class ApiClient(private val auth: AuthManager) {
     // ── Lyrics ─────────────────────────────────────────────────────────────────
 
     data class LyricsResult(val lines: List<LyricLine>, val synced: Boolean)
+    // startMs is milliseconds from track start, matching the desktop LyricLine.start field (src/lib/lyrics.ts).
     data class LyricLine(val startMs: Long?, val text: String)
+
+    // Runs a single lyric source, swallowing failures so callers can fall through to the next source.
+    private suspend fun tryFetchLyrics(source: suspend () -> LyricsResult?): LyricsResult? {
+        return try {
+            source()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            null
+        }
+    }
 
     // Tries OpenSubsonic structured lyrics, then legacy getLyrics, then LrcLib as final fallback.
     suspend fun getLyrics(songId: String, artist: String, title: String, albumName: String = "", durationSec: Int = 0, useLrclib: Boolean = true): LyricsResult? {
         // 1. OpenSubsonic extension (getLyricsBySongId) — synced timestamps preferred.
-        try {
+        tryFetchLyrics {
             val data = fetch("getLyricsBySongId", mapOf("id" to songId))
             val lyricsObj = data.getAsJsonObject("lyricsList")
                 ?.getAsJsonArray("structuredLyrics")
                 ?.firstOrNull()?.asJsonObject
-            if (lyricsObj != null) {
-                val synced = lyricsObj.get("synced")?.asBoolean ?: false
-                val lines = lyricsObj.getAsJsonArray("line")?.map { line ->
-                    val obj = line.asJsonObject
-                    LyricLine(
-                        startMs = if (synced) obj.get("start")?.asLong else null,
-                        text = obj.get("value")?.asString ?: "",
-                    )
-                } ?: emptyList()
-                if (lines.isNotEmpty()) return LyricsResult(lines, synced)
-            }
-        } catch (e: Exception) { if (e is CancellationException) throw e }
+                ?: return@tryFetchLyrics null
+            val synced = lyricsObj.get("synced")?.asBoolean ?: false
+            val lines = lyricsObj.getAsJsonArray("line")?.map { line ->
+                val obj = line.asJsonObject
+                LyricLine(
+                    startMs = if (synced) obj.get("start")?.asLong else null,
+                    text = obj.get("value")?.asString ?: "",
+                )
+            } ?: emptyList()
+            if (lines.isNotEmpty()) LyricsResult(lines, synced) else null
+        }?.let { return it }
 
         // 2. Legacy getLyrics endpoint (Subsonic, no timestamps).
-        try {
+        tryFetchLyrics {
             val data = fetch("getLyrics", mapOf("artist" to artist, "title" to title))
             val text = data.getAsJsonObject("lyrics")?.get("value")?.asString
-            if (!text.isNullOrBlank()) {
-                val lines = text.lines().map { LyricLine(null, it) }
-                if (lines.isNotEmpty()) return LyricsResult(lines, false)
-            }
-        } catch (e: Exception) { if (e is CancellationException) throw e }
+            if (text.isNullOrBlank()) return@tryFetchLyrics null
+            val lines = text.lines().map { LyricLine(null, it) }
+            if (lines.isNotEmpty()) LyricsResult(lines, false) else null
+        }?.let { return it }
 
         // 3. LrcLib — free community lyrics database, supports synced LRC format.
         if (useLrclib) {
-            try {
+            tryFetchLyrics {
                 val url = buildString {
                     append("https://lrclib.net/api/get")
                     append("?artist_name=${java.net.URLEncoder.encode(artist, "UTF-8")}")
@@ -220,20 +236,19 @@ class ApiClient(private val auth: AuthManager) {
                     val response = http.newCall(Request.Builder().url(url).build()).execute()
                     response.body?.string() to response.isSuccessful
                 }
-                if (body != null && isSuccessful) {
-                    val obj = JsonParser.parseString(body).asJsonObject
-                    val synced = obj.get("syncedLyrics")?.takeIf { !it.isJsonNull }?.asString
-                    if (!synced.isNullOrBlank()) {
-                        val result = parseLrc(synced)
-                        if (result.lines.isNotEmpty()) return result
-                    }
-                    val plain = obj.get("plainLyrics")?.takeIf { !it.isJsonNull }?.asString
-                    if (!plain.isNullOrBlank()) {
-                        val lines = plain.lines().map { LyricLine(null, it) }
-                        if (lines.isNotEmpty()) return LyricsResult(lines, false)
-                    }
+                if (body == null || !isSuccessful) return@tryFetchLyrics null
+                val obj = JsonParser.parseString(body).asJsonObject
+                val synced = obj.get("syncedLyrics")?.takeIf { !it.isJsonNull }?.asString
+                if (!synced.isNullOrBlank()) {
+                    val result = parseLrc(synced)
+                    if (result.lines.isNotEmpty()) return@tryFetchLyrics result
                 }
-            } catch (e: Exception) { if (e is CancellationException) throw e }
+                val plain = obj.get("plainLyrics")?.takeIf { !it.isJsonNull }?.asString
+                if (!plain.isNullOrBlank()) {
+                    val lines = plain.lines().map { LyricLine(null, it) }
+                    if (lines.isNotEmpty()) LyricsResult(lines, false) else null
+                } else null
+            }?.let { return it }
         }
 
         return null
@@ -315,7 +330,9 @@ class ApiClient(private val auth: AuthManager) {
         coverArt = obj.get("coverArt")?.asString,
     )
 
-    // Mirrors infer_release_type from lib.rs.
+    // Android release-type inference. NOTE: diverges from infer_release_type in mappers.rs
+    // (Title Case vs lowercase output, includes Compilation/Live/Remix, checks isCompilation
+    // first, no title/songCount fallback — see effectiveType() in AlbumListScreen.kt for that layer).
     private fun inferReleaseType(types: List<String>?, isCompilation: Boolean): String {
         if (isCompilation) return "Compilation"
         if (types.isNullOrEmpty()) return "Album"

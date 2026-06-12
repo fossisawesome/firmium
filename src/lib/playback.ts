@@ -5,12 +5,19 @@ import {
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
   bumpToken, getPlayToken, recentlyPlayedSongs
-} from './stores.js'
-import { Api, OpenSubsonicRouter } from './api.js'
+} from './stores'
+import { Api, OpenSubsonicRouter } from './api'
+import type { Song, PlaybackState } from './types/tauri-commands'
+import type { AudioBridge } from './audio-bridge'
+
+const replayGainDb = (track: Song): number | null => {
+  const rg = track.replayGain as { trackGain?: number; albumGain?: number } | undefined
+  return rg?.trackGain ?? rg?.albumGain ?? null
+}
 
 // ── Play a track ──────────────────────────────────────────────────────────────
 
-export async function playAt(idx) {
+export async function playAt(idx: number): Promise<void> {
   const bridge = get(audioBridge)
   const $queue = get(queue)
   if (!bridge || idx < 0 || idx >= $queue.length) return
@@ -32,8 +39,7 @@ export async function playAt(idx) {
 
     if (isGaplessPromotion && outgoing) Api.scrobble(outgoing.id, true)
 
-    const replayGainDb = track.replayGain?.trackGain ?? track.replayGain?.albumGain ?? null
-    await bridge.play(streamUrl, track.id, replayGainDb)
+    await bridge.play(streamUrl, track.id, replayGainDb(track))
     Api.scrobble(track.id, false)
     recentlyPlayedSongs.push(track)
     await bridge.setVolume(get(volume))
@@ -49,7 +55,7 @@ export async function playAt(idx) {
 
 // ── Crossfade to next track ───────────────────────────────────────────────────
 
-export async function crossfadeToNext(nextIdx) {
+export async function crossfadeToNext(nextIdx: number): Promise<void> {
   const bridge = get(audioBridge)
   if (!bridge) return
 
@@ -67,8 +73,7 @@ export async function crossfadeToNext(nextIdx) {
     if (currentToken !== getPlayToken()) return
 
     const fadeDurationMs = get(crossfadeDuration) * 1000
-    const replayGainDb = nextTrack.replayGain?.trackGain ?? nextTrack.replayGain?.albumGain ?? null
-    await bridge.startCrossfadeIn(streamUrl, nextTrack.id, get(volume), fadeDurationMs, replayGainDb)
+    await bridge.startCrossfadeIn(streamUrl, nextTrack.id, get(volume), fadeDurationMs, replayGainDb(nextTrack))
 
     Api.scrobble(nextTrack.id, false)
     recentlyPlayedSongs.push(nextTrack)
@@ -82,14 +87,20 @@ export async function crossfadeToNext(nextIdx) {
 // ── Position tracking ─────────────────────────────────────────────────────────
 // Driven by Rust "playback-position" events (~300ms cadence) via AudioBridge.
 
-let _positionHandler = null
-let _cachedDuration = null
-let _crossfadeStarted = false
-let _preloadStarted = false
+let _positionHandler: ((data: { position: number; duration: number }) => void) | null = null
 
-function _handlePositionUpdate(position, duration) {
-  if (!_cachedDuration && duration != null) {
-    _cachedDuration = duration
+// Per-track playback tracking state, reset at the start of each track via startPositionTracking().
+interface TrackProgressState {
+  cachedDuration: number | null
+  crossfadeStarted: boolean
+  preloadStarted: boolean
+}
+
+let _trackProgress: TrackProgressState = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false }
+
+function _handlePositionUpdate(position: number, duration: number | null): void {
+  if (!_trackProgress.cachedDuration && duration != null) {
+    _trackProgress.cachedDuration = duration
     trackDuration.set(duration)
   }
 
@@ -97,32 +108,34 @@ function _handlePositionUpdate(position, duration) {
 
   if (get(lyricsOpen)) syncLyricsToPosition(position)
 
+  const cachedDuration = _trackProgress.cachedDuration
+
   // Trigger crossfade when approaching end of track.
-  if (!_crossfadeStarted && _cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
+  if (!_trackProgress.crossfadeStarted && cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
     const fadeSec = get(crossfadeDuration)
-    if (position >= _cachedDuration - fadeSec) {
+    if (position >= cachedDuration - fadeSec) {
       const $queue = get(queue)
       let nextIdx = get(queueIdx) + 1
       if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
       if (nextIdx < $queue.length) {
-        _crossfadeStarted = true
+        _trackProgress.crossfadeStarted = true
         crossfadeToNext(nextIdx)
       }
     }
   }
 
   // Preload next track for gapless playback — crossfade off, 30s before end.
-  if (!_preloadStarted && _cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
-    const preloadAt = Math.max(0, _cachedDuration - 30)
+  if (!_trackProgress.preloadStarted && cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
+    const preloadAt = Math.max(0, cachedDuration - 30)
     if (position >= preloadAt) {
       const $queue = get(queue)
       let nextIdx = get(queueIdx) + 1
       if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
       if (nextIdx < $queue.length) {
-        _preloadStarted = true
+        _trackProgress.preloadStarted = true
         const nextTrack = $queue[nextIdx]
         if (nextTrack) {
-          const rgDb = nextTrack.replayGain?.trackGain ?? nextTrack.replayGain?.albumGain ?? null
+          const rgDb = replayGainDb(nextTrack)
           OpenSubsonicRouter.buildUrl('stream', { id: nextTrack.id })
             .then(url => get(audioBridge)?.preload(url, nextTrack.id, rgDb))
             .catch(e => console.error('Preload URL error:', e))
@@ -132,11 +145,9 @@ function _handlePositionUpdate(position, duration) {
   }
 }
 
-export function startPositionTracking() {
+export function startPositionTracking(): void {
   stopPositionTracking()
-  _cachedDuration = null
-  _crossfadeStarted = false
-  _preloadStarted = false
+  _trackProgress = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false }
 
   // Subscribe to Rust-emitted position events — no IPC polling overhead.
   const bridge = get(audioBridge)
@@ -145,7 +156,7 @@ export function startPositionTracking() {
   bridge.on('position', _positionHandler)
 }
 
-export function stopPositionTracking() {
+export function stopPositionTracking(): void {
   if (_positionHandler) {
     const bridge = get(audioBridge)
     if (bridge) bridge.off('position', _positionHandler)
@@ -157,7 +168,7 @@ export function stopPositionTracking() {
 
 export const activeLyricIdx = writable(-1)
 
-function syncLyricsToPosition(positionSec) {
+function syncLyricsToPosition(positionSec: number): void {
   if (!get(lyricsSynced)) return
   const $lyricsLines = get(lyricsLines)
   if (!$lyricsLines.length) return
@@ -174,8 +185,8 @@ function syncLyricsToPosition(positionSec) {
 
 // ── Bridge event wiring ───────────────────────────────────────────────────────
 
-export function wireBridgeEvents(bridge) {
-  bridge.on('statechange', (state) => {
+export function wireBridgeEvents(bridge: AudioBridge): void {
+  bridge.on('statechange', (state: PlaybackState) => {
     playbackState.set(state)
     if (state === 'playing') {
       startPositionTracking()
@@ -203,14 +214,14 @@ export function wireBridgeEvents(bridge) {
     }
   })
 
-  bridge.on('volumechange', (vol) => {
+  bridge.on('volumechange', (vol: number) => {
     volume.set(vol)
   })
 }
 
 // ── Lyrics fetching ───────────────────────────────────────────────────────────
 
-export async function fetchAndShowLyrics(song) {
+export async function fetchAndShowLyrics(song: Song): Promise<void> {
   if (!song) return
   lyricsTrackId.set(song.id)
   if (!get(lyricsOpen)) return

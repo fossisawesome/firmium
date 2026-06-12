@@ -89,6 +89,7 @@ class AudioPlayer(private val context: Context) {
     private fun releaseSession(playerId: String) {
         sessions.remove(playerId)?.let { s ->
             s.finishWatchJob?.cancel()
+            s.fadeJob?.cancel()
             s.player.stop()
             s.player.release()
         }
@@ -110,19 +111,6 @@ class AudioPlayer(private val context: Context) {
         return playerId
     }
 
-    fun preload(streamUrl: String, trackId: String, replayGainDb: Float? = null): String {
-        val playerId = UUID.randomUUID().toString()
-        val player = buildPlayer()
-        val gain = gainFactor(replayGainDb)
-        player.volume = gain
-        val session = AudioSession(player, trackId, 1.0f, gain)
-        sessions[playerId] = session
-        player.setMediaItem(MediaItem.fromUri(streamUrl))
-        player.prepare()
-        player.playWhenReady = false
-        return playerId
-    }
-
     fun resume(playerId: String) {
         val session = sessions[playerId] ?: return
         if (session.finishWatchJob == null) attachListeners(playerId, session)
@@ -131,7 +119,8 @@ class AudioPlayer(private val context: Context) {
 
     fun pause(playerId: String) {
         val session = sessions[playerId] ?: return
-        scope.launch {
+        session.fadeJob?.cancel()
+        session.fadeJob = scope.launch {
             val vol = session.player.volume
             repeat(5) { i ->
                 session.player.volume = vol * (1f - (i + 1) / 5f)
@@ -144,7 +133,8 @@ class AudioPlayer(private val context: Context) {
 
     fun stop(playerId: String) {
         val session = sessions[playerId] ?: return
-        scope.launch {
+        session.fadeJob?.cancel()
+        session.fadeJob = scope.launch {
             val vol = session.player.volume
             repeat(5) { i ->
                 session.player.volume = vol * (1f - (i + 1) / 5f)
@@ -293,6 +283,7 @@ private data class AudioSession(
     var baseVolume: Float = 1.0f,
     var replayGainFactor: Float = 1.0f,
     var finishWatchJob: Job? = null,
+    var fadeJob: Job? = null,
     val queueTrackIds: List<String>? = null,
     val queueReplayGainFactors: List<Float>? = null,
     var currentQueueIndex: Int = 0,

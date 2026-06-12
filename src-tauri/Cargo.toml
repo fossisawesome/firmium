@@ -1,6 +1,6 @@
 [package]
 name = "firmium"
-version = "4.0.2"
+version = "5.0.0"
 description = "Subsonic Desktop Music Streamer"
 authors = ["fossisawesome"]
 edition = "2021"
@@ -17,6 +17,8 @@ tauri = { version = "2.11.2", features = ["devtools"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tauri-plugin-http = "2.5.9"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 # rustls added so Android builds don't need system OpenSSL; harmless on desktop.
 reqwest = { version = "0.13.4", features = ["json", "stream", "blocking", "rustls"] }
 rodio = "0.22.2"

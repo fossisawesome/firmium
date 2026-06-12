@@ -8,7 +8,6 @@ import com.fossisawesome.firmium.audio.AudioPlayer
 import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.audio.QueueTrack
 import com.fossisawesome.firmium.data.api.ApiClient
-import com.fossisawesome.firmium.data.api.ApiClient.LyricLine
 import com.fossisawesome.firmium.data.api.AuthManager
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.data.storage.AppPreferences
@@ -34,15 +33,6 @@ data class PlayerState(
     val hasPrev: Boolean get() = queueIndex > 0
 }
 
-data class LyricsState(
-    val lines: List<LyricLine> = emptyList(),
-    val synced: Boolean = false,
-    val activeLine: Int = -1,
-    val isLoading: Boolean = false,
-    val isOpen: Boolean = false,
-    val trackId: String? = null,
-)
-
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val audioPlayer: AudioPlayer = getApplication<FirmiumApplication>().audioPlayer
@@ -54,12 +44,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
 
-    private val _lyricsState = MutableStateFlow(LyricsState())
-    val lyricsState: StateFlow<LyricsState> = _lyricsState.asStateFlow()
+    private val lyrics = LyricsController(viewModelScope, api)
+    val lyricsState: StateFlow<LyricsState> = lyrics.state
 
     private var currentPlayerId: String? = null
     private var positionJob: Job? = null
-    private var lyricsJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -226,48 +215,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Lyrics ─────────────────────────────────────────────────────────────────
 
-    fun openLyrics() { _lyricsState.update { it.copy(isOpen = true) } }
-    fun closeLyrics() { _lyricsState.update { it.copy(isOpen = false) } }
-
-    private fun fetchLyricsForCurrent() {
-        val track = _state.value.currentTrack ?: return
-        // Skip if we already have lyrics for this track.
-        if (_lyricsState.value.trackId == track.id && _lyricsState.value.lines.isNotEmpty()) return
-        lyricsJob?.cancel()
-        _lyricsState.update { it.copy(isLoading = true, lines = emptyList(), synced = false, activeLine = -1, trackId = track.id) }
-        lyricsJob = viewModelScope.launch {
-            val trackId = track.id
-            val result = try {
-                api.getLyrics(track.id, track.artist, track.title, track.album, track.duration)
-            } catch (e: Exception) { if (e is CancellationException) throw e; null }
-            // Guard against a stale fetch racing ahead of a newer track that started before this
-            // coroutine was cancelled.
-            if (_lyricsState.value.trackId != trackId) return@launch
-            if (result != null) {
-                _lyricsState.update { it.copy(isLoading = false, lines = result.lines, synced = result.synced) }
-            } else {
-                _lyricsState.update { it.copy(isLoading = false) }
-            }
-        }
-    }
-
-    // Finds the active lyric line for the given playback position (milliseconds scan).
-    // Matches the syncLyricsToPosition logic from playback.js.
-    private fun syncLyricsToPosition(positionSeconds: Double) {
-        val ls = _lyricsState.value
-        if (!ls.synced || ls.lines.isEmpty()) return
-        val posMs = (positionSeconds * 1000).toLong()
-        var active = -1
-        for (i in ls.lines.indices) {
-            val startMs = ls.lines[i].startMs ?: break
-            if (startMs <= posMs) active = i else break
-        }
-        if (active != ls.activeLine) {
-            _lyricsState.update { it.copy(activeLine = active) }
-        }
-    }
+    fun openLyrics() { lyrics.open() }
+    fun closeLyrics() { lyrics.close() }
 
     // ── Internal helpers ───────────────────────────────────────────────────────
+
+    private fun fetchLyricsForCurrent() {
+        _state.value.currentTrack?.let { lyrics.fetchForTrack(it) }
+    }
 
     private fun crossfadeToNext() {
         val s = _state.value
@@ -335,7 +290,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 if (!_state.value.isSeeking) {
                     _state.update { it.copy(currentPosition = pos, trackDuration = dur) }
                 }
-                if (_lyricsState.value.isOpen) syncLyricsToPosition(pos)
+                if (lyricsState.value.isOpen) lyrics.syncToPosition(pos)
                 // Push position to notification so the lock-screen seekbar stays live.
                 nowPlaying.updatePosition((pos * 1000).toLong(), (dur * 1000).toLong(), _state.value.playbackState == "playing")
                 val s = _state.value
@@ -356,6 +311,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         stopPositionTracking()
-        lyricsJob?.cancel()
+        lyrics.cancel()
     }
 }

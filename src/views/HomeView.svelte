@@ -1,9 +1,23 @@
-<script>
-  import { IconMusic, IconList, IconPlay, IconUser } from '../lib/icons.js'
-  import { onMount, onDestroy } from 'svelte'
-  import { authUsername, navToAlbum, navToArtist, navToView, recentlyPlayedSongs } from '../lib/stores.js'
-  import { Api, loadImage } from '../lib/api.js'
-  import { lazyLoad } from '../lib/lazyLoad.js'
+<script lang="ts">
+  import { IconMusic, IconList, IconPlay, IconUser } from '../lib/icons'
+  import { onMount } from 'svelte'
+  import { authUsername, navToAlbum, navToArtist, navToView, recentlyPlayedSongs } from '../lib/stores'
+  import { Api, loadImage } from '../lib/api'
+  import { lazyLoad } from '../lib/lazyLoad'
+  import { getCached, setCached } from '../lib/listCache'
+  import { createAbortController } from '../lib/utils'
+  import type { Album } from '../lib/types/tauri-commands'
+  import type { Genre } from '../lib/api'
+
+  type RecentArtist = { id?: string; name: string; coverArtId?: string; artistImageUrl?: string | null }
+  type RecentAlbumFromSong = { id: string; name: string; artist: string; coverArtId?: string }
+
+  interface CachedHome {
+    recentAlbums: Album[]
+    recentArtists: RecentArtist[]
+    randomAlbums: Album[]
+    genres: Genre[]
+  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   function getTimeOfDay() {
@@ -21,20 +35,22 @@
   const username = $derived($authUsername ?? 'there')
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  let recentAlbums = $state([])
-  let recentArtists = $state([])
-  let randomAlbums = $state([])
-  let genres = $state([])
-  let loadingRecent = $state(true)
-  let loadingRandom = $state(true)
-  let loadingGenres = $state(true)
+  const cachedHome = getCached<CachedHome>('home')
 
-  let ctrl
+  let recentAlbums = $state<Album[]>(cachedHome?.recentAlbums ?? [])
+  let recentArtists = $state<RecentArtist[]>(cachedHome?.recentArtists ?? [])
+  let randomAlbums = $state<Album[]>(cachedHome?.randomAlbums ?? [])
+  let genres = $state<Genre[]>(cachedHome?.genres ?? [])
+  let loadingRecent = $state(!cachedHome)
+  let loadingRandom = $state(!cachedHome)
+  let loadingGenres = $state(!cachedHome)
+
+  const abortCtrl = createAbortController()
 
   // Derives unique artists from recently played albums
-  function extractArtists(albums) {
-    const seen = new Set()
-    const out = []
+  function extractArtists(albums: Album[]): RecentArtist[] {
+    const seen = new Set<string>()
+    const out: RecentArtist[] = []
     for (const a of albums) {
       const key = a.albumArtist
       if (!seen.has(key)) { seen.add(key); out.push({ id: a.artistId, name: key, coverArtId: a.coverArtId }) }
@@ -43,8 +59,8 @@
   }
 
   onMount(async () => {
-    ctrl = new AbortController()
-    const sig = ctrl.signal
+    if (cachedHome) return
+    const sig = abortCtrl.renew()
 
     // Fetch recent albums + random albums + genres in parallel
     const [recentRes, randomRes, genresRes] = await Promise.allSettled([
@@ -82,26 +98,25 @@
     }
     loadingGenres = false
 
+    setCached('home', { recentAlbums, recentArtists, randomAlbums, genres })
   })
-
-  onDestroy(() => ctrl?.abort())
 
   // Derives unique albums from recently played songs (deduplicated by albumId)
   const recentAlbumsFromSongs = $derived((() => {
-    const seen = new Set()
-    const out = []
+    const seen = new Set<string>()
+    const out: RecentAlbumFromSong[] = []
     for (const s of $recentlyPlayedSongs) {
       const key = s.albumId
       if (key && !seen.has(key)) {
         seen.add(key)
-        out.push({ id: s.albumId, name: s.album, artist: s.artist, coverArtId: s.coverArtId })
+        out.push({ id: key, name: s.album, artist: s.artist, coverArtId: s.coverArtId })
       }
     }
     return out
   })())
 
   // ── Navigate to genre search ──────────────────────────────────────────────
-  function navToGenre(genre) {
+  function navToGenre(genre: string) {
     navToView('search')
     // Dispatch after view switches so SearchView can receive it
     setTimeout(() => {
@@ -128,7 +143,7 @@
           <div class="home-card" onclick={() => navToAlbum(album.id)}>
             <div class="home-card-art">
               {#if album.coverArtId}
-                <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
+                <img use:lazyLoad={img => loadImage(img, album.coverArtId, abortCtrl.signal)} alt="" />
               {:else}
                 <div class="home-card-no-art"><span class="icon" style="width:24px;height:24px;color:var(--muted)">{@html IconMusic}</span></div>
               {/if}
@@ -160,7 +175,7 @@
               {#if artist.artistImageUrl}
                 <img src={artist.artistImageUrl} alt="" />
               {:else if artist.coverArtId}
-                <img use:lazyLoad={img => loadImage(img, artist.coverArtId, ctrl?.signal)} alt="" />
+                <img use:lazyLoad={img => loadImage(img, artist.coverArtId, abortCtrl.signal)} alt="" />
               {:else}
                 <div class="home-card-no-art"><span class="icon" style="width:28px;height:28px;color:var(--muted)">{@html IconUser}</span></div>
               {/if}
@@ -189,7 +204,7 @@
           <div class="home-card" onclick={() => navToAlbum(album.id)}>
             <div class="home-card-art">
               {#if album.coverArtId}
-                <img use:lazyLoad={img => loadImage(img, album.coverArtId, ctrl?.signal)} alt="" />
+                <img use:lazyLoad={img => loadImage(img, album.coverArtId, abortCtrl.signal)} alt="" />
               {:else}
                 <div class="home-card-no-art"><span class="icon" style="width:24px;height:24px;color:var(--muted)">{@html IconMusic}</span></div>
               {/if}

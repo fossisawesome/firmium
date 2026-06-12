@@ -1,5 +1,8 @@
-import { tauriInvoke } from './tauri.js'
-import { listen } from '@tauri-apps/api/event'
+import { tauriInvoke } from './tauri'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+
+type BridgeEvent = 'statechange' | 'finished' | 'volumechange' | 'error' | 'position'
+type BridgeCallback = (data?: any) => void
 
 /**
  * Audio Bridge — Frontend interface to the Rust rodio audio backend.
@@ -11,24 +14,25 @@ import { listen } from '@tauri-apps/api/event'
  *   'error'       (msg: string)    — playback error
  */
 export class AudioBridge {
+  currentPlayerId: string | null = null
+  listeners = new Map<BridgeEvent, BridgeCallback[]>()
+  lastKnownState: string | null = null
+  _hasStartedPlaying = false
+  preloadedPlayerId: string | null = null
+  preloadedTrackId: string | null = null
+  _unlistenState: UnlistenFn | null = null
+  _unlistenFinished: UnlistenFn | null = null
+  _unlistenPosition: UnlistenFn | null = null
+
   constructor() {
-    this.currentPlayerId = null
-    this.listeners = new Map()
-    this.lastKnownState = null
-    this._hasStartedPlaying = false
-    this.preloadedPlayerId = null
-    this.preloadedTrackId = null
-    this._unlistenState = null
-    this._unlistenFinished = null
-    this._unlistenPosition = null
     this._initListeners()
   }
 
   // ── Event listeners ────────────────────────────────────────────────────────
 
-  async _initListeners() {
+  async _initListeners(): Promise<void> {
     // Rust emits global events via app_handle.emit() — listen() wraps data in { payload }.
-    this._unlistenState = await listen('playback-state-changed', ({ payload }) => {
+    this._unlistenState = await listen<{ playerId: string; state: string }>('playback-state-changed', ({ payload }) => {
       if (payload.playerId !== this.currentPlayerId) return
       const state = payload.state
       if (state === 'playing') this._hasStartedPlaying = true
@@ -38,7 +42,7 @@ export class AudioBridge {
       }
     })
 
-    this._unlistenFinished = await listen('playback-finished', ({ payload }) => {
+    this._unlistenFinished = await listen<{ playerId: string }>('playback-finished', ({ payload }) => {
       if (payload.playerId !== this.currentPlayerId) return
       this.lastKnownState = 'finished'
       this.currentPlayerId = null
@@ -46,7 +50,7 @@ export class AudioBridge {
     })
 
     // Position events from Rust's finish-watcher thread (~300ms cadence).
-    this._unlistenPosition = await listen('playback-position', ({ payload }) => {
+    this._unlistenPosition = await listen<{ playerId: string; position: number; duration: number }>('playback-position', ({ payload }) => {
       if (payload.playerId !== this.currentPlayerId) return
       this.emit('position', { position: payload.position, duration: payload.duration })
     })
@@ -54,28 +58,28 @@ export class AudioBridge {
 
   // ── Event emitter ──────────────────────────────────────────────────────────
 
-  on(event, callback) {
+  on(event: BridgeEvent, callback: BridgeCallback): void {
     if (!this.listeners.has(event)) this.listeners.set(event, [])
-    this.listeners.get(event).push(callback)
+    this.listeners.get(event)!.push(callback)
   }
 
-  off(event, callback) {
+  off(event: BridgeEvent, callback: BridgeCallback): void {
     if (this.listeners.has(event)) {
-      const callbacks = this.listeners.get(event)
+      const callbacks = this.listeners.get(event)!
       const idx = callbacks.indexOf(callback)
       if (idx > -1) callbacks.splice(idx, 1)
     }
   }
 
-  emit(event, data) {
+  emit(event: BridgeEvent, data?: any): void {
     if (this.listeners.has(event)) {
-      this.listeners.get(event).forEach(cb => cb(data))
+      this.listeners.get(event)!.forEach(cb => cb(data))
     }
   }
 
   // ── Playback controls ──────────────────────────────────────────────────────
 
-  async play(streamUrl, trackId, replayGainDb = null) {
+  async play(streamUrl: string, trackId: string, replayGainDb: number | null = null): Promise<string> {
     try {
       // Promote a preloaded session instead of starting a fresh fetch — gapless.
       if (this.preloadedPlayerId && this.preloadedTrackId === trackId) {
@@ -96,7 +100,7 @@ export class AudioBridge {
       }
 
       if (this.currentPlayerId) await this.stop()
-      const playerId = await tauriInvoke('play_stream', { streamUrl, trackId, replayGainDb })
+      const playerId = await tauriInvoke<string>('play_stream', { streamUrl, trackId, replayGainDb })
       this.currentPlayerId = playerId
       this._hasStartedPlaying = false
       this.lastKnownState = 'loading'
@@ -108,7 +112,7 @@ export class AudioBridge {
     }
   }
 
-  async preload(streamUrl, trackId, replayGainDb = null) {
+  async preload(streamUrl: string, trackId: string, replayGainDb: number | null = null): Promise<void> {
     if (this.preloadedPlayerId && this.preloadedTrackId !== trackId) {
       const old = this.preloadedPlayerId
       this.preloadedPlayerId = null
@@ -117,7 +121,7 @@ export class AudioBridge {
     }
     if (this.preloadedTrackId === trackId) return
     try {
-      const playerId = await tauriInvoke('preload_stream', { streamUrl, trackId, replayGainDb })
+      const playerId = await tauriInvoke<string>('preload_stream', { streamUrl, trackId, replayGainDb })
       this.preloadedPlayerId = playerId
       this.preloadedTrackId = trackId
     } catch (err) {
@@ -125,7 +129,7 @@ export class AudioBridge {
     }
   }
 
-  async pause() {
+  async pause(): Promise<void> {
     if (!this.currentPlayerId) return
     try {
       await tauriInvoke('pause_playback', { playerId: this.currentPlayerId })
@@ -136,7 +140,7 @@ export class AudioBridge {
     }
   }
 
-  async resume() {
+  async resume(): Promise<void> {
     if (!this.currentPlayerId) return
     try {
       await tauriInvoke('resume_playback', { playerId: this.currentPlayerId })
@@ -148,7 +152,7 @@ export class AudioBridge {
     }
   }
 
-  async stop() {
+  async stop(): Promise<void> {
     if (!this.currentPlayerId) return
     if (this.preloadedPlayerId) {
       const preId = this.preloadedPlayerId
@@ -168,10 +172,10 @@ export class AudioBridge {
     }
   }
 
-  async startCrossfadeIn(streamUrl, trackId, targetVolume, fadeDurationMs, replayGainDb = null) {
+  async startCrossfadeIn(streamUrl: string, trackId: string, targetVolume: number, fadeDurationMs: number, replayGainDb: number | null = null): Promise<void> {
     const oldPlayerId = this.currentPlayerId
     try {
-      const newPlayerId = await tauriInvoke('crossfade_to', {
+      const newPlayerId = await tauriInvoke<string>('crossfade_to', {
         oldPlayerId: oldPlayerId ?? '',
         streamUrl,
         trackId,
@@ -195,7 +199,7 @@ export class AudioBridge {
 
   // ── Volume ─────────────────────────────────────────────────────────────────
 
-  async setVolume(vol) {
+  async setVolume(vol: number): Promise<void> {
     const normalized = Math.max(0, Math.min(1, Number(vol)))
     if (!this.currentPlayerId) return
     try {
@@ -206,47 +210,47 @@ export class AudioBridge {
     }
   }
 
-  async getVolume() {
+  async getVolume(): Promise<number | null> {
     if (!this.currentPlayerId) return null
-    try { return await tauriInvoke('get_volume', { playerId: this.currentPlayerId }) } catch (err) {
+    try { return await tauriInvoke<number>('get_volume', { playerId: this.currentPlayerId }) } catch (err) {
       console.error('Get volume failed:', err)
       return null
     }
   }
 
-  async seek(position) {
+  async seek(position: number): Promise<void> {
     if (!this.currentPlayerId) return
     try { await tauriInvoke('seek_position', { playerId: this.currentPlayerId, position: Math.max(0, Number(position) || 0) }) } catch (err) {
       console.warn('Seek not supported for this stream:', err)
     }
   }
 
-  async getCurrentPosition() {
+  async getCurrentPosition(): Promise<number> {
     if (!this.currentPlayerId) return 0
-    try { return await tauriInvoke('get_current_position', { playerId: this.currentPlayerId }) } catch (err) {
+    try { return await tauriInvoke<number>('get_current_position', { playerId: this.currentPlayerId }) } catch (err) {
       console.error('Get position failed:', err)
       return 0
     }
   }
 
-  async getDuration() {
+  async getDuration(): Promise<number | null> {
     if (!this.currentPlayerId) return null
-    try { return await tauriInvoke('get_track_duration', { playerId: this.currentPlayerId }) } catch (err) {
+    try { return await tauriInvoke<number>('get_track_duration', { playerId: this.currentPlayerId }) } catch (err) {
       console.error('Get duration failed:', err)
       return null
     }
   }
 
-  async isFinished() {
+  async isFinished(): Promise<boolean> {
     if (!this.currentPlayerId) return true
-    try { return await tauriInvoke('is_playback_finished', { playerId: this.currentPlayerId }) } catch (err) {
+    try { return await tauriInvoke<boolean>('is_playback_finished', { playerId: this.currentPlayerId }) } catch (err) {
       return false
     }
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-  destroy() {
+  destroy(): void {
     if (this._unlistenState) { this._unlistenState(); this._unlistenState = null }
     if (this._unlistenFinished) { this._unlistenFinished(); this._unlistenFinished = null }
     if (this._unlistenPosition) { this._unlistenPosition(); this._unlistenPosition = null }

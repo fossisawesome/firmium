@@ -1,26 +1,26 @@
-/// Audio playback module using rodio for native OS audio engine integration.
-/// Provides low-latency, high-quality streaming with minimal CPU usage.
-///
-/// Features:
-/// - Streaming playback (no full file buffering)
-/// - Volume control with memory persistence
-/// - Playback state management (Playing, Paused, Stopped, Loading)
-/// - Multiple device support
-/// - Background playback via dedicated thread
-/// - ReplayGain normalization applied per-source via rodio's amplify chain
-/// - Native crossfade between sessions with sub-50ms volume steps
-/// - Tauri event emission for state changes (eliminates JS polling)
-///
-/// Design: Uses OutputStreamHandle (Send + Sync) instead of OutputStream to maintain
-/// thread-safety for Tauri managed state. The OutputStream itself is held securely
-/// within a Mutex container to guarantee its lifecycle matches the application state.
-///
-/// Session lifecycle:
-///   play_stream() → session inserted immediately with loading=true → emits "playback-state-changed" (loading)
-///   async decode → source appended, loading set to false, sink.play() called → emits "playback-state-changed" (playing)
-///   finish watcher detects empty sink → emits "playback-finished" → session removed
-///   get_state()  → returns Loading while buffering, Playing/Paused/Stopped after
-///   is_finished()→ returns Ok(false) while loading; Ok(true) only after audio plays out
+//! Audio playback module using rodio for native OS audio engine integration.
+//! Provides low-latency, high-quality streaming with minimal CPU usage.
+//!
+//! Features:
+//! - Streaming playback (no full file buffering)
+//! - Volume control with memory persistence
+//! - Playback state management (Playing, Paused, Stopped, Loading)
+//! - Multiple device support
+//! - Background playback via dedicated thread
+//! - ReplayGain normalization applied per-source via rodio's amplify chain
+//! - Native crossfade between sessions with sub-50ms volume steps
+//! - Tauri event emission for state changes (eliminates JS polling)
+//!
+//! Design: Uses OutputStreamHandle (Send + Sync) instead of OutputStream to maintain
+//! thread-safety for Tauri managed state. The OutputStream itself is held securely
+//! within a Mutex container to guarantee its lifecycle matches the application state.
+//!
+//! Session lifecycle:
+//!   play_stream() → session inserted immediately with loading=true → emits "playback-state-changed" (loading)
+//!   async decode → source appended, loading set to false, sink.play() called → emits "playback-state-changed" (playing)
+//!   finish watcher detects empty sink → emits "playback-finished" → session removed
+//!   get_state()  → returns Loading while buffering, Playing/Paused/Stopped after
+//!   is_finished()→ returns Ok(false) while loading; Ok(true) only after audio plays out
 
 use parking_lot::{Mutex, RwLock};
 use rodio::mixer::Mixer;
@@ -32,6 +32,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
+
+/// Decoded audio source plus its duration (if known) and the raw byte buffer
+/// backing the streaming reader (kept alive for the lifetime of playback).
+type DecodedSource = (Box<dyn Source<Item = f32> + Send>, Option<f64>, Arc<Mutex<Vec<u8>>>);
 
 /// A Read+Seek wrapper over a streaming HTTP response body.
 ///
@@ -139,6 +143,10 @@ unsafe impl Sync for SafeOutputStream {}
 /// Unique identifier for each playback session
 pub type PlayerId = String;
 
+/// Shared session map type, used by the finish-watcher helper which is spawned
+/// from contexts that don't have access to `&self`.
+type SessionMap = Arc<RwLock<std::collections::HashMap<PlayerId, PlaybackSession>>>;
+
 const PLAYER_NOT_FOUND: &str = "Player not found";
 
 /// Represents the current playback state.
@@ -172,7 +180,7 @@ struct PlaybackSession {
 /// Holds the handle alongside the root stream container securely to prevent
 /// premature audio device drop-offs by the operating system.
 pub struct AudioPlayer {
-    sessions: Arc<RwLock<std::collections::HashMap<PlayerId, PlaybackSession>>>,
+    sessions: SessionMap,
     mixer: Mixer,
     _stream: parking_lot::Mutex<SafeOutputStream>,
     /// Reused HTTP client — avoids rebuilding a connection pool and TLS context on every track.
@@ -346,53 +354,7 @@ impl AudioPlayer {
             // Finish watcher — polls at 100ms, emits "playback-position" every ~300ms and
             // "playback-finished" when the sink drains. Only runs for non-preloaded sessions.
             if !start_paused {
-                let sessions_watch = Arc::clone(&sessions);
-                let app_handle_watch = app_handle.clone();
-                let pid = player_id_clone.clone();
-                tauri::async_runtime::spawn(async move {
-                    let mut tick: u8 = 0;
-                    loop {
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        tick = tick.wrapping_add(1);
-
-                        let (finished, pos_payload) = {
-                            let s = sessions_watch.read();
-                            match s.get(&pid) {
-                                None => break, // Session removed externally (stop() called).
-                                Some(session) => {
-                                    let finished = !session.loading && session.sink.empty();
-                                    // Emit position every ~300ms when actively playing.
-                                    let pos_payload = if tick % 3 == 0 && !session.loading && session.playback_start_time.is_some() {
-                                        let pos = session.accumulated_time
-                                            + session.playback_start_time
-                                                .map(|t| t.elapsed().as_secs_f64())
-                                                .unwrap_or(0.0);
-                                        Some(serde_json::json!({
-                                            "playerId": pid,
-                                            "position": pos,
-                                            "duration": session.duration
-                                        }))
-                                    } else {
-                                        None
-                                    };
-                                    (finished, pos_payload)
-                                }
-                            }
-                        };
-
-                        if let Some(payload) = pos_payload {
-                            let _ = app_handle_watch.emit("playback-position", payload);
-                        }
-
-                        if finished {
-                            sessions_watch.write().remove(&pid);
-                            let _ = app_handle_watch.emit("playback-finished", serde_json::json!({
-                                "playerId": pid
-                            }));
-                            break;
-                        }
-                    }
-                });
+                Self::spawn_finish_watcher(Arc::clone(&sessions), app_handle.clone(), player_id_clone.clone());
                 // Record that this session has a running watcher so resume() can
                 // skip spawning a duplicate.
                 if let Some(s) = sessions.write().get_mut(&player_id_clone) {
@@ -402,6 +364,61 @@ impl AudioPlayer {
         });
 
         Ok(player_id)
+    }
+
+    /// Spawn a finish-watcher task for `player_id`.
+    ///
+    /// Polls every 100ms; emits "playback-position" every ~300ms while playing,
+    /// and "playback-finished" (removing the session) once the sink drains or
+    /// the session is removed externally (e.g. stop()).
+    ///
+    /// Takes the session map and app handle directly (rather than `&self`) so it
+    /// can be called from the 'static async task spawned by `start_session`.
+    fn spawn_finish_watcher(sessions: SessionMap, app_handle: AppHandle, player_id: PlayerId) {
+        tauri::async_runtime::spawn(async move {
+            let mut tick: u8 = 0;
+            loop {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                tick = tick.wrapping_add(1);
+
+                let (finished, pos_payload) = {
+                    let s = sessions.read();
+                    match s.get(&player_id) {
+                        None => break, // Session removed externally (stop() called).
+                        Some(session) => {
+                            let finished = !session.loading && session.sink.empty();
+                            // Emit position every ~300ms when actively playing.
+                            let pos_payload = if tick.is_multiple_of(3) && !session.loading && session.playback_start_time.is_some() {
+                                let pos = session.accumulated_time
+                                    + session.playback_start_time
+                                        .map(|t| t.elapsed().as_secs_f64())
+                                        .unwrap_or(0.0);
+                                Some(serde_json::json!({
+                                    "playerId": player_id,
+                                    "position": pos,
+                                    "duration": session.duration
+                                }))
+                            } else {
+                                None
+                            };
+                            (finished, pos_payload)
+                        }
+                    }
+                };
+
+                if let Some(payload) = pos_payload {
+                    let _ = app_handle.emit("playback-position", payload);
+                }
+
+                if finished {
+                    sessions.write().remove(&player_id);
+                    let _ = app_handle.emit("playback-finished", serde_json::json!({
+                        "playerId": player_id
+                    }));
+                    break;
+                }
+            }
+        });
     }
 
     /// Fetch a stream from a URL and open a streaming decoder.
@@ -418,7 +435,7 @@ impl AudioPlayer {
     fn fetch_and_decode_blocking(
         client: reqwest::blocking::Client,
         url: &str,
-    ) -> Result<(Box<dyn Source<Item = f32> + Send>, Option<f64>, Arc<Mutex<Vec<u8>>>), String> {
+    ) -> Result<DecodedSource, String> {
         let response = client
             .get(url)
             .send()
@@ -492,57 +509,12 @@ impl AudioPlayer {
             // Promoted preloads need their own finish watcher + position emitter.
             // Non-preloaded sessions already have one from start_session(), so skip them
             // to avoid duplicate position/finished events after pause-resume cycles.
-            let needs_watcher = sessions.get(player_id).map_or(false, |s| !s.has_watcher);
+            let needs_watcher = sessions.get(player_id).is_some_and(|s| !s.has_watcher);
             if needs_watcher {
                 if let Some(s) = sessions.get_mut(player_id) {
                     s.has_watcher = true;
                 }
-                let sessions_watch = Arc::clone(&self.sessions);
-                let app_handle_watch = self.app_handle.clone();
-                let pid = player_id.to_string();
-                tauri::async_runtime::spawn(async move {
-                    let mut tick: u8 = 0;
-                    loop {
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        tick = tick.wrapping_add(1);
-
-                        let (finished, pos_payload) = {
-                            let s = sessions_watch.read();
-                            match s.get(&pid) {
-                                None => break,
-                                Some(session) => {
-                                    let finished = !session.loading && session.sink.empty();
-                                    let pos_payload = if tick % 3 == 0 && !session.loading && session.playback_start_time.is_some() {
-                                        let pos = session.accumulated_time
-                                            + session.playback_start_time
-                                                .map(|t| t.elapsed().as_secs_f64())
-                                                .unwrap_or(0.0);
-                                        Some(serde_json::json!({
-                                            "playerId": pid,
-                                            "position": pos,
-                                            "duration": session.duration
-                                        }))
-                                    } else {
-                                        None
-                                    };
-                                    (finished, pos_payload)
-                                }
-                            }
-                        };
-
-                        if let Some(payload) = pos_payload {
-                            let _ = app_handle_watch.emit("playback-position", payload);
-                        }
-
-                        if finished {
-                            sessions_watch.write().remove(&pid);
-                            let _ = app_handle_watch.emit("playback-finished", serde_json::json!({
-                                "playerId": pid
-                            }));
-                            break;
-                        }
-                    }
-                });
+                Self::spawn_finish_watcher(Arc::clone(&self.sessions), self.app_handle.clone(), player_id.to_string());
             }
         }
         result
@@ -731,27 +703,51 @@ impl AudioPlayer {
     /// the buffer without re-fetching from the network.
     pub fn seek(&self, player_id: &str, position: f64) -> Result<(), String> {
         let pos = Duration::from_secs_f64(position.max(0.0));
-        let mut sessions = self.sessions.write();
-        let session = sessions
-            .get_mut(player_id)
-            .ok_or_else(|| PLAYER_NOT_FOUND.to_string())?;
 
-        if session.sink.try_seek(pos).is_ok() {
-            session.accumulated_time = position.max(0.0);
-            session.playback_start_time = if session.sink.is_paused() {
-                None
-            } else {
-                Some(std::time::Instant::now())
-            };
-            return Ok(());
+        // Fast path: native seek under a short-lived write lock.
+        {
+            let mut sessions = self.sessions.write();
+            let session = sessions
+                .get_mut(player_id)
+                .ok_or_else(|| PLAYER_NOT_FOUND.to_string())?;
+
+            if session.sink.try_seek(pos).is_ok() {
+                session.accumulated_time = position.max(0.0);
+                session.playback_start_time = if session.sink.is_paused() {
+                    None
+                } else {
+                    Some(std::time::Instant::now())
+                };
+                return Ok(());
+            }
         }
 
         // Native seek failed (e.g. ForwardOnly format / backward seek in MP3/OGG).
         // Rebuild the decoder from the in-memory buffer and seek from the start.
-        let raw = session.buffered_bytes.lock().clone();
+        // The buffer clone, decode, and stabilization sleep below all happen
+        // WITHOUT holding the sessions lock, so other sessions' watchers, volume
+        // changes, and state queries aren't stalled for the duration.
+        let (raw, was_paused) = {
+            let sessions = self.sessions.read();
+            let session = sessions
+                .get(player_id)
+                .ok_or_else(|| PLAYER_NOT_FOUND.to_string())?;
+
+            let was_paused = session.sink.is_paused();
+            // Pause first to allow audio thread to stabilize before switching sinks.
+            // This prevents buffer underrun/overrun during rapid seeking.
+            if !was_paused {
+                session.sink.pause();
+            }
+            let raw = session.buffered_bytes.lock().clone();
+            (raw, was_paused)
+        };
         if raw.is_empty() {
             return Err("Seek failed: no buffered data available yet".to_string());
         }
+
+        std::thread::sleep(Duration::from_millis(10));
+
         let cursor = Cursor::new(raw);
         let mut source =
             Decoder::try_from(cursor).map_err(|e| format!("Failed to re-decode for seek: {}", e))?;
@@ -759,15 +755,6 @@ impl AudioPlayer {
         source
             .try_seek(pos)
             .map_err(|e| format!("Seek failed: {}", e))?;
-
-        let was_paused = session.sink.is_paused();
-        // Pause first to allow audio thread to stabilize before switching sinks.
-        // This prevents buffer underrun/overrun during rapid seeking.
-        if !was_paused {
-            session.sink.pause();
-        }
-        std::thread::sleep(Duration::from_millis(10));
-        session.sink.stop();
 
         let new_sink = Player::connect_new(&self.mixer);
         new_sink.append(source);
@@ -777,6 +764,16 @@ impl AudioPlayer {
             new_sink.play();
         }
 
+        // Re-acquire the lock only to swap in the new sink. If the session was
+        // removed (e.g. a concurrent stop()) while we were decoding, stop the
+        // new sink before dropping it so its audio thread doesn't keep playing.
+        let mut sessions = self.sessions.write();
+        let Some(session) = sessions.get_mut(player_id) else {
+            new_sink.stop();
+            return Err(PLAYER_NOT_FOUND.to_string());
+        };
+        session.sink.set_volume(0.0);
+        session.sink.stop();
         session.sink = new_sink;
         session.accumulated_time = position.max(0.0);
         session.playback_start_time = if was_paused {
@@ -786,12 +783,6 @@ impl AudioPlayer {
         };
 
         Ok(())
-    }
-}
-
-impl Default for AudioPlayer {
-    fn default() -> Self {
-        panic!("AudioPlayer::default() is not supported; use AudioPlayer::new(app_handle)")
     }
 }
 

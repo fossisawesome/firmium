@@ -1,14 +1,15 @@
-<script>
+<script lang="ts">
   import { get } from 'svelte/store'
-  import { activeView, navToView, clearAuth, authServer, audioBridge } from '../lib/stores.js'
-  import { stopPositionTracking } from '../lib/playback.js'
-  import { clearAll } from '../lib/coverCache.js'
+  import { activeView, navToView, clearAuth, authServer, audioBridge, type ViewType } from '../lib/stores'
+  import { stopPositionTracking } from '../lib/playback'
+  import { clearAll } from '../lib/coverCache'
+  import { clearAll as clearListCache } from '../lib/listCache'
   import {
     IconHome, IconDisc, IconMusic, IconSearch,
     IconList, IconSettings, IconHexagon, IconClose
-  } from '../lib/icons.js'
+  } from '../lib/icons'
 
-  const NAV_ITEMS = [
+  const NAV_ITEMS: { view: ViewType; label: string; icon: string }[] = [
     { view: 'home',      label: 'Home',      icon: IconHome },
     { view: 'albums',    label: 'Albums',    icon: IconDisc },
     { view: 'artists',   label: 'Artists',   icon: IconMusic },
@@ -23,7 +24,7 @@
     try { return new URL($authServer ?? '').hostname } catch (_) { return 'online' }
   })())
 
-  function isActive(view) {
+  function isActive(view: ViewType) {
     const t = $activeView.type
     const parent = $activeView.parentType
     if (view === 'home')    return t === 'home' || parent === 'home'
@@ -38,6 +39,7 @@
     if (bridge) { bridge.destroy() }
     stopPositionTracking()
     clearAll()
+    clearListCache()
     clearAuth()
     document.title = 'Firmium'
   }

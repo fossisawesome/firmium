@@ -1,9 +1,9 @@
-<script>
-  import { lyricsOpen, lyricsLines, lyricsSynced, lyricsStatus, currentTrack } from '../lib/stores.js'
-  import { activeLyricIdx } from '../lib/playback.js'
-  import { IconClose } from '../lib/icons.js'
+<script lang="ts">
+  import { lyricsOpen, lyricsLines, lyricsSynced, lyricsStatus, currentTrack } from '../lib/stores'
+  import { activeLyricIdx } from '../lib/playback'
+  import { IconClose } from '../lib/icons'
 
-  let lyricsBody = $state()
+  let lyricsBody: HTMLDivElement | undefined = $state()
 
   // Scroll the active lyric into view when it changes.
   $effect(() => {
@@ -23,14 +23,14 @@
   let dragStartY = 0
   let isDragging = false
 
-  function onDragStart(e) {
-    dragStartY = (e.touches ?? [e])[0].clientY
+  function onDragStart(e: TouchEvent | MouseEvent) {
+    dragStartY = ('touches' in e ? e.touches[0] : e).clientY
     isDragging = true
   }
 
-  function onDragMove(e) {
+  function onDragMove(e: TouchEvent | MouseEvent) {
     if (!isDragging) return
-    const dy = (e.touches ?? [e])[0].clientY - dragStartY
+    const dy = ('touches' in e ? e.touches[0] : e).clientY - dragStartY
     dragOffset = Math.max(0, dy)
   }
 

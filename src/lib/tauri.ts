@@ -14,9 +14,9 @@ export { invoke as tauriInvoke }
 // listener that throws "resource id X is invalid" on a promise we can't catch.
 // Instead, race the response against the signal ourselves so callers get a clean
 // AbortError and the plugin request just completes silently in the background.
-export function tauriFetch(url, init) {
+export function tauriFetch(url: string | URL | Request, init?: RequestInit): Promise<Response> {
   const signal = init?.signal
-  const pluginInit = signal ? { ...init, signal: undefined } : init
+  const pluginInit: RequestInit | undefined = signal ? { ...init, signal: undefined as unknown as AbortSignal } : init
   const p = pluginFetch(url, pluginInit)
 
   if (!signal) return p

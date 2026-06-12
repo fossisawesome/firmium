@@ -1,13 +1,22 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
-  import { tauriInvoke } from '../lib/tauri.js'
-  import { SafeStorage } from '../lib/utils.js'
-  import { Keyring } from '../lib/api.js'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled } from '../lib/stores.js'
-  import { clearAll } from '../lib/coverCache.js'
-  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo } from '../lib/icons.js'
+  import { tauriInvoke } from '../lib/tauri'
+  import { SafeStorage } from '../lib/utils'
+  import { Keyring } from '../lib/api'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, clearAuth, navToView } from '../lib/stores'
+  import { clearAll } from '../lib/coverCache'
+  import { clearAll as clearListCache } from '../lib/listCache'
+  import { checkForUpdate, installUpdate } from '../lib/updater'
+  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo } from '../lib/icons'
+  import type { Theme } from '../lib/types/tauri-commands'
 
-  let { onapplyTheme, onapplyDecorations, themes = [] } = $props()
+  interface Props {
+    onapplyTheme?: (id: string) => void
+    onapplyDecorations?: () => void
+    themes?: Theme[]
+  }
+
+  let { onapplyTheme, onapplyDecorations, themes = [] }: Props = $props()
 
   const SETTINGS_KEYS = [
     'firmium_server', 'firmium_user', 'firmium_save_pass',
@@ -44,52 +53,58 @@
   let deleteLogsDisabled = $state(false)
   let deleteSettingsLabel = $state('Delete')
 
+  let updateLabel = $state('Check for Updates')
+  let updateDisabled = $state(false)
+  let updateAvailable = $state<string | null>(null)
+
   onMount(async () => {
-    tauriInvoke('get_app_version').then(v => appVersion = `v${v}`).catch(() => appVersion = 'unavailable')
-    tauriInvoke('get_log_path').then(p => logPath = p).catch(() => logPath = 'unavailable')
-    Keyring.load('lastfm_api_key').then(k => { if (k) lastfmKey = k }).catch(() => {})
-    Keyring.load('lastfm_secret').then(s => { if (s) lastfmSecret = s }).catch(() => {})
+    tauriInvoke<string>('get_app_version').then(v => appVersion = `v${v}`).catch(() => appVersion = 'unavailable')
+    tauriInvoke<string>('get_log_path').then(p => logPath = p).catch(() => logPath = 'unavailable')
+    Keyring.load('lastfm_api_key').then(k => { if (k) lastfmKey = k as string }).catch(() => {})
+    Keyring.load('lastfm_secret').then(s => { if (s) lastfmSecret = s as string }).catch(() => {})
   })
 
   const themeName = $derived(themes.find(t => t.id === currentTheme)?.name ?? currentTheme)
 
-  function selectTheme(val) {
+  function selectTheme(val: string) {
     currentTheme = val; themeOpen = false
     SafeStorage.setItem('firmium_theme', val)
     onapplyTheme?.(val)
   }
 
-  function handleDecorationsChange(e) {
-    SafeStorage.setItem('firmium_decorations', e.target.checked ? 'true' : 'false')
+  function handleDecorationsChange(e: Event) {
+    SafeStorage.setItem('firmium_decorations', (e.target as HTMLInputElement).checked ? 'true' : 'false')
     onapplyDecorations?.()
   }
 
-  function handleAutoLogin(e)    { SafeStorage.setItem('firmium_auto_login', e.target.checked ? 'true' : 'false') }
-  function handleLrclib(e)       { SafeStorage.setItem('firmium_lrclib',     e.target.checked ? 'true' : 'false') }
-  function handleLastfm(e) {
-    isLastfmEnabled = e.target.checked
+  function handleAutoLogin(e: Event)    { SafeStorage.setItem('firmium_auto_login', (e.target as HTMLInputElement).checked ? 'true' : 'false') }
+  function handleLrclib(e: Event)       { SafeStorage.setItem('firmium_lrclib',     (e.target as HTMLInputElement).checked ? 'true' : 'false') }
+  function handleLastfm(e: Event) {
+    isLastfmEnabled = (e.target as HTMLInputElement).checked
     SafeStorage.setItem('firmium_lastfm', isLastfmEnabled ? 'true' : 'false')
   }
-  function handleLastfmKey(e)    { lastfmKey = e.target.value;    Keyring.save('lastfm_api_key', e.target.value).catch(() => {}) }
-  function handleLastfmSecret(e) { lastfmSecret = e.target.value; Keyring.save('lastfm_secret',  e.target.value).catch(() => {}) }
+  function handleLastfmKey(e: Event)    { lastfmKey = (e.target as HTMLInputElement).value;    Keyring.save('lastfm_api_key', (e.target as HTMLInputElement).value).catch(() => {}) }
+  function handleLastfmSecret(e: Event) { lastfmSecret = (e.target as HTMLInputElement).value; Keyring.save('lastfm_secret',  (e.target as HTMLInputElement).value).catch(() => {}) }
 
-  function handleCrossfadeToggle(e) {
-    setCrossfadeEnabled(e.target.checked)
-    if (e.target.checked) setGaplessEnabled(false)
+  function handleCrossfadeToggle(e: Event) {
+    const checked = (e.target as HTMLInputElement).checked
+    setCrossfadeEnabled(checked)
+    if (checked) setGaplessEnabled(false)
   }
-  function handleCrossfadeDuration(e) { setCrossfadeDuration(Number(e.target.value)) }
-  function handleGaplessToggle(e) {
-    setGaplessEnabled(e.target.checked)
-    if (e.target.checked) setCrossfadeEnabled(false)
+  function handleCrossfadeDuration(e: Event) { setCrossfadeDuration(Number((e.target as HTMLInputElement).value)) }
+  function handleGaplessToggle(e: Event) {
+    const checked = (e.target as HTMLInputElement).checked
+    setGaplessEnabled(checked)
+    if (checked) setCrossfadeEnabled(false)
   }
 
   function wipeCache() {
-    clearAll(); wipeCacheLabel = 'Wiped!'
+    clearAll(); clearListCache(); wipeCacheLabel = 'Wiped!'
     setTimeout(() => wipeCacheLabel = 'Wipe', 1500)
   }
   async function deleteLogs() {
     deleteLogsDisabled = true
-    try { await tauriInvoke('delete_logs'); deleteLogsLabel = 'Deleted!' }
+    try { await tauriInvoke<void>('delete_logs'); deleteLogsLabel = 'Deleted!' }
     catch { deleteLogsLabel = 'Failed' }
     setTimeout(() => { deleteLogsLabel = 'Delete'; deleteLogsDisabled = false }, 1500)
   }
@@ -97,6 +112,45 @@
     SETTINGS_KEYS.forEach(k => SafeStorage.removeItem(k))
     deleteSettingsLabel = 'Deleted!'
     setTimeout(() => deleteSettingsLabel = 'Delete', 1500)
+  }
+
+  async function checkForUpdates() {
+    updateDisabled = true
+    updateLabel = 'Checking…'
+    try {
+      const update = await checkForUpdate()
+      if (update) {
+        updateAvailable = update.version
+        updateLabel = `Install v${update.version}`
+      } else {
+        updateLabel = 'Up to date'
+        setTimeout(() => updateLabel = 'Check for Updates', 2000)
+      }
+    } catch {
+      updateLabel = 'Check failed'
+      setTimeout(() => updateLabel = 'Check for Updates', 2000)
+    } finally {
+      updateDisabled = false
+    }
+  }
+
+  async function applyUpdate() {
+    updateDisabled = true
+    updateLabel = 'Installing…'
+    try {
+      await installUpdate()
+    } catch {
+      updateLabel = 'Install failed'
+      updateDisabled = false
+      setTimeout(() => updateLabel = `Install v${updateAvailable}`, 2000)
+    }
+  }
+
+  function logout() {
+    clearAll()
+    clearListCache()
+    clearAuth()
+    navToView('settings')
   }
 </script>
 
@@ -262,6 +316,14 @@
         </label>
       </div>
 
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Logout</div>
+          <div class="settings-desc">Clear stored credentials and return to login</div>
+        </div>
+        <button class="debug-btn debug-btn--danger" onclick={logout}>Logout</button>
+      </div>
+
     {:else if activeCategory === 'debug'}
       <div class="sett-panel-title">Debug</div>
 
@@ -270,6 +332,14 @@
           <div class="settings-title">App Version</div>
           <div class="settings-desc">{appVersion}</div>
         </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Software Update</div>
+          <div class="settings-desc">Check for and install a newer version (Windows/Linux AppImage builds)</div>
+        </div>
+        <button class="debug-btn" disabled={updateDisabled} onclick={updateAvailable ? applyUpdate : checkForUpdates}>{updateLabel}</button>
       </div>
 
       <div class="settings-row">

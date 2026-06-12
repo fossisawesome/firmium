@@ -1,8 +1,8 @@
 import { get } from 'svelte/store'
-import { audioBridge, currentTrack, queue, queueIdx, repeatOne, repeatAll, shuffleEnabled } from './stores.js'
-import { playAt } from './playback.js'
+import { audioBridge, currentTrack, currentPosition, queue, queueIdx, repeatOne, repeatAll, shuffleEnabled } from './stores'
+import { playAt } from './playback'
 
-export async function togglePlay() {
+export async function togglePlay(): Promise<void> {
   const bridge = get(audioBridge)
   if (!get(currentTrack) || !bridge) return
   const state = bridge.lastKnownState
@@ -11,12 +11,16 @@ export async function togglePlay() {
   else if (!state || state === 'stopped') playAt(get(queueIdx))
 }
 
-export function prevTrack() {
+export function prevTrack(): void {
   const idx = get(queueIdx)
-  if (idx > 0) playAt(idx - 1)
+  if (get(currentPosition) > 3) {
+    get(audioBridge)?.seek(0)
+  } else if (idx > 0) {
+    playAt(idx - 1)
+  }
 }
 
-export function nextTrack() {
+export function nextTrack(): void {
   const idx = get(queueIdx)
   const len = get(queue).length
   if (get(shuffleEnabled) && len > 1) {
@@ -30,11 +34,11 @@ export function nextTrack() {
   }
 }
 
-export function toggleShuffle() {
+export function toggleShuffle(): void {
   shuffleEnabled.update(v => !v)
 }
 
-export function cycleRepeat() {
+export function cycleRepeat(): void {
   if (!get(repeatOne) && !get(repeatAll)) {
     repeatOne.set(true)
   } else if (get(repeatOne)) {

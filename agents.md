@@ -110,7 +110,12 @@ Strong criteria let you operate independently. Vague criteria ("make it work") r
 
 ## 7. Keep Docs in Sync
 
-If a change touches settings (`Settings.svelte`, `stores.js`), themes (`themes/*.toml`, theme loading code), or build/packaging commands (`package.json` scripts, `PKGBUILD`, `firmium.spec`), update the matching page in the `firmium-docs` repo (`src/content/settings.md`, `src/content/custom-themes.md`, `src/content/building-from-source.md`) in the same change.
+If a change touches settings (`Settings.svelte`, `stores.ts`), themes (`themes/*.toml`, theme loading code), or build/packaging commands (`package.json` scripts, `PKGBUILD`, `firmium.spec`), update the matching pages in the `firmium-docs` repo in the same change:
+
+- Settings: `src/content/settings.md` (what it does, layman's terms) and `src/content/settings-themes-internals.md` (storage keys, code references)
+- Themes: `src/content/custom-themes.md` (how to use/create themes) and `src/content/settings-themes-internals.md` (how themes are loaded/applied internally)
+- Build/packaging: `src/content/building-from-source.md`
+- Architecture-level changes (new modules, restructuring): `src/content/architecture-overview.md`
 
 ## When to Use These Guidelines
 

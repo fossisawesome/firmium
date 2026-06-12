@@ -1,15 +1,16 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
   import {
     isAuthed, setAuth, clearAuth, navToView,
     authServer, activeView, lyricsOpen, currentTrack,
-  } from './lib/stores.js'
-  import { SafeStorage } from './lib/utils.js'
-  import { Keyring } from './lib/api.js'
-  import { tauriInvoke } from './lib/tauri.js'
-  import { fetchAndShowLyrics } from './lib/playback.js'
-  import { playlistMenuState, hidePlaylistMenu } from './lib/playlistMenu.js'
-  import { Api } from './lib/api.js'
+  } from './lib/stores'
+  import { SafeStorage } from './lib/utils'
+  import { Keyring } from './lib/api'
+  import { tauriInvoke } from './lib/tauri'
+  import { fetchAndShowLyrics } from './lib/playback'
+  import { playlistMenuState, hidePlaylistMenu } from './lib/playlistMenu'
+  import { Api } from './lib/api'
+  import type { Theme } from './lib/types/tauri-commands'
 
   import Setup from './components/Setup.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -27,16 +28,16 @@
   import HomeView from './views/HomeView.svelte'
 
   let setupError = $state('')
-  let loadedThemes = $state([])
+  let loadedThemes = $state<Theme[]>([])
 
   // Apply a theme by setting CSS custom properties directly on :root.
   // Falls back gracefully if the theme ID isn't in the loaded list.
-  function applyThemeById(id) {
+  function applyThemeById(id: string) {
     const theme = loadedThemes.find(t => t.id === id)
     if (theme) applyThemeData(theme)
   }
 
-  function applyThemeData(theme) {
+  function applyThemeData(theme: Theme) {
     const root = document.documentElement
     root.style.colorScheme = theme.color_scheme || 'dark'
     const c = theme.colors
@@ -56,8 +57,9 @@
   async function applyDecorations() {
     const show = SafeStorage.getItem('firmium_decorations') !== 'false'
     try {
-      if (window.__TAURI__) {
-        const tauriWindow = window.__TAURI__.window || window.__TAURI__
+      const tauriGlobal = (window as any).__TAURI__
+      if (tauriGlobal) {
+        const tauriWindow = tauriGlobal.window || tauriGlobal
         if (tauriWindow && typeof tauriWindow.getCurrentWindow === 'function') {
           tauriWindow.getCurrentWindow().setDecorations(show); return
         }
@@ -77,14 +79,14 @@
 
   onMount(async () => {
     try {
-      loadedThemes = await tauriInvoke('list_themes')
+      loadedThemes = await tauriInvoke<Theme[]>('list_themes')
     } catch (_) {}
     applyThemeById(SafeStorage.getItem('firmium_theme') || 'firmium')
     applyDecorations()
     document.addEventListener('contextmenu', e => e.preventDefault())
 
     // Block devtools shortcuts unless --debug was passed at launch.
-    const debugMode = await tauriInvoke('is_debug_mode').catch(() => false)
+    const debugMode = await tauriInvoke<boolean>('is_debug_mode').catch(() => false)
     if (!debugMode) {
       document.addEventListener('keydown', e => {
         const devtoolsKey = e.key === 'F12' ||
@@ -100,12 +102,12 @@
 
     if (autoLoginEnabled && savePasswordEnabled && savedServer && savedUser) {
       try {
-        const savedPass = await Keyring.load(savedUser)
+        const savedPass = await Keyring.load(savedUser) as string | null
         if (savedPass) {
           setupError = 'Connecting…'
           try {
             await doConnect(savedServer, savedUser, savedPass)
-          } catch (err) {
+          } catch (err: any) {
             clearAuth()
             setupError = err.message ?? 'Auto-login failed'
           }
@@ -114,15 +116,16 @@
     }
   })
 
-  async function doConnect(sUrl, uName, pWord) {
-    let parsed
+  async function doConnect(sUrl: string, uName: string, pWord: string) {
+    let parsed: URL
     try { parsed = new URL(sUrl) } catch (_) { throw new Error('Invalid URL format') }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Protocol must be HTTP or HTTPS')
     setAuth(sUrl, uName, pWord)
     try {
-      await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 })
-    } catch (err) {
+      await Api.fetch('getAlbumList2', { type: 'alphabeticalByName', size: 1 }, null, { silentSessionExpiry: true })
+    } catch (err: any) {
       clearAuth()
+      if (err?.code === 'SESSION_EXPIRED') throw new Error('Wrong username or password')
       throw err
     }
     navToView('home')
@@ -132,6 +135,11 @@
     clearAuth()
     setupError = 'Session expired — please reconnect'
   }
+
+  onMount(() => {
+    window.addEventListener('firmium:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('firmium:session-expired', handleSessionExpired)
+  })
 </script>
 
 {#if $isAuthed}
@@ -145,17 +153,17 @@
       {:else if $activeView.type === 'albums'}
         <AlbumList />
       {:else if $activeView.type === 'album'}
-        <AlbumDetail id={$activeView.id} />
+        <AlbumDetail id={$activeView.id!} />
       {:else if $activeView.type === 'artists'}
         <ArtistList />
       {:else if $activeView.type === 'artist'}
-        <ArtistDetail id={$activeView.id} />
+        <ArtistDetail id={$activeView.id!} />
       {:else if $activeView.type === 'search'}
         <SearchView />
       {:else if $activeView.type === 'playlists'}
         <PlaylistsView />
       {:else if $activeView.type === 'playlist'}
-        <PlaylistDetail id={$activeView.id} />
+        <PlaylistDetail id={$activeView.id!} />
       {:else if $activeView.type === 'settings'}
         <Settings onapplyTheme={applyThemeById} onapplyDecorations={applyDecorations} themes={loadedThemes} />
       {/if}

@@ -56,7 +56,7 @@ firmium/
 
 **Frontend Changes**
 - All Svelte, JavaScript, CSS changes in `src/` hot-reload instantly via Vite
-- Svelte stores in `src/lib/stores.js` are the single source of truth for app state
+- Svelte stores in `src/lib/stores.ts` are the single source of truth for app state
 - No need to restart the dev server
 
 **Rust Backend Changes**
@@ -100,8 +100,8 @@ npm run android:debug     # assembleDebug + install on device
 - No TypeScript; type-check responses manually
 - Svelte stores in `src/lib/stores.js` — all mutable state goes here
 - Components subscribe reactively to stores
-- Playback orchestration in `src/lib/playback.js`
-- API calls via `Api` class in `src/lib/api.js`
+- Playback orchestration in `src/lib/playback.ts`
+- API calls via `Api` class in `src/lib/api.ts`
 
 ### Themes
 - TOML files in `themes/` directory
@@ -114,7 +114,7 @@ Currently no automated test suite. Manual testing required:
 
 1. **Playback**: play, pause, resume, seek, volume control
 2. **Cover Art**: verify caching on second view
-3. **Search**: artist/album/song search with Wikipedia bio fetch
+3. **Search**: artist/album/song search with artist bio fetch
 4. **Auth**: login with different servers, credential storage
 5. **Playlists**: create, add tracks, delete (if applicable)
 6. **Edge Cases**: network interruption, malformed responses, large libraries
@@ -161,7 +161,7 @@ Docs are built with Vite + Svelte (rendered via `src/lib/Markdown.svelte`) and d
 
 ## Getting Help
 
-- **Architecture questions**: Read [CLAUDE.md](CLAUDE.md) first, then open a discussion
+- **Architecture questions**: Read docs first, then open a discussion
 - **AI-assisted work**: See [agents.md](agents.md) for behavioral guidelines when working with Claude Code
 - **Android-specific issues**: See [android/CLAUDE.md](android/CLAUDE.md)
 - **Bug reports**: Open an issue with reproduction steps and environment details

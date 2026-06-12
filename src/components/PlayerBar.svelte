@@ -1,18 +1,18 @@
-<script>
+<script lang="ts">
   import { get } from 'svelte/store'
   import {
     currentTrack, playbackState, currentPosition, trackDuration, isSeeking,
     volume, repeatOne, repeatAll, audioBridge,
     lyricsOpen, setVolume
-  } from '../lib/stores.js'
-  import { fetchAndShowLyrics } from '../lib/playback.js'
-  import { formatDuration } from '../lib/utils.js'
-  import { loadImage } from '../lib/api.js'
-  import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls.js'
+  } from '../lib/stores'
+  import { fetchAndShowLyrics } from '../lib/playback'
+  import { formatDuration } from '../lib/utils'
+  import { loadImage } from '../lib/api'
+  import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls'
   import {
     IconPlay, IconPause, IconLoading, IconPrev, IconNext,
     IconRepeat, IconLyrics, IconVolume, IconMusic
-  } from '../lib/icons.js'
+  } from '../lib/icons'
 
   const playIcon = $derived(
     $playbackState === 'loading' ? IconLoading : $playbackState === 'playing' ? IconPause : IconPlay
@@ -33,22 +33,22 @@
     }
   }
 
-  function handleVolumeInput(e) {
-    const v = setVolume(e.target.value)
+  function handleVolumeInput(e: Event) {
+    const v = setVolume(Number((e.target as HTMLInputElement).value))
     const bridge = get(audioBridge)
     if (bridge) bridge.setVolume(v).catch(console.error)
   }
 
   function startSeek() { isSeeking.set(true) }
-  async function endSeek(e) {
+  async function endSeek(e: Event) {
     isSeeking.set(false)
     const bridge = get(audioBridge)
     if (bridge) {
-      try { await bridge.seek(Number(e.target.value)) } catch (err) { console.error('Seek failed:', err) }
+      try { await bridge.seek(Number((e.target as HTMLInputElement).value)) } catch (err) { console.error('Seek failed:', err) }
     }
   }
 
-  let npCoverImg = $state()
+  let npCoverImg: HTMLImageElement | undefined = $state()
   $effect(() => {
     if ($currentTrack?.coverArtId && npCoverImg) {
       loadImage(npCoverImg, $currentTrack.coverArtId, null)
