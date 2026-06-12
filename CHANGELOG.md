@@ -2,14 +2,23 @@
 
 ## Added
 
+- **Frontend migrated to TypeScript**: `src/lib/*.js` and `src/main.js` converted to `.ts` (`api.ts`, `audio-bridge.ts`, `coverCache.ts`, `icons.ts`, `lazyLoad.ts`, `lyrics.ts`, `playback.ts`, `playerControls.ts`, `playlistMenu.ts`, `stores.ts`, `tauri.ts`, `main.ts`), with new `tsconfig.json`, `src/vite-env.d.ts`, and generated Tauri command types in `src/lib/types/tauri-commands.ts`.
+- **Test suite**: new Vitest setup (`vitest.config.ts`, `vitest.setup.ts`) with unit tests for `api.ts`, `playback.ts`, `playerControls.ts`, and `utils.ts`; new Rust unit tests for the auth and theme commands; new Android `LyricsControllerTest.kt`.
+- **Virtualized lists** (`src/lib/VirtualList.svelte`): album, artist, and playlist views now render only visible rows, improving scroll performance on large libraries.
+- **In-app auto-updater** (`src/lib/updater.ts`): checks the configured update endpoint and installs/relaunches via `@tauri-apps/plugin-updater` and `@tauri-apps/plugin-process`, surfaced under Settings > Debug > Software Update (Windows and Linux AppImage builds).
+- **Rust backend split into command modules** (`src-tauri/src/commands/`): `auth.rs` (OpenSubsonic token-auth generation, keeping MD5 out of the JS layer), `credentials.rs` (OS keyring save/get/delete), `themes.rs` (theme discovery/merging, including Android compile-time embedded themes), `playback.rs`, `logging.rs`, and `mappers.rs`. `lib.rs` is now just the app entry point and command registry.
+- **Android lyrics sync controller** (`android/.../viewmodel/LyricsController.kt`): owns lyrics fetching, caching, and position-sync state for the currently playing track, mirroring `syncLyricsToPosition` from `playback.ts`, with cancellation-safe fetches and a guard against stale track switches.
 - **CodeQL security scanning** (`.github/workflows/codeql.yml`): New CI workflow runs CodeQL analysis across the JS/TS and Java/Kotlin codebases on push, PR, and a weekly schedule, with the Android build run manually via Gradle to satisfy the Java/Kotlin analysis.
+- **New CI workflows**: `.github/workflows/ci.yml` (lint/build/test) and `.github/workflows/audit.yml` (dependency audits).
 - **Dependabot** (`.github/dependabot.yml`): Automated dependency update PRs for npm, Cargo, Gradle, and GitHub Actions.
+- **`.github/FUNDING.yml`**: project funding links.
 - **`CONTRIBUTING.md`**: New contributor guide covering setup, branching, and PR conventions.
 - **`android/CLAUDE.md`**: Dedicated guidance file for the Android app's tech stack and architecture, referenced from the root `CLAUDE.md`.
 - **App icon redesign**: All icon assets (Linux, Windows, macOS, iOS) regenerated from a new `icon-source.svg` at higher resolution.
 
 ## Changed
 
+- **`src-tauri/src/audio.rs` rewritten**: significant cleanup of the `rodio`-based playback engine alongside the `commands/` module split.
 - **`copr.yml` hardened**: Untrusted GitHub Actions expressions (PR titles, branch names) no longer interpolated directly into shell scripts, closing a script-injection vector. Explicit workflow permissions added.
 - **Dependency updates**: `vite`, `svelte`, `concurrently`, `uuid`, `toml` (Rust), `androidx.compose:compose-bom`, `androidx.lifecycle:lifecycle-runtime-compose`, `org.jetbrains.kotlinx:kotlinx-coroutines-android`, `com.squareup.okhttp3:logging-interceptor`, and the Gradle wrapper all bumped to their latest compatible versions. GitHub Actions (`actions/checkout`, `actions/setup-node`, `actions/setup-java`, `actions/github-script`, `android-actions/setup-android`) updated to their latest major versions.
 - **`CLAUDE.md` and `agents.md`** restructured: project guidance split between the root `CLAUDE.md` and the new `android/CLAUDE.md`, with `agents.md` updated for autonomy/escalation rules.
