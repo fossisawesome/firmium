@@ -101,7 +101,11 @@ pub fn run() {
             create_playlist,
             update_playlist,
             delete_playlist,
+            get_open_subsonic_extensions,
             scrobble,
+            report_playback,
+            get_sonic_similar_tracks,
+            find_sonic_path,
             get_song_lyrics,
         ])
         .run(tauri::generate_context!())

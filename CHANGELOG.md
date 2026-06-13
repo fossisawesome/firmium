@@ -1,3 +1,24 @@
+# v5.3.0
+
+## Added
+
+- **OpenSubsonic extension detection** (`src-tauri/src/commands/subsonic.rs::get_open_subsonic_extensions`, Android `ApiClient.kt::openSubsonicExtensions`/`hasExtension`): the extensions advertised by the server are now tracked from every API response, so the app can show or hide extension-gated features. `src/lib/stores.ts`'s `openSubsonicExtensions` is now typed `string[] | null` and reset on logout.
+- **Playback reporting** (`playbackReport` extension): desktop (`src-tauri/src/commands/subsonic.rs::report_playback`, `src/lib/api.ts::Api.reportPlayback`) and Android (`ApiClient.kt::reportPlayback`, `PlayerViewModel.kt::reportPlaybackCurrent`) now report `starting`/`playing`/`paused`/`stopped` state and position to the server on play, pause, resume, track change, and track end. No-op if the server hasn't advertised the extension.
+- **Sonic similarity / similar tracks** (`sonicSimilarity` extension): new `get_sonic_similar_tracks`/`find_sonic_path` Tauri commands (`src-tauri/src/commands/subsonic.rs`, `mappers.rs::SimilarMatch`/`map_similar_matches`) and Android `ApiClient.getSonicSimilarTracks`/`SimilarMatch`. Desktop adds a `SimilarTracksPanel.svelte` component (new `.similar-tracks-panel` styles in `src/style.css`, full-screen overlay on mobile like the lyrics panel), toggled from a new hexagon button in `PlayerBar.svelte` (`src/lib/stores.ts`: `similarTracksOpen`/`similarTracksTrackId`/`similarTracksResults`/`similarTracksStatus`, `hasSonicSimilarity` derived store). Android adds `PlayerViewModel.fetchSimilarTracks`/`SimilarTracksState`, a new `SimilarTracksSheet.kt` bottom sheet, and a "Similar Tracks" button (`Icons.Default.Hub`) in `FullScreenPlayer.kt`, shown only when the server supports the extension.
+- **`LoadingState.svelte`**: shared loading/error/empty-state wrapper component for desktop list views.
+
+## Changed
+
+- **Shared `AlbumRow` component** (Android, new `ui/components/AlbumRow.kt`): consolidates the three near-identical album row implementations previously duplicated in `AlbumListScreen.kt` (`MusicAlbumRow`), `ArtistDetailScreen.kt` (`ArtistAlbumRow`), and `SearchScreen.kt` (`SearchAlbumRow`), with `showArtist`/`coverSize`/`coverRadius` parameters to cover their differences.
+- `android/.../ui/navigation/AppNavGraph.kt`: the album/artist detail screen slide transitions are now shared `detailEnterTransition`/`detailExitTransition`/`detailPopEnterTransition`/`detailPopExitTransition` constants instead of duplicated per-route lambdas.
+
+
+## Fixed
+
+- Issue 20, crash on playing music.
+
+---
+
 # v5.2.0
 
 ## Added

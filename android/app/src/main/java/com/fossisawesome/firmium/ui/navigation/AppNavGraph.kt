@@ -14,7 +14,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
+import androidx.navigation.NavBackStackEntry
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
@@ -52,6 +56,23 @@ import com.fossisawesome.firmium.viewmodel.*
 import kotlinx.coroutines.launch
 
 private data class NavDest(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
+private val detailEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+        fadeIn(tween(250))
+}
+private val detailExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(250)) +
+        fadeOut(tween(200))
+}
+private val detailPopEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    slideInHorizontally(initialOffsetX = { -it / 4 }, animationSpec = tween(250)) +
+        fadeIn(tween(200))
+}
+private val detailPopExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
+        fadeOut(tween(250))
+}
 
 // Search and settings are top-bar icons, not bottom tabs — matches the old mobile layout.
 private val bottomDests = listOf(
@@ -105,6 +126,8 @@ fun AppNavGraph(
     var showFullPlayer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showLyrics by remember { mutableStateOf(false) }
+    var showSimilarTracks by remember { mutableStateOf(false) }
+    val similarTracksState by playerViewModel.similarTracksState.collectAsStateWithLifecycle()
 
     // Pending album-add-to-playlist: load tracks on demand, then show the dialog.
     var pendingAddAlbumId by remember { mutableStateOf<String?>(null) }
@@ -239,22 +262,10 @@ fun AppNavGraph(
                 }
                 composable(
                     "album/{albumId}",
-                    enterTransition = {
-                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            fadeIn(tween(250))
-                    },
-                    exitTransition = {
-                        slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(250)) +
-                            fadeOut(tween(200))
-                    },
-                    popEnterTransition = {
-                        slideInHorizontally(initialOffsetX = { -it / 4 }, animationSpec = tween(250)) +
-                            fadeIn(tween(200))
-                    },
-                    popExitTransition = {
-                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            fadeOut(tween(250))
-                    },
+                    enterTransition = detailEnterTransition,
+                    exitTransition = detailExitTransition,
+                    popEnterTransition = detailPopEnterTransition,
+                    popExitTransition = detailPopExitTransition,
                 ) { back ->
                     val id = back.arguments?.getString("albumId") ?: return@composable
                     AlbumDetailScreen(
@@ -281,22 +292,10 @@ fun AppNavGraph(
                 }
                 composable(
                     "artist/{artistId}",
-                    enterTransition = {
-                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            fadeIn(tween(250))
-                    },
-                    exitTransition = {
-                        slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(250)) +
-                            fadeOut(tween(200))
-                    },
-                    popEnterTransition = {
-                        slideInHorizontally(initialOffsetX = { -it / 4 }, animationSpec = tween(250)) +
-                            fadeIn(tween(200))
-                    },
-                    popExitTransition = {
-                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            fadeOut(tween(250))
-                    },
+                    enterTransition = detailEnterTransition,
+                    exitTransition = detailExitTransition,
+                    popEnterTransition = detailPopEnterTransition,
+                    popExitTransition = detailPopExitTransition,
                 ) { back ->
                     val id = back.arguments?.getString("artistId") ?: return@composable
                     ArtistDetailScreen(
@@ -320,22 +319,10 @@ fun AppNavGraph(
                 }
                 composable(
                     "playlist/{playlistId}",
-                    enterTransition = {
-                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            fadeIn(tween(250))
-                    },
-                    exitTransition = {
-                        slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(250)) +
-                            fadeOut(tween(200))
-                    },
-                    popEnterTransition = {
-                        slideInHorizontally(initialOffsetX = { -it / 4 }, animationSpec = tween(250)) +
-                            fadeIn(tween(200))
-                    },
-                    popExitTransition = {
-                        slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300, easing = FastOutSlowInEasing)) +
-                            fadeOut(tween(250))
-                    },
+                    enterTransition = detailEnterTransition,
+                    exitTransition = detailExitTransition,
+                    popEnterTransition = detailPopEnterTransition,
+                    popExitTransition = detailPopExitTransition,
                 ) { back ->
                     val id = back.arguments?.getString("playlistId") ?: return@composable
                     val playlist = playlistsState.playlists.find { it.id == id }
@@ -473,6 +460,12 @@ fun AppNavGraph(
             },
             onShuffleToggle = { playerViewModel.toggleShuffle() },
             onQueueOpen = { showQueue = true },
+            onSimilarTracksOpen = if (playerViewModel.hasSonicSimilarity()) {
+                {
+                    playerViewModel.fetchSimilarTracks()
+                    showSimilarTracks = true
+                }
+            } else null,
             onLyricsOpen = {
                 playerViewModel.openLyrics()
                 showLyrics = true
@@ -502,6 +495,21 @@ fun AppNavGraph(
             onDismiss = {
                 showLyrics = false
                 playerViewModel.closeLyrics()
+            },
+        )
+    }
+
+    if (showSimilarTracks) {
+        SimilarTracksSheet(
+            state = similarTracksState,
+            onDismiss = {
+                showSimilarTracks = false
+                playerViewModel.clearSimilarTracks()
+            },
+            onPlayAt = { songs, idx ->
+                playerViewModel.playAt(songs, idx)
+                showSimilarTracks = false
+                playerViewModel.clearSimilarTracks()
             },
         )
     }

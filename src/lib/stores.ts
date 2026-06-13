@@ -1,7 +1,7 @@
 import { writable, derived, get, type Writable } from 'svelte/store'
 import { SafeStorage } from './utils'
 import { tauriInvoke } from './tauri'
-import type { Song, PlaybackState, LyricLine } from './types/tauri-commands'
+import type { Song, PlaybackState, LyricLine, SimilarMatch } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 import type { ServerPlaylist } from './api'
 
@@ -21,6 +21,7 @@ export function setAuth(s: string | null, u: string | null, p: string | null): v
   authServer.set(server)
   authUsername.set(u)
   authPassword.set(p)
+  openSubsonicExtensions.set(null)
   tauriInvoke('set_connection', { server, username: u, password: p })
 }
 
@@ -39,8 +40,9 @@ export async function getQueryParams(): Promise<Record<string, unknown>> {
 }
 
 // ── Server info ───────────────────────────────────────────────────────────────
-export const openSubsonicExtensions = writable<unknown>(null)
+export const openSubsonicExtensions = writable<string[] | null>(null)
 export const isOpenSubsonic = derived(openSubsonicExtensions, $ext => $ext !== null)
+export const hasSonicSimilarity = derived(openSubsonicExtensions, $ext => $ext?.includes('sonicSimilarity') ?? false)
 
 // ── View routing ──────────────────────────────────────────────────────────────
 export type ViewType = 'albums' | 'artists' | 'search' | 'playlists' | 'settings' | 'home'
@@ -150,6 +152,12 @@ export const lyricsLines = writable<LyricLine[]>([])
 export const lyricsSynced = writable(false)
 export const lyricsTrackId = writable<string | null>(null)
 export const lyricsStatus = writable('No track playing')
+
+// ── Similar tracks ───────────────────────────────────────────────────────────
+export const similarTracksOpen = writable(false)
+export const similarTracksTrackId = writable<string | null>(null)
+export const similarTracksResults = writable<SimilarMatch[]>([])
+export const similarTracksStatus = writable('')
 
 // ── Audio bridge ──────────────────────────────────────────────────────────────
 export const audioBridge: Writable<AudioBridge | null> = writable(null)

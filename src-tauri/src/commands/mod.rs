@@ -16,10 +16,11 @@ pub use app_info::get_app_version;
 pub use lyrics::{parse_lrc, fetch_lrclib_lyrics};
 pub use cover_cache::{get_cover_art, clear_cover_cache};
 pub use subsonic::{
-    set_connection, validate_connection, get_albums, get_artists, get_album_tracks,
+    set_connection, validate_connection, get_open_subsonic_extensions, get_albums, get_artists, get_album_tracks,
     get_artist_details, get_artist_info, search, get_recent_albums, get_random_albums,
     get_newest_albums, get_genres_list, get_playlists, get_playlist_tracks, create_playlist,
-    update_playlist, delete_playlist, scrobble, get_song_lyrics,
+    update_playlist, delete_playlist, scrobble, report_playback,
+    get_sonic_similar_tracks, find_sonic_path, get_song_lyrics,
 };
 pub use playback::{
     play_stream, preload_stream, pause_playback, resume_playback, stop_playback,

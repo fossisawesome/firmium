@@ -8,6 +8,7 @@
   import { getCached, setCached } from '../lib/listCache'
   import { createAbortController } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
+  import LoadingState from '../components/LoadingState.svelte'
   import type { Album } from '../lib/types/tauri-commands'
 
   const ALBUM_ROW_HEIGHT = 60
@@ -48,13 +49,7 @@
   })
 </script>
 
-{#if loading}
-  <div class="loading-msg">Loading albums…</div>
-{:else if error}
-  <div class="loading-msg error-msg">{error}</div>
-{:else if albums.length === 0}
-  <div class="loading-msg">No albums found.</div>
-{:else}
+<LoadingState {loading} {error} empty={albums.length === 0} loadingMessage="Loading albums…" emptyMessage="No albums found.">
   <VirtualList items={flatAlbums} itemHeight={ALBUM_ROW_HEIGHT}>
     {#snippet children(album, _index)}
       <div
@@ -83,4 +78,4 @@
       </div>
     {/snippet}
   </VirtualList>
-{/if}
+</LoadingState>

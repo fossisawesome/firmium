@@ -41,6 +41,13 @@ export interface Song {
   trackInfo?: string
 }
 
+// A song paired with a similarity score, from the sonicSimilarity extension
+// (getSonicSimilarTracks/findSonicPath).
+export interface SimilarMatch {
+  song: Song
+  similarity: number
+}
+
 export type PlaybackState = 'loading' | 'playing' | 'paused' | 'stopped'
 
 export interface AudioDevice {

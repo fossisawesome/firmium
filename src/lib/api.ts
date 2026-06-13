@@ -2,7 +2,7 @@ import { tauriInvoke } from './tauri'
 import { SafeStorage } from './utils'
 import { get } from 'svelte/store'
 import { authServer, getQueryParams } from './stores'
-import type { Album, Artist, Song, LyricsResult } from './types/tauri-commands'
+import type { Album, Artist, Song, LyricsResult, SimilarMatch } from './types/tauri-commands'
 import { getCoverArt } from './coverCache'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -90,6 +90,16 @@ export const Api = {
   scrobble: (id: string, submission: boolean, time: number = Date.now()): void => {
     tauriInvoke('scrobble', { id, submission, time }).catch(() => {})
   },
+
+  // Reports playback state/position via the playbackReport OpenSubsonic extension.
+  // No-op on the Rust side if the server hasn't advertised the extension.
+  reportPlayback: (id: string, positionMs: number, playbackState: 'starting' | 'playing' | 'paused' | 'stopped'): void => {
+    tauriInvoke('report_playback', { mediaId: id, positionMs, playbackState }).catch(() => {})
+  },
+
+  // Audio-similar tracks for a song via the sonicSimilarity OpenSubsonic extension.
+  getSonicSimilarTracks: async (id: string, count?: number): Promise<SimilarMatch[]> =>
+    tauriInvoke('get_sonic_similar_tracks', { id, count }),
 
   // ── Playlist API (OpenSubsonic) ───────────────────────────────────────────────
 

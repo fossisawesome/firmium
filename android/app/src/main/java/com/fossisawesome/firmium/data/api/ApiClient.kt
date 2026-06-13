@@ -34,6 +34,14 @@ class ApiClient(private val auth: AuthManager) {
 
     // ── Core fetch ─────────────────────────────────────────────────────────────
 
+    // OpenSubsonic extensions advertised by the server, refreshed on every response.
+    // Mirrors ConnectionState.open_subsonic_extensions on desktop.
+    @Volatile
+    var openSubsonicExtensions: Set<String> = emptySet()
+        private set
+
+    fun hasExtension(name: String): Boolean = openSubsonicExtensions.contains(name)
+
     private suspend fun fetch(action: String, params: Map<String, String> = emptyMap()): JsonObject {
         val url = auth.buildUrl(action, params)
         return withContext(Dispatchers.IO) {
@@ -41,6 +49,9 @@ class ApiClient(private val auth: AuthManager) {
             val body = response.body?.string() ?: error("Empty response from $action")
             val root = JsonParser.parseString(body).asJsonObject
             val data = root.getAsJsonObject("subsonic-response")
+            data.getAsJsonArray("openSubsonicExtensions")?.let { extensions ->
+                openSubsonicExtensions = extensions.mapNotNull { it.asJsonObject.get("name")?.asString }.toSet()
+            }
             if (data.get("status").asString != "ok") {
                 val code = data.getAsJsonObject("error")?.get("code")?.asInt
                 val msg = data.getAsJsonObject("error")?.get("message")?.asString
@@ -175,6 +186,42 @@ class ApiClient(private val auth: AuthManager) {
                 "time" to System.currentTimeMillis().toString(),
             ))
         } catch (_: Exception) { /* scrobble failures are non-fatal */ }
+    }
+
+    // ── Playback reporting ────────────────────────────────────────────────────
+
+    // Reports playback state/position via the playbackReport OpenSubsonic extension
+    // (reportPlayback). No-op if the server hasn't advertised the extension.
+    suspend fun reportPlayback(songId: String, positionMs: Long, state: String) {
+        if (!hasExtension("playbackReport")) return
+        try {
+            fetch("reportPlayback", mapOf(
+                "mediaId" to songId,
+                "mediaType" to "song",
+                "positionMs" to positionMs.toString(),
+                "state" to state,
+            ))
+        } catch (_: Exception) { /* report failures are non-fatal */ }
+    }
+
+    // ── Sonic similarity ──────────────────────────────────────────────────────
+
+    data class SimilarMatch(val song: Song, val similarity: Double)
+
+    // Fetches audio-similar tracks via the sonicSimilarity OpenSubsonic extension
+    // (getSonicSimilarTracks). Throws if the server hasn't advertised the extension,
+    // so callers can hide the feature.
+    suspend fun getSonicSimilarTracks(songId: String, count: Int? = null): List<SimilarMatch> {
+        if (!hasExtension("sonicSimilarity")) error("sonicSimilarity not supported")
+        val params = mutableMapOf("id" to songId)
+        count?.let { params["count"] = it.toString() }
+        val data = fetch("getSonicSimilarTracks", params)
+        return data.getAsJsonArray("sonicMatch")
+            ?.map {
+                val obj = it.asJsonObject
+                SimilarMatch(parseSong(obj.getAsJsonObject("entry")), obj.get("similarity")?.asDouble ?: 0.0)
+            }
+            ?: emptyList()
     }
 
     // ── Lyrics ─────────────────────────────────────────────────────────────────

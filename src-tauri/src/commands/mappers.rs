@@ -189,3 +189,23 @@ pub fn map_artists(artists: Vec<serde_json::Value>) -> Vec<Artist> {
 pub fn map_songs(songs: Vec<serde_json::Value>) -> Vec<Song> {
     songs.iter().map(map_song).collect()
 }
+
+/// A song paired with a similarity score, returned by the `sonicSimilarity`
+/// OpenSubsonic extension (`getSonicSimilarTracks`/`findSonicPath`).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SimilarMatch {
+    song: Song,
+    similarity: f64,
+}
+
+/// Map a batch of raw `sonicMatches` entries (`{entry, similarity}`) to typed SimilarMatch structs.
+pub fn map_similar_matches(matches: Vec<serde_json::Value>) -> Vec<SimilarMatch> {
+    matches
+        .iter()
+        .map(|m| SimilarMatch {
+            song: map_song(m.get("entry").unwrap_or(&serde_json::Value::Null)),
+            similarity: m.get("similarity").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        })
+        .collect()
+}

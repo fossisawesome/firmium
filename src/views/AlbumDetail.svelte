@@ -9,6 +9,7 @@
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration, createAbortController } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
+  import LoadingState from '../components/LoadingState.svelte'
   import type { Song } from '../lib/types/tauri-commands'
 
   const TRACK_ROW_HEIGHT = 56
@@ -67,11 +68,7 @@
 
 </div>
 
-{#if loading}
-  <div class="loading-msg">Loading album tracks…</div>
-{:else if error}
-  <div class="loading-msg error-msg">{error}</div>
-{:else}
+<LoadingState {loading} {error} empty={tracks.length === 0} loadingMessage="Loading album tracks…" emptyMessage="No tracks found.">
   <div class="track-list">
     <VirtualList items={tracks} itemHeight={TRACK_ROW_HEIGHT}>
       {#snippet children(track, idx)}
@@ -103,4 +100,4 @@
       {/snippet}
     </VirtualList>
   </div>
-{/if}
+</LoadingState>

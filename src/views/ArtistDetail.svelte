@@ -2,6 +2,7 @@
   import { IconMusic, IconList, IconPlay } from '../lib/icons'
   import { onMount } from 'svelte'
   import { queue, currentTrack, navToAlbum } from '../lib/stores'
+  import LoadingState from '../components/LoadingState.svelte'
   import { Api, Keyring, loadImage } from '../lib/api'
   import { playAt } from '../lib/playback'
   import { showPlaylistMenu } from '../lib/playlistMenu'
@@ -129,11 +130,7 @@ let { id }: { id: string } = $props()
 </div>
 
 
-{#if loading}
-  <div class="loading-msg">Loading artist profile…</div>
-{:else if error}
-  <div class="loading-msg error-msg">{error}</div>
-{:else}
+<LoadingState {loading} {error} empty={!groups.Albums.length && !groups.EPs.length && !groups.Singles.length} loadingMessage="Loading artist profile…" emptyMessage="No releases found.">
   {#each ['Albums', 'EPs', 'Singles'] as const as category}
     {#if groups[category].length > 0}
       <div class="release-group-title">{category}</div>
@@ -167,4 +164,4 @@ let { id }: { id: string } = $props()
       </VirtualList>
     {/if}
   {/each}
-{/if}
+</LoadingState>

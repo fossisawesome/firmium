@@ -3,6 +3,7 @@
   import {
     isAuthed, setAuth, clearAuth, navToView,
     authServer, activeView, lyricsOpen, currentTrack,
+    openSubsonicExtensions,
   } from './lib/stores'
   import { SafeStorage } from './lib/utils'
   import { Keyring } from './lib/api'
@@ -16,6 +17,7 @@
   import Sidebar from './components/Sidebar.svelte'
   import PlayerBar from './components/PlayerBar.svelte'
   import LyricsPanel from './components/LyricsPanel.svelte'
+  import SimilarTracksPanel from './components/SimilarTracksPanel.svelte'
   import PlaylistMenu from './components/PlaylistMenu.svelte'
   import AlbumList from './views/AlbumList.svelte'
   import AlbumDetail from './views/AlbumDetail.svelte'
@@ -125,6 +127,7 @@
       if (err === 'SESSION_EXPIRED') throw new Error('Wrong username or password')
       throw err
     }
+    openSubsonicExtensions.set(await tauriInvoke<string[]>('get_open_subsonic_extensions'))
     navToView('home')
   }
 
@@ -167,6 +170,7 @@
     </div>
   </div>
   <LyricsPanel />
+  <SimilarTracksPanel />
   <PlayerBar />
   <PlaylistMenu />
 {:else}

@@ -43,6 +43,7 @@ export async function playAt(idx: number): Promise<void> {
 
     await bridge.play(streamUrl, track.id, replayGainDb(track))
     Api.scrobble(track.id, false)
+    Api.reportPlayback(track.id, 0, 'starting')
     recentlyPlayedSongs.push(track)
     await bridge.setVolume(get(volume))
     fetchAndShowLyrics(track)
@@ -78,6 +79,7 @@ export async function crossfadeToNext(nextIdx: number): Promise<void> {
     await bridge.startCrossfadeIn(streamUrl, nextTrack.id, get(volume), fadeDurationMs, replayGainDb(nextTrack))
 
     Api.scrobble(nextTrack.id, false)
+    Api.reportPlayback(nextTrack.id, 0, 'starting')
     recentlyPlayedSongs.push(nextTrack)
     fetchAndShowLyrics(nextTrack)
     document.title = `▶ ${nextTrack.title} - Firmium`
@@ -199,7 +201,10 @@ export function wireBridgeEvents(bridge: AudioBridge): void {
 
   bridge.on('finished', () => {
     const track = get(currentTrack)
-    if (track) Api.scrobble(track.id, true)
+    if (track) {
+      Api.scrobble(track.id, true)
+      Api.reportPlayback(track.id, (get(trackDuration) ?? track.duration ?? 0) * 1000, 'stopped')
+    }
 
     if (get(repeatOne)) {
       repeatOne.set(false)

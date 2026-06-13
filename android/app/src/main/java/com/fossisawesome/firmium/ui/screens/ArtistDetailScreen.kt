@@ -1,26 +1,20 @@
 package com.fossisawesome.firmium.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
@@ -138,7 +132,13 @@ fun ArtistDetailScreen(
                                 )
                             }
                             items(albums, key = { it.id }) { album ->
-                                ArtistAlbumRow(album, coverUrlFor(album.coverArt), onAlbumClick, onAddAlbum)
+                                AlbumRow(
+                                    album = album,
+                                    coverUrl = coverUrlFor(album.coverArt),
+                                    onAlbumClick = onAlbumClick,
+                                    onAddClick = { onAddAlbum(album.id) },
+                                    showArtist = false,
+                                )
                                 FirmiumDivider()
                             }
                         }
@@ -153,41 +153,6 @@ fun ArtistDetailScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ArtistAlbumRow(
-    album: Album,
-    coverUrl: String?,
-    onAlbumClick: (String) -> Unit,
-    onAddClick: (String) -> Unit,
-) {
-    val colors = LocalFirmiumColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { onAlbumClick(album.id) }.padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        CoverImage(
-            url = coverUrl,
-            contentDescription = album.name,
-            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
-                .background(colors.surface2),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                album.name, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
-                fontSize = 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            val meta = listOfNotNull(album.year?.toString()).joinToString(" · ")
-            if (meta.isNotBlank()) {
-                Text(meta, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
-            }
-        }
-        FirmiumIconButton(onClick = { onAddClick(album.id) }, modifier = Modifier.size(36.dp)) {
-            FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(18.dp))
         }
     }
 }

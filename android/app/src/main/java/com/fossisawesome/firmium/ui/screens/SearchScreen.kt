@@ -12,7 +12,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
@@ -29,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
@@ -173,8 +171,14 @@ fun SearchScreen(
                             modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
                     }
                     itemsIndexed(state.albums, key = { _, a -> "album_${a.id}" }) { _, album ->
-                        SearchAlbumRow(album = album, coverUrl = coverUrlFor(album.coverArt),
-                            onAlbumClick = onAlbumClick, onAddClick = { onAddAlbum(album.id) })
+                        AlbumRow(
+                            album = album,
+                            coverUrl = coverUrlFor(album.coverArt),
+                            onAlbumClick = onAlbumClick,
+                            onAddClick = { onAddAlbum(album.id) },
+                            coverSize = 40.dp,
+                            coverRadius = 8.dp,
+                        )
                         FirmiumDivider()
                     }
                 }
@@ -265,34 +269,6 @@ private fun SearchTrackRow(
         ) {
             FirmiumIcon(Icons.Default.PlaylistAdd, contentDescription = "Add to playlist",
                 tint = colors.muted, modifier = Modifier.size(16.dp))
-        }
-    }
-}
-
-// Album row matching .album-row: padding 10dp, gap 16dp.
-@Composable
-private fun SearchAlbumRow(album: Album, coverUrl: String?, onAlbumClick: (String) -> Unit, onAddClick: () -> Unit = {}) {
-    val colors = LocalFirmiumColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onAlbumClick(album.id) }
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        CoverImage(
-            url = coverUrl,
-            contentDescription = null,
-            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = album.name, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = colors.text, maxLines = 1)
-            Spacer(Modifier.height(2.dp))
-            Text(text = album.artist, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted, maxLines = 1)
-        }
-        FirmiumIconButton(onClick = onAddClick, modifier = Modifier.size(36.dp)) {
-            FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(18.dp))
         }
     }
 }

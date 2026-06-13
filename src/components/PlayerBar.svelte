@@ -3,15 +3,16 @@
   import {
     currentTrack, playbackState, currentPosition, trackDuration, isSeeking,
     volume, repeatOne, repeatAll, audioBridge,
-    lyricsOpen, setVolume, activeStreamInfo
+    lyricsOpen, setVolume, activeStreamInfo,
+    hasSonicSimilarity, similarTracksOpen, similarTracksTrackId, similarTracksResults, similarTracksStatus
   } from '../lib/stores'
   import { fetchAndShowLyrics } from '../lib/playback'
   import { formatDuration } from '../lib/utils'
-  import { loadImage } from '../lib/api'
+  import { Api, loadImage } from '../lib/api'
   import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls'
   import {
     IconPlay, IconPause, IconLoading, IconPrev, IconNext,
-    IconRepeat, IconLyrics, IconVolume, IconMusic
+    IconRepeat, IconLyrics, IconVolume, IconMusic, IconHexagon
   } from '../lib/icons'
 
   const playIcon = $derived(
@@ -36,6 +37,29 @@
     if (nowOpen) {
       const track = get(currentTrack)
       if (track) fetchAndShowLyrics(track)
+    }
+  }
+
+  async function toggleSimilarTracks() {
+    const nowOpen = !get(similarTracksOpen)
+    similarTracksOpen.set(nowOpen)
+    if (!nowOpen) return
+    const track = get(currentTrack)
+    if (!track) return
+    if (get(similarTracksTrackId) === track.id) return
+    similarTracksTrackId.set(track.id)
+    similarTracksStatus.set('Loading similar tracks…')
+    similarTracksResults.set([])
+    try {
+      const results = await Api.getSonicSimilarTracks(track.id)
+      if (get(similarTracksTrackId) !== track.id) return
+      similarTracksResults.set(results)
+      similarTracksStatus.set('')
+    } catch (e) {
+      if (get(similarTracksTrackId) === track.id) {
+        similarTracksStatus.set('Failed to load similar tracks')
+        console.error('Similar tracks error:', e)
+      }
     }
   }
 
@@ -130,5 +154,10 @@
     <button class="ctrl-btn secondary-ctrl" class:active={$lyricsOpen} onclick={toggleLyrics} title="Lyrics">
       <span class="icon" style="width:16px;height:16px">{@html IconLyrics}</span>
     </button>
+    {#if $hasSonicSimilarity}
+      <button class="ctrl-btn secondary-ctrl" class:active={$similarTracksOpen} onclick={toggleSimilarTracks} title="Similar Tracks">
+        <span class="icon" style="width:16px;height:16px">{@html IconHexagon}</span>
+      </button>
+    {/if}
   </div>
 </div>

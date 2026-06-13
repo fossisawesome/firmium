@@ -72,6 +72,7 @@ fun FullScreenPlayer(
     onShuffleToggle: () -> Unit,
     onQueueOpen: () -> Unit,
     onLyricsOpen: () -> Unit,
+    onSimilarTracksOpen: (() -> Unit)? = null,
     onAddToPlaylist: (playlistId: String) -> Unit,
     onCreatePlaylistAndAdd: (name: String) -> Unit,
 ) {
@@ -202,6 +203,7 @@ fun FullScreenPlayer(
                         onPrevious = onPrevious, onPlayPause = onPlayPause, onNext = onNext,
                         onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
                         onAddToPlaylist = { showAddToPlaylist = true }, onQueueOpen = onQueueOpen,
+                        onSimilarTracksOpen = onSimilarTracksOpen,
                         onVolumeChange = onVolumeChange, compact = true,
                     )
                 }
@@ -240,6 +242,7 @@ fun FullScreenPlayer(
                     onPrevious = onPrevious, onPlayPause = onPlayPause, onNext = onNext,
                     onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
                     onAddToPlaylist = { showAddToPlaylist = true }, onQueueOpen = onQueueOpen,
+                    onSimilarTracksOpen = onSimilarTracksOpen,
                     onVolumeChange = onVolumeChange, compact = false,
                 )
 
@@ -318,6 +321,7 @@ private fun PlayerControls(
     onRepeatCycle: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onQueueOpen: () -> Unit,
+    onSimilarTracksOpen: (() -> Unit)? = null,
     onVolumeChange: (Float) -> Unit,
     compact: Boolean,
 ) {
@@ -457,6 +461,12 @@ private fun PlayerControls(
         FirmiumCircleButton(size = secSize, onClick = onQueueOpen) {
             FirmiumIcon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue",
                 tint = colors.muted, modifier = Modifier.size(22.dp))
+        }
+        if (onSimilarTracksOpen != null) {
+            FirmiumCircleButton(size = secSize, onClick = onSimilarTracksOpen) {
+                FirmiumIcon(Icons.Default.Hub, contentDescription = "Similar Tracks",
+                    tint = colors.muted, modifier = Modifier.size(22.dp))
+            }
         }
     }
 

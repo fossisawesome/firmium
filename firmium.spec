@@ -2,7 +2,7 @@
 %global shortcommit %(git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
 
 Name:           firmium
-Version:        5.2.0
+Version:        5.3.0
 Release:        1
 Summary:        OpenSubsonic music streaming desktop client
 
@@ -54,5 +54,5 @@ cp -r usr/* %{buildroot}/usr/ 2>/dev/null || true
 /usr/share/icons/hicolor/*/apps/firmium.svg
 
 %changelog
-* Fri Jun 12 2026 fossisawesome <fossisawesome AT github DOT com> - 5.2.0-1
+* Sat Jun 13 2026 fossisawesome <fossisawesome AT github DOT com> - 5.3.0-1
 - Initial packaging for COPR

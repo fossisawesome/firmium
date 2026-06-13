@@ -33,6 +33,12 @@ data class PlayerState(
     val hasPrev: Boolean get() = queueIndex > 0
 }
 
+data class SimilarTracksState(
+    val isLoading: Boolean = false,
+    val matches: List<ApiClient.SimilarMatch> = emptyList(),
+    val error: String? = null,
+)
+
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val audioPlayer: AudioPlayer = getApplication<FirmiumApplication>().audioPlayer
@@ -46,6 +52,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val lyrics = LyricsController(viewModelScope, api)
     val lyricsState: StateFlow<LyricsState> = lyrics.state
+
+    private val _similarTracksState = MutableStateFlow(SimilarTracksState())
+    val similarTracksState: StateFlow<SimilarTracksState> = _similarTracksState.asStateFlow()
 
     private var currentPlayerId: String? = null
     private var positionJob: Job? = null
@@ -83,6 +92,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(queueIndex = index) }
                 updateNowPlayingNotification()
                 viewModelScope.launch { scrobbleCurrent(false) }
+                viewModelScope.launch { reportPlaybackCurrent("starting", 0L) }
                 fetchLyricsForCurrent()
             }
 
@@ -90,6 +100,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 if (playerId != currentPlayerId) return
                 stopPositionTracking()
                 viewModelScope.launch { scrobbleCurrent(true) }
+                viewModelScope.launch { reportPlaybackCurrent("stopped", (_state.value.trackDuration * 1000).toLong()) }
                 onTrackEnded()
             }
         }
@@ -124,6 +135,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(queue = songs, queueIndex = actualIndex, playbackState = "loading", currentPosition = 0.0) }
         updateNowPlayingNotification()
         viewModelScope.launch { scrobbleCurrent(false) }
+        viewModelScope.launch { reportPlaybackCurrent("starting", 0L) }
         fetchLyricsForCurrent()
     }
 
@@ -137,8 +149,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Transport controls ─────────────────────────────────────────────────────
 
-    fun pause() { currentPlayerId?.let { audioPlayer.pause(it) } }
-    fun resume() { currentPlayerId?.let { audioPlayer.resume(it) } }
+    fun pause() {
+        currentPlayerId?.let { audioPlayer.pause(it) }
+        viewModelScope.launch { reportPlaybackCurrent("paused") }
+    }
+
+    fun resume() {
+        currentPlayerId?.let { audioPlayer.resume(it) }
+        viewModelScope.launch { reportPlaybackCurrent("playing") }
+    }
 
     fun togglePlayPause() {
         when (_state.value.playbackState) {
@@ -218,6 +237,26 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun openLyrics() { lyrics.open() }
     fun closeLyrics() { lyrics.close() }
 
+    // ── Similar tracks ─────────────────────────────────────────────────────────
+
+    fun hasSonicSimilarity(): Boolean = api.hasExtension("sonicSimilarity")
+
+    fun fetchSimilarTracks() {
+        val track = _state.value.currentTrack ?: return
+        _similarTracksState.value = SimilarTracksState(isLoading = true)
+        viewModelScope.launch {
+            _similarTracksState.value = try {
+                SimilarTracksState(matches = api.getSonicSimilarTracks(track.id))
+            } catch (e: Exception) {
+                SimilarTracksState(error = "No similar tracks found")
+            }
+        }
+    }
+
+    fun clearSimilarTracks() {
+        _similarTracksState.value = SimilarTracksState()
+    }
+
     // ── Internal helpers ───────────────────────────────────────────────────────
 
     private fun fetchLyricsForCurrent() {
@@ -242,6 +281,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(queueIndex = nextIdx, currentPosition = 0.0) }
         updateNowPlayingNotification()
         viewModelScope.launch { scrobbleCurrent(false) }
+        viewModelScope.launch { reportPlaybackCurrent("starting", 0L) }
         fetchLyricsForCurrent()
     }
 
@@ -278,6 +318,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun scrobbleCurrent(submission: Boolean) {
         val trackId = _state.value.currentTrack?.id ?: return
         api.scrobble(trackId, submission)
+    }
+
+    private suspend fun reportPlaybackCurrent(state: String, positionMs: Long? = null) {
+        val s = _state.value
+        val trackId = s.currentTrack?.id ?: return
+        api.reportPlayback(trackId, positionMs ?: (s.currentPosition * 1000).toLong(), state)
     }
 
     private fun startPositionTracking() {

@@ -6,7 +6,7 @@
 
 use crate::commands::auth::generate_auth_params;
 use crate::commands::lyrics::{fetch_lrclib_lyrics, LyricLine, LyricsResult};
-use crate::commands::mappers::{map_albums, map_artists, map_songs, Album, Artist, Song};
+use crate::commands::mappers::{map_albums, map_artists, map_similar_matches, map_songs, Album, Artist, SimilarMatch, Song};
 use crate::state::{AppState, ConnectionState};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
@@ -78,6 +78,18 @@ async fn subsonic_request(
     }
 
     Ok(body)
+}
+
+/// Checks whether the connected server has advertised the given OpenSubsonic extension.
+fn has_extension(state: &AppState, name: &str) -> bool {
+    state.connection.read().open_subsonic_extensions.as_deref().unwrap_or(&[]).iter().any(|e| e == name)
+}
+
+/// Returns the OpenSubsonic extensions advertised by the connected server, as
+/// detected from the most recent API response.
+#[tauri::command]
+pub fn get_open_subsonic_extensions(state: State<'_, Arc<AppState>>) -> Vec<String> {
+    state.connection.read().open_subsonic_extensions.clone().unwrap_or_default()
 }
 
 fn array_field(body: &serde_json::Value, path: &[&str]) -> Vec<serde_json::Value> {
@@ -349,12 +361,66 @@ pub async fn delete_playlist(app: AppHandle, state: State<'_, Arc<AppState>>, id
 #[tauri::command]
 pub fn scrobble(app: AppHandle, state: State<'_, Arc<AppState>>, id: String, submission: bool, time: i64) {
     let state = state.inner().clone();
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let params = [("id", id), ("submission", submission.to_string()), ("time", time.to_string())];
         if let Err(e) = subsonic_request(&app, &state, "scrobble", &params, true).await {
             eprintln!("Scrobble failed: {e}");
         }
     });
+}
+
+/// Reports playback state/position via the `playbackReport` OpenSubsonic extension
+/// (`reportPlayback`). No-op if the server hasn't advertised the extension.
+/// Fire-and-forget, like `scrobble`.
+#[tauri::command]
+pub fn report_playback(app: AppHandle, state: State<'_, Arc<AppState>>, media_id: String, position_ms: i64, playback_state: String) {
+    let state = state.inner().clone();
+    if has_extension(&state, "playbackReport") {
+        tauri::async_runtime::spawn(async move {
+            let params = [
+                ("mediaId", media_id),
+                ("mediaType", "song".to_string()),
+                ("positionMs", position_ms.to_string()),
+                ("state", playback_state),
+            ];
+            if let Err(e) = subsonic_request(&app, &state, "reportPlayback", &params, true).await {
+                eprintln!("Report playback failed: {e}");
+            }
+        });
+    }
+}
+
+// ── Sonic Similarity ─────────────────────────────────────────────────────────
+
+/// Fetches audio-similar tracks for a song via the `sonicSimilarity` OpenSubsonic
+/// extension (`getSonicSimilarTracks`). Errors if the server hasn't advertised
+/// the extension, so the frontend can hide the feature.
+#[tauri::command]
+pub async fn get_sonic_similar_tracks(app: AppHandle, state: State<'_, Arc<AppState>>, id: String, count: Option<i32>) -> Result<Vec<SimilarMatch>, String> {
+    if !has_extension(&state, "sonicSimilarity") {
+        return Err("sonicSimilarity not supported".to_string());
+    }
+    let mut params = vec![("id", id)];
+    if let Some(count) = count {
+        params.push(("count", count.to_string()));
+    }
+    let body = subsonic_request(&app, &state, "getSonicSimilarTracks", &params, false).await?;
+    Ok(map_similar_matches(array_field(&body, &["sonicMatch"])))
+}
+
+/// Finds a transition path of audio-similar tracks between two songs via the
+/// `sonicSimilarity` OpenSubsonic extension (`findSonicPath`).
+#[tauri::command]
+pub async fn find_sonic_path(app: AppHandle, state: State<'_, Arc<AppState>>, start_song_id: String, end_song_id: String, count: Option<i32>) -> Result<Vec<SimilarMatch>, String> {
+    if !has_extension(&state, "sonicSimilarity") {
+        return Err("sonicSimilarity not supported".to_string());
+    }
+    let mut params = vec![("startSongId", start_song_id), ("endSongId", end_song_id)];
+    if let Some(count) = count {
+        params.push(("count", count.to_string()));
+    }
+    let body = subsonic_request(&app, &state, "findSonicPath", &params, false).await?;
+    Ok(map_similar_matches(array_field(&body, &["sonicMatch"])))
 }
 
 // ── Lyrics ───────────────────────────────────────────────────────────────────

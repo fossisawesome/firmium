@@ -49,6 +49,7 @@
     "clear_cover_cache",
     "set_connection",
     "validate_connection",
+    "get_open_subsonic_extensions",
     "get_albums",
     "get_artists",
     "get_album_tracks",
@@ -65,6 +66,9 @@
     "update_playlist",
     "delete_playlist",
     "scrobble",
+    "report_playback",
+    "get_sonic_similar_tracks",
+    "find_sonic_path",
     "get_song_lyrics"
   ]
 }
