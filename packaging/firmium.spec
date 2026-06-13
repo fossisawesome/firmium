@@ -10,12 +10,12 @@ Version:        VERSION_PLACEHOLDER
 Release:        1%{?dist}
 Summary:        Cross-platform OpenSubsonic music streaming client
 License:        MIT
-URL:            https://github.com/fossisawesome/firmium-desktop
+URL:            https://github.com/fossisawesome/firmium
 BuildArch:      x86_64
 ExclusiveArch:  x86_64
 
 # Downloads the pre-built Tauri RPM from GitHub Releases instead of recompiling.
-Source0:        https://github.com/fossisawesome/firmium-desktop/releases/download/vVERSION_PLACEHOLDER/RPM_FILENAME_PLACEHOLDER
+Source0:        https://github.com/fossisawesome/firmium/releases/download/vVERSION_PLACEHOLDER/RPM_FILENAME_PLACEHOLDER
 
 BuildRequires:  cpio
 
