@@ -246,7 +246,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         _similarTracksState.value = SimilarTracksState(isLoading = true)
         viewModelScope.launch {
             _similarTracksState.value = try {
-                SimilarTracksState(matches = api.getSonicSimilarTracks(track.id))
+                val matches = if (hasSonicSimilarity()) {
+                    api.getSonicSimilarTracks(track.id)
+                } else {
+                    api.getSimilarTracksFallback(track.id, track.artistId, track.genres.firstOrNull())
+                }
+                if (matches.isEmpty()) SimilarTracksState(error = "No similar tracks found")
+                else SimilarTracksState(matches = matches)
             } catch (e: Exception) {
                 SimilarTracksState(error = "No similar tracks found")
             }

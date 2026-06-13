@@ -106,6 +106,7 @@ pub fn run() {
             report_playback,
             get_sonic_similar_tracks,
             find_sonic_path,
+            get_similar_tracks_fallback,
             get_song_lyrics,
         ])
         .run(tauri::generate_context!())

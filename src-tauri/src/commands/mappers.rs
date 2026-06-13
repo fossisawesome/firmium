@@ -37,6 +37,7 @@ pub struct Song {
     id: String,
     title: String,
     artist: String,
+    artist_id: Option<String>,
     album: String,
     album_id: Option<String>,
     duration: f64,
@@ -52,6 +53,12 @@ pub struct Song {
     suffix: Option<String>,
     content_type: Option<String>,
     track_info: Option<String>,
+}
+
+impl Song {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 }
 
 /// Formats a "FLAC · 44.1 kHz · 16-bit · 1234 kbps"-style summary of a song's
@@ -154,6 +161,7 @@ fn map_song(s: &serde_json::Value) -> Song {
         title: s.get("title").and_then(|v| v.as_str()).unwrap_or("Unknown Track").to_string(),
         artist: s.get("displayArtist").or_else(|| s.get("artist"))
             .and_then(|v| v.as_str()).unwrap_or("Unknown Artist").to_string(),
+        artist_id: s.get("artistId").and_then(|v| v.as_str()).map(str::to_string),
         album: s.get("album").and_then(|v| v.as_str()).unwrap_or("Unknown Album").to_string(),
         album_id: s.get("albumId").and_then(|v| v.as_str()).map(|v| v.to_string()),
         duration: s.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0),
@@ -197,6 +205,12 @@ pub fn map_songs(songs: Vec<serde_json::Value>) -> Vec<Song> {
 pub struct SimilarMatch {
     song: Song,
     similarity: f64,
+}
+
+impl SimilarMatch {
+    pub fn new(song: Song, similarity: f64) -> Self {
+        SimilarMatch { song, similarity }
+    }
 }
 
 /// Map a batch of raw `sonicMatches` entries (`{entry, similarity}`) to typed SimilarMatch structs.

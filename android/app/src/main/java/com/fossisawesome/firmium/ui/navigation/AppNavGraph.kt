@@ -460,12 +460,10 @@ fun AppNavGraph(
             },
             onShuffleToggle = { playerViewModel.toggleShuffle() },
             onQueueOpen = { showQueue = true },
-            onSimilarTracksOpen = if (playerViewModel.hasSonicSimilarity()) {
-                {
-                    playerViewModel.fetchSimilarTracks()
-                    showSimilarTracks = true
-                }
-            } else null,
+            onSimilarTracksOpen = {
+                playerViewModel.fetchSimilarTracks()
+                showSimilarTracks = true
+            },
             onLyricsOpen = {
                 playerViewModel.openLyrics()
                 showLyrics = true

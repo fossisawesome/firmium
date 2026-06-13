@@ -61,7 +61,7 @@ async fn subsonic_request(
 
     if let Some(ext) = body.get("openSubsonicExtensions") {
         state.connection.write().open_subsonic_extensions = ext.as_array().map(|arr| {
-            arr.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()
+            arr.iter().filter_map(|v| v.get("name").and_then(|n| n.as_str()).map(str::to_string)).collect()
         });
     }
 
@@ -122,7 +122,12 @@ pub fn set_connection(state: State<'_, Arc<AppState>>, server: Option<String>, u
 #[tauri::command]
 pub async fn validate_connection(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), String> {
     match subsonic_request(&app, &state, "getAlbumList2", &[("type", "alphabeticalByName".to_string()), ("size", "1".to_string())], true).await {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            // openSubsonicExtensions is only included on this dedicated endpoint,
+            // not on regular responses like getAlbumList2.
+            let _ = subsonic_request(&app, &state, "getOpenSubsonicExtensions", &[], true).await;
+            Ok(())
+        }
         Err(e) => {
             *state.connection.write() = ConnectionState::default();
             Err(e)
@@ -421,6 +426,49 @@ pub async fn find_sonic_path(app: AppHandle, state: State<'_, Arc<AppState>>, st
     }
     let body = subsonic_request(&app, &state, "findSonicPath", &params, false).await?;
     Ok(map_similar_matches(array_field(&body, &["sonicMatch"])))
+}
+
+/// Fallback "similar tracks" for servers without `sonicSimilarity`: combines
+/// genre-matched songs (`getSongsByGenre`) and tracks by Last.fm-similar artists
+/// (`getArtistInfo2` → `getTopSongs`), with synthetic similarity scores so the
+/// existing Similar Tracks UI keeps working unchanged.
+#[tauri::command]
+pub async fn get_similar_tracks_fallback(app: AppHandle, state: State<'_, Arc<AppState>>, song_id: String, artist_id: Option<String>, genre: Option<String>, count: Option<i32>) -> Result<Vec<SimilarMatch>, String> {
+    use rand::seq::SliceRandom;
+
+    let count = count.unwrap_or(10).max(1) as usize;
+    let mut matches: Vec<SimilarMatch> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    seen.insert(song_id.clone());
+
+    if let Some(genre) = genre {
+        if let Ok(body) = subsonic_request(&app, &state, "getSongsByGenre", &[("genre", genre), ("count", (count * 2).to_string())], true).await {
+            for song in map_songs(array_field(&body, &["songsByGenre", "song"])) {
+                if seen.insert(song.id().to_string()) {
+                    matches.push(SimilarMatch::new(song, 0.55));
+                }
+            }
+        }
+    }
+
+    if let Some(artist_id) = artist_id {
+        if let Ok(body) = subsonic_request(&app, &state, "getArtistInfo2", &[("id", artist_id), ("count", "5".to_string())], true).await {
+            for similar in array_field(&body, &["artistInfo2", "similarArtist"]).iter().take(3) {
+                let Some(name) = similar.get("name").and_then(|v| v.as_str()) else { continue };
+                if let Ok(top_body) = subsonic_request(&app, &state, "getTopSongs", &[("artist", name.to_string()), ("count", "2".to_string())], true).await {
+                    for song in map_songs(array_field(&top_body, &["topSongs", "song"])) {
+                        if seen.insert(song.id().to_string()) {
+                            matches.push(SimilarMatch::new(song, 0.45));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    matches.shuffle(&mut rand::rng());
+    matches.truncate(count);
+    Ok(matches)
 }
 
 // ── Lyrics ───────────────────────────────────────────────────────────────────

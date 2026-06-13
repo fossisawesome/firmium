@@ -101,6 +101,11 @@ export const Api = {
   getSonicSimilarTracks: async (id: string, count?: number): Promise<SimilarMatch[]> =>
     tauriInvoke('get_sonic_similar_tracks', { id, count }),
 
+  // Fallback "similar tracks" for servers without sonicSimilarity: matches by genre
+  // and by Last.fm-backed similar artists (via getArtistInfo2/getTopSongs).
+  getSimilarTracksFallback: async (songId: string, artistId: string | undefined, genre: string | undefined, count?: number): Promise<SimilarMatch[]> =>
+    tauriInvoke('get_similar_tracks_fallback', { songId, artistId, genre, count }),
+
   // ── Playlist API (OpenSubsonic) ───────────────────────────────────────────────
 
   // Returns all playlists visible to the current user from the server.

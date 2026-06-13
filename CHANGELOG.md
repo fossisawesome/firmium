@@ -1,3 +1,16 @@
+# v5.4.0
+
+## Added
+
+- **Similar Tracks fallback for servers without `sonicSimilarity`** (`src-tauri/src/commands/subsonic.rs::get_similar_tracks_fallback`, `mappers.rs::SimilarMatch::new`, Android `ApiClient.kt::getSimilarTracksFallback`): combines genre-matched songs (`getSongsByGenre`, similarity 0.55) and tracks from Last.fm-similar artists (`getArtistInfo2` → `getTopSongs`, similarity 0.45), shuffled and capped to `count`. The Similar Tracks button in `PlayerBar.svelte` and the Android player are now always shown (previously hidden without `sonicSimilarity`); `toggleSimilarTracks`/`PlayerViewModel.fetchSimilarTracks` pick `get_sonic_similar_tracks` or the new fallback based on `hasSonicSimilarity`.
+- **`Song.artistId`** (`mappers.rs::map_song`, `src/lib/types/tauri-commands.ts`): mapped from `artistId`, used to drive the similar-artists lookup in the fallback above.
+
+## Fixed
+
+- **`openSubsonicExtensions` detection** (`subsonic.rs::subsonic_request`/`validate_connection`): extension entries are objects (`{name, versions}`), not strings — `open_subsonic_extensions` now reads `.name` from each entry. `validate_connection` also calls `getOpenSubsonicExtensions` directly, since regular endpoints like `getAlbumList2` don't include the `openSubsonicExtensions` field.
+
+---
+
 # v5.3.0
 
 ## Added

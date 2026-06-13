@@ -40,6 +40,17 @@
     }
   }
 
+  function firstGenre(track: { genres?: unknown }): string | undefined {
+    const genres = track.genres
+    if (!Array.isArray(genres) || genres.length === 0) return undefined
+    const first = genres[0]
+    if (typeof first === 'object' && first !== null && 'name' in first) {
+      const name = (first as { name?: unknown }).name
+      return typeof name === 'string' ? name : undefined
+    }
+    return typeof first === 'string' ? first : undefined
+  }
+
   async function toggleSimilarTracks() {
     const nowOpen = !get(similarTracksOpen)
     similarTracksOpen.set(nowOpen)
@@ -51,7 +62,9 @@
     similarTracksStatus.set('Loading similar tracks…')
     similarTracksResults.set([])
     try {
-      const results = await Api.getSonicSimilarTracks(track.id)
+      const results = get(hasSonicSimilarity)
+        ? await Api.getSonicSimilarTracks(track.id)
+        : await Api.getSimilarTracksFallback(track.id, track.artistId, firstGenre(track), 10)
       if (get(similarTracksTrackId) !== track.id) return
       similarTracksResults.set(results)
       similarTracksStatus.set('')
@@ -154,10 +167,8 @@
     <button class="ctrl-btn secondary-ctrl" class:active={$lyricsOpen} onclick={toggleLyrics} title="Lyrics">
       <span class="icon" style="width:16px;height:16px">{@html IconLyrics}</span>
     </button>
-    {#if $hasSonicSimilarity}
-      <button class="ctrl-btn secondary-ctrl" class:active={$similarTracksOpen} onclick={toggleSimilarTracks} title="Similar Tracks">
-        <span class="icon" style="width:16px;height:16px">{@html IconHexagon}</span>
-      </button>
-    {/if}
+    <button class="ctrl-btn secondary-ctrl" class:active={$similarTracksOpen} onclick={toggleSimilarTracks} title="Similar Tracks">
+      <span class="icon" style="width:16px;height:16px">{@html IconHexagon}</span>
+    </button>
   </div>
 </div>

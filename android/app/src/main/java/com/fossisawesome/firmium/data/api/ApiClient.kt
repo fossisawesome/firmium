@@ -224,6 +224,43 @@ class ApiClient(private val auth: AuthManager) {
             ?: emptyList()
     }
 
+    // Fallback "similar tracks" for servers without sonicSimilarity: matches by genre
+    // (getSongsByGenre, similarity 0.55) and by Last.fm-backed similar artists
+    // (getArtistInfo2 -> getTopSongs, similarity 0.45). Never throws.
+    suspend fun getSimilarTracksFallback(songId: String, artistId: String?, genre: String?, count: Int = 10): List<SimilarMatch> {
+        val results = mutableListOf<SimilarMatch>()
+        val seenIds = mutableSetOf(songId)
+
+        if (!genre.isNullOrBlank()) {
+            try {
+                val data = fetch("getSongsByGenre", mapOf("genre" to genre, "count" to (count * 2).toString()))
+                data.getAsJsonObject("songsByGenre")?.getAsJsonArray("song")?.forEach {
+                    val song = parseSong(it.asJsonObject)
+                    if (seenIds.add(song.id)) results.add(SimilarMatch(song, 0.55))
+                }
+            } catch (_: Exception) { /* genre lookup is best-effort */ }
+        }
+
+        if (!artistId.isNullOrBlank()) {
+            try {
+                val data = fetch("getArtistInfo2", mapOf("id" to artistId, "count" to "5"))
+                val similarArtists = data.getAsJsonObject("artistInfo2")?.getAsJsonArray("similarArtist") ?: emptyList()
+                for (similar in similarArtists.take(3)) {
+                    val name = similar.asJsonObject.get("name")?.asString ?: continue
+                    try {
+                        val topData = fetch("getTopSongs", mapOf("artist" to name, "count" to "2"))
+                        topData.getAsJsonObject("topSongs")?.getAsJsonArray("song")?.forEach {
+                            val song = parseSong(it.asJsonObject)
+                            if (seenIds.add(song.id)) results.add(SimilarMatch(song, 0.45))
+                        }
+                    } catch (_: Exception) { /* per-artist lookup is best-effort */ }
+                }
+            } catch (_: Exception) { /* similar-artist lookup is best-effort */ }
+        }
+
+        return results.shuffled().take(count)
+    }
+
     // ── Lyrics ─────────────────────────────────────────────────────────────────
 
     data class LyricsResult(val lines: List<LyricLine>, val synced: Boolean)
