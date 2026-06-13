@@ -195,3 +195,20 @@ jobs:
               name: path.basename(apk),
               data: fs.readFileSync(apk),
             })
+
+  publish-release:
+    needs: [create-release, build, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              draft: false,
+            })
