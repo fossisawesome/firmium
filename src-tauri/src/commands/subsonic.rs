@@ -160,10 +160,10 @@ pub async fn get_artists(app: AppHandle, state: State<'_, Arc<AppState>>) -> Res
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumTracks {
-    tracks: Vec<Song>,
-    album_name: String,
-    album_artist: String,
-    cover_art_id: Option<String>,
+    pub tracks: Vec<Song>,
+    pub album_name: String,
+    pub album_artist: String,
+    pub cover_art_id: Option<String>,
 }
 
 #[tauri::command]
@@ -393,6 +393,54 @@ pub fn report_playback(app: AppHandle, state: State<'_, Arc<AppState>>, media_id
             }
         });
     }
+}
+
+// ── Play Queue (cross-device continue) ──────────────────────────────────────
+
+/// Saves the current queue/position to the server via `savePlayQueue`, so it can be
+/// resumed on another device. Fire-and-forget, like `scrobble`.
+#[tauri::command]
+pub fn save_play_queue(app: AppHandle, state: State<'_, Arc<AppState>>, ids: Vec<String>, current: Option<String>, position_ms: Option<i64>) {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn(async move {
+        let mut params: Vec<(&str, String)> = ids.into_iter().map(|id| ("id", id)).collect();
+        if let Some(c) = current { params.push(("current", c)); }
+        if let Some(p) = position_ms { params.push(("position", p.to_string())); }
+        if let Err(e) = subsonic_request(&app, &state, "savePlayQueue", &params, true).await {
+            eprintln!("Save play queue failed: {e}");
+        }
+    });
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemotePlayQueue {
+    pub entries: Vec<Song>,
+    pub current: Option<String>,
+    pub position_ms: Option<i64>,
+    pub changed_by: Option<String>,
+}
+
+/// Fetches the last saved play queue from the server via `getPlayQueue`, for
+/// resuming playback that was started on another device. Returns `None` if no
+/// queue has been saved.
+#[tauri::command]
+pub async fn get_play_queue(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<Option<RemotePlayQueue>, String> {
+    let body = subsonic_request(&app, &state, "getPlayQueue", &[], true).await?;
+    let queue = body.get("playQueue").cloned();
+    let Some(queue) = queue else { return Ok(None) };
+
+    let entries = map_songs(array_field(&queue, &["entry"]));
+    if entries.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(RemotePlayQueue {
+        entries,
+        current: queue.get("current").and_then(|v| v.as_str()).map(str::to_string),
+        position_ms: queue.get("position").and_then(|v| v.as_i64()),
+        changed_by: queue.get("changedBy").and_then(|v| v.as_str()).map(str::to_string),
+    }))
 }
 
 // ── Sonic Similarity ─────────────────────────────────────────────────────────

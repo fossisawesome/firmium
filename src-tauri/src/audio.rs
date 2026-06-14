@@ -214,6 +214,8 @@ pub struct AudioPlayer {
     /// stream mid-crossfade would silence whichever session is on the old
     /// mixer, so reopens are deferred until the fade completes.
     crossfade_in_progress: AtomicBool,
+    /// Shared state for the audio visualizer (sample ring buffer + analysis toggle).
+    pub(crate) visualizer: Arc<crate::visualizer::VisualizerState>,
 }
 
 impl AudioPlayer {
@@ -234,6 +236,9 @@ impl AudioPlayer {
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
+        let visualizer = Arc::new(crate::visualizer::VisualizerState::new());
+        crate::visualizer::spawn_analysis_task(app_handle.clone(), Arc::clone(&visualizer));
+
         Ok(AudioPlayer {
             sessions: Arc::new(RwLock::new(std::collections::HashMap::new())),
             output: RwLock::new(OutputDevice {
@@ -246,12 +251,18 @@ impl AudioPlayer {
             app_handle,
             bit_perfect_enabled: AtomicBool::new(true),
             crossfade_in_progress: AtomicBool::new(false),
+            visualizer,
         })
     }
 
     /// Enable or disable bit-perfect output stream reopening.
     pub fn set_bit_perfect_enabled(&self, enabled: bool) {
         self.bit_perfect_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Enable or disable the audio visualizer analysis task.
+    pub fn set_visualizer_enabled(&self, enabled: bool) {
+        self.visualizer.set_enabled(enabled);
     }
 
     /// Reopen the output device to match `target_rate`/`target_channels` if they
@@ -429,6 +440,10 @@ impl AudioPlayer {
                         source
                     };
 
+                    // Tap samples for the audio visualizer (no-op when disabled).
+                    let amplified: Box<dyn Source<Item = f32> + Send> =
+                        Box::new(crate::visualizer::tap(amplified, Arc::clone(&player.visualizer)));
+
                     // Fade-in over 25ms to eliminate the start-of-playback pop.
                     let amplified = amplified.fade_in(Duration::from_millis(25));
 
@@ -567,6 +582,12 @@ impl AudioPlayer {
         client: reqwest::blocking::Client,
         url: &str,
     ) -> Result<DecodedSource, String> {
+        // Local library tracks are passed as `file://<absolute path>` instead of an
+        // HTTP URL — decode directly from disk via a seekable BufReader<File>.
+        if let Some(path) = url.strip_prefix("file://") {
+            return Self::decode_local_file(path);
+        }
+
         let response = client
             .get(url)
             .send()
@@ -589,6 +610,23 @@ impl AudioPlayer {
         let channel_count = source.channels().get();
 
         Ok((Box::new(source), duration, shared_buffer, sample_rate, channel_count))
+    }
+
+    /// Open and decode a local audio file from disk (local library / downloaded tracks).
+    ///
+    /// `BufReader<File>` is natively `Read + Seek`, so backward seeks work directly
+    /// through the decoder without the in-memory buffer rebuild used for HTTP streams.
+    fn decode_local_file(path: &str) -> Result<DecodedSource, String> {
+        let file = std::fs::File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+        let reader = BufReader::with_capacity(256 * 1024, file);
+        let source =
+            Decoder::try_from(reader).map_err(|e| format!("Failed to decode audio: {}", e))?;
+
+        let duration = source.total_duration().map(|d| d.as_secs_f64());
+        let sample_rate = source.sample_rate().get();
+        let channel_count = source.channels().get();
+
+        Ok((Box::new(source), duration, Arc::new(Mutex::new(Vec::new())), sample_rate, channel_count))
     }
 
     /// Pause playback for a session.

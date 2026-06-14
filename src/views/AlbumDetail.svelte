@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { IconMusic, IconList, IconPlay } from '../lib/icons'
-  import { onMount } from 'svelte'
-  import { get } from 'svelte/store'
-  import { queue, queueIdx, currentTrack, navBack } from '../lib/stores'
-  import { Api, loadImage } from '../lib/api'
-  import { playAt } from '../lib/playback'
-  import { showPlaylistMenu } from '../lib/playlistMenu'
+  import { IconMusic } from '../lib/icons'
+  import { currentTrack } from '../lib/stores'
+  import { loadImage, Api } from '../lib/api'
+  import { dataSource } from '../lib/dataSource'
+  import { dataSourceVersion } from '../lib/stores'
+  import { setQueueSeamless } from '../lib/playback'
   import { lazyLoad } from '../lib/lazyLoad'
-  import { formatDuration, createAbortController } from '../lib/utils'
+  import { createAbortController } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
   import LoadingState from '../components/LoadingState.svelte'
+  import TrackRow from '../components/TrackRow.svelte'
   import type { Song } from '../lib/types/tauri-commands'
 
   const TRACK_ROW_HEIGHT = 56
@@ -27,25 +27,49 @@
 
   const isCurrentTrackHere = $derived($currentTrack && tracks.some(t => t.id === $currentTrack!.id))
 
-  onMount(async () => {
+  let downloadedKeys = $state<Set<string>>(new Set())
+
+  function trackKey(trackNumber: number | null | undefined, title: string): string {
+    return `${trackNumber ?? ''}|${title.trim().toLowerCase()}`
+  }
+
+  function isDownloaded(track: Song): boolean {
+    return downloadedKeys.has(trackKey(track.trackNumber, track.title))
+  }
+
+  $effect(() => {
+    const source = $dataSource
+    $dataSourceVersion
+    const albumId = id
+    loading = true
+    error = ''
     const signal = abortCtrl.renew()
-    try {
-      const result = await Api.getAlbumTracks(id, signal)
-      if (signal.aborted) return
-      tracks = result.tracks
-      albumName = result.albumName
-      albumArtist = result.albumArtist
-      coverArtId = result.coverArtId
-    } catch (e: any) {
-      if (!signal.aborted) error = e.message
-    } finally {
-      if (!signal.aborted) loading = false
-    }
+    ;(async () => {
+      try {
+        const result = await source.getAlbumTracks(albumId, signal)
+        if (signal.aborted) return
+        tracks = result.tracks
+        albumName = result.albumName
+        albumArtist = result.albumArtist
+        coverArtId = result.coverArtId
+
+        try {
+          const localKeys = await Api.getLocalAlbumTrackKeys(albumArtist, albumName)
+          if (signal.aborted) return
+          downloadedKeys = new Set(localKeys.map(k => trackKey(k.trackNumber, k.title)))
+        } catch (_) {
+          downloadedKeys = new Set()
+        }
+      } catch (e: any) {
+        if (!signal.aborted) error = e.message
+      } finally {
+        if (!signal.aborted) loading = false
+      }
+    })()
   })
 
   function playTrack(idx: number) {
-    queue.set(tracks)
-    playAt(idx)
+    setQueueSeamless(tracks, idx)
   }
 
   function isPlaying(track: Song) {
@@ -72,31 +96,14 @@
   <div class="track-list">
     <VirtualList items={tracks} itemHeight={TRACK_ROW_HEIGHT}>
       {#snippet children(track, idx)}
-        <div
-          class="track-row"
-          class:playing={isPlaying(track)}
-          role="button"
-          tabindex="0"
-          onclick={() => playTrack(idx)}
-          onkeydown={e => (e.key === 'Enter' || e.key === ' ') && playTrack(idx)}
-        >
-          <div class="track-num">{track.trackNumber ?? idx + 1}</div>
-          <div class="track-thumb">
-            {#if track.coverArtId}
-              <img use:lazyLoad={img => loadImage(img, track.coverArtId, abortCtrl.signal)} alt="" />
-            {/if}
-          </div>
-          <div class="track-info">
-            <div class="track-title">{track.title}</div>
-            <div class="track-artist">{track.artist}</div>
-          </div>
-          <div class="track-duration">{formatDuration(track.duration)}</div>
-          <button
-            class="track-add-btn"
-            title="Add to playlist"
-            onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
-          >+</button>
-        </div>
+        <TrackRow
+          {track} {idx}
+          playing={isPlaying(track)}
+          signal={abortCtrl.signal}
+          {albumArtist}
+          downloaded={isDownloaded(track)}
+          onPlay={playTrack}
+        />
       {/snippet}
     </VirtualList>
   </div>

@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { audioBridge, currentTrack, currentPosition, queue, queueIdx, repeatOne, repeatAll, shuffleEnabled } from './stores'
-import { playAt } from './playback'
+import { playAt, schedulePlayQueueSave } from './playback'
 import { Api } from './api'
 
 export async function togglePlay(): Promise<void> {
@@ -14,6 +14,7 @@ export async function togglePlay(): Promise<void> {
   } else if (state === 'playing') {
     await bridge.pause()
     if (track) Api.reportPlayback(track.id, get(currentPosition) * 1000, 'paused')
+    schedulePlayQueueSave()
   } else if (!state || state === 'stopped') playAt(get(queueIdx))
 }
 

@@ -3,6 +3,7 @@
   import { playlistMenuState, hidePlaylistMenu, switchToCreate } from '../lib/playlistMenu'
   import { playlists } from '../lib/stores'
   import { Api } from '../lib/api'
+  import { dataSource } from '../lib/dataSource'
   import type { Song } from '../lib/types/tauri-commands'
 
   let newPlaylistName = $state('')
@@ -57,7 +58,7 @@
       await syncAddTracks(playlistId, pending.tracks)
     } else if (pending.type === 'album') {
       try {
-        const { tracks } = await Api.getAlbumTracks(pending.albumId)
+        const { tracks } = await $dataSource.getAlbumTracks(pending.albumId)
         await syncAddTracks(playlistId, tracks)
       } catch (err) {
         console.error('Failed to add album to playlist:', err)
@@ -84,7 +85,7 @@
       await syncAddTracks(newPl.id, pending.tracks)
     } else if (pending.type === 'album') {
       try {
-        const { tracks } = await Api.getAlbumTracks(pending.albumId)
+        const { tracks } = await $dataSource.getAlbumTracks(pending.albumId)
         await syncAddTracks(newPl.id, tracks)
       } catch (err) {
         console.error('Failed to add album to new playlist:', err)

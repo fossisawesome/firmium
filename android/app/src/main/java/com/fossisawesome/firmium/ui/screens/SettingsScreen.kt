@@ -50,6 +50,7 @@ fun SettingsScreen(
     lastfmApiKey: String,
     lastfmSecret: String,
     autoLoginEnabled: Boolean,
+    downloadFormat: String,
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
@@ -59,6 +60,7 @@ fun SettingsScreen(
     onLastfmApiKeyChange: (String) -> Unit,
     onLastfmSecretChange: (String) -> Unit,
     onAutoLoginToggle: (Boolean) -> Unit,
+    onDownloadFormatSelected: (String) -> Unit,
     onWipeCache: () -> Unit,
     onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
@@ -75,6 +77,7 @@ fun SettingsScreen(
         lastfmApiKey = lastfmApiKey,
         lastfmSecret = lastfmSecret,
         autoLoginEnabled = autoLoginEnabled,
+        downloadFormat = downloadFormat,
         onCrossfadeToggle = onCrossfadeToggle,
         onCrossfadeDurationChange = onCrossfadeDurationChange,
         onGaplessToggle = onGaplessToggle,
@@ -84,6 +87,7 @@ fun SettingsScreen(
         onLastfmApiKeyChange = onLastfmApiKeyChange,
         onLastfmSecretChange = onLastfmSecretChange,
         onAutoLoginToggle = onAutoLoginToggle,
+        onDownloadFormatSelected = onDownloadFormatSelected,
         onWipeCache = onWipeCache,
         onClearCache = onClearCache,
         onResetSettings = onResetSettings,
@@ -99,9 +103,20 @@ private data class Category(val id: String, val label: String, val icon: ImageVe
 private val CATEGORIES = listOf(
     Category("appearance", "Appearance", Icons.Default.Palette),
     Category("playback",   "Playback",   Icons.Default.PlayArrow),
+    Category("downloads",  "Downloads",  Icons.Default.Download),
     Category("services",   "Services",   Icons.Default.Language),
     Category("account",    "Account",    Icons.Default.Person),
     Category("about",      "About",      Icons.Default.Info),
+)
+
+private data class DownloadFormatOption(val id: String, val name: String)
+
+private val FORMAT_OPTIONS = listOf(
+    DownloadFormatOption("original", "Original"),
+    DownloadFormatOption("mp3",      "MP3"),
+    DownloadFormatOption("flac",     "FLAC"),
+    DownloadFormatOption("wav",      "WAV"),
+    DownloadFormatOption("opus",     "Opus"),
 )
 
 @Composable
@@ -116,6 +131,7 @@ private fun FirmiumSettingsScreen(
     lastfmApiKey: String,
     lastfmSecret: String,
     autoLoginEnabled: Boolean,
+    downloadFormat: String,
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
@@ -125,6 +141,7 @@ private fun FirmiumSettingsScreen(
     onLastfmApiKeyChange: (String) -> Unit,
     onLastfmSecretChange: (String) -> Unit,
     onAutoLoginToggle: (Boolean) -> Unit,
+    onDownloadFormatSelected: (String) -> Unit,
     onWipeCache: () -> Unit,
     onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
@@ -242,6 +259,10 @@ private fun FirmiumSettingsScreen(
                             onCrossfadeDurationChange = onCrossfadeDurationChange,
                             onGaplessToggle = onGaplessToggle,
                         )
+                        "downloads" -> FirmiumDownloadsPanel(
+                            downloadFormat = downloadFormat,
+                            onDownloadFormatSelected = onDownloadFormatSelected,
+                        )
                         "services" -> FirmiumServicesPanel(
                             lrclibEnabled = lrclibEnabled,
                             lastfmEnabled = lastfmEnabled,
@@ -310,6 +331,84 @@ private fun FirmiumAppearancePanel(
         Text("Color Theme", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
             color = colors.muted, modifier = Modifier.padding(bottom = 4.dp))
         ThemeDropdown(currentThemeId = currentThemeId, onThemeSelected = onThemeSelected)
+    }
+}
+
+@Composable
+private fun FirmiumDownloadsPanel(
+    downloadFormat: String,
+    onDownloadFormatSelected: (String) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Download Format", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            color = colors.muted, modifier = Modifier.padding(bottom = 4.dp))
+        Text(
+            "Format used when downloading tracks and albums. \"Original\" saves the file exactly as stored on the server.",
+            fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+        )
+        FormatDropdown(downloadFormat = downloadFormat, onFormatSelected = onDownloadFormatSelected)
+    }
+}
+
+@Composable
+private fun FormatDropdown(downloadFormat: String, onFormatSelected: (String) -> Unit) {
+    val colors = LocalFirmiumColors.current
+    val current = FORMAT_OPTIONS.find { it.id == downloadFormat } ?: FORMAT_OPTIONS.first()
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(6.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(current.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                color = colors.text, modifier = Modifier.weight(1f))
+            FirmiumIcon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp),
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .background(colors.surface),
+            ) {
+                FORMAT_OPTIONS.forEachIndexed { i, fmt ->
+                    if (i > 0) FirmiumDivider(color = colors.border)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onFormatSelected(fmt.id); expanded = false }
+                            .background(if (fmt.id == downloadFormat) colors.surface2.copy(alpha = 0.5f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            fmt.name, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            color = if (fmt.id == downloadFormat) colors.accent else colors.text,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (fmt.id == downloadFormat) {
+                            FirmiumIcon(Icons.Default.Check, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

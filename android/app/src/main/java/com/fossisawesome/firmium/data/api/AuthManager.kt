@@ -92,6 +92,12 @@ class AuthManager(
         return buildUrl("stream", extra)
     }
 
+    // Download URL for a track. "original" maps to format=raw (server's source file).
+    fun downloadUrl(songId: String, format: String): String {
+        val fmt = if (format == "original") "raw" else format
+        return buildUrl("stream", mapOf("id" to songId, "format" to fmt))
+    }
+
     // Cover art URL — stable within a session so Coil can cache by URL.
     // Uses a per-session fixed salt+token rather than a fresh UUID each call.
     fun coverArtUrl(coverId: String, size: Int? = null): String {

@@ -3,11 +3,11 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, bitPerfectEnabled, setBitPerfectEnabled, clearAuth, navToView } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, bitPerfectEnabled, setBitPerfectEnabled, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
-  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo } from '../lib/icons'
+  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload } from '../lib/icons'
   import type { Theme } from '../lib/types/tauri-commands'
 
   interface Props {
@@ -23,17 +23,19 @@
     'firmium_auto_login', 'firmium_lrclib', 'firmium_theme',
     'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
     'firmium_volume', 'firmium_gapless', 'firmium_lastfm', 'firmium_bit_perfect',
+    'firmium_download_format',
   ]
 
   // ── Active category ───────────────────────────────────────────────────────────
   let activeCategory = $state('appearance')
 
   const CATEGORIES = [
-    { id: 'appearance', label: 'Appearance', icon: IconPalette },
-    { id: 'playback',   label: 'Playback',   icon: IconPlay    },
-    { id: 'services',   label: 'Services',   icon: IconGlobe   },
-    { id: 'account',    label: 'Account',    icon: IconUser    },
-    { id: 'debug',      label: 'Debug',      icon: IconInfo    },
+    { id: 'appearance', label: 'Appearance', icon: IconPalette  },
+    { id: 'playback',   label: 'Playback',   icon: IconPlay     },
+    { id: 'downloads',  label: 'Downloads',  icon: IconDownload },
+    { id: 'services',   label: 'Services',   icon: IconGlobe    },
+    { id: 'account',    label: 'Account',    icon: IconUser     },
+    { id: 'debug',      label: 'Debug',      icon: IconInfo     },
   ]
 
   // ── Settings state ────────────────────────────────────────────────────────────
@@ -45,6 +47,15 @@
   let lastfmSecret = $state('')
   let currentTheme = $state(SafeStorage.getItem('firmium_theme') || 'firmium')
   let themeOpen = $state(false)
+  let formatOpen = $state(false)
+
+  const FORMAT_OPTIONS = [
+    { id: 'original', name: 'Original' },
+    { id: 'mp3',      name: 'MP3'      },
+    { id: 'flac',     name: 'FLAC'     },
+    { id: 'wav',      name: 'WAV'      },
+    { id: 'opus',     name: 'Opus'     },
+  ]
 
   let appVersion = $state('Loading…')
   let wipeCacheLabel = $state('Wipe')
@@ -66,6 +77,11 @@
     currentTheme = val; themeOpen = false
     SafeStorage.setItem('firmium_theme', val)
     onapplyTheme?.(val)
+  }
+
+  function selectFormat(val: string) {
+    setDownloadFormat(val)
+    formatOpen = false
   }
 
   function handleDecorationsChange(e: Event) {
@@ -145,8 +161,8 @@
   }
 </script>
 
-<!-- Close theme dropdown when clicking outside -->
-<svelte:document onclick={() => themeOpen = false} />
+<!-- Close dropdowns when clicking outside -->
+<svelte:document onclick={() => { themeOpen = false; formatOpen = false }} />
 
 <div class="sett-layout">
 
@@ -262,6 +278,40 @@
         </label>
       </div>
 
+    {:else if activeCategory === 'downloads'}
+      <div class="sett-panel-title">Downloads</div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Download Format</div>
+          <div class="settings-desc">Format used when downloading tracks and albums. "Original" saves the file exactly as stored on the server.</div>
+        </div>
+        <div
+          class="theme-selector"
+          class:open={formatOpen}
+          role="button"
+          tabindex="0"
+          onclick={e => { e.stopPropagation(); formatOpen = !formatOpen }}
+          onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && (formatOpen = !formatOpen) }}
+        >
+          <div class="theme-selector-value">{FORMAT_OPTIONS.find(f => f.id === $downloadFormat)?.name ?? 'Original'}</div>
+          <span class="theme-selector-arrow icon" style="width:14px;height:14px">{@html IconChevronDown}</span>
+          <div class="theme-selector-dropdown">
+            {#each FORMAT_OPTIONS as fmt (fmt.id)}
+              <div
+                class="theme-option"
+                class:selected={$downloadFormat === fmt.id}
+                role="option"
+                tabindex="0"
+                aria-selected={$downloadFormat === fmt.id}
+                onclick={e => { e.stopPropagation(); selectFormat(fmt.id) }}
+                onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && selectFormat(fmt.id) }}
+              >{fmt.name}</div>
+            {/each}
+          </div>
+        </div>
+      </div>
+
     {:else if activeCategory === 'services'}
       <div class="sett-panel-title">Services</div>
 
@@ -309,6 +359,18 @@
 
       <div class="settings-row">
         <div class="settings-info">
+          <div class="settings-title">Connection</div>
+          <div class="settings-desc">{$isAuthed ? $authServer : 'Not connected — browsing local files'}</div>
+        </div>
+        {#if $isAuthed}
+          <button class="debug-btn debug-btn--danger" onclick={logout}>Disconnect</button>
+        {:else}
+          <button class="debug-btn" onclick={openAccountModal}>Connect</button>
+        {/if}
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
           <div class="settings-title">Auto-Login</div>
           <div class="settings-desc">Automatically connect on startup when credentials are saved</div>
         </div>
@@ -316,14 +378,6 @@
           <input type="checkbox" bind:checked={isAutoLoginEnabled} onchange={handleAutoLogin} />
           <span class="toggle-slider"></span>
         </label>
-      </div>
-
-      <div class="settings-row">
-        <div class="settings-info">
-          <div class="settings-title">Logout</div>
-          <div class="settings-desc">Clear stored credentials and return to login</div>
-        </div>
-        <button class="debug-btn debug-btn--danger" onclick={logout}>Logout</button>
       </div>
 
     {:else if activeCategory === 'debug'}

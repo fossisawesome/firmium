@@ -25,6 +25,7 @@ fun AlbumRow(
     coverUrl: String?,
     onAlbumClick: (String) -> Unit,
     onAddClick: () -> Unit,
+    onDownloadClick: (suspend () -> Result<Unit>)? = null,
     showArtist: Boolean = true,
     coverSize: Dp = 44.dp,
     coverRadius: Dp = 6.dp,
@@ -53,6 +54,9 @@ fun AlbumRow(
             if (meta.isNotBlank()) {
                 Text(meta, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+        }
+        if (onDownloadClick != null) {
+            DownloadButton(onDownload = onDownloadClick)
         }
         FirmiumIconButton(onClick = onAddClick, modifier = Modifier.size(36.dp)) {
             FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(18.dp))

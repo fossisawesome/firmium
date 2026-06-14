@@ -34,6 +34,7 @@ fun AlbumDetailScreen(
     onPlayAll: (List<Song>, Int) -> Unit,
     onAddToPlaylist: (playlistId: String, songs: List<Song>) -> Unit,
     onCreatePlaylistAndAdd: (name: String, songs: List<Song>) -> Unit,
+    onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
     onBack: () -> Unit,
 ) {
     LaunchedEffect(albumId) { onLoad(albumId) }
@@ -127,6 +128,7 @@ fun AlbumDetailScreen(
                             coverUrl = coverUrlFor(song.coverArt),
                             onClick = { onPlayAll(album.tracks, index) },
                             onAddClick = { pendingSong = song },
+                            onDownloadClick = onDownloadTrack?.invoke(song),
                         )
                         FirmiumDivider()
                     }
@@ -158,7 +160,14 @@ fun AlbumDetailScreen(
 
 // Track row with thumbnail, title, optional artist, duration, and a visible + add button.
 @Composable
-private fun AlbumTrackRow(track: Song, index: Int, coverUrl: String?, onClick: () -> Unit, onAddClick: () -> Unit) {
+private fun AlbumTrackRow(
+    track: Song,
+    index: Int,
+    coverUrl: String?,
+    onClick: () -> Unit,
+    onAddClick: () -> Unit,
+    onDownloadClick: (suspend () -> Result<Unit>)? = null,
+) {
     val colors = LocalFirmiumColors.current
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
@@ -189,6 +198,9 @@ private fun AlbumTrackRow(track: Song, index: Int, coverUrl: String?, onClick: (
             }
         }
         Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        if (onDownloadClick != null) {
+            DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp)
+        }
         FirmiumIconButton(onClick = onAddClick, modifier = Modifier.size(32.dp)) {
             FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(16.dp))
         }
@@ -197,7 +209,13 @@ private fun AlbumTrackRow(track: Song, index: Int, coverUrl: String?, onClick: (
 
 // Shared TrackRow used by PlaylistDetailScreen
 @Composable
-fun TrackRow(track: Song, index: Int?, isCurrentlyPlaying: Boolean, onClick: () -> Unit) {
+fun TrackRow(
+    track: Song,
+    index: Int?,
+    isCurrentlyPlaying: Boolean,
+    onClick: () -> Unit,
+    onDownloadClick: (suspend () -> Result<Unit>)? = null,
+) {
     val colors = LocalFirmiumColors.current
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -225,6 +243,9 @@ fun TrackRow(track: Song, index: Int?, isCurrentlyPlaying: Boolean, onClick: () 
         }
         Spacer(Modifier.width(8.dp))
         Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        if (onDownloadClick != null) {
+            DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp)
+        }
     }
 }
 

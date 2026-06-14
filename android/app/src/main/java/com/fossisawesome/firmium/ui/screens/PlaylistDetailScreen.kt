@@ -21,6 +21,7 @@ fun PlaylistDetailScreen(
     playlist: Playlist,
     onPlayAll: (List<Song>, Int) -> Unit,
     onRemoveTrack: (trackId: String) -> Unit,
+    onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
     onBack: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
@@ -57,6 +58,7 @@ fun PlaylistDetailScreen(
                         index = index + 1,
                         isCurrentlyPlaying = false,
                         onClick = { onPlayAll(playlist.tracks, index) },
+                        onDownloadClick = onDownloadTrack?.invoke(song),
                     )
                     FirmiumDivider()
                 }

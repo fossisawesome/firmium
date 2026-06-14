@@ -1,14 +1,11 @@
 <script lang="ts">
-  import { IconMusic, IconList, IconPlay } from '../lib/icons'
-  import { onMount } from 'svelte'
-  import { navToAlbum } from '../lib/stores'
-  import { Api, loadImage } from '../lib/api'
-  import { showPlaylistMenu } from '../lib/playlistMenu'
-  import { lazyLoad } from '../lib/lazyLoad'
+  import { dataSource } from '../lib/dataSource'
+  import { dataSourceVersion } from '../lib/stores'
   import { getCached, setCached } from '../lib/listCache'
   import { createAbortController } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
   import LoadingState from '../components/LoadingState.svelte'
+  import AlbumRow from '../components/AlbumRow.svelte'
   import type { Album } from '../lib/types/tauri-commands'
 
   const ALBUM_ROW_HEIGHT = 60
@@ -35,47 +32,33 @@
 
   const flatAlbums = $derived(grouped.flatMap(section => section.items))
 
-  onMount(async () => {
-    if (albums.length > 0) return
+  let initialized = false
+
+  $effect(() => {
+    const source = $dataSource
+    $dataSourceVersion
+    if (!initialized && albums.length > 0) { initialized = true; return }
+    initialized = true
+    loading = true
+    error = ''
     const signal = abortCtrl.renew()
-    try {
-      albums = await Api.getAlbums(signal)
-      setCached('albums', albums)
-    } catch (e: any) {
-      if (!signal.aborted) error = e.message
-    } finally {
-      if (!signal.aborted) loading = false
-    }
+    ;(async () => {
+      try {
+        albums = await source.getAlbums(signal)
+        setCached('albums', albums)
+      } catch (e: any) {
+        if (!signal.aborted) error = e.message
+      } finally {
+        if (!signal.aborted) loading = false
+      }
+    })()
   })
 </script>
 
 <LoadingState {loading} {error} empty={albums.length === 0} loadingMessage="Loading albums…" emptyMessage="No albums found.">
   <VirtualList items={flatAlbums} itemHeight={ALBUM_ROW_HEIGHT}>
     {#snippet children(album, _index)}
-      <div
-        class="album-row"
-        role="button"
-        tabindex="0"
-        onclick={() => navToAlbum(album.id)}
-        onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navToAlbum(album.id)}
-      >
-        <div class="album-art-sm">
-          {#if album.coverArtId}
-            <img use:lazyLoad={img => loadImage(img, album.coverArtId, abortCtrl.signal)} alt="" />
-          {:else}
-            <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
-          {/if}
-        </div>
-        <div class="album-info">
-          <div class="album-title">{album.name}</div>
-          <div class="album-artist">{album.albumArtist}</div>
-        </div>
-        <button
-          class="album-add-btn"
-          title="Add to playlist"
-          onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'album', albumId: album.id, albumName: album.name }) }}
-        >+</button>
-      </div>
+      <AlbumRow {album} signal={abortCtrl.signal} />
     {/snippet}
   </VirtualList>
 </LoadingState>

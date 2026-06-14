@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { navToArtist } from '../lib/stores'
-  import { Api } from '../lib/api'
+  import { dataSource } from '../lib/dataSource'
+  import { dataSourceVersion } from '../lib/stores'
   import { lazyLoad } from '../lib/lazyLoad'
   import { getCached, setCached } from '../lib/listCache'
   import { createAbortController } from '../lib/utils'
@@ -16,17 +16,26 @@
   let error = $state('')
   const abortCtrl = createAbortController()
 
-  onMount(async () => {
-    if (artists.length > 0) return
+  let initialized = false
+
+  $effect(() => {
+    const source = $dataSource
+    $dataSourceVersion
+    if (!initialized && artists.length > 0) { initialized = true; return }
+    initialized = true
+    loading = true
+    error = ''
     const signal = abortCtrl.renew()
-    try {
-      artists = await Api.getArtists(signal)
-      setCached('artists', artists)
-    } catch (e: any) {
-      if (!signal.aborted) error = e.message
-    } finally {
-      if (!signal.aborted) loading = false
-    }
+    ;(async () => {
+      try {
+        artists = await source.getArtists(signal)
+        setCached('artists', artists)
+      } catch (e: any) {
+        if (!signal.aborted) error = e.message
+      } finally {
+        if (!signal.aborted) loading = false
+      }
+    })()
   })
 
   // Fetch artist photo from the server's MusicBrainz/Last.fm integration.
@@ -39,7 +48,7 @@
       if (cached.image) img.src = cached.image
       return
     }
-    Api.getArtistInfo(artistId, abortCtrl.signal).then(info => {
+    $dataSource.getArtistInfo(artistId, abortCtrl.signal).then(info => {
       setCached(cacheKey, info ?? {})
       if (info?.image && !abortCtrl.signal?.aborted) img.src = info.image
     }).catch(() => {})

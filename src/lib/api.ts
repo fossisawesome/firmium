@@ -2,8 +2,9 @@ import { tauriInvoke } from './tauri'
 import { SafeStorage } from './utils'
 import { get } from 'svelte/store'
 import { authServer, getQueryParams } from './stores'
-import type { Album, Artist, Song, LyricsResult, SimilarMatch } from './types/tauri-commands'
+import type { Album, Artist, Song, LyricsResult, SimilarMatch, RemotePlayQueue } from './types/tauri-commands'
 import { getCoverArt } from './coverCache'
+import { loadLocalImage } from './localApi'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const PLAY_ALL_CONCURRENCY = 5
@@ -97,6 +98,16 @@ export const Api = {
     tauriInvoke('report_playback', { mediaId: id, positionMs, playbackState }).catch(() => {})
   },
 
+  // Saves the current queue/position to the server (Subsonic savePlayQueue), so
+  // playback can be resumed on another device. Fire-and-forget.
+  savePlayQueue: (ids: string[], current: string | null, positionMs: number | null): void => {
+    tauriInvoke('save_play_queue', { ids, current, positionMs }).catch(() => {})
+  },
+
+  // Fetches the last saved play queue (Subsonic getPlayQueue), for resuming
+  // playback started on another device. Returns null if nothing was saved.
+  getPlayQueue: async (): Promise<RemotePlayQueue | null> => tauriInvoke('get_play_queue'),
+
   // Audio-similar tracks for a song via the sonicSimilarity OpenSubsonic extension.
   getSonicSimilarTracks: async (id: string, count?: number): Promise<SimilarMatch[]> =>
     tauriInvoke('get_sonic_similar_tracks', { id, count }),
@@ -131,12 +142,38 @@ export const Api = {
     title: song.title,
     duration: song.duration ?? 0,
     useLrclibFallback: SafeStorage.getItem('firmium_lrclib') !== 'false',
-  })
+  }),
+
+  // ── Downloads ────────────────────────────────────────────────────────────────
+
+  // Downloads a single track into Music/Firmium/<AlbumArtist>/<Album>/, transcoded
+  // to `format` ('original', 'mp3', 'flac', 'wav', or 'opus').
+  downloadTrack: (song: Song, format: string, albumArtist?: string): Promise<void> => tauriInvoke('download_track', {
+    songId: song.id,
+    format: format === 'original' ? 'raw' : format,
+    albumArtist: albumArtist ?? song.artist,
+    album: song.album,
+    title: song.title,
+    trackNumber: song.trackNumber ?? null,
+    suffix: song.suffix ?? null,
+  }),
+
+  // Downloads every track of an album/single/EP into Music/Firmium/<AlbumArtist>/<Album>/.
+  downloadAlbum: (albumId: string, format: string): Promise<void> => tauriInvoke('download_album', {
+    albumId,
+    format: format === 'original' ? 'raw' : format,
+  }),
+
+  // (trackNumber, title) pairs for tracks already present in Music/Firmium/<albumArtist>/<album>/,
+  // used to mark matching server tracks as already downloaded.
+  getLocalAlbumTrackKeys: (albumArtist: string, album: string): Promise<{ trackNumber: number | null, title: string }[]> =>
+    tauriInvoke('get_local_album_track_keys', { albumArtist, album }),
 }
 
 // ── Cover art loader ──────────────────────────────────────────────────────────
 export async function loadImage(img: HTMLImageElement | null | undefined, coverId: string | null | undefined, signal?: AbortSignal | null): Promise<void> {
   if (!img || !coverId) return
+  if (coverId.startsWith('local:')) return loadLocalImage(img, coverId, signal)
   try {
     const url = await OpenSubsonicRouter.buildUrl('getCoverArt', { id: coverId })
     const assetUrl = await getCoverArt(coverId, url)

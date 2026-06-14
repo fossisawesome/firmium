@@ -7,6 +7,8 @@ pub mod playback;
 pub mod lyrics;
 pub mod cover_cache;
 pub mod subsonic;
+pub mod local_library;
+pub mod downloads;
 
 pub use themes::list_themes;
 pub use mappers::{map_albums, map_artists, map_songs};
@@ -20,11 +22,19 @@ pub use subsonic::{
     get_artist_details, get_artist_info, search, get_recent_albums, get_random_albums,
     get_newest_albums, get_genres_list, get_playlists, get_playlist_tracks, create_playlist,
     update_playlist, delete_playlist, scrobble, report_playback,
+    save_play_queue, get_play_queue,
     get_sonic_similar_tracks, find_sonic_path, get_similar_tracks_fallback, get_song_lyrics,
 };
 pub use playback::{
     play_stream, preload_stream, pause_playback, resume_playback, stop_playback,
     set_volume, get_volume, get_playback_state, is_playback_finished, get_track_duration,
     get_current_position, seek_position, list_audio_devices, crossfade_to,
-    set_bit_perfect_enabled,
+    set_bit_perfect_enabled, set_visualizer_enabled,
 };
+pub use local_library::{
+    get_local_albums, get_local_artists, get_local_album_tracks, get_local_album_track_keys, get_local_artist_details,
+    get_local_cover_art, get_local_track_path, search_local, get_local_recent_albums,
+    get_local_random_albums, get_local_newest_albums, get_local_genres_list,
+    import_local_files,
+};
+pub use downloads::{download_track, download_album};

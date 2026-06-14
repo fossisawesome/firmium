@@ -20,6 +20,7 @@ pub struct AudioDevice {
 
 mod audio;
 use audio::AudioPlayer;
+mod visualizer;
 mod commands;
 use commands::*;
 mod state;
@@ -77,6 +78,7 @@ pub fn run() {
             list_audio_devices,
             crossfade_to,
             set_bit_perfect_enabled,
+            set_visualizer_enabled,
             // Lyrics
             parse_lrc,
             fetch_lrclib_lyrics,
@@ -104,10 +106,29 @@ pub fn run() {
             get_open_subsonic_extensions,
             scrobble,
             report_playback,
+            save_play_queue,
+            get_play_queue,
             get_sonic_similar_tracks,
             find_sonic_path,
             get_similar_tracks_fallback,
             get_song_lyrics,
+            // Local library
+            get_local_albums,
+            get_local_artists,
+            get_local_album_tracks,
+            get_local_album_track_keys,
+            get_local_artist_details,
+            get_local_cover_art,
+            get_local_track_path,
+            search_local,
+            get_local_recent_albums,
+            get_local_random_albums,
+            get_local_newest_albums,
+            get_local_genres_list,
+            import_local_files,
+            // Downloads
+            download_track,
+            download_album,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

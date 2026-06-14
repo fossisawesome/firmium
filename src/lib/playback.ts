@@ -4,10 +4,11 @@ import {
   volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration, gaplessEnabled,
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
-  bumpToken, getPlayToken, recentlyPlayedSongs,
+  bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed,
   bitPerfectEnabled, activeStreamInfo
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
+import { getLocalTrackPath } from './localApi'
 import { tauriInvoke } from './tauri'
 import type { Song, PlaybackState } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
@@ -15,6 +16,16 @@ import type { AudioBridge } from './audio-bridge'
 const replayGainDb = (track: Song): number | null => {
   const rg = track.replayGain as { trackGain?: number; albumGain?: number } | undefined
   return rg?.trackGain ?? rg?.albumGain ?? null
+}
+
+// Local library tracks are played directly from disk via a `file://` URL
+// (audio.rs branches on this prefix instead of fetching over HTTP).
+async function streamUrlFor(track: Song): Promise<string> {
+  if (track.id.startsWith('local:')) {
+    const path = await getLocalTrackPath(track.id)
+    return `file://${path}`
+  }
+  return OpenSubsonicRouter.buildUrl('stream', { id: track.id })
 }
 
 // ── Play a track ──────────────────────────────────────────────────────────────
@@ -36,7 +47,7 @@ export async function playAt(idx: number): Promise<void> {
   const currentToken = bumpToken()
 
   try {
-    const streamUrl = await OpenSubsonicRouter.buildUrl('stream', { id: track.id })
+    const streamUrl = await streamUrlFor(track)
     if (currentToken !== getPlayToken()) return
 
     if (isGaplessPromotion && outgoing) Api.scrobble(outgoing.id, true)
@@ -44,6 +55,7 @@ export async function playAt(idx: number): Promise<void> {
     await bridge.play(streamUrl, track.id, replayGainDb(track))
     Api.scrobble(track.id, false)
     Api.reportPlayback(track.id, 0, 'starting')
+    schedulePlayQueueSave()
     recentlyPlayedSongs.push(track)
     await bridge.setVolume(get(volume))
     fetchAndShowLyrics(track)
@@ -53,6 +65,48 @@ export async function playAt(idx: number): Promise<void> {
     if (currentToken === getPlayToken()) {
       console.error('Playback error:', e)
     }
+  }
+}
+
+// ── Cross-device play queue sync ───────────────────────────────────────────────
+// Debounced save of the current queue/position to the server, so playback can be
+// resumed on another device. Local-only tracks (id starting "local:") aren't sent,
+// since the server has no record of them.
+
+const PLAY_QUEUE_SAVE_DEBOUNCE_MS = 4000
+
+let _playQueueSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+export function schedulePlayQueueSave(): void {
+  if (!get(isAuthed)) return
+  if (_playQueueSaveTimer) clearTimeout(_playQueueSaveTimer)
+  _playQueueSaveTimer = setTimeout(() => {
+    _playQueueSaveTimer = null
+    const track = get(currentTrack)
+    if (!track || track.id.startsWith('local:')) return
+    const ids = get(queue).filter(t => !t.id.startsWith('local:')).map(t => t.id)
+    if (!ids.length) return
+    Api.savePlayQueue(ids, track.id, Math.round(get(currentPosition) * 1000))
+  }, PLAY_QUEUE_SAVE_DEBOUNCE_MS)
+}
+
+// ── Switch to a new queue without interrupting playback ────────────────────────
+
+// Replaces the queue with `newQueue`. If the currently playing track is also in
+// `newQueue`, playback continues uninterrupted from its current position (only the
+// queue and the current index are updated). Otherwise behaves like `queue.set()` +
+// `playAt(startIdx)`.
+export function setQueueSeamless(newQueue: Song[], startIdx: number): void {
+  const current = get(currentTrack)
+  const matchIdx = current ? newQueue.findIndex(t => t.id === current.id) : -1
+
+  queue.set(newQueue)
+
+  if (matchIdx !== -1 && get(playbackState) !== 'stopped') {
+    queueIdx.set(matchIdx)
+  } else {
+    queueIdx.set(startIdx)
+    playAt(startIdx)
   }
 }
 
@@ -72,7 +126,7 @@ export async function crossfadeToNext(nextIdx: number): Promise<void> {
   const currentToken = bumpToken()
 
   try {
-    const streamUrl = await OpenSubsonicRouter.buildUrl('stream', { id: nextTrack.id })
+    const streamUrl = await streamUrlFor(nextTrack)
     if (currentToken !== getPlayToken()) return
 
     const fadeDurationMs = get(crossfadeDuration) * 1000
@@ -80,6 +134,7 @@ export async function crossfadeToNext(nextIdx: number): Promise<void> {
 
     Api.scrobble(nextTrack.id, false)
     Api.reportPlayback(nextTrack.id, 0, 'starting')
+    schedulePlayQueueSave()
     recentlyPlayedSongs.push(nextTrack)
     fetchAndShowLyrics(nextTrack)
     document.title = `▶ ${nextTrack.title} - Firmium`
@@ -98,9 +153,10 @@ interface TrackProgressState {
   cachedDuration: number | null
   crossfadeStarted: boolean
   preloadStarted: boolean
+  lastQueueSavePosition: number
 }
 
-let _trackProgress: TrackProgressState = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false }
+let _trackProgress: TrackProgressState = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false, lastQueueSavePosition: 0 }
 
 function _handlePositionUpdate(position: number, duration: number | null): void {
   if (!_trackProgress.cachedDuration && duration != null) {
@@ -111,6 +167,12 @@ function _handlePositionUpdate(position: number, duration: number | null): void 
   if (!get(isSeeking)) currentPosition.set(position)
 
   if (get(lyricsOpen)) syncLyricsToPosition(position)
+
+  // Periodically save the play queue/position for cross-device resume.
+  if (position - _trackProgress.lastQueueSavePosition >= 30) {
+    _trackProgress.lastQueueSavePosition = position
+    schedulePlayQueueSave()
+  }
 
   const cachedDuration = _trackProgress.cachedDuration
 
@@ -140,7 +202,7 @@ function _handlePositionUpdate(position: number, duration: number | null): void 
         const nextTrack = $queue[nextIdx]
         if (nextTrack) {
           const rgDb = replayGainDb(nextTrack)
-          OpenSubsonicRouter.buildUrl('stream', { id: nextTrack.id })
+          streamUrlFor(nextTrack)
             .then(url => get(audioBridge)?.preload(url, nextTrack.id, rgDb))
             .catch(e => console.error('Preload URL error:', e))
         }
@@ -151,7 +213,7 @@ function _handlePositionUpdate(position: number, duration: number | null): void 
 
 export function startPositionTracking(): void {
   stopPositionTracking()
-  _trackProgress = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false }
+  _trackProgress = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false, lastQueueSavePosition: 0 }
 
   // Subscribe to Rust-emitted position events — no IPC polling overhead.
   const bridge = get(audioBridge)

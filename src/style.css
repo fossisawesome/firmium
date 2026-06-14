@@ -22,6 +22,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  aspect-ratio: 1 / 1;
 }
 
 :root {
@@ -162,6 +163,117 @@ body {
   opacity: 0.9;
 }
 
+/* ── Drag-and-drop import overlay ────────────────────────────────────────── */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 600;
+  pointer-events: none;
+}
+
+.drop-overlay-content {
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  padding: 32px 48px;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+/* ── Resume queue prompt ──────────────────────────────────────────────────── */
+.resume-queue-prompt {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.resume-queue-btn, .resume-queue-dismiss {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.resume-queue-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.resume-queue-btn:hover { background: var(--accent-dim); }
+.resume-queue-dismiss:hover { background: var(--surface2); }
+
+/* ── Account modal ────────────────────────────────────────────────────────── */
+.account-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.account-modal-content {
+  position: relative;
+}
+
+.account-modal-content .setup-box {
+  width: 360px;
+}
+
+.account-modal-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  z-index: 1;
+}
+
+.account-modal-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.account-modal-server {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 1rem;
+  word-break: break-all;
+}
+
+.account-modal-disconnect {
+  background: var(--error);
+}
+
 #app {
   display: flex;
   height: 100vh;
@@ -177,6 +289,29 @@ body {
   flex-direction: column;
   padding: 20px;
   flex-shrink: 0;
+}
+
+html.sidebar-collapsed .sidebar {
+  width: 64px;
+  padding: 20px 8px;
+}
+
+html.sidebar-collapsed .nav-label,
+html.sidebar-collapsed .app-brand .server-lbl {
+  display: none;
+}
+
+html.sidebar-collapsed .nav-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+
+html.sidebar-collapsed .nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px;
 }
 
 .app-brand {
@@ -198,6 +333,26 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+}
+
+.account-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all var(--timing);
+  flex-shrink: 0;
+}
+
+.account-btn:hover {
+  color: var(--accent);
+  background: var(--surface2);
 }
 
 .nav-links {
@@ -234,24 +389,6 @@ body {
 /* On desktop the icon is decorative; hide it to keep the original text-only look */
 .nav-icon { display: none; width: 18px; height: 18px; }
 .nav-label { display: inline; }
-
-.logout-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 8px;
-  font-family: var(--font);
-  font-size: 11px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all var(--timing);
-  text-align: center;
-}
-
-.logout-btn:hover {
-  border-color: var(--error);
-  color: var(--error);
-}
 
 .main-area {
   flex: 1;
@@ -1115,6 +1252,9 @@ input[type="range"].volume-slider {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
+  margin-right: 16px;
 }
 
 .settings-title {
@@ -1126,6 +1266,9 @@ input[type="range"].volume-slider {
 .settings-desc {
   font-size: 11px;
   color: var(--muted);
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .settings-text-input {
@@ -1179,6 +1322,7 @@ input[type="range"].volume-slider {
   width: 40px;
   height: 20px;
   align-self: center;
+  flex-shrink: 0;
 }
 
 .toggle-switch input {
@@ -1277,7 +1421,8 @@ input[type="range"].volume-slider {
 
 .theme-selector {
   position: relative;
-  width: 100%;
+  width: 200px;
+  flex-shrink: 0;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
@@ -1546,6 +1691,105 @@ input[type="range"].volume-slider {
   flex-shrink: 0;
 }
 
+/* ── Visualizer Panel ─────────────────────────────────────────────────────── */
+
+.visualizer-panel {
+  width: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 75px;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.visualizer-panel.open {
+  width: 360px;
+  min-width: 360px;
+}
+
+.visualizer-safe-top {
+  height: 0;
+  flex-shrink: 0;
+}
+
+.visualizer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  flex-shrink: 0;
+}
+
+.visualizer-header-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.visualizer-mode-toggle {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.visualizer-mode-toggle button {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--timing);
+}
+
+.visualizer-mode-toggle button.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.visualizer-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all var(--timing);
+  padding: 0;
+  font-family: var(--font);
+  flex-shrink: 0;
+}
+
+.visualizer-close:hover {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.visualizer-body {
+  flex: 1;
+  padding: 12px 20px 40px;
+  display: flex;
+}
+
+.visualizer-body canvas {
+  width: 100%;
+  height: 100%;
+}
+
 /* ── Playlist add button on track rows ────────────────────────────────────── */
 
 .track-add-btn,
@@ -1619,6 +1863,54 @@ input[type="range"].volume-slider {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
+}
+
+/* ── Download buttons (track + album rows) ────────────────────────────────── */
+
+.track-download-btn,
+.album-download-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 16px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--timing), color var(--timing), border-color var(--timing), background var(--timing);
+  font-family: var(--font);
+  line-height: 1;
+}
+
+.album-download-btn {
+  margin-right: 4px;
+}
+
+.track-row:hover .track-download-btn,
+.album-row:hover .album-download-btn {
+  opacity: 1;
+}
+
+.track-download-btn:hover,
+.album-download-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.download-done {
+  opacity: 1 !important;
+  color: var(--accent) !important;
+}
+
+.download-error {
+  opacity: 1 !important;
+  color: var(--error) !important;
 }
 
 /* ── Playlist add popup menu ─────────────────────────────────────────────── */
@@ -2311,7 +2603,6 @@ html.is-mobile-layout .sidebar {
 }
 
 html.is-mobile-layout .app-brand { display: none; }
-html.is-mobile-layout .logout-btn { display: none; }
 
 html.is-mobile-layout .nav-links {
   flex-direction: row;
@@ -2459,6 +2750,26 @@ html.is-mobile-layout .similar-tracks-panel.open .similar-tracks-safe-top {
   height: env(safe-area-inset-top, 24px);
 }
 
+/* Visualizer panel → full-screen overlay, same pattern as the lyrics panel */
+html.is-mobile-layout .visualizer-panel {
+  position: fixed !important;
+  inset: 0;
+  width: 100% !important;
+  min-width: unset;
+  z-index: 400;
+  padding-bottom: calc(68px + 56px + env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+html.is-mobile-layout .visualizer-panel.open {
+  transform: translateY(0);
+}
+
+html.is-mobile-layout .visualizer-panel.open .visualizer-safe-top {
+  height: env(safe-area-inset-top, 24px);
+}
+
 html.is-mobile-layout .artist-page-header { flex-direction: column; gap: 16px; }
 html.is-mobile-layout .artist-img-circle { width: 100px; height: 100px; }
 html.is-mobile-layout .tracklist-header { flex-direction: row; align-items: center; gap: 12px; }
@@ -2466,6 +2777,7 @@ html.is-mobile-layout .tl-art { width: 64px; height: 64px; font-size: 24px; }
 html.is-mobile-layout .pl-detail-header { flex-direction: column; gap: 12px; }
 html.is-mobile-layout .settings-row { flex-direction: column; gap: 10px; align-items: flex-start; }
 html.is-mobile-layout .settings-text-input { width: 100%; }
+html.is-mobile-layout .theme-selector { width: 100%; }
 html.is-mobile-layout .home-view { padding: 16px; gap: 24px; }
 html.is-mobile-layout .home-greeting-name { font-size: 22px; }
 html.is-mobile-layout .home-card { width: 130px; }
@@ -2477,7 +2789,9 @@ html.is-mobile-layout .track-row { padding: 14px 10px; }
 /* Always show action buttons — no hover state on touch screens */
 html.is-mobile-layout .track-add-btn,
 html.is-mobile-layout .track-remove-btn,
-html.is-mobile-layout .album-add-btn { opacity: 1; }
+html.is-mobile-layout .album-add-btn,
+html.is-mobile-layout .track-download-btn,
+html.is-mobile-layout .album-download-btn { opacity: 1; }
 
 html.is-mobile-layout #setup { padding: 1rem; }
 html.is-mobile-layout .setup-box { padding: 1.5rem; }

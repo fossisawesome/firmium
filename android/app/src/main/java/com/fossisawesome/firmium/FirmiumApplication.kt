@@ -9,6 +9,8 @@ import com.fossisawesome.firmium.audio.AudioPlayer
 import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.download.DownloadManager
+import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
@@ -22,6 +24,8 @@ class FirmiumApplication : Application() {
     val secureStorage by lazy { SecureStorage(this) }
     val auth by lazy { AuthManager(secureStorage, prefs) }
     val api by lazy { ApiClient(auth) }
+    val localLibrary by lazy { LocalLibraryRepository(this) }
+    val downloadManager by lazy { DownloadManager(this, auth, localLibrary) }
     val playlists by lazy { PlaylistRepository(prefs) }
     val audioPlayer by lazy { AudioPlayer(this) }
     val nowPlaying by lazy { NowPlayingController(this) }

@@ -3,21 +3,25 @@
   import {
     isAuthed, setAuth, clearAuth, navToView,
     authServer, activeView, lyricsOpen, currentTrack,
-    openSubsonicExtensions,
+    openSubsonicExtensions, showAccountModal, bumpDataSourceVersion,
   } from './lib/stores'
   import { SafeStorage } from './lib/utils'
-  import { Keyring } from './lib/api'
+  import { Keyring, Api } from './lib/api'
+  import type { RemotePlayQueue } from './lib/types/tauri-commands'
+  import { importLocalFiles } from './lib/localApi'
   import { tauriInvoke } from './lib/tauri'
   import { listen } from '@tauri-apps/api/event'
   import { fetchAndShowLyrics } from './lib/playback'
   import { playlistMenuState, hidePlaylistMenu } from './lib/playlistMenu'
   import type { Theme } from './lib/types/tauri-commands'
 
-  import Setup from './components/Setup.svelte'
+  import AccountModal from './components/AccountModal.svelte'
+  import ResumeQueuePrompt from './components/ResumeQueuePrompt.svelte'
   import Sidebar from './components/Sidebar.svelte'
   import PlayerBar from './components/PlayerBar.svelte'
   import LyricsPanel from './components/LyricsPanel.svelte'
   import SimilarTracksPanel from './components/SimilarTracksPanel.svelte'
+  import VisualizerPanel from './components/VisualizerPanel.svelte'
   import PlaylistMenu from './components/PlaylistMenu.svelte'
   import AlbumList from './views/AlbumList.svelte'
   import AlbumDetail from './views/AlbumDetail.svelte'
@@ -31,6 +35,15 @@
 
   let setupError = $state('')
   let loadedThemes = $state<Theme[]>([])
+  let dragActive = $state(false)
+  let remoteQueue = $state<RemotePlayQueue | null>(null)
+
+  async function checkRemotePlayQueue() {
+    try {
+      const result = await Api.getPlayQueue()
+      if (result && result.entries.length > 0) remoteQueue = result
+    } catch (_) {}
+  }
 
   // Apply a theme by setting CSS custom properties directly on :root.
   // Falls back gracefully if the theme ID isn't in the loaded list.
@@ -109,6 +122,7 @@
           } catch (err: any) {
             clearAuth()
             setupError = err.message ?? 'Auto-login failed'
+            showAccountModal.set(true)
           }
         }
       } catch (_) {}
@@ -129,52 +143,106 @@
     }
     openSubsonicExtensions.set(await tauriInvoke<string[]>('get_open_subsonic_extensions'))
     navToView('home')
+    checkRemotePlayQueue()
   }
 
   function handleSessionExpired() {
     clearAuth()
     setupError = 'Session expired — please reconnect'
+    showAccountModal.set(true)
   }
 
   onMount(() => {
     const unlisten = listen('firmium:session-expired', handleSessionExpired)
     return () => { unlisten.then(f => f()) }
   })
+
+  // Collapse the sidebar to a bottom tab bar (mobile) or icon-only rail (narrow desktop)
+  // depending on available width.
+  onMount(() => {
+    const mobileQuery = window.matchMedia('(max-width: 640px)')
+    const collapsedQuery = window.matchMedia('(max-width: 900px)')
+    const update = () => {
+      document.documentElement.classList.toggle('is-mobile-layout', mobileQuery.matches)
+      document.documentElement.classList.toggle('sidebar-collapsed', collapsedQuery.matches && !mobileQuery.matches)
+    }
+    update()
+    mobileQuery.addEventListener('change', update)
+    collapsedQuery.addEventListener('change', update)
+    return () => {
+      mobileQuery.removeEventListener('change', update)
+      collapsedQuery.removeEventListener('change', update)
+    }
+  })
+
+  // Dragging audio files/folders onto the window copies them into ~/Music/Firmium.
+  onMount(() => {
+    let unlisten: (() => void) | undefined
+    ;(async () => {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      unlisten = await getCurrentWindow().onDragDropEvent(async (event) => {
+        switch (event.payload.type) {
+          case 'enter':
+          case 'over':
+            dragActive = true
+            break
+          case 'drop':
+            dragActive = false
+            try {
+              await importLocalFiles(event.payload.paths)
+              bumpDataSourceVersion()
+            } catch (e) {
+              console.error('Import failed:', e)
+            }
+            break
+          default:
+            dragActive = false
+        }
+      })
+    })()
+    return () => { unlisten?.() }
+  })
 </script>
 
-{#if $isAuthed}
-  <div class="sidebar">
-    <Sidebar />
+<div class="sidebar">
+  <Sidebar />
+</div>
+<div class="main-area">
+  <div class="list-panel">
+    {#if $activeView.type === 'home'}
+      <HomeView />
+    {:else if $activeView.type === 'albums'}
+      <AlbumList />
+    {:else if $activeView.type === 'album'}
+      <AlbumDetail id={$activeView.id!} />
+    {:else if $activeView.type === 'artists'}
+      <ArtistList />
+    {:else if $activeView.type === 'artist'}
+      <ArtistDetail id={$activeView.id!} />
+    {:else if $activeView.type === 'search'}
+      <SearchView />
+    {:else if $activeView.type === 'playlists'}
+      <PlaylistsView />
+    {:else if $activeView.type === 'playlist'}
+      <PlaylistDetail id={$activeView.id!} />
+    {:else if $activeView.type === 'settings'}
+      <Settings onapplyTheme={applyThemeById} onapplyDecorations={applyDecorations} themes={loadedThemes} />
+    {/if}
   </div>
-  <div class="main-area">
-    <div class="list-panel">
-      {#if $activeView.type === 'home'}
-        <HomeView />
-      {:else if $activeView.type === 'albums'}
-        <AlbumList />
-      {:else if $activeView.type === 'album'}
-        <AlbumDetail id={$activeView.id!} />
-      {:else if $activeView.type === 'artists'}
-        <ArtistList />
-      {:else if $activeView.type === 'artist'}
-        <ArtistDetail id={$activeView.id!} />
-      {:else if $activeView.type === 'search'}
-        <SearchView />
-      {:else if $activeView.type === 'playlists'}
-        <PlaylistsView />
-      {:else if $activeView.type === 'playlist'}
-        <PlaylistDetail id={$activeView.id!} />
-      {:else if $activeView.type === 'settings'}
-        <Settings onapplyTheme={applyThemeById} onapplyDecorations={applyDecorations} themes={loadedThemes} />
-      {/if}
-    </div>
-  </div>
-  <LyricsPanel />
-  <SimilarTracksPanel />
-  <PlayerBar />
-  <PlaylistMenu />
-{:else}
-  <div id="setup">
-    <Setup bind:error={setupError} {doConnect} />
+</div>
+<LyricsPanel />
+<SimilarTracksPanel />
+<VisualizerPanel />
+<PlayerBar />
+<PlaylistMenu />
+{#if $showAccountModal}
+  <AccountModal bind:error={setupError} {doConnect} />
+{/if}
+{#if remoteQueue}
+  <ResumeQueuePrompt {remoteQueue} onDismiss={() => remoteQueue = null} />
+{/if}
+{#if dragActive}
+  <div class="drop-overlay">
+    <div class="drop-overlay-content">Drop to add to your library</div>
   </div>
 {/if}

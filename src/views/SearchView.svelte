@@ -1,8 +1,9 @@
 <script lang="ts">
   import { IconMusic, IconList, IconPlay } from '../lib/icons'
-  import { queue, currentTrack, navToAlbum } from '../lib/stores'
-  import { Api, loadImage } from '../lib/api'
-  import { playAt } from '../lib/playback'
+  import { currentTrack, navToAlbum } from '../lib/stores'
+  import { loadImage } from '../lib/api'
+  import { dataSource } from '../lib/dataSource'
+  import { setQueueSeamless } from '../lib/playback'
   import { showPlaylistMenu } from '../lib/playlistMenu'
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration, createAbortController } from '../lib/utils'
@@ -25,7 +26,7 @@
     error = ''
     searched = false
     try {
-      const results = await Api.search(query.trim(), signal)
+      const results = await $dataSource.search(query.trim(), signal)
       if (signal.aborted) return
       songs = results.songs
       albums = results.albums
@@ -38,8 +39,7 @@
   }
 
   function playTrack(idx: number) {
-    queue.set(songs)
-    playAt(idx)
+    setQueueSeamless(songs, idx)
   }
 
   function isPlaying(track: Song) {

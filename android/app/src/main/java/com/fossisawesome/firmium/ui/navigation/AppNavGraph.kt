@@ -48,6 +48,7 @@ import coil.imageLoader
 import com.fossisawesome.firmium.BuildConfig
 import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.screens.*
@@ -101,6 +102,7 @@ fun AppNavGraph(
     playlistViewModel: PlaylistViewModel,
     currentThemeId: String,
     onThemeSelected: (String) -> Unit,
+    onAccountClick: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as FirmiumApplication
@@ -115,6 +117,25 @@ fun AppNavGraph(
     val lrclibEnabled by app.prefs.lrclibEnabled.collectAsStateWithLifecycle(initialValue = true)
     val lastfmEnabled by app.prefs.lastfmEnabled.collectAsStateWithLifecycle(initialValue = false)
     val autoLoginEnabled by app.prefs.autoLoginEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val downloadFormat by app.prefs.downloadFormat.collectAsStateWithLifecycle(initialValue = "original")
+
+    // Download callbacks — only offered when connected to a server (local-library tracks are
+    // already on disk). Returned as suspend lambdas so DownloadButton can drive its own state.
+    val onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = if (auth.isAuthenticated) {
+        { song -> { app.downloadManager.downloadTrack(song, downloadFormat) } }
+    } else null
+    val onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = if (auth.isAuthenticated) {
+        { album ->
+            {
+                try {
+                    val full = app.api.getAlbumDetail(album.id)
+                    app.downloadManager.downloadAlbum(full, downloadFormat)
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+            }
+        }
+    } else null
 
     var lastfmApiKey by remember { mutableStateOf("") }
     var lastfmSecret by remember { mutableStateOf("") }
@@ -138,7 +159,7 @@ fun AppNavGraph(
         pendingAddAlbumTracks = tracks
     }
 
-    val coverUrl: (String?) -> String? = { id -> id?.let { auth.coverArtUrl(it, 300) } }
+    val coverUrl: (String?) -> String? = { id -> id?.let { if (it.startsWith("file://")) it else auth.coverArtUrl(it, 300) } }
 
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     // Main tab routes — those that show the shared top bar and bottom nav.
@@ -196,6 +217,7 @@ fun AppNavGraph(
                 onNavigate = onNavigate,
                 onSearchClick = onSearchClick,
                 onSettingsClick = onSettingsClick,
+                onAccountClick = onAccountClick,
             )
         }
 
@@ -206,6 +228,7 @@ fun AppNavGraph(
                 title = routeTitle[currentRoute] ?: routeTitle[currentSection] ?: "",
                 onSearchClick = if (useRailNav) null else onSearchClick,
                 onSettingsClick = if (useRailNav) null else onSettingsClick,
+                onAccountClick = if (useRailNav) null else onAccountClick,
             )
         }
 
@@ -258,6 +281,7 @@ fun AppNavGraph(
                                 if (tracks.isNotEmpty()) playlistViewModel.createAndAdd(name, tracks)
                             }
                         },
+                        onDownloadAlbum = onDownloadAlbum,
                     )
                 }
                 composable(
@@ -279,6 +303,7 @@ fun AppNavGraph(
                         onCreatePlaylistAndAdd = { name, songs ->
                             playlistViewModel.createAndAdd(name, songs)
                         },
+                        onDownloadTrack = onDownloadTrack,
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -306,6 +331,7 @@ fun AppNavGraph(
                         onLoad = { libraryViewModel.loadArtistDetail(it) },
                         onAlbumClick = { navController.navigate("album/$it") },
                         onAddAlbum = { albumId -> pendingAddAlbumId = albumId },
+                        onDownloadAlbum = onDownloadAlbum,
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -331,6 +357,7 @@ fun AppNavGraph(
                             playlist = playlist,
                             onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
                             onRemoveTrack = { trackId -> playlistViewModel.removeTrack(id, trackId) },
+                            onDownloadTrack = onDownloadTrack,
                             onBack = { navController.popBackStack() },
                         )
                     }
@@ -348,6 +375,8 @@ fun AppNavGraph(
                         onAddSongToPlaylist = { pid, song -> playlistViewModel.addTracks(pid, listOf(song)) },
                         onCreatePlaylistAndAddSong = { name, song -> playlistViewModel.createAndAdd(name, listOf(song)) },
                         onAddAlbum = { albumId -> pendingAddAlbumId = albumId },
+                        onDownloadAlbum = onDownloadAlbum,
+                        onDownloadTrack = onDownloadTrack,
                     )
                 }
                 composable("settings") {
@@ -362,6 +391,7 @@ fun AppNavGraph(
                         lastfmApiKey = lastfmApiKey,
                         lastfmSecret = lastfmSecret,
                         autoLoginEnabled = autoLoginEnabled,
+                        downloadFormat = downloadFormat,
                         onCrossfadeToggle = { playerViewModel.setCrossfadeEnabled(it) },
                         onCrossfadeDurationChange = { playerViewModel.setCrossfadeDuration(it) },
                         onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
@@ -377,6 +407,7 @@ fun AppNavGraph(
                             app.secureStorage.save("lastfm", "secret", secret)
                         },
                         onAutoLoginToggle = { scope.launch { app.prefs.setAutoLoginEnabled(it) } },
+                        onDownloadFormatSelected = { scope.launch { app.prefs.setDownloadFormat(it) } },
                         onWipeCache = {
                             context.imageLoader.diskCache?.clear()
                             context.imageLoader.memoryCache?.clear()
@@ -530,13 +561,14 @@ fun AppNavGraph(
     }
 }
 
-// Page header matching .mobile-page-header: title left, search + settings icons right, border-bottom.
-// Pass null for onSearchClick/onSettingsClick to hide those icons (used on rail-nav wide screens).
+// Page header matching .mobile-page-header: title left, account + search + settings icons right, border-bottom.
+// Pass null for onSearchClick/onSettingsClick/onAccountClick to hide those icons (used on rail-nav wide screens).
 @Composable
 private fun FirmiumPageHeader(
     title: String,
     onSearchClick: (() -> Unit)?,
     onSettingsClick: (() -> Unit)?,
+    onAccountClick: (() -> Unit)?,
 ) {
     val colors = LocalFirmiumColors.current
 
@@ -571,6 +603,11 @@ private fun FirmiumPageHeader(
                     FirmiumIcon(Icons.Default.Settings, contentDescription = "Settings", tint = colors.muted)
                 }
             }
+            if (onAccountClick != null) {
+                FirmiumIconButton(onClick = onAccountClick, modifier = Modifier.size(44.dp)) {
+                    FirmiumIcon(Icons.Default.AccountCircle, contentDescription = "Account", tint = colors.muted)
+                }
+            }
         }
         FirmiumDivider()
     }
@@ -585,6 +622,7 @@ private fun FirmiumNavRail(
     onNavigate: (String) -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onAccountClick: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     Column(
@@ -607,6 +645,10 @@ private fun FirmiumNavRail(
         Spacer(Modifier.height(4.dp))
         FirmiumIconButton(onClick = onSettingsClick, modifier = Modifier.size(48.dp)) {
             FirmiumIcon(Icons.Default.Settings, contentDescription = "Settings", tint = colors.muted)
+        }
+        Spacer(Modifier.height(4.dp))
+        FirmiumIconButton(onClick = onAccountClick, modifier = Modifier.size(48.dp)) {
+            FirmiumIcon(Icons.Default.AccountCircle, contentDescription = "Account", tint = colors.muted)
         }
         Spacer(Modifier.height(12.dp))
     }

@@ -4,7 +4,8 @@
     currentTrack, playbackState, currentPosition, trackDuration, isSeeking,
     volume, repeatOne, repeatAll, audioBridge,
     lyricsOpen, setVolume, activeStreamInfo,
-    hasSonicSimilarity, similarTracksOpen, similarTracksTrackId, similarTracksResults, similarTracksStatus
+    hasSonicSimilarity, similarTracksOpen, similarTracksTrackId, similarTracksResults, similarTracksStatus,
+    visualizerOpen
   } from '../lib/stores'
   import { fetchAndShowLyrics } from '../lib/playback'
   import { formatDuration } from '../lib/utils'
@@ -12,7 +13,7 @@
   import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls'
   import {
     IconPlay, IconPause, IconLoading, IconPrev, IconNext,
-    IconRepeat, IconLyrics, IconVolume, IconMusic, IconHexagon
+    IconRepeat, IconLyrics, IconVolume, IconMusic, IconHexagon, IconWaveform
   } from '../lib/icons'
 
   const playIcon = $derived(
@@ -169,6 +170,9 @@
     </button>
     <button class="ctrl-btn secondary-ctrl" class:active={$similarTracksOpen} onclick={toggleSimilarTracks} title="Similar Tracks">
       <span class="icon" style="width:16px;height:16px">{@html IconHexagon}</span>
+    </button>
+    <button class="ctrl-btn secondary-ctrl" class:active={$visualizerOpen} onclick={() => visualizerOpen.update(v => !v)} title="Visualizer">
+      <span class="icon" style="width:16px;height:16px">{@html IconWaveform}</span>
     </button>
   </div>
 </div>

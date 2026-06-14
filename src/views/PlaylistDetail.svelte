@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { IconMusic, IconList, IconPlay, IconCloud } from '../lib/icons'
-  import { playlists, queue, currentTrack, navToView, serverPlaylists, type Playlist } from '../lib/stores'
+  import { IconList, IconPlay, IconCloud } from '../lib/icons'
+  import { playlists, currentTrack, navToView, serverPlaylists, type Playlist } from '../lib/stores'
   import { Api, loadImage } from '../lib/api'
-  import { playAt } from '../lib/playback'
+  import { setQueueSeamless } from '../lib/playback'
   import { showPlaylistMenu } from '../lib/playlistMenu'
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
+  import TrackRow from '../components/TrackRow.svelte'
   import type { Song } from '../lib/types/tauri-commands'
 
   const TRACK_ROW_HEIGHT = 56
@@ -124,8 +125,7 @@
 
   function playAll() {
     if (!pl || !pl.tracks.length) return
-    queue.set(pl.tracks)
-    playAt(0)
+    setQueueSeamless(pl.tracks, 0)
   }
 
   function deletePl() {
@@ -176,8 +176,7 @@
 
   function playTrack(idx: number) {
     if (!pl) return
-    queue.set(pl.tracks)
-    playAt(idx)
+    setQueueSeamless(pl.tracks, idx)
   }
 </script>
 
@@ -309,38 +308,14 @@
     <div class="track-list">
       <VirtualList items={pl.tracks} itemHeight={TRACK_ROW_HEIGHT}>
         {#snippet children(track, idx)}
-          <div
-            class="track-row"
-            class:playing={isPlaying(track)}
-            role="button"
-            tabindex="0"
-            onclick={() => playTrack(idx)}
-            onkeydown={e => (e.key === 'Enter' || e.key === ' ') && playTrack(idx)}
-          >
-            <div class="track-num">{idx + 1}</div>
-            <div class="track-thumb">
-              {#if track.coverArtId}
-                <img use:lazyLoad={img => loadImage(img, track.coverArtId, null)} alt="" />
-              {/if}
-            </div>
-            <div class="track-info">
-              <div class="track-title">{track.title}</div>
-              <div class="track-artist">{track.artist}</div>
-            </div>
-            <div class="track-duration">{formatDuration(track.duration)}</div>
-            {#if !pl.isServerOnly}
-              <button
-                class="track-add-btn"
-                title="Add to playlist"
-                onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
-              >+</button>
-            {/if}
-            <button
-              class="track-remove-btn"
-              title="Remove from playlist"
-              onclick={e => { e.stopPropagation(); removeTrack(track, idx) }}
-            >×</button>
-          </div>
+          <TrackRow
+            {track} {idx}
+            playing={isPlaying(track)}
+            displayNum={idx + 1}
+            showAddButton={!pl.isServerOnly}
+            onPlay={playTrack}
+            onRemove={removeTrack}
+          />
         {/snippet}
       </VirtualList>
     </div>

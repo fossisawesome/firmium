@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.data.api.ApiClient
+import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Artist
 import com.fossisawesome.firmium.data.model.ArtistDetail
@@ -57,6 +59,12 @@ data class ArtistDetailState(
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     private val api: ApiClient = getApplication<FirmiumApplication>().api
+    private val auth: AuthManager = getApplication<FirmiumApplication>().auth
+    private val localLibrary: LocalLibraryRepository = getApplication<FirmiumApplication>().localLibrary
+
+    // Picks between the server API and the local-library repository depending on whether the
+    // user is connected — mirrors `dataSource` (dataSource.ts) on desktop.
+    private val useLocal: Boolean get() = !auth.isAuthenticated
 
     private val _homeState = MutableStateFlow(HomeState())
     val homeState: StateFlow<HomeState> = _homeState.asStateFlow()
@@ -73,15 +81,26 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val _artistDetailState = MutableStateFlow(ArtistDetailState())
     val artistDetailState: StateFlow<ArtistDetailState> = _artistDetailState.asStateFlow()
 
-    fun loadHome() {
-        if (_homeState.value.recentAlbums.isNotEmpty()) return
+    // Resets all cached state and re-fetches the top-level lists from the now-current data
+    // source (server vs. local library) — called after login/logout. Detail screens are
+    // simply cleared; they re-fetch on their own when next navigated to.
+    fun invalidateAll() {
+        _albumDetailState.value = AlbumDetailState()
+        _artistDetailState.value = ArtistDetailState()
+        loadHome(force = true)
+        loadAlbums(force = true)
+        loadArtists(force = true)
+    }
+
+    fun loadHome(force: Boolean = false) {
+        if (!force && _homeState.value.recentAlbums.isNotEmpty()) return
         if (_homeState.value.isLoading) return
         _homeState.value = HomeState(isLoading = true)
         viewModelScope.launch {
             try {
                 // Fetch recent and random albums concurrently — they are independent requests.
-                val recentDeferred = async { api.getRecentAlbums(12) }
-                val randomDeferred = async { api.getRandomAlbums(12) }
+                val recentDeferred = async { if (useLocal) localLibrary.getRecentAlbums(12) else api.getRecentAlbums(12) }
+                val randomDeferred = async { if (useLocal) localLibrary.getRandomAlbums(12) else api.getRandomAlbums(12) }
                 val recent = recentDeferred.await()
                 val random = randomDeferred.await()
                 // Derive unique artists from recent albums, preserving first-seen order.
@@ -99,26 +118,26 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun loadAlbums() {
-        if (_albumListState.value.albums.isNotEmpty()) return
+    fun loadAlbums(force: Boolean = false) {
+        if (!force && _albumListState.value.albums.isNotEmpty()) return
         if (_albumListState.value.isLoading) return
         _albumListState.value = AlbumListState(isLoading = true)
         viewModelScope.launch {
             try {
-                _albumListState.value = AlbumListState(albums = api.getAlbums())
+                _albumListState.value = AlbumListState(albums = if (useLocal) localLibrary.getAlbums() else api.getAlbums())
             } catch (e: Exception) {
                 _albumListState.value = AlbumListState(error = e.message)
             }
         }
     }
 
-    fun loadArtists() {
-        if (_artistListState.value.artists.isNotEmpty()) return
+    fun loadArtists(force: Boolean = false) {
+        if (!force && _artistListState.value.artists.isNotEmpty()) return
         if (_artistListState.value.isLoading) return
         _artistListState.value = ArtistListState(isLoading = true)
         viewModelScope.launch {
             try {
-                _artistListState.value = ArtistListState(artists = api.getArtists())
+                _artistListState.value = ArtistListState(artists = if (useLocal) localLibrary.getArtists() else api.getArtists())
             } catch (e: Exception) {
                 _artistListState.value = ArtistListState(error = e.message)
             }
@@ -130,7 +149,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _albumDetailState.value = AlbumDetailState(isLoading = true)
         viewModelScope.launch {
             try {
-                _albumDetailState.value = AlbumDetailState(album = api.getAlbumDetail(albumId))
+                _albumDetailState.value = AlbumDetailState(album = if (useLocal) localLibrary.getAlbumDetail(albumId) else api.getAlbumDetail(albumId))
             } catch (e: Exception) {
                 _albumDetailState.value = AlbumDetailState(error = e.message)
             }
@@ -142,7 +161,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _artistDetailState.value = ArtistDetailState(isLoading = true)
         viewModelScope.launch {
             try {
-                _artistDetailState.value = ArtistDetailState(detail = api.getArtistDetail(artistId))
+                _artistDetailState.value = ArtistDetailState(detail = if (useLocal) localLibrary.getArtistDetail(artistId) else api.getArtistDetail(artistId))
             } catch (e: Exception) {
                 _artistDetailState.value = ArtistDetailState(error = e.message)
             }

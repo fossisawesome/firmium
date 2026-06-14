@@ -36,6 +36,12 @@ pub fn set_bit_perfect_enabled<R: tauri::Runtime>(app_handle: tauri::AppHandle<R
 }
 
 #[tauri::command]
+pub fn set_visualizer_enabled<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, enabled: bool) -> Result<(), String> {
+    get_player(&app_handle)?.set_visualizer_enabled(enabled);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn pause_playback<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str) -> Result<(), String> {
     get_player(&app_handle)?.pause(player_id)
 }

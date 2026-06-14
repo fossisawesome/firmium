@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
@@ -48,6 +49,8 @@ fun SearchScreen(
     onAddSongToPlaylist: (playlistId: String, song: Song) -> Unit,
     onCreatePlaylistAndAddSong: (name: String, song: Song) -> Unit,
     onAddAlbum: (albumId: String) -> Unit = {},
+    onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
+    onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     val border = colors.surface2.copy(alpha = 0.4f)
@@ -160,6 +163,7 @@ fun SearchScreen(
                             isPlaying = false,
                             onClick = { onPlaySong(state.songs, index) },
                             onAddToPlaylist = { pendingSong = song },
+                            onDownloadClick = onDownloadTrack?.invoke(song),
                         )
                         FirmiumDivider()
                     }
@@ -176,6 +180,7 @@ fun SearchScreen(
                             coverUrl = coverUrlFor(album.coverArt),
                             onAlbumClick = onAlbumClick,
                             onAddClick = { onAddAlbum(album.id) },
+                            onDownloadClick = onDownloadAlbum?.invoke(album),
                             coverSize = 40.dp,
                             coverRadius = 8.dp,
                         )
@@ -207,6 +212,7 @@ private fun SearchTrackRow(
     isPlaying: Boolean,
     onClick: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onDownloadClick: (suspend () -> Result<Unit>)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     Row(
@@ -259,6 +265,9 @@ private fun SearchTrackRow(
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.padding(end = 10.dp),
         )
+        if (onDownloadClick != null) {
+            DownloadButton(onDownload = onDownloadClick, buttonSize = 26.dp, iconSize = 16.dp)
+        }
         // Add-to-playlist button — .track-add-btn: 26x26 circle
         Box(
             modifier = Modifier

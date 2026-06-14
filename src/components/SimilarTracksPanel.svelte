@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { similarTracksOpen, similarTracksResults, similarTracksStatus, currentTrack, queue } from '../lib/stores'
-  import { playAt } from '../lib/playback'
+  import { similarTracksOpen, similarTracksResults, similarTracksStatus, currentTrack } from '../lib/stores'
+  import { setQueueSeamless } from '../lib/playback'
   import { loadImage } from '../lib/api'
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration, createAbortController } from '../lib/utils'
@@ -13,8 +13,7 @@
   }
 
   function playMatch(idx: number) {
-    queue.set($similarTracksResults.map(m => m.song))
-    playAt(idx)
+    setQueueSeamless($similarTracksResults.map(m => m.song), idx)
   }
 
   function isPlaying(songId: string) {

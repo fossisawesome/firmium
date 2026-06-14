@@ -6,53 +6,53 @@
 // for release-type inference and keeps transform logic out of JS.
 
 /// Mapped album, returned to JS in camelCase via serde.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Album {
-    id: String,
-    name: String,
-    album_artist: String,
-    artist_id: Option<String>,
-    cover_art_id: Option<String>,
-    song_count: Option<u32>,
-    release_type: String,
-    genres: Option<serde_json::Value>,
-    year: Option<u32>,
-    is_compilation: bool,
+    pub id: String,
+    pub name: String,
+    pub album_artist: String,
+    pub artist_id: Option<String>,
+    pub cover_art_id: Option<String>,
+    pub song_count: Option<u32>,
+    pub release_type: String,
+    pub genres: Option<serde_json::Value>,
+    pub year: Option<u32>,
+    pub is_compilation: bool,
 }
 
 /// Mapped artist, returned to JS in camelCase via serde.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Artist {
-    id: String,
-    name: String,
-    album_count: u32,
+    pub id: String,
+    pub name: String,
+    pub album_count: u32,
 }
 
 /// Mapped song, returned to JS in camelCase via serde.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Song {
-    id: String,
-    title: String,
-    artist: String,
-    artist_id: Option<String>,
-    album: String,
-    album_id: Option<String>,
-    duration: f64,
-    track_number: Option<u32>,
-    cover_art_id: Option<String>,
-    replay_gain: Option<serde_json::Value>,
-    bpm: Option<f64>,
-    comment: Option<String>,
-    genres: Option<serde_json::Value>,
-    bit_rate: Option<u32>,
-    sampling_rate: Option<u32>,
-    bit_depth: Option<u32>,
-    suffix: Option<String>,
-    content_type: Option<String>,
-    track_info: Option<String>,
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub artist_id: Option<String>,
+    pub album: String,
+    pub album_id: Option<String>,
+    pub duration: f64,
+    pub track_number: Option<u32>,
+    pub cover_art_id: Option<String>,
+    pub replay_gain: Option<serde_json::Value>,
+    pub bpm: Option<f64>,
+    pub comment: Option<String>,
+    pub genres: Option<serde_json::Value>,
+    pub bit_rate: Option<u32>,
+    pub sampling_rate: Option<u32>,
+    pub bit_depth: Option<u32>,
+    pub suffix: Option<String>,
+    pub content_type: Option<String>,
+    pub track_info: Option<String>,
 }
 
 impl Song {
@@ -63,7 +63,7 @@ impl Song {
 
 /// Formats a "FLAC · 44.1 kHz · 16-bit · 1234 kbps"-style summary of a song's
 /// audio format, for display in the player bar.
-fn format_track_info(s: &serde_json::Value) -> Option<String> {
+pub(crate) fn format_track_info(s: &serde_json::Value) -> Option<String> {
     let mut parts = Vec::new();
     if let Some(suffix) = s.get("suffix").and_then(|v| v.as_str()) {
         if !suffix.is_empty() {
@@ -98,7 +98,7 @@ fn format_track_info(s: &serde_json::Value) -> Option<String> {
 /// Infer release type from explicit server fields, title keywords, and song count.
 /// Equivalent to the release-type inference originally in the frontend's api.ts (now
 /// superseded; see ApiClient.kt for the Android equivalent, which uses a different taxonomy).
-fn infer_release_type(a: &serde_json::Value) -> String {
+pub(crate) fn infer_release_type(a: &serde_json::Value) -> String {
     // Prefer explicit releaseTypes[] array, then releaseType string.
     let explicit = a.get("releaseTypes")
         .and_then(|v| v.as_array())

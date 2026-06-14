@@ -1,3 +1,23 @@
+# v5.5.0
+
+## Added
+
+- **Offline local library** (`src-tauri/src/commands/local_library.rs`, new `lofty` dependency): when not connected to a server, the app reads `~/Music/Firmium` and maps its contents into the same `Album`/`Artist`/`Song` shapes used by the OpenSubsonic API, so the existing UI works unchanged offline. New `src/lib/dataSource.ts` (`dataSource` derived store) picks between `Api` (`src/lib/api.ts`) and the new `src/lib/localApi.ts` (`LocalApi`, backed by `get_local_albums`/`get_local_artists`/`get_local_album_tracks`/`get_local_artist_details`/`search_local`/`get_local_recent_albums`/`get_local_random_albums`/`get_local_newest_albums`/`get_local_genres_list`) based on `isAuthed`. Local ids are `local:<md5>`; cover art is read from embedded tags via `get_local_cover_art` and loaded with `loadLocalImage`. Android adds the equivalent `data/local/LocalLibraryRepository.kt`.
+- **Drag-and-drop import** (`import_local_files` in `local_library.rs`): dropping audio files/folders onto the desktop window copies them into `~/Music/Firmium/<AlbumArtist>/<Album>/`, invalidates the local-library cache, and bumps `stores.ts::dataSourceVersion` so local views refetch. `App.svelte` shows a "Drop to add to your library" overlay during the drag and wires `getCurrentWindow().onDragDropEvent`.
+- **Downloads** (`src-tauri/src/commands/downloads.rs::download_track`/`download_album`, `src/lib/api.ts::Api.downloadTrack`/`downloadAlbum`/`getLocalAlbumTrackKeys`): downloads tracks/albums from the connected server into `~/Music/Firmium/<AlbumArtist>/<Album>/<TrackNum> - <Title>.<ext>` (same layout as imports), then invalidates the local-library cache. New `DownloadButton.kt` (Android) and a "Downloads" settings category (`Settings.svelte`, `stores.ts::downloadFormat`/`setDownloadFormat`, new `IconDownload`) to choose "Original" (server's source file via `format=raw`) or a transcode target. Android adds `data/download/DownloadManager.kt`.
+- **Audio visualizer** (`src-tauri/src/visualizer.rs`, new `rustfft` dependency): `VisualizerTap` taps the rodio decode chain, downmixes to mono, and an FFT-based analysis task emits `firmium:audio-analysis` ({ bass, bars }) events at 50ms intervals while enabled — no overhead when closed. New `VisualizerPanel.svelte` (orb or bars mode, toggled via `stores.ts::visualizerOpen`/`visualizerMode`/`setVisualizerMode`, new `IconWaveform` button in `PlayerBar.svelte`).
+- **Cross-device play queue resume** (`savePlayQueue`/`getPlayQueue` OpenSubsonic extensions, `src/lib/api.ts::Api.savePlayQueue`/`getPlayQueue`, `RemotePlayQueue` type): the current queue, track, and position are saved to the server on play/pause and every 30s of playback (debounced via `playback.ts::schedulePlayQueueSave`). On login, `App.svelte::checkRemotePlayQueue` fetches any saved queue and shows the new `ResumeQueuePrompt.svelte`, which resumes playback via `playback.ts::setQueueSeamless` (keeps the current track playing uninterrupted if it's already in the new queue) and seeks to the saved position. Local-only (`local:`) tracks are excluded from saves and aren't resumable.
+- **Account modal** (`AccountModal.svelte`, `stores.ts::showAccountModal`/`openAccountModal`/`closeAccountModal`): replaces the old full-screen logout/login flow. Opened via a new account button (`IconUser`) in `Sidebar.svelte`; shows connection status + Disconnect when authed, or the `Setup` login form when not. Also shown automatically on session expiry or auto-login failure. Android adds the equivalent `AccountDialog.kt`.
+- **Shared `AlbumRow.svelte`/`TrackRow.svelte` components**: consolidate the duplicated album/track row markup previously repeated across `AlbumList.svelte`, `ArtistDetail.svelte`, `HomeView.svelte`, `SearchView.svelte`, and `PlaylistDetail.svelte`.
+- **Responsive sidebar layout** (`App.svelte`, `src/style.css`): the sidebar collapses to an icon-only rail below 900px and a bottom tab bar below 640px (`is-mobile-layout`/`sidebar-collapsed` classes on `<html>`, toggled via `matchMedia`).
+
+## Changed
+
+- Playing audio now resolves its stream URL via `playback.ts::streamUrlFor`, which routes `local:`-prefixed track ids to a `file://` URL (via `getLocalTrackPath`) instead of the OpenSubsonic `stream` endpoint, for both normal playback and crossfade/gapless preload.
+- `loadImage` (`src/lib/api.ts`) now routes `local:`-prefixed cover ids to `loadLocalImage` (`localApi.ts`) instead of `OpenSubsonicRouter`/`coverCache`.
+
+---
+
 # v5.4.0
 
 ## Added

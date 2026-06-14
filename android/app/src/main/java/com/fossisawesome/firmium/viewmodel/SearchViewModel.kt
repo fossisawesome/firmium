@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.data.api.ApiClient
+import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Song
 import kotlinx.coroutines.Job
@@ -25,6 +27,8 @@ data class SearchState(
 class SearchViewModel(app: Application) : AndroidViewModel(app) {
 
     private val api: ApiClient = getApplication<FirmiumApplication>().api
+    private val auth: AuthManager = getApplication<FirmiumApplication>().auth
+    private val localLibrary: LocalLibraryRepository = getApplication<FirmiumApplication>().localLibrary
     private val _state = MutableStateFlow(SearchState())
     val state: StateFlow<SearchState> = _state.asStateFlow()
 
@@ -42,7 +46,7 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
             delay(300)
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                val results = api.search(query)
+                val results = if (auth.isAuthenticated) api.search(query) else localLibrary.search(query)
                 _state.value = _state.value.copy(
                     songs = results.songs,
                     albums = results.albums,

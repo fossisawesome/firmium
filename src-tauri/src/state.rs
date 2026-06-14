@@ -5,6 +5,7 @@
 // and a shared async HTTP client for `commands/subsonic.rs`. Separate from
 // `audio.rs`'s blocking client, which is dedicated to the playback thread.
 
+use crate::commands::local_library::LocalLibraryCache;
 use parking_lot::RwLock;
 
 #[derive(Default)]
@@ -18,6 +19,9 @@ pub struct ConnectionState {
 pub struct AppState {
     pub connection: RwLock<ConnectionState>,
     pub http: reqwest::Client,
+    /// Cached scan of the local library folder (`~/Music/Firmium`). `None` until
+    /// the first scan; invalidated after downloads/imports so the next read rescans.
+    pub local_library: RwLock<Option<LocalLibraryCache>>,
 }
 
 impl AppState {
@@ -28,6 +32,7 @@ impl AppState {
                 .user_agent("Firmium")
                 .build()
                 .expect("failed to build reqwest client"),
+            local_library: RwLock::new(None),
         }
     }
 }

@@ -21,7 +21,7 @@
 
 ---
 
-Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client built with Tauri 2, targeting **Linux desktop and Android**. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
+Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client built with Tauri 2, targeting **Linux desktop, Windows and Android**. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
 
 > **Note:** Firmium is a *client only* — you need a self-hosted OpenSubsonic-compatible server to use it. [Navidrome](https://www.navidrome.org/) is the most popular choice and is free and open source.
 
@@ -249,6 +249,9 @@ Try forcing XWayland: `WAYLAND_DISPLAY= ./firmium` or set `GDK_BACKEND=x11` befo
 
 **Server connection refused**
 Make sure your server URL includes the port (e.g. `http://192.168.1.10:4533`) and that Firmium can reach it on your network. Check your server's logs if the URL looks correct.
+
+**Bit-perfect Audio doesn't seem to change the output rate**
+On PipeWire systems, the app stream can open at the track's native sample rate while the ALSA sink itself stays locked at a fixed rate (commonly 48000Hz), so PipeWire resamples before the signal reaches the DAC. Check with `pw-top` during playback — if the `alsa_output` sink row doesn't match your track's sample rate, add a `default.clock.allowed-rates` list (e.g. `[ 44100 48000 88200 96000 176400 192000 ]`) to `~/.config/pipewire/pipewire.conf.d/`, then restart PipeWire (`systemctl --user restart pipewire pipewire-pulse wireplumber`).
 
 </details>
 

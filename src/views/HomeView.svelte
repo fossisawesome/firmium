@@ -1,8 +1,9 @@
 <script lang="ts">
   import { IconMusic, IconList, IconPlay, IconUser } from '../lib/icons'
-  import { onMount } from 'svelte'
   import { authUsername, navToAlbum, navToArtist, navToView, recentlyPlayedSongs } from '../lib/stores'
-  import { Api, loadImage } from '../lib/api'
+  import { loadImage } from '../lib/api'
+  import { dataSource } from '../lib/dataSource'
+  import { dataSourceVersion } from '../lib/stores'
   import { lazyLoad } from '../lib/lazyLoad'
   import { getCached, setCached } from '../lib/listCache'
   import { createAbortController } from '../lib/utils'
@@ -58,47 +59,59 @@
     return out
   }
 
-  onMount(async () => {
-    if (cachedHome) return
+  let initialized = false
+
+  $effect(() => {
+    const source = $dataSource
+    $dataSourceVersion
+    if (!initialized && cachedHome) { initialized = true; return }
+    initialized = true
+
+    loadingRecent = true
+    loadingRandom = true
+    loadingGenres = true
+
     const sig = abortCtrl.renew()
 
-    // Fetch recent albums + random albums + genres in parallel
-    const [recentRes, randomRes, genresRes] = await Promise.allSettled([
-      Api.getRecentAlbums(12, sig),
-      Api.getRandomAlbums(12, sig),
-      Api.getGenresList(sig),
-    ])
+    ;(async () => {
+      // Fetch recent albums + random albums + genres in parallel
+      const [recentRes, randomRes, genresRes] = await Promise.allSettled([
+        source.getRecentAlbums(12, sig),
+        source.getRandomAlbums(12, sig),
+        source.getGenresList(sig),
+      ])
 
-    if (sig.aborted) return
+      if (sig.aborted) return
 
-    if (recentRes.status === 'fulfilled') {
-      recentAlbums = recentRes.value
-      recentArtists = extractArtists(recentRes.value)
-      // Upgrade artist images from server (MusicBrainz/Last.fm) in the background.
-      // Falls back to album cover art already stored in coverArtId.
-      recentArtists.forEach((artist, i) => {
-        if (!artist.id) return
-        Api.getArtistInfo(artist.id, sig).then(info => {
-          if (!info?.image || sig.aborted) return
-          recentArtists = recentArtists.map((a, j) =>
-            j === i ? { ...a, artistImageUrl: info.image } : a
-          )
-        }).catch(() => {})
-      })
-    }
-    loadingRecent = false
+      if (recentRes.status === 'fulfilled') {
+        recentAlbums = recentRes.value
+        recentArtists = extractArtists(recentRes.value)
+        // Upgrade artist images from server (MusicBrainz/Last.fm) in the background.
+        // Falls back to album cover art already stored in coverArtId.
+        recentArtists.forEach((artist, i) => {
+          if (!artist.id) return
+          source.getArtistInfo(artist.id, sig).then(info => {
+            if (!info?.image || sig.aborted) return
+            recentArtists = recentArtists.map((a, j) =>
+              j === i ? { ...a, artistImageUrl: info.image } : a
+            )
+          }).catch(() => {})
+        })
+      }
+      loadingRecent = false
 
-    if (randomRes.status === 'fulfilled') {
-      randomAlbums = randomRes.value
-    }
-    loadingRandom = false
+      if (randomRes.status === 'fulfilled') {
+        randomAlbums = randomRes.value
+      }
+      loadingRandom = false
 
-    if (genresRes.status === 'fulfilled') {
-      genres = genresRes.value.slice(0, 30)
-    }
-    loadingGenres = false
+      if (genresRes.status === 'fulfilled') {
+        genres = genresRes.value.slice(0, 30)
+      }
+      loadingGenres = false
 
-    setCached('home', { recentAlbums, recentArtists, randomAlbums, genres })
+      setCached('home', { recentAlbums, recentArtists, randomAlbums, genres })
+    })()
   })
 
   // Derives unique albums from recently played songs (deduplicated by albumId)

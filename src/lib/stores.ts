@@ -32,6 +32,13 @@ export function clearAuth(): void {
   tauriInvoke('set_connection', { server: null, username: null, password: null })
 }
 
+// Bumped after local-library imports/downloads so local-data views refetch even
+// though `dataSource` itself didn't change (still the same LocalApi instance).
+export const dataSourceVersion = writable(0)
+export function bumpDataSourceVersion(): void {
+  dataSourceVersion.update(n => n + 1)
+}
+
 export async function getQueryParams(): Promise<Record<string, unknown>> {
   const username = get(authUsername)
   const password = get(authPassword)
@@ -146,12 +153,38 @@ export function setBitPerfectEnabled(v: unknown): void {
 // Info about the currently-playing stream's actual output format, emitted by the Rust backend.
 export const activeStreamInfo = writable<{ sampleRate: number; channels: number; bitPerfect: boolean } | null>(null)
 
+// ── Downloads ────────────────────────────────────────────────────────────────
+
+// Download format: 'original' (server's source file, format=raw) or a transcode target.
+export const downloadFormat = writable(SafeStorage.getItem('firmium_download_format') ?? 'original')
+
+export function setDownloadFormat(v: string): void {
+  downloadFormat.set(v)
+  SafeStorage.setItem('firmium_download_format', v)
+}
+
+// ── Visualizer ───────────────────────────────────────────────────────────────
+export const visualizerOpen = writable(false)
+export const visualizerMode = writable<'orb' | 'bars'>(
+  (SafeStorage.getItem('firmium_visualizer_mode') as 'orb' | 'bars') ?? 'orb'
+)
+
+export function setVisualizerMode(mode: 'orb' | 'bars'): void {
+  visualizerMode.set(mode)
+  SafeStorage.setItem('firmium_visualizer_mode', mode)
+}
+
 // ── Lyrics ────────────────────────────────────────────────────────────────────
 export const lyricsOpen = writable(false)
 export const lyricsLines = writable<LyricLine[]>([])
 export const lyricsSynced = writable(false)
 export const lyricsTrackId = writable<string | null>(null)
 export const lyricsStatus = writable('No track playing')
+
+// ── Account modal ─────────────────────────────────────────────────────────────
+export const showAccountModal = writable(false)
+export function openAccountModal(): void { showAccountModal.set(true) }
+export function closeAccountModal(): void { showAccountModal.set(false) }
 
 // ── Similar tracks ───────────────────────────────────────────────────────────
 export const similarTracksOpen = writable(false)

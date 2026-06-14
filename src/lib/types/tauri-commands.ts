@@ -49,6 +49,13 @@ export interface SimilarMatch {
   similarity: number
 }
 
+export interface RemotePlayQueue {
+  entries: Song[]
+  current: string | null
+  positionMs: number | null
+  changedBy: string | null
+}
+
 export type PlaybackState = 'loading' | 'playing' | 'paused' | 'stopped'
 
 export interface AudioDevice {

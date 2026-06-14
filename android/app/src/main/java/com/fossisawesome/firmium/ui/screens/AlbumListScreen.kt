@@ -38,6 +38,7 @@ fun AlbumListScreen(
     onLoad: () -> Unit,
     onAddAlbumToPlaylist: (playlistId: String, albumId: String) -> Unit,
     onCreatePlaylistAndAddAlbum: (name: String, albumId: String) -> Unit,
+    onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
 ) {
     LaunchedEffect(Unit) { onLoad() }
 
@@ -92,6 +93,7 @@ fun AlbumListScreen(
                             coverUrl = coverUrlFor(album.coverArt),
                             onAlbumClick = onAlbumClick,
                             onAddClick = { pendingAlbumId = album.id },
+                            onDownloadClick = onDownloadAlbum?.invoke(album),
                         )
                         FirmiumDivider()
                     }

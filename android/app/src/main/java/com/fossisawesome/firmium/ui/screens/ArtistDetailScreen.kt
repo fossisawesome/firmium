@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
@@ -29,6 +30,7 @@ fun ArtistDetailScreen(
     onLoad: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
     onAddAlbum: (albumId: String) -> Unit,
+    onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
     onBack: () -> Unit,
 ) {
     LaunchedEffect(artistId) { onLoad(artistId) }
@@ -137,6 +139,7 @@ fun ArtistDetailScreen(
                                     coverUrl = coverUrlFor(album.coverArt),
                                     onAlbumClick = onAlbumClick,
                                     onAddClick = { onAddAlbum(album.id) },
+                                    onDownloadClick = onDownloadAlbum?.invoke(album),
                                     showArtist = false,
                                 )
                                 FirmiumDivider()

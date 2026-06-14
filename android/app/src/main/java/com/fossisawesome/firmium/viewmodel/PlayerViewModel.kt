@@ -9,6 +9,7 @@ import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.audio.QueueTrack
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import kotlinx.coroutines.*
@@ -45,6 +46,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val nowPlaying: NowPlayingController = getApplication<FirmiumApplication>().nowPlaying
     private val auth: AuthManager = getApplication<FirmiumApplication>().auth
     private val api: ApiClient = getApplication<FirmiumApplication>().api
+    private val localLibrary: LocalLibraryRepository = getApplication<FirmiumApplication>().localLibrary
     private val prefs: AppPreferences = getApplication<FirmiumApplication>().prefs
 
     private val _state = MutableStateFlow(PlayerState())
@@ -121,22 +123,30 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Queue management ───────────────────────────────────────────────────────
 
+    // Local library tracks are played directly from MediaStore via their content:// URI
+    // (ExoPlayer's MediaItem.fromUri handles content:// natively, no decoder changes needed).
+    private suspend fun streamUrlFor(song: Song): String =
+        if (song.id.startsWith("local:")) localLibrary.getTrackUri(song.id)?.toString() ?: ""
+        else auth.streamUrl(song.id)
+
     fun playAt(songs: List<Song>, startIndex: Int) {
-        val tracks = songs.map { song ->
-            QueueTrack(
-                streamUrl = auth.streamUrl(song.id),
-                trackId = song.id,
-                replayGainDb = (song.replayGainTrack ?: song.replayGainAlbum)?.toFloat(),
-            )
+        viewModelScope.launch {
+            val tracks = songs.map { song ->
+                QueueTrack(
+                    streamUrl = streamUrlFor(song),
+                    trackId = song.id,
+                    replayGainDb = (song.replayGainTrack ?: song.replayGainAlbum)?.toFloat(),
+                )
+            }
+            val playerId = audioPlayer.setQueue(tracks, startIndex, _state.value.volume)
+            currentPlayerId = playerId
+            val actualIndex = startIndex.coerceIn(0, (songs.size - 1).coerceAtLeast(0))
+            _state.update { it.copy(queue = songs, queueIndex = actualIndex, playbackState = "loading", currentPosition = 0.0) }
+            updateNowPlayingNotification()
+            scrobbleCurrent(false)
+            reportPlaybackCurrent("starting", 0L)
+            fetchLyricsForCurrent()
         }
-        val playerId = audioPlayer.setQueue(tracks, startIndex, _state.value.volume)
-        currentPlayerId = playerId
-        val actualIndex = startIndex.coerceIn(0, (songs.size - 1).coerceAtLeast(0))
-        _state.update { it.copy(queue = songs, queueIndex = actualIndex, playbackState = "loading", currentPosition = 0.0) }
-        updateNowPlayingNotification()
-        viewModelScope.launch { scrobbleCurrent(false) }
-        viewModelScope.launch { reportPlaybackCurrent("starting", 0L) }
-        fetchLyricsForCurrent()
     }
 
     fun skipToIndex(index: Int) {
@@ -274,21 +284,23 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val pid = currentPlayerId ?: return
         val nextIdx = s.queueIndex + 1
         val nextSong = s.queue.getOrNull(nextIdx) ?: return
-        viewModelScope.launch { scrobbleCurrent(true) }
-        val newPid = audioPlayer.crossfadeTo(
-            oldPlayerId = pid,
-            streamUrl = auth.streamUrl(nextSong.id),
-            trackId = nextSong.id,
-            fadeDurationMs = s.crossfadeDurationMs.toLong(),
-            targetVolume = s.volume,
-            replayGainDb = (nextSong.replayGainTrack ?: nextSong.replayGainAlbum)?.toFloat(),
-        )
-        currentPlayerId = newPid
-        _state.update { it.copy(queueIndex = nextIdx, currentPosition = 0.0) }
-        updateNowPlayingNotification()
-        viewModelScope.launch { scrobbleCurrent(false) }
-        viewModelScope.launch { reportPlaybackCurrent("starting", 0L) }
-        fetchLyricsForCurrent()
+        viewModelScope.launch {
+            scrobbleCurrent(true)
+            val newPid = audioPlayer.crossfadeTo(
+                oldPlayerId = pid,
+                streamUrl = streamUrlFor(nextSong),
+                trackId = nextSong.id,
+                fadeDurationMs = s.crossfadeDurationMs.toLong(),
+                targetVolume = s.volume,
+                replayGainDb = (nextSong.replayGainTrack ?: nextSong.replayGainAlbum)?.toFloat(),
+            )
+            currentPlayerId = newPid
+            _state.update { it.copy(queueIndex = nextIdx, currentPosition = 0.0) }
+            updateNowPlayingNotification()
+            scrobbleCurrent(false)
+            reportPlaybackCurrent("starting", 0L)
+            fetchLyricsForCurrent()
+        }
     }
 
     private fun onTrackEnded() {
@@ -312,11 +324,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun updateNowPlayingNotification() {
         val track = _state.value.currentTrack ?: return
+        val coverArt = track.coverArt
         nowPlaying.update(
             title = track.title,
             artist = track.displayArtist ?: track.artist,
             album = track.album,
-            coverUrl = track.coverArt?.let { auth.coverArtUrl(it, 512) },
+            coverUrl = coverArt?.let { if (it.startsWith("file://")) it else auth.coverArtUrl(it, 512) },
             isPlaying = _state.value.playbackState == "playing",
         )
     }

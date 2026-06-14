@@ -1,12 +1,8 @@
 <script lang="ts">
-  import { get } from 'svelte/store'
-  import { activeView, navToView, clearAuth, authServer, audioBridge, type ViewType } from '../lib/stores'
-  import { stopPositionTracking } from '../lib/playback'
-  import { clearAll } from '../lib/coverCache'
-  import { clearAll as clearListCache } from '../lib/listCache'
+  import { activeView, navToView, isAuthed, authServer, openAccountModal, type ViewType } from '../lib/stores'
   import {
     IconHome, IconDisc, IconMusic, IconSearch,
-    IconList, IconSettings, IconHexagon, IconClose
+    IconList, IconSettings, IconHexagon, IconUser
   } from '../lib/icons'
 
   const NAV_ITEMS: { view: ViewType; label: string; icon: string }[] = [
@@ -21,6 +17,7 @@
   const visibleItems = $derived(NAV_ITEMS)
 
   const serverLabel = $derived((() => {
+    if (!$isAuthed) return 'Local Files'
     try { return new URL($authServer ?? '').hostname } catch (_) { return 'online' }
   })())
 
@@ -34,20 +31,14 @@
     return t === view
   }
 
-  async function handleLogout() {
-    const bridge = get(audioBridge)
-    if (bridge) { bridge.destroy() }
-    stopPositionTracking()
-    await clearAll()
-    clearListCache()
-    clearAuth()
-    document.title = 'Firmium'
-  }
 </script>
 
 <div class="app-brand">
   <span class="icon logo" style="width:20px;height:20px;color:var(--accent)">{@html IconHexagon}</span>
   <span class="server-lbl">{serverLabel}</span>
+  <button class="account-btn" title={$isAuthed ? 'Account' : 'Connect to server'} onclick={openAccountModal}>
+    <span class="icon" style="width:16px;height:16px">{@html IconUser}</span>
+  </button>
 </div>
 
 <div class="nav-links">
@@ -62,7 +53,3 @@
     </button>
   {/each}
 </div>
-
-<button class="logout-btn" onclick={handleLogout}>
-  <span class="icon" style="width:11px;height:11px;margin-right:4px">{@html IconClose}</span>disconnect
-</button>
