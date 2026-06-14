@@ -95,7 +95,7 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // DataStore for non-sensitive preferences (server URL, settings)
-    implementation("androidx.datastore:datastore-preferences:1.1.2")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Adaptive layout: WindowSizeClass + FoldingFeature for foldable / large screen support
     implementation("androidx.window:window:1.3.0")
