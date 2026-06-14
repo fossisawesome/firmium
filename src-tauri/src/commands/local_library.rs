@@ -236,16 +236,16 @@ fn scan(app: &AppHandle) -> Result<LocalLibraryCache, String> {
         albums_by_artist.entry(artist_id).or_default().push(album.clone());
         albums.push(album);
     }
-    albums.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    albums.sort_by_key(|a| a.name.to_lowercase());
     for albums in albums_by_artist.values_mut() {
-        albums.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        albums.sort_by_key(|a| a.name.to_lowercase());
     }
 
     let mut artists: Vec<Artist> = artist_names.iter().map(|(id, name)| {
         let album_count = albums_by_artist.get(id).map(|v| v.len() as u32).unwrap_or(0);
         Artist { id: id.clone(), name: name.clone(), album_count }
     }).collect();
-    artists.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    artists.sort_by_key(|a| a.name.to_lowercase());
 
     Ok(LocalLibraryCache {
         albums,
@@ -330,10 +330,8 @@ pub async fn import_local_files(app: AppHandle, state: State<'_, Arc<AppState>>,
                         count += 1;
                     }
                 }
-            } else if AUDIO_EXTENSIONS.contains(&extension_lower(&path).as_str()) {
-                if import_file(&root, &path)? {
-                    count += 1;
-                }
+            } else if AUDIO_EXTENSIONS.contains(&extension_lower(&path).as_str()) && import_file(&root, &path)? {
+                count += 1;
             }
         }
         Ok(count)
@@ -483,10 +481,10 @@ pub fn search_local(app: AppHandle, state: State<'_, Arc<AppState>>, query: Stri
     let cache = cache.as_ref().unwrap();
     let songs = cache.all_songs.iter()
         .filter(|s| s.title.to_lowercase().contains(&q) || s.artist.to_lowercase().contains(&q) || s.album.to_lowercase().contains(&q))
-        .cloned().take(100).collect();
+        .take(100).cloned().collect();
     let albums = cache.albums.iter()
         .filter(|a| a.name.to_lowercase().contains(&q) || a.album_artist.to_lowercase().contains(&q))
-        .cloned().take(40).collect();
+        .take(40).cloned().collect();
     Ok(LocalSearchResult { songs, albums })
 }
 
@@ -515,7 +513,7 @@ pub fn get_local_random_albums(app: AppHandle, state: State<'_, Arc<AppState>>, 
 pub fn get_local_newest_albums(app: AppHandle, state: State<'_, Arc<AppState>>, size: u32) -> Result<Vec<Album>, String> {
     ensure_scanned(&app, &state)?;
     let mut albums = state.local_library.read().as_ref().unwrap().albums.clone();
-    albums.sort_by(|a, b| b.year.cmp(&a.year));
+    albums.sort_by_key(|a| std::cmp::Reverse(a.year));
     albums.truncate(size as usize);
     Ok(albums)
 }

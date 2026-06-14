@@ -20,6 +20,7 @@ pub(crate) fn sanitize_path_component(name: &str) -> String {
     if trimmed.is_empty() { "Unknown".to_string() } else { trimmed.to_string() }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn download_track(
     app: AppHandle,

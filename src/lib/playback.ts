@@ -20,10 +20,9 @@ const replayGainDb = (track: Song): number | null => {
 
 // Local library tracks are played directly from disk via a `file://` URL
 // (audio.rs branches on this prefix instead of fetching over HTTP).
-async function streamUrlFor(track: Song): Promise<string> {
+function streamUrlFor(track: Song): Promise<string> {
   if (track.id.startsWith('local:')) {
-    const path = await getLocalTrackPath(track.id)
-    return `file://${path}`
+    return getLocalTrackPath(track.id).then(path => `file://${path}`)
   }
   return OpenSubsonicRouter.buildUrl('stream', { id: track.id })
 }
