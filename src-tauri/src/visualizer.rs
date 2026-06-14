@@ -1,14 +1,15 @@
 //! Real-time audio visualizer support.
 //!
-//! `VisualizerTap` is a passthrough `Source` wrapper inserted into the
-//! playback decode chain (see `audio.rs::start_session`). It downmixes
-//! whatever is playing to mono and pushes samples into a shared ring buffer.
-//! A background task periodically reads that buffer, runs an FFT, and emits
-//! `firmium:audio-analysis` events ({ bass, bars }) for the frontend to render.
+//! `process_chunk` is called inline from the decode-feeder (see
+//! `audio::session::spawn_decode_feeder`) for every decoded chunk of
+//! interleaved samples. It downmixes whatever is playing to mono and pushes
+//! samples into a shared ring buffer. A background task periodically reads
+//! that buffer, runs an FFT, and emits `firmium:audio-analysis` events
+//! ({ bass, bars }) for the frontend to render.
 //!
-//! The tap is always present in the decode chain but only writes samples
-//! (and the analysis task only runs its FFT) while `enabled` is true, so
-//! there's no overhead when the visualizer panel is closed.
+//! `process_chunk` is always called from the decode chain but only writes
+//! samples (and the analysis task only runs its FFT) while `enabled` is
+//! true, so there's no overhead when the visualizer panel is closed.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -16,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use rodio::{ChannelCount, SampleRate, Source};
 use rustfft::num_complex::Complex32;
 use rustfft::FftPlanner;
 use tauri::{AppHandle, Emitter};
@@ -64,55 +64,18 @@ impl VisualizerState {
     }
 }
 
-/// Passthrough `Source` wrapper that downmixes to mono and feeds `VisualizerState`.
-pub struct VisualizerTap<S> {
-    inner: S,
-    state: Arc<VisualizerState>,
-    channels: u16,
-    channel_idx: u16,
-    accum: f32,
-    sample_rate: u32,
-}
-
-pub fn tap<S: Source<Item = f32>>(inner: S, state: Arc<VisualizerState>) -> VisualizerTap<S> {
-    let channels = inner.channels().get();
-    let sample_rate = inner.sample_rate().get();
-    VisualizerTap { inner, state, channels, channel_idx: 0, accum: 0.0, sample_rate }
-}
-
-impl<S: Source<Item = f32>> Iterator for VisualizerTap<S> {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<f32> {
-        let sample = self.inner.next()?;
-        if self.state.enabled.load(Ordering::Relaxed) {
-            self.accum += sample;
-            self.channel_idx += 1;
-            if self.channel_idx >= self.channels.max(1) {
-                self.state.push_sample(self.accum / self.channels.max(1) as f32, self.sample_rate);
-                self.accum = 0.0;
-                self.channel_idx = 0;
-            }
-        }
-        Some(sample)
+/// Downmix an interleaved chunk of samples to mono and feed `VisualizerState`.
+///
+/// Called inline from the decode-feeder for every decoded chunk. No-op
+/// (besides the atomic load) while the visualizer is disabled.
+pub fn process_chunk(samples: &[f32], channels: u16, sample_rate: u32, state: &VisualizerState) {
+    if !state.enabled.load(Ordering::Relaxed) {
+        return;
     }
-}
-
-impl<S: Source<Item = f32>> Source for VisualizerTap<S> {
-    fn current_span_len(&self) -> Option<usize> {
-        self.inner.current_span_len()
-    }
-
-    fn channels(&self) -> ChannelCount {
-        self.inner.channels()
-    }
-
-    fn sample_rate(&self) -> SampleRate {
-        self.inner.sample_rate()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        self.inner.total_duration()
+    let channels = channels.max(1) as usize;
+    for frame in samples.chunks(channels) {
+        let sum: f32 = frame.iter().sum();
+        state.push_sample(sum / channels as f32, sample_rate);
     }
 }
 

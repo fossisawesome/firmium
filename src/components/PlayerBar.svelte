@@ -3,7 +3,7 @@
   import {
     currentTrack, playbackState, currentPosition, trackDuration, isSeeking,
     volume, repeatOne, repeatAll, audioBridge,
-    lyricsOpen, setVolume, activeStreamInfo,
+    lyricsOpen, setVolume,
     hasSonicSimilarity, similarTracksOpen, similarTracksTrackId, similarTracksResults, similarTracksStatus,
     visualizerOpen
   } from '../lib/stores'
@@ -20,11 +20,7 @@
     $playbackState === 'loading' ? IconLoading : $playbackState === 'playing' ? IconPause : IconPlay
   )
 
-  const trackInfo = $derived.by(() => {
-    const base = $currentTrack?.trackInfo ?? ''
-    if ($activeStreamInfo?.bitPerfect) return base ? `${base} · Bit-perfect` : 'Bit-perfect'
-    return base
-  })
+  const trackInfo = $derived($currentTrack?.trackInfo ?? '')
 
   const posDisplay = $derived(formatDuration($currentPosition))
   const durDisplay = $derived(formatDuration($trackDuration ?? $currentTrack?.duration ?? 0))

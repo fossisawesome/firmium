@@ -1,6 +1,6 @@
 # Maintainer: fossisawesome <lx bax wp 73 AT moz mail DOT com>
 pkgname=firmium-desktop-bin
-pkgver=5.5.0
+pkgver=6.0.0
 pkgrel=1
 pkgdesc="Lightning fast OpenSubsonic player in Tauri"
 arch=('x86_64')

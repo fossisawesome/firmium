@@ -1,7 +1,7 @@
 import { tauriInvoke } from './tauri'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
-type BridgeEvent = 'statechange' | 'finished' | 'volumechange' | 'error' | 'position' | 'audioinfo'
+type BridgeEvent = 'statechange' | 'finished' | 'volumechange' | 'error' | 'position'
 type BridgeCallback = (data?: any) => void
 
 /**
@@ -32,11 +32,10 @@ export class AudioBridge {
 
   async _initListeners(): Promise<void> {
     // Rust emits global events via app_handle.emit() — listen() wraps data in { payload }.
-    this._unlistenState = await listen<{ playerId: string; state: string; audioInfo?: { sampleRate: number; channels: number; bitPerfect: boolean } }>('playback-state-changed', ({ payload }) => {
+    this._unlistenState = await listen<{ playerId: string; state: string; audioInfo?: { sampleRate: number; channels: number } }>('playback-state-changed', ({ payload }) => {
       if (payload.playerId !== this.currentPlayerId) return
       const state = payload.state
       if (state === 'playing') this._hasStartedPlaying = true
-      if (payload.audioInfo) this.emit('audioinfo', payload.audioInfo)
       if (state !== this.lastKnownState) {
         this.lastKnownState = state
         this.emit('statechange', state)

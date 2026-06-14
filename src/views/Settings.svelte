@@ -3,7 +3,7 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, bitPerfectEnabled, setBitPerfectEnabled, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
@@ -22,7 +22,7 @@
     'firmium_server', 'firmium_user', 'firmium_save_pass',
     'firmium_auto_login', 'firmium_lrclib', 'firmium_theme',
     'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
-    'firmium_volume', 'firmium_gapless', 'firmium_lastfm', 'firmium_bit_perfect',
+    'firmium_volume', 'firmium_gapless', 'firmium_lastfm',
     'firmium_download_format',
   ]
 
@@ -109,7 +109,6 @@
     setGaplessEnabled(checked)
     if (checked) setCrossfadeEnabled(false)
   }
-  function handleBitPerfectToggle(e: Event) { setBitPerfectEnabled((e.target as HTMLInputElement).checked) }
 
   async function wipeCache() {
     await clearAll(); clearListCache(); wipeCacheLabel = 'Wiped!'
@@ -263,17 +262,6 @@
         </div>
         <label class="toggle-switch">
           <input type="checkbox" checked={$gaplessEnabled} onchange={handleGaplessToggle} />
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="settings-row">
-        <div class="settings-info">
-          <div class="settings-title">Bit-perfect Audio</div>
-          <div class="settings-desc">Reopens the audio output at each track's native sample rate when possible. May cause a brief click on track changes with mismatched rates.</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" checked={$bitPerfectEnabled} onchange={handleBitPerfectToggle} />
           <span class="toggle-slider"></span>
         </label>
       </div>

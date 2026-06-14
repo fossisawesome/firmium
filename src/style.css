@@ -712,7 +712,7 @@ html.is-mobile-layout.has-player .main-area {
   height: 75px;
   background: var(--surface);
   display: grid;
-  grid-template-columns: 240px 1fr 240px;
+  grid-template-columns: 240px 1fr 280px;
   align-items: center;
   padding: 0 30px;
   z-index: 100;
@@ -784,14 +784,20 @@ html.is-mobile-layout.has-player .main-area {
   align-items: center;
   gap: 12px;
   width: 100%;
+  min-width: 0;
   padding: 0 20px;
+}
+
+.progress-row input[type="range"] {
+  min-width: 0;
 }
 
 .progress-row .time {
   font-size: 11px;
   color: var(--muted);
-  width: 35px;
+  min-width: 35px;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .progress-row .time.right {

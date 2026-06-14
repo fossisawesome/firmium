@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 5.5.0
+**Version**: 6.0.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Desktop (Linux, Windows)**
 - **Frontend**: Svelte 5 + TypeScript, bundled via Vite
 - **Backend**: Rust 2021 edition, Tauri 2.11+
-- **Audio**: `rodio` 0.22 for native OS audio engine integration
+- **Audio**: `symphonia` 0.5 (decoding) + `cpal` 0.17 (output device I/O), hand-rolled engine
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
 - **Credentials**: OS keyring via `keyring` crate (libsecret on Linux, Windows Credential Manager on Windows)
 - **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer)
@@ -40,12 +40,15 @@ The backend exposes Tauri commands that the frontend invokes via `src/lib/audio-
   - `subsonic.rs`: `set_connection()`, `validate_connection()`, and the OpenSubsonic API itself — album/artist/search/genre reads, playlist CRUD, `scrobble()`, `get_song_lyrics()` (structured → legacy → LRCLIB cascade). Internal `subsonic_request()` helper builds authenticated requests and emits `firmium:session-expired` on HTTP 401 or OpenSubsonic error codes 40/41.
   - `lyrics.rs`: `parse_lrc()`, `fetch_lrclib_lyrics()` — LRC parsing and the LRCLIB fallback used by `get_song_lyrics()`
   - `cover_cache.rs`: `get_cover_art()`, `clear_cover_cache()` — disk-based cover art cache (200MB budget, mtime-based LRU eviction), served to the frontend via Tauri's asset protocol
-  - `playback.rs`: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()`, `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`, `list_audio_devices()` — delegate to rodio `AudioPlayer`
+  - `playback.rs`: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()`, `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`, `list_audio_devices()` — delegate to `AudioPlayer`
   - `app_info.rs`: `get_app_version()`
 
-- **audio.rs**: Desktop-only audio playback module. Core design:
-  - `StreamingReader`: Implements Read+Seek over HTTP response body. Bytes buffered locally to keep Subsonic "Now Playing" status during playback.
-  - `AudioPlayer`: Manages session lifecycle (loading → playing → paused/stopped). Uses `rodio::MixerDeviceSink` for per-device volume control. Thread-safe via `parking_lot::Mutex`.
+- **audio/**: Desktop-only audio playback module (`symphonia` decode + `cpal` output). Core design:
+  - `streaming_reader.rs`: `StreamingReader` implements Read+Seek over HTTP response body (bytes buffered locally to keep Subsonic "Now Playing" status during playback); `VecSource`/`FileSource` are seekable `MediaSource` wrappers for seek-rebuild and local files.
+  - `decoder.rs`: `DecoderHandle` wraps a `symphonia` `FormatReader`/`Decoder`, exposing `next_samples()` (interleaved f32), `seek()`, and `sample_rate`/`channels`/duration. Defaults to 48000 Hz if the container doesn't report a sample rate.
+  - `session.rs`: `Session` holds a `Mutex<VecDeque<f32>>` ring buffer plus playback state (volume, playing, position). `spawn_decode_feeder()` runs the blocking decode loop (ReplayGain, 25ms fade-in, visualizer tap, native seek via `SeekRequest`/`SeekReply`).
+  - `output.rs`: cpal device negotiation (`find_compatible_config`, `open_with_config`/`open_default`) and the realtime `mix_into` callback, which sums all active sessions' ring buffers (with per-session volume, channel adaptation, and a linear-interpolation resampler that degenerates to passthrough when rates match).
+  - `mod.rs`: `AudioPlayer` manages session lifecycle (loading → playing → paused/stopped) and reopens the output stream at each track's native sample rate via `reopen_stream_if_needed()` (deferred during crossfade). Thread-safe via `parking_lot::Mutex`/`RwLock`.
   - Session state: `PlaybackState` enum (Loading, Playing, Paused, Stopped)
   - Sessions stored in `Arc<RwLock<HashMap>>` — playback events fire via Tauri `emit()` to frontend
   - Supports `preload_stream()` and `crossfade_to()` for gapless playback
@@ -93,9 +96,9 @@ Rust Commands (commands/)
     │    └─ 401 / error 40/41 → emit("firmium:session-expired")
     ├─ Cover art → disk cache (cover_cache.rs) → asset:// URL
     ├─ Lyrics cascade (subsonic.rs::get_song_lyrics → lyrics.rs)
-    └─ Audio playback (audio.rs, AudioBridge → tauriInvoke)
-         └─ StreamingReader (HTTP→rodio)
-              └─ OS audio device (rodio)
+    └─ Audio playback (audio/, AudioBridge → tauriInvoke)
+         └─ StreamingReader (HTTP) → symphonia decode
+              └─ OS audio device (cpal)
     ↓ (status polling every 750ms via AudioBridge)
 Svelte stores (playbackState, currentPosition, …) → reactive UI
 ```
@@ -110,11 +113,11 @@ Native Kotlin/Compose app in `android/`, independent of the Tauri build, sharing
 
 2. **HTTP Streaming with Local Buffering**: `StreamingReader` keeps the HTTP connection open during playback so Subsonic/Navidrome sees "Now Playing" status for the full track duration, not just the download moment.
 
-3. **Synchronous HTTP Blocking**: `reqwest::blocking` is used instead of async to simplify integration with rodio's Decoder, which expects a synchronous Read+Seek source.
+3. **Synchronous HTTP Blocking**: `reqwest::blocking` is used instead of async to simplify integration with `symphonia`'s decoder, which expects a synchronous Read+Seek source. Decoding runs on a `spawn_blocking` task per session.
 
-4. **UUID-Based Session Tracking**: Each audio playback gets a UUID. Multiple devices can play concurrently; each has its own session in the `AudioPlayer` map.
+4. **UUID-Based Session Tracking**: Each audio playback gets a UUID, with its own `Session` (ring buffer, volume, position) in the `AudioPlayer` map.
 
-5. **Volume Isolation Per Device**: `MixerDeviceSink` allows independent volume control per audio output device, not just global volume.
+5. **Per-Session Volume**: Each `Session` has its own volume, applied in the shared `cpal` mixing callback (`audio/output.rs::mix_into`) — independent of the global output device volume.
 
 ### Known Cross-Platform Divergences
 
@@ -132,13 +135,13 @@ other without checking with the user first:
    reclassification on the Android side.
 
 2. **Crossfade gain handling**: Desktop's `AudioPlayer::crossfade_to` (Rust,
-   `audio.rs`) does not apply ReplayGain during the fade ramp. Android's
+   `audio/mod.rs`) does not apply ReplayGain during the fade ramp. Android's
    `AudioPlayer.crossfadeTo` multiplies by `gain` during the ramp.
 
 3. **Queue/playback model**: Android runs a single ExoPlayer instance with the
    full playlist loaded (native gapless/queue management). Desktop runs
-   per-track `rodio` sessions with manual preload-and-promote to the next
-   session for gapless/crossfade transitions.
+   per-track decode sessions (`audio/session.rs`) with manual preload-and-promote
+   to the next session for gapless/crossfade transitions.
 
 ## Build & Run
 
@@ -186,10 +189,10 @@ npm run android:install # installDebug via adb
 - Restart dev server: `npm run dev:app`
 
 ### Adding Audio Playback Features
-- Playback logic lives in `audio.rs`. New playback methods (e.g., equalizer) belong there.
+- Playback logic lives in `audio/`. New playback methods (e.g., equalizer) belong there — `mod.rs` for the public `AudioPlayer` API, `session.rs` for per-track decode/state, `output.rs` for the cpal mixing callback.
 - All changes must maintain thread-safety (Arc, Mutex, RwLock).
 - Sessions are identified by UUID; use `AudioPlayer::get_state(session_id)` to query state.
-- Crossfade is implemented in Rust: `AudioPlayer::crossfade_to()` in `audio.rs` ramps volume between the outgoing and incoming sessions. The frontend (`src/lib/playback.ts`) decides *when* to trigger it and calls into Rust via `AudioBridge`; it does not perform the fade itself.
+- Crossfade is implemented in Rust: `AudioPlayer::crossfade_to()` in `audio/mod.rs` ramps volume between the outgoing and incoming sessions. The frontend (`src/lib/playback.ts`) decides *when* to trigger it and calls into Rust via `AudioBridge`; it does not perform the fade itself.
 
 ### Frontend State Management
 - All mutable app state lives in Svelte stores (`src/lib/stores.ts`).
@@ -247,7 +250,7 @@ Currently no automated tests. Manual testing workflow:
 
 - `src-tauri/src/lib.rs` — All Tauri command definitions, app entry point
 - `src-tauri/src/main.rs` — Thin entry point that calls `lib::run()`
-- `src-tauri/src/audio.rs` — Audio playback engine (rodio)
+- `src-tauri/src/audio/` — Audio playback engine (symphonia + cpal)
 - `src/App.svelte` — Root component, auth bootstrap, view routing
 - `src/lib/stores.ts` — All Svelte stores (single source of truth for app state)
 - `src/lib/playback.ts` — Playback orchestration, position tracking, lyrics sync

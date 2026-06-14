@@ -1,3 +1,18 @@
+# v6.0.0
+
+## Changed
+
+- **Audio backend rewritten from `rodio` to hand-rolled `symphonia` + `cpal`** (`src-tauri/src/audio/`, replacing the old single-file `audio.rs`): new `streaming_reader.rs` (`StreamingReader`/`VecSource`/`FileSource`, Read+Seek over HTTP or local files), `decoder.rs` (`DecoderHandle` wrapping a `symphonia` `FormatReader`/`Decoder`), `session.rs` (`Session` ring buffer + `spawn_decode_feeder` decode loop), `output.rs` (cpal device negotiation and the `mix_into` mixing callback with per-session volume, channel adaptation, and a linear-interpolation resampler), and `mod.rs` (`AudioPlayer` session lifecycle). `Cargo.toml` drops `rodio` for `symphonia` + `cpal` directly.
+- **Visualizer tap moved inline**: `visualizer.rs`'s `VisualizerTap` (a `rodio::Source` wrapper) is replaced by `process_chunk()`, called directly from `session::spawn_decode_feeder` for each decoded chunk — same downmix-to-mono/FFT/`firmium:audio-analysis` behavior, just without the `Source` wrapper.
+- Minor clippy-driven cleanups in `local_library.rs` (`sort_by_key` instead of `sort_by` with a closure, combined nested `if` conditions, reordered `take`/`cloned`) and `downloads.rs` (`#[allow(clippy::too_many_arguments)]` on `download_track`), with no behavior change.
+- `playback.ts::streamUrlFor` no longer needs to be `async` for local tracks; it now returns the `getLocalTrackPath` promise directly via `.then()`.
+
+## Removed
+
+- **Bit-perfect Audio setting** (`set_bit_perfect_enabled`, `stores.ts::bitPerfectEnabled`/`setBitPerfectEnabled`/`activeStreamInfo`, the Settings > Playback toggle, and the "Bit-perfect" suffix in `PlayerBar.svelte`'s track info): the new `cpal` output path always negotiates a device config compatible with the track and resamples via `output.rs`'s linear interpolation, so the explicit reopen-at-native-rate toggle is no longer needed.
+
+---
+
 # v5.5.0
 
 ## Added

@@ -77,7 +77,6 @@ pub fn run() {
             seek_position,
             list_audio_devices,
             crossfade_to,
-            set_bit_perfect_enabled,
             set_visualizer_enabled,
             // Lyrics
             parse_lrc,

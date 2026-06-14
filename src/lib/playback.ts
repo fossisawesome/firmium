@@ -4,12 +4,10 @@ import {
   volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration, gaplessEnabled,
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
-  bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed,
-  bitPerfectEnabled, activeStreamInfo
+  bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
 import { getLocalTrackPath } from './localApi'
-import { tauriInvoke } from './tauri'
 import type { Song, PlaybackState } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 
@@ -286,14 +284,6 @@ export function wireBridgeEvents(bridge: AudioBridge): void {
     volume.set(vol)
   })
 
-  bridge.on('audioinfo', (info: { sampleRate: number; channels: number; bitPerfect: boolean }) => {
-    activeStreamInfo.set(info)
-  })
-
-  tauriInvoke('set_bit_perfect_enabled', { enabled: get(bitPerfectEnabled) }).catch(() => {})
-  bitPerfectEnabled.subscribe(enabled => {
-    tauriInvoke('set_bit_perfect_enabled', { enabled }).catch(() => {})
-  })
 }
 
 // ── Lyrics fetching ───────────────────────────────────────────────────────────

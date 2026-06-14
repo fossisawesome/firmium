@@ -29,7 +29,7 @@ pub use playback::{
     play_stream, preload_stream, pause_playback, resume_playback, stop_playback,
     set_volume, get_volume, get_playback_state, is_playback_finished, get_track_duration,
     get_current_position, seek_position, list_audio_devices, crossfade_to,
-    set_bit_perfect_enabled, set_visualizer_enabled,
+    set_visualizer_enabled,
 };
 pub use local_library::{
     get_local_albums, get_local_artists, get_local_album_tracks, get_local_album_track_keys, get_local_artist_details,
