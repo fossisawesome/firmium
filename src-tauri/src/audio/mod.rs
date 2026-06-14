@@ -34,6 +34,10 @@ use streaming_reader::{FileSource, StreamingReader, VecSource};
 
 const PLAYER_NOT_FOUND: &str = "Player not found";
 
+/// Decoder handle, optional duration, consumed-bytes buffer (for seek-rebuild
+/// fallback), native sample rate, and channel count.
+type OpenedStream = (DecoderHandle, Option<f64>, Arc<Mutex<Vec<u8>>>, u32, u16);
+
 struct OutputHandle {
     device: cpal::Device,
     stream: OutputStream,
@@ -220,7 +224,7 @@ impl AudioPlayer {
     /// Returns the decoder, the track's duration (if known), a shared buffer
     /// of consumed bytes (for seek-rebuild fallback — empty for local files,
     /// which can be seeked directly), and the native sample rate/channels.
-    fn fetch_and_open(client: reqwest::blocking::Client, url: &str) -> Result<(DecoderHandle, Option<f64>, Arc<Mutex<Vec<u8>>>, u32, u16), String> {
+    fn fetch_and_open(client: reqwest::blocking::Client, url: &str) -> Result<OpenedStream, String> {
         if let Some(path) = url.strip_prefix("file://") {
             return Self::open_local_file(path);
         }
@@ -240,7 +244,7 @@ impl AudioPlayer {
         Ok((decoder, duration, shared_buffer, rate, channels))
     }
 
-    fn open_local_file(path: &str) -> Result<(DecoderHandle, Option<f64>, Arc<Mutex<Vec<u8>>>, u32, u16), String> {
+    fn open_local_file(path: &str) -> Result<OpenedStream, String> {
         let file = std::fs::File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
         let len = file.metadata().ok().map(|m| m.len());
         let source = FileSource::new(BufReader::with_capacity(256 * 1024, file), len);
