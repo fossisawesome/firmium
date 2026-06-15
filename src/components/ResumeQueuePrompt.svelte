@@ -18,7 +18,7 @@
 </script>
 
 <div class="resume-queue-prompt">
-  <span>Resume queue from another device?</span>
+  <span>Resume queue?</span>
   <button class="resume-queue-btn" onclick={resume}>Resume</button>
   <button class="resume-queue-dismiss" onclick={onDismiss}>Dismiss</button>
 </div>

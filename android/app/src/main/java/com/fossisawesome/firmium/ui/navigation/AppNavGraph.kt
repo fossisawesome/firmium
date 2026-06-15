@@ -144,6 +144,9 @@ fun AppNavGraph(
         lastfmApiKey = app.secureStorage.get("lastfm", "api_key") ?: ""
         lastfmSecret = app.secureStorage.get("lastfm", "secret") ?: ""
     }
+    // Fetch server playlists up front so "Add to playlist" dialogs can offer
+    // server-only playlists (not just locally-created ones).
+    LaunchedEffect(Unit) { playlistViewModel.refreshServerPlaylists() }
 
     var showFullPlayer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
@@ -267,13 +270,13 @@ fun AppNavGraph(
                     AlbumListScreen(
                         state = albumListState,
                         coverUrlFor = coverUrl,
-                        playlists = playlistsState.playlists,
+                        playlistItems = playlistsState.items,
                         onAlbumClick = { navController.navigate("album/$it") },
                         onLoad = { libraryViewModel.loadAlbums() },
-                        onAddAlbumToPlaylist = { pid, albumId ->
+                        onAddAlbumToPlaylist = { item, albumId ->
                             scope.launch {
                                 val tracks = try { app.api.getAlbumDetail(albumId).tracks } catch (_: Exception) { emptyList() }
-                                if (tracks.isNotEmpty()) playlistViewModel.addTracks(pid, tracks)
+                                if (tracks.isNotEmpty()) playlistViewModel.addTracksTo(item, tracks)
                             }
                         },
                         onCreatePlaylistAndAddAlbum = { name, albumId ->
@@ -297,10 +300,10 @@ fun AppNavGraph(
                         albumId = id,
                         state = albumDetailState,
                         coverUrlFor = coverUrl,
-                        playlists = playlistsState.playlists,
+                        playlistItems = playlistsState.items,
                         onLoad = { libraryViewModel.loadAlbumDetail(it) },
                         onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
-                        onAddToPlaylist = { pid, songs -> playlistViewModel.addTracks(pid, songs) },
+                        onAddToPlaylist = { item, songs -> playlistViewModel.addTracksTo(item, songs) },
                         onCreatePlaylistAndAdd = { name, songs ->
                             playlistViewModel.createAndAdd(name, songs)
                         },
@@ -342,6 +345,7 @@ fun AppNavGraph(
                         onPlaylistClick = { navController.navigate("playlist/$it") },
                         onCreate = { playlistViewModel.create(it) },
                         onDelete = { playlistViewModel.delete(it) },
+                        onSync = { playlistViewModel.syncNow(it) },
                         onRefreshServer = { playlistViewModel.refreshServerPlaylists() },
                     )
                 }
@@ -389,13 +393,13 @@ fun AppNavGraph(
                     SearchScreen(
                         state = searchState,
                         coverUrlFor = coverUrl,
-                        playlists = playlistsState.playlists,
+                        playlistItems = playlistsState.items,
                         onBack = { navController.popBackStack() },
                         onQueryChange = { searchViewModel.onQueryChanged(it) },
                         onSearch = { searchViewModel.onQueryChanged(searchState.query) },
                         onPlaySong = { songs, idx -> playerViewModel.playAt(songs, idx) },
                         onAlbumClick = { navController.navigate("album/$it") },
-                        onAddSongToPlaylist = { pid, song -> playlistViewModel.addTracks(pid, listOf(song)) },
+                        onAddSongToPlaylist = { item, song -> playlistViewModel.addTracksTo(item, listOf(song)) },
                         onCreatePlaylistAndAddSong = { name, song -> playlistViewModel.createAndAdd(name, listOf(song)) },
                         onAddAlbum = { albumId -> pendingAddAlbumId = albumId },
                         onDownloadAlbum = onDownloadAlbum,
@@ -496,7 +500,7 @@ fun AppNavGraph(
         FullScreenPlayer(
             state = playerState,
             coverUrl = coverUrl(playerState.currentTrack?.coverArt),
-            playlists = playlistsState.playlists,
+            playlistItems = playlistsState.items,
             onDismiss = { showFullPlayer = false },
             onPlayPause = { playerViewModel.togglePlayPause() },
             onNext = { playerViewModel.skipToNext() },
@@ -524,8 +528,8 @@ fun AppNavGraph(
                 playerViewModel.openLyrics()
                 showLyrics = true
             },
-            onAddToPlaylist = { pid ->
-                playerState.currentTrack?.let { playlistViewModel.addTracks(pid, listOf(it)) }
+            onAddToPlaylist = { item ->
+                playerState.currentTrack?.let { playlistViewModel.addTracksTo(item, listOf(it)) }
             },
             onCreatePlaylistAndAdd = { name ->
                 playerState.currentTrack?.let { playlistViewModel.createAndAdd(name, listOf(it)) }
@@ -576,9 +580,9 @@ fun AppNavGraph(
     val tracks = pendingAddAlbumTracks
     if (pendingAddAlbumId != null && tracks != null) {
         AddToPlaylistDialog(
-            playlists = playlistsState.playlists,
-            onAddTo = { pid ->
-                playlistViewModel.addTracks(pid, tracks)
+            items = playlistsState.items,
+            onAddTo = { item ->
+                playlistViewModel.addTracksTo(item, tracks)
                 pendingAddAlbumId = null; pendingAddAlbumTracks = null
             },
             onCreateAndAdd = { name ->

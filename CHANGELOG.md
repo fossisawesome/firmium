@@ -1,3 +1,19 @@
+# v6.1.1
+
+## Added
+
+- **Manual playlist sync button** (desktop `src/views/PlaylistsView.svelte`, Android `PlaylistsScreen.kt`): Local-only playlists now show a **Sync** button that immediately calls `Api.createPlaylist()` and links the result via `stores.ts::playlists.setServerId()` (desktop) or `playlistViewModel.syncNow()` (Android), allowing users to push a playlist to the server on demand instead of waiting for the automatic retry loop. The button is disabled while a sync is in progress and hidden for playlists that are already synced or server-only.
+- **Server playlist fetch on-demand in add-to-playlist popup** (`src/components/PlaylistMenu.svelte`): When the "add to playlist" context menu opens and server playlists haven't been fetched yet, `Api.getPlaylists()` is now called lazily, allowing server-only playlists (created on other devices but not previously seen locally) to be offered as add targets without blocking the initial menu open.
+
+## Changed
+
+- **Playlist merge displays cloud badges for synced/server-only entries** (`src/components/PlaylistMenu.svelte`, `src/views/PlaylistsView.svelte`): The unified playlist list now shows a small cloud icon badge next to playlist names to distinguish synced playlists (local with matching `serverId`) from server-only entries. `PlaylistMenu.svelte` also uses the merged list instead of local-only, and `PlaylistsView.svelte::unified` list now displays both local and server-only playlists with appropriate visual and interaction cues.
+- **Playlist row UI refinements** (desktop `src/style.css`, Android `PlaylistsScreen.kt`): Added `.pl-popup-cloud` styling for the cloud badge icon in the add-to-playlist menu (margin, color, opacity). Android `PlaylistRow` now accepts optional `onSync` callback and displays the sync button alongside the delete button for unsync'd local playlists.
+- **Audio backend refactoring** (`src-tauri/src/audio/mod.rs`): Extracted a `OpenedStream` type alias for the `(DecoderHandle, Option<f64>, Arc<Mutex<Vec<u8>>>, u32, u16)` tuple returned by `fetch_and_open` and `open_local_file`, reducing type complexity and improving code readability.
+- **Android playlist sync helpers** (`viewmodel/PlaylistViewModel.kt`): Added `syncNow(id)` method to manually trigger `syncCreate()` for a single playlist, and `addTracksToServerOnly()` / `addTracksTo()` helpers to support adding tracks to server-only playlists without a local entry.
+
+---
+
 # v6.1.0
 
 ## Added

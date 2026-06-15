@@ -87,9 +87,23 @@ class PlaylistViewModel(app: Application) : AndroidViewModel(app) {
         val playlist = repo.create(name)
         repo.addTracks(playlist.id, songs)
     }
+    fun syncNow(id: String) = viewModelScope.launch { repo.syncNow(id) }
     fun delete(id: String) = viewModelScope.launch { repo.delete(id) }
     fun rename(id: String, name: String) = viewModelScope.launch { repo.rename(id, name) }
     fun addTracks(id: String, songs: List<Song>) = viewModelScope.launch { repo.addTracks(id, songs) }
+
+    // Adds tracks directly to a server-only playlist (no local entry to update).
+    fun addTracksToServerOnly(serverId: String, songs: List<Song>) = viewModelScope.launch {
+        try {
+            api.updatePlaylist(serverId, songIdsToAdd = songs.map { it.id })
+        } catch (_: Exception) { /* best-effort, same as local sync */ }
+    }
+
+    // Adds tracks to whichever playlist `item` represents, local/synced or server-only.
+    fun addTracksTo(item: PlaylistListItem, songs: List<Song>) = when (item) {
+        is PlaylistListItem.Local -> addTracks(item.playlist.id, songs)
+        is PlaylistListItem.ServerOnly -> addTracksToServerOnly(item.server.id, songs)
+    }
     fun removeTrack(playlistId: String, trackId: String) = viewModelScope.launch { repo.removeTrack(playlistId, trackId) }
 
     fun playlistById(id: String): Playlist? = state.value.playlists.find { it.id == id }

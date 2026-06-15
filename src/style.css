@@ -2039,6 +2039,15 @@ input[type="range"].volume-slider {
   flex-shrink: 0;
 }
 
+.pl-popup-cloud {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--accent);
+  opacity: 0.8;
+  vertical-align: middle;
+}
+
 .pl-popup-empty {
   padding: 8px 14px;
   font-size: 12px;

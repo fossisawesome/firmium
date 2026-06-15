@@ -10,10 +10,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Album
-import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.AlbumListState
+import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 
 // Classifies an album into Single / EP / Album based on songCount.
 // Special server-reported types (Compilation, Live, Remix) are preserved.
@@ -33,10 +33,10 @@ fun String.releaseTypeSortOrder(): Int = typeOrder[this] ?: 6
 fun AlbumListScreen(
     state: AlbumListState,
     coverUrlFor: (String?) -> String?,
-    playlists: List<Playlist>,
+    playlistItems: List<PlaylistListItem>,
     onAlbumClick: (String) -> Unit,
     onLoad: () -> Unit,
-    onAddAlbumToPlaylist: (playlistId: String, albumId: String) -> Unit,
+    onAddAlbumToPlaylist: (item: PlaylistListItem, albumId: String) -> Unit,
     onCreatePlaylistAndAddAlbum: (name: String, albumId: String) -> Unit,
     onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
 ) {
@@ -113,8 +113,8 @@ fun AlbumListScreen(
     val albumId = pendingAlbumId
     if (albumId != null) {
         AddToPlaylistDialog(
-            playlists = playlists,
-            onAddTo = { pid -> onAddAlbumToPlaylist(pid, albumId); pendingAlbumId = null },
+            items = playlistItems,
+            onAddTo = { item -> onAddAlbumToPlaylist(item, albumId); pendingAlbumId = null },
             onCreateAndAdd = { name -> onCreatePlaylistAndAddAlbum(name, albumId); pendingAlbumId = null },
             onDismiss = { pendingAlbumId = null },
         )

@@ -31,6 +31,7 @@ fun PlaylistsScreen(
     onPlaylistClick: (String) -> Unit,
     onCreate: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onSync: (String) -> Unit,
     onRefreshServer: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
@@ -77,6 +78,7 @@ fun PlaylistsScreen(
                         item = item,
                         onClick = { onPlaylistClick(item.id) },
                         onDelete = if (item is PlaylistListItem.Local) ({ onDelete(item.id) }) else null,
+                        onSync = if (item is PlaylistListItem.Local && !item.isSynced) ({ onSync(item.id) }) else null,
                     )
                     FirmiumDivider()
                 }
@@ -97,7 +99,7 @@ fun PlaylistsScreen(
 
 // .pl-card: padding 12/10dp, gap 16dp. Art: 48×48dp, surface2, 8dp radius.
 @Composable
-private fun PlaylistRow(item: PlaylistListItem, onClick: () -> Unit, onDelete: (() -> Unit)?) {
+private fun PlaylistRow(item: PlaylistListItem, onClick: () -> Unit, onDelete: (() -> Unit)?, onSync: (() -> Unit)?) {
     val colors = LocalFirmiumColors.current
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
@@ -127,6 +129,13 @@ private fun PlaylistRow(item: PlaylistListItem, onClick: () -> Unit, onDelete: (
                 "${item.trackCount} track${if (item.trackCount != 1) "s" else ""}",
                 fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
             )
+        }
+        // Sync — small icon button for local-only playlists not yet on the server
+        if (onSync != null) {
+            FirmiumIconButton(onClick = onSync, modifier = Modifier.size(36.dp)) {
+                FirmiumIcon(Icons.Default.Cloud, contentDescription = "Sync to server",
+                    tint = colors.accent, modifier = Modifier.size(18.dp))
+            }
         }
         // Delete — small icon button (only for local playlists)
         if (onDelete != null) {

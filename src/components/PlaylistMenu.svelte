@@ -1,10 +1,13 @@
 <script lang="ts">
   import { get } from 'svelte/store'
   import { playlistMenuState, hidePlaylistMenu, switchToCreate } from '../lib/playlistMenu'
-  import { playlists } from '../lib/stores'
+  import { playlists, serverPlaylists, mergePlaylists } from '../lib/stores'
   import { Api } from '../lib/api'
+  import { IconCloud } from '../lib/icons'
   import { dataSource } from '../lib/dataSource'
   import type { Song } from '../lib/types/tauri-commands'
+
+  const unified = $derived(mergePlaylists($playlists, $serverPlaylists))
 
   let newPlaylistName = $state('')
   let popupEl: HTMLDivElement | undefined = $state()
@@ -22,6 +25,14 @@
         if (pr.right > window.innerWidth - 8) popupEl.style.left = `${rect.left - pr.width - 6}px`
         if (pr.bottom > window.innerHeight - 8) popupEl.style.top = `${Math.max(8, window.innerHeight - pr.height - 8)}px`
       })
+    }
+  })
+
+  // Lazily fetch server playlists when the popup opens, so server-only playlists
+  // (not created by this client) can be offered as add targets too.
+  $effect(() => {
+    if ($playlistMenuState.visible && $playlistMenuState.mode !== 'create' && get(serverPlaylists).length === 0) {
+      Api.getPlaylists().then(fetched => serverPlaylists.set(fetched)).catch(console.error)
     }
   })
 
@@ -50,16 +61,31 @@
     }
   }
 
+  // Adds tracks directly to a server-only playlist (no local entry exists for it).
+  async function addTracksToServerPlaylist(serverId: string, tracks: Song[]): Promise<void> {
+    await Api.updatePlaylist(serverId, { songIdsToAdd: tracks.map(t => t.id) })
+  }
+
   async function addTo(playlistId: string) {
     const pending = $playlistMenuState.pending
     hidePlaylistMenu()
     if (!pending) return
+    const item = unified.find(u => u.id === playlistId)
+    const isServerOnly = item?.source === 'server-only' && item.serverId
     if (pending.type === 'tracks') {
-      await syncAddTracks(playlistId, pending.tracks)
+      if (isServerOnly) {
+        await addTracksToServerPlaylist(item.serverId!, pending.tracks).catch(console.error)
+      } else {
+        await syncAddTracks(playlistId, pending.tracks)
+      }
     } else if (pending.type === 'album') {
       try {
         const { tracks } = await $dataSource.getAlbumTracks(pending.albumId)
-        await syncAddTracks(playlistId, tracks)
+        if (isServerOnly) {
+          await addTracksToServerPlaylist(item.serverId!, tracks).catch(console.error)
+        } else {
+          await syncAddTracks(playlistId, tracks)
+        }
       } catch (err) {
         console.error('Failed to add album to playlist:', err)
       }
@@ -143,10 +169,10 @@
     </div>
   {:else}
     <div class="pl-popup-header">Add to playlist</div>
-    {#if $playlists.length === 0}
+    {#if unified.length === 0}
       <div class="pl-popup-empty">No playlists yet</div>
     {:else}
-      {#each $playlists as pl}
+      {#each unified as pl}
         <div
           class="pl-popup-item"
           role="button"
@@ -154,8 +180,13 @@
           onclick={() => addTo(pl.id)}
           onkeydown={e => handleItemKeydown(e, () => addTo(pl.id))}
         >
-          <span class="pl-popup-name">{pl.name}</span>
-          <span class="pl-popup-count">{pl.tracks.length}</span>
+          <span class="pl-popup-name">
+            {pl.name}
+            {#if pl.source === 'synced' || pl.source === 'server-only'}
+              <span class="pl-popup-cloud" title={pl.source === 'synced' ? 'Synced to server' : 'Server playlist'}><span class="icon" style="width:10px;height:10px">{@html IconCloud}</span></span>
+            {/if}
+          </span>
+          <span class="pl-popup-count">{pl.trackCount}</span>
         </div>
       {/each}
     {/if}

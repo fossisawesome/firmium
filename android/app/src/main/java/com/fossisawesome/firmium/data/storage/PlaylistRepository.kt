@@ -67,6 +67,13 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
         }
     }
 
+    // Manually triggers a sync for a single local-only playlist (e.g. user tapped "Sync").
+    suspend fun syncNow(id: String) {
+        val p = load().find { it.id == id } ?: return
+        if (p.serverId != null) return
+        syncCreate(p)
+    }
+
     suspend fun delete(id: String) {
         val serverId = load().find { it.id == id }?.serverId
         mutate { removeIf { it.id == id } }

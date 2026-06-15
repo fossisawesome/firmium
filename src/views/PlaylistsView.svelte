@@ -70,6 +70,25 @@
     showDialog = false
   }
 
+  let syncingIds = $state(new Set<string>())
+
+  async function syncToServer(e: MouseEvent, item: typeof unified[number]) {
+    e.stopPropagation()
+    if (!item.local || syncingIds.has(item.local.id)) return
+    const localId = item.local.id
+    syncingIds = new Set(syncingIds).add(localId)
+    try {
+      const serverPl = await Api.createPlaylist(item.name)
+      playlists.setServerId(localId, serverPl.id)
+    } catch (e) {
+      console.error('Failed to sync playlist to server:', e)
+    } finally {
+      const next = new Set(syncingIds)
+      next.delete(localId)
+      syncingIds = next
+    }
+  }
+
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') confirm()
     if (e.key === 'Escape') cancel()
@@ -145,11 +164,46 @@
           {#if item.description} · {item.description.slice(0, 60)}{/if}
         </div>
       </div>
+      {#if item.source === 'local' && item.local}
+        <button
+          class="pl-sync-btn"
+          title="Sync to server"
+          disabled={syncingIds.has(item.local.id)}
+          onclick={e => syncToServer(e, item)}
+        >
+          <span class="icon" style="width:14px;height:14px">{@html IconCloud}</span>
+          {syncingIds.has(item.local.id) ? 'Syncing…' : 'Sync'}
+        </button>
+      {/if}
     </div>
   {/each}
 {/if}
 
 <style>
+  .pl-sync-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .pl-sync-btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .pl-sync-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
   .pl-synced-badge, .pl-server-badge {
     display: inline-flex;
     align-items: center;

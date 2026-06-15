@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,14 +20,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 
 // Sheet for picking an existing playlist to add tracks to, or creating a new one.
 @Composable
 fun AddToPlaylistDialog(
-    playlists: List<Playlist>,
-    onAddTo: (playlistId: String) -> Unit,
+    items: List<PlaylistListItem>,
+    onAddTo: (PlaylistListItem) -> Unit,
     onCreateAndAdd: (name: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -101,10 +102,10 @@ fun AddToPlaylistDialog(
                     }
                     FirmiumDivider()
                 }
-                items(playlists, key = { it.id }) { playlist ->
+                items(items, key = { it.id }) { item ->
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .clickable { onAddTo(playlist.id); onDismiss() }
+                            .clickable { onAddTo(item); onDismiss() }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -112,8 +113,15 @@ fun AddToPlaylistDialog(
                             tint = colors.muted, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.width(16.dp))
                         Column {
-                            Text(playlist.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
-                            Text("${playlist.tracks.size} tracks", fontSize = 12.sp,
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(item.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                                if (item.isSynced) {
+                                    Spacer(Modifier.width(6.dp))
+                                    FirmiumIcon(Icons.Default.Cloud, contentDescription = null,
+                                        tint = colors.accent, modifier = Modifier.size(12.dp))
+                                }
+                            }
+                            Text("${item.trackCount} tracks", fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace, color = colors.muted)
                         }
                     }

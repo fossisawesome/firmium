@@ -40,10 +40,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.PlayerState
+import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -54,7 +54,7 @@ import kotlin.math.roundToInt
 fun FullScreenPlayer(
     state: PlayerState,
     coverUrl: String?,
-    playlists: List<Playlist>,
+    playlistItems: List<PlaylistListItem>,
     onDismiss: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -68,7 +68,7 @@ fun FullScreenPlayer(
     onQueueOpen: () -> Unit,
     onLyricsOpen: () -> Unit,
     onSimilarTracksOpen: (() -> Unit)? = null,
-    onAddToPlaylist: (playlistId: String) -> Unit,
+    onAddToPlaylist: (item: PlaylistListItem) -> Unit,
     onCreatePlaylistAndAdd: (name: String) -> Unit,
 ) {
     val track = state.currentTrack ?: return
@@ -274,8 +274,8 @@ fun FullScreenPlayer(
 
     if (showAddToPlaylist) {
         AddToPlaylistDialog(
-            playlists = playlists,
-            onAddTo = { pid -> onAddToPlaylist(pid) },
+            items = playlistItems,
+            onAddTo = { item -> onAddToPlaylist(item) },
             onCreateAndAdd = { name -> onCreatePlaylistAndAdd(name) },
             onDismiss = { showAddToPlaylist = false },
         )

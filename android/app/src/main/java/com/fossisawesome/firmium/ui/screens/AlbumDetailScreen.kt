@@ -19,21 +19,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.AlbumDetailState
+import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 
 @Composable
 fun AlbumDetailScreen(
     albumId: String,
     state: AlbumDetailState,
     coverUrlFor: (String?) -> String?,
-    playlists: List<Playlist>,
+    playlistItems: List<PlaylistListItem>,
     onLoad: (String) -> Unit,
     onPlayAll: (List<Song>, Int) -> Unit,
-    onAddToPlaylist: (playlistId: String, songs: List<Song>) -> Unit,
+    onAddToPlaylist: (item: PlaylistListItem, songs: List<Song>) -> Unit,
     onCreatePlaylistAndAdd: (name: String, songs: List<Song>) -> Unit,
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
     onBack: () -> Unit,
@@ -142,8 +142,8 @@ fun AlbumDetailScreen(
     if (pendingSong != null) {
         val song = pendingSong!!
         AddToPlaylistDialog(
-            playlists = playlists,
-            onAddTo = { id -> onAddToPlaylist(id, listOf(song)); pendingSong = null },
+            items = playlistItems,
+            onAddTo = { item -> onAddToPlaylist(item, listOf(song)); pendingSong = null },
             onCreateAndAdd = { name -> onCreatePlaylistAndAdd(name, listOf(song)); pendingSong = null },
             onDismiss = { pendingSong = null },
         )
@@ -152,8 +152,8 @@ fun AlbumDetailScreen(
     val album = state.album
     if (pendingAllSongs && album != null) {
         AddToPlaylistDialog(
-            playlists = playlists,
-            onAddTo = { id -> onAddToPlaylist(id, album.tracks); pendingAllSongs = false },
+            items = playlistItems,
+            onAddTo = { item -> onAddToPlaylist(item, album.tracks); pendingAllSongs = false },
             onCreateAndAdd = { name -> onCreatePlaylistAndAdd(name, album.tracks); pendingAllSongs = false },
             onDismiss = { pendingAllSongs = false },
         )

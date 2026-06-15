@@ -29,10 +29,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Album
-import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 import com.fossisawesome.firmium.viewmodel.SearchState
 
 // Search screen — Firmium styling, exact port of MobileSearch.svelte.
@@ -40,13 +40,13 @@ import com.fossisawesome.firmium.viewmodel.SearchState
 fun SearchScreen(
     state: SearchState,
     coverUrlFor: (String?) -> String?,
-    playlists: List<Playlist>,
+    playlistItems: List<PlaylistListItem>,
     onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onPlaySong: (List<Song>, Int) -> Unit,
     onAlbumClick: (String) -> Unit,
-    onAddSongToPlaylist: (playlistId: String, song: Song) -> Unit,
+    onAddSongToPlaylist: (item: PlaylistListItem, song: Song) -> Unit,
     onCreatePlaylistAndAddSong: (name: String, song: Song) -> Unit,
     onAddAlbum: (albumId: String) -> Unit = {},
     onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
@@ -194,8 +194,8 @@ fun SearchScreen(
     val song = pendingSong
     if (song != null) {
         AddToPlaylistDialog(
-            playlists = playlists,
-            onAddTo = { pid -> onAddSongToPlaylist(pid, song); pendingSong = null },
+            items = playlistItems,
+            onAddTo = { item -> onAddSongToPlaylist(item, song); pendingSong = null },
             onCreateAndAdd = { name -> onCreatePlaylistAndAddSong(name, song); pendingSong = null },
             onDismiss = { pendingSong = null },
         )
