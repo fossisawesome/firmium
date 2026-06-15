@@ -52,6 +52,9 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
     private suspend fun syncCreate(p: Playlist) {
         try {
             val serverPl = api.createPlaylist(p.name)
+            if (p.tracks.isNotEmpty()) {
+                api.updatePlaylist(serverPl.id, songIdsToAdd = p.tracks.map { it.id })
+            }
             mutate {
                 val idx = indexOfFirst { it.id == p.id }
                 if (idx >= 0) set(idx, get(idx).copy(serverId = serverPl.id, createPending = false))
@@ -111,6 +114,35 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
         }
         if (serverId != null && newSongs.isNotEmpty()) {
             try { api.updatePlaylist(serverId!!, songIdsToAdd = newSongs.map { it.id }) } catch (_: Exception) { /* best-effort */ }
+        }
+    }
+
+    // Moves a track within the playlist and, if synced, pushes the new order to the
+    // server by removing every original index and re-adding song IDs in the new order
+    // (OpenSubsonic's updatePlaylist has no native "move" operation).
+    suspend fun moveTrack(id: String, from: Int, to: Int) {
+        var serverId: String? = null
+        var newTracks: List<Song>? = null
+        mutate {
+            val idx = indexOfFirst { it.id == id }
+            if (idx < 0) return@mutate
+            val existing = get(idx)
+            if (from < 0 || from >= existing.tracks.size || to < 0 || to >= existing.tracks.size || from == to) return@mutate
+            val tracks = existing.tracks.toMutableList()
+            val moved = tracks.removeAt(from)
+            tracks.add(to, moved)
+            serverId = existing.serverId
+            newTracks = tracks
+            set(idx, existing.copy(tracks = tracks))
+        }
+        if (serverId != null && newTracks != null) {
+            try {
+                api.updatePlaylist(
+                    serverId!!,
+                    songIndicesToRemove = newTracks!!.indices.toList(),
+                    songIdsToAdd = newTracks!!.map { it.id },
+                )
+            } catch (_: Exception) { /* best-effort */ }
         }
     }
 

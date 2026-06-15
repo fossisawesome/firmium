@@ -2,6 +2,7 @@ package com.fossisawesome.firmium.data.api
 
 import com.fossisawesome.firmium.BuildConfig
 import com.fossisawesome.firmium.data.model.*
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
@@ -185,10 +186,7 @@ class ApiClient(private val auth: AuthManager) {
     // Returns all playlists visible to the current user.
     suspend fun getPlaylists(): List<ServerPlaylist> {
         val data = fetch("getPlaylists")
-        return data.getAsJsonObject("playlists")
-            ?.getAsJsonArray("playlist")
-            ?.map { parsePlaylist(it.asJsonObject) }
-            ?: emptyList()
+        return jsonArray(data.getAsJsonObject("playlists"), "playlist").map { parsePlaylist(it.asJsonObject) }
     }
 
     // Fetches a playlist's full track list from the server.
@@ -200,8 +198,15 @@ class ApiClient(private val auth: AuthManager) {
             name = playlist.get("name")?.asString ?: "",
             comment = playlist.get("comment")?.asString ?: "",
             songCount = playlist.get("songCount")?.asInt ?: 0,
-            tracks = playlist.getAsJsonArray("entry")?.map { parseSong(it.asJsonObject) } ?: emptyList(),
+            tracks = jsonArray(playlist, "entry").map { parseSong(it.asJsonObject) },
         )
+    }
+
+    // Some servers return a single object instead of a one-element array when a
+    // collection (e.g. playlists, playlist entries) contains exactly one item.
+    private fun jsonArray(obj: JsonObject?, key: String): List<JsonElement> {
+        val el = obj?.get(key) ?: return emptyList()
+        return if (el.isJsonArray) el.asJsonArray.toList() else listOf(el)
     }
 
     // Creates a new playlist on the server and returns the created playlist's metadata.

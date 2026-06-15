@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { IconMusic } from '../lib/icons'
+  import { IconMusic, IconPlay, IconShuffle } from '../lib/icons'
   import { currentTrack } from '../lib/stores'
   import { loadImage, Api } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
   import { dataSourceVersion } from '../lib/stores'
-  import { setQueueSeamless } from '../lib/playback'
+  import { setQueueSeamless, shufflePlay } from '../lib/playback'
   import { lazyLoad } from '../lib/lazyLoad'
   import { createAbortController } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
@@ -72,6 +72,16 @@
     setQueueSeamless(tracks, idx)
   }
 
+  function playAll() {
+    if (!tracks.length) return
+    setQueueSeamless(tracks, 0)
+  }
+
+  function shuffleAll() {
+    if (!tracks.length) return
+    shufflePlay(tracks)
+  }
+
   function isPlaying(track: Song) {
     return $currentTrack?.id === track.id
   }
@@ -88,6 +98,10 @@
   <div class="tl-info">
     <div class="tl-title">{albumName}</div>
     <div class="tl-subtitle">{albumArtist}</div>
+    <div class="pl-detail-actions">
+      <button class="play-all-btn" onclick={playAll} disabled={!tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>Play All</button>
+      <button class="play-all-btn shuffle-all-btn" onclick={shuffleAll} disabled={!tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconShuffle}</span>Shuffle</button>
+    </div>
   </div>
 
 </div>

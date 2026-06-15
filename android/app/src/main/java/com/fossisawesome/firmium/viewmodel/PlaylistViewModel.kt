@@ -106,5 +106,33 @@ class PlaylistViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun removeTrack(playlistId: String, trackId: String) = viewModelScope.launch { repo.removeTrack(playlistId, trackId) }
 
+    // Removes a track from a server-only playlist by index, updating the cached
+    // track list and the server.
+    fun removeServerTrack(serverId: String, index: Int) = viewModelScope.launch {
+        val current = serverTracksCache.value[serverId] ?: return@launch
+        if (index < 0 || index >= current.tracks.size) return@launch
+        val tracks = current.tracks.toMutableList().also { it.removeAt(index) }
+        serverTracksCache.update { it + (serverId to current.copy(tracks = tracks)) }
+        try {
+            api.updatePlaylist(serverId, songIndicesToRemove = listOf(index))
+        } catch (_: Exception) { /* best-effort */ }
+    }
+
+    fun moveTrack(playlistId: String, from: Int, to: Int) = viewModelScope.launch { repo.moveTrack(playlistId, from, to) }
+
+    // Reorders a server-only playlist's cached tracks and pushes the new order to the
+    // server (remove all original indices, re-add song IDs in the new order).
+    fun moveServerTrack(serverId: String, from: Int, to: Int) = viewModelScope.launch {
+        val current = serverTracksCache.value[serverId] ?: return@launch
+        if (from < 0 || from >= current.tracks.size || to < 0 || to >= current.tracks.size || from == to) return@launch
+        val tracks = current.tracks.toMutableList()
+        val moved = tracks.removeAt(from)
+        tracks.add(to, moved)
+        serverTracksCache.update { it + (serverId to current.copy(tracks = tracks)) }
+        try {
+            api.updatePlaylist(serverId, songIndicesToRemove = tracks.indices.toList(), songIdsToAdd = tracks.map { it.id })
+        } catch (_: Exception) { /* best-effort */ }
+    }
+
     fun playlistById(id: String): Playlist? = state.value.playlists.find { it.id == id }
 }

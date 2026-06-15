@@ -100,7 +100,13 @@ fn array_field(body: &serde_json::Value, path: &[&str]) -> Vec<serde_json::Value
             None => return Vec::new(),
         }
     }
-    cur.as_array().cloned().unwrap_or_default()
+    // Some servers return a single object instead of a one-element array when
+    // a collection (e.g. playlists, playlist entries) contains exactly one item.
+    match cur {
+        serde_json::Value::Array(arr) => arr.clone(),
+        serde_json::Value::Object(_) => vec![cur.clone()],
+        _ => Vec::new(),
+    }
 }
 
 // ── Connection ───────────────────────────────────────────────────────────────

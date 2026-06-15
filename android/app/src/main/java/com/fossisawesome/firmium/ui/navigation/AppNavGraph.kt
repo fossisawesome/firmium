@@ -370,7 +370,8 @@ fun AppNavGraph(
                                 isServerOnly = true,
                                 serverLoading = cached == null,
                                 onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
-                                onRemoveTrack = { _, _ -> },
+                                onRemoveTrack = { _, index -> playlistViewModel.removeServerTrack(serverId, index) },
+                                onMoveTrack = { from, to -> playlistViewModel.moveServerTrack(serverId, from, to) },
                                 onDownloadTrack = onDownloadTrack,
                                 onBack = { navController.popBackStack() },
                             )
@@ -383,6 +384,7 @@ fun AppNavGraph(
                                 tracks = playlist.tracks,
                                 onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
                                 onRemoveTrack = { trackId, _ -> playlistViewModel.removeTrack(id, trackId) },
+                                onMoveTrack = { from, to -> playlistViewModel.moveTrack(id, from, to) },
                                 onDownloadTrack = onDownloadTrack,
                                 onBack = { navController.popBackStack() },
                             )

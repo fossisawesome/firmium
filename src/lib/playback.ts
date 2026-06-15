@@ -5,7 +5,7 @@ import {
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
   lyricsWordTimings, lyricsGlowColor,
-  bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed
+  bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed, shuffleEnabled
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
 import { getLocalTrackPath } from './localApi'
@@ -108,6 +108,19 @@ export function setQueueSeamless(newQueue: Song[], startIdx: number): void {
     queueIdx.set(startIdx)
     playAt(startIdx)
   }
+}
+
+// Shuffles `tracks` and starts playback from the first shuffled track, enabling
+// shuffle mode so subsequent `nextTrack()` calls keep picking random queue items.
+export function shufflePlay(tracks: Song[]): void {
+  if (!tracks.length) return
+  const shuffled = [...tracks]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  shuffleEnabled.set(true)
+  setQueueSeamless(shuffled, 0)
 }
 
 // ── Crossfade to next track ───────────────────────────────────────────────────

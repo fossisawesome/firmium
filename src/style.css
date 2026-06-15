@@ -1070,6 +1070,18 @@ input[type="range"].volume-slider {
   opacity: 0.8;
 }
 
+.shuffle-all-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.shuffle-all-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
+}
+
 /* Wraps play-all and bio-toggle on the same row */
 .artist-page-actions {
   display: flex;
@@ -1847,7 +1859,8 @@ input[type="range"].volume-slider {
 /* ── Playlist add button on track rows ────────────────────────────────────── */
 
 .track-add-btn,
-.track-remove-btn {
+.track-remove-btn,
+.track-move-btn {
   background: none;
   border: 1px solid transparent;
   color: var(--muted);
@@ -1867,8 +1880,20 @@ input[type="range"].volume-slider {
 }
 
 .track-row:hover .track-add-btn,
-.track-row:hover .track-remove-btn {
+.track-row:hover .track-remove-btn,
+.track-row:hover .track-move-btn {
   opacity: 1;
+}
+
+.track-move-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.track-move-btn:disabled {
+  opacity: 0.3 !important;
+  cursor: not-allowed;
 }
 
 .track-add-btn:hover {
@@ -2860,6 +2885,7 @@ html.is-mobile-layout .track-row { padding: 14px 10px; }
 /* Always show action buttons — no hover state on touch screens */
 html.is-mobile-layout .track-add-btn,
 html.is-mobile-layout .track-remove-btn,
+html.is-mobile-layout .track-move-btn,
 html.is-mobile-layout .album-add-btn,
 html.is-mobile-layout .track-download-btn,
 html.is-mobile-layout .album-download-btn { opacity: 1; }

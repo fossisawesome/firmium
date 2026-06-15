@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { IconList, IconPlay, IconCloud } from '../lib/icons'
+  import { IconList, IconPlay, IconCloud, IconShuffle } from '../lib/icons'
   import { playlists, currentTrack, navToView, serverPlaylists, type Playlist } from '../lib/stores'
   import { Api, loadImage } from '../lib/api'
-  import { setQueueSeamless } from '../lib/playback'
+  import { setQueueSeamless, shufflePlay } from '../lib/playback'
   import { showPlaylistMenu } from '../lib/playlistMenu'
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration } from '../lib/utils'
@@ -128,6 +128,11 @@
     setQueueSeamless(pl.tracks, 0)
   }
 
+  function shuffleAll() {
+    if (!pl || !pl.tracks.length) return
+    shufflePlay(pl.tracks)
+  }
+
   function deletePl() {
     if (!pl) return
     if (confirm(`Delete "${pl.name}"? This cannot be undone.`)) {
@@ -177,6 +182,30 @@
   function playTrack(idx: number) {
     if (!pl) return
     setQueueSeamless(pl.tracks, idx)
+  }
+
+  // Pushes the playlist's new track order to the server by removing every
+  // original index and re-adding the song IDs in the new order (OpenSubsonic
+  // updatePlaylist has no native "move" operation).
+  function syncOrderToServer(serverIdToUse: string, newTracks: Song[]) {
+    const ids = newTracks.map(t => t.id)
+    Api.updatePlaylist(serverIdToUse, { songIndicesToRemove: ids.map((_, i) => i), songIdsToAdd: ids }).catch(console.error)
+  }
+
+  function moveTrack(idx: number, direction: -1 | 1) {
+    if (!pl) return
+    const to = idx + direction
+    if (to < 0 || to >= pl.tracks.length) return
+    if (pl.isServerOnly) {
+      const tracks = [...(serverTracks ?? [])]
+      const [moved] = tracks.splice(idx, 1)
+      tracks.splice(to, 0, moved)
+      serverTracks = tracks
+      syncOrderToServer(serverId!, tracks)
+    } else {
+      const newTracks = playlists.moveTrack(id, idx, to)
+      if (newTracks && pl.serverId) syncOrderToServer(pl.serverId, newTracks)
+    }
   }
 </script>
 
@@ -267,6 +296,7 @@
 
       <div class="pl-detail-actions">
         <button class="play-all-btn" onclick={playAll} disabled={!pl.tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>Play All</button>
+        <button class="play-all-btn shuffle-all-btn" onclick={shuffleAll} disabled={!pl.tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconShuffle}</span>Shuffle</button>
         <button class="pl-delete-btn" onclick={deletePl}>Delete</button>
       </div>
     </div>
@@ -315,6 +345,9 @@
             showAddButton={!pl.isServerOnly}
             onPlay={playTrack}
             onRemove={removeTrack}
+            onMove={moveTrack}
+            isFirst={idx === 0}
+            isLast={idx === pl.tracks.length - 1}
           />
         {/snippet}
       </VirtualList>

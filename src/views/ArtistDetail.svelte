@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { IconPlay, IconLoading } from '../lib/icons'
+  import { IconPlay, IconLoading, IconShuffle } from '../lib/icons'
   import LoadingState from '../components/LoadingState.svelte'
   import { Keyring } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
   import { dataSourceVersion } from '../lib/stores'
-  import { setQueueSeamless } from '../lib/playback'
+  import { setQueueSeamless, shufflePlay } from '../lib/playback'
   import { pooledMap, SafeStorage, createAbortController } from '../lib/utils'
   import { PLAY_ALL_CONCURRENCY } from '../lib/api'
   import { tauriFetch } from '../lib/tauri'
@@ -42,6 +42,7 @@ let { id }: { id: string } = $props()
   let bio = $state('Fetching biography…')
   let wikiImage = $state<string | null>(null)
   let playingAll = $state(false)
+  let shufflingAll = $state(false)
 
   $effect(() => {
     const source = $dataSource
@@ -101,19 +102,23 @@ let { id }: { id: string } = $props()
     })
   }
 
-  async function playAll() {
-    playingAll = true
+  async function playAll(shuffle = false) {
+    if (shuffle) shufflingAll = true
+    else playingAll = true
     try {
       const allAlbums = [...groups.Albums, ...groups.EPs, ...groups.Singles]
       const completed = await pooledMap(allAlbums, PLAY_ALL_CONCURRENCY, a => $dataSource.getAlbumTracks(a.id))
       const allTracks = completed.flatMap(r => r.tracks)
-      if (allTracks.length > 0) { setQueueSeamless(allTracks, 0) }
-      else alert('No playable tracks found for this artist.')
+      if (allTracks.length > 0) {
+        if (shuffle) shufflePlay(allTracks)
+        else setQueueSeamless(allTracks, 0)
+      } else alert('No playable tracks found for this artist.')
     } catch (err) {
       console.error('Play artist all failed:', err)
       alert('Failed to load artist queue.')
     } finally {
       playingAll = false
+      shufflingAll = false
     }
   }
 
@@ -130,8 +135,11 @@ let { id }: { id: string } = $props()
     <div class="artist-page-name">{name}</div>
     <div class="artist-page-bio">{bio}</div>
     <div class="artist-page-actions">
-      <button class="play-all-btn" onclick={playAll} disabled={playingAll}>
+      <button class="play-all-btn" onclick={() => playAll(false)} disabled={playingAll || shufflingAll}>
         <span class="icon" class:icon-spin={playingAll} style="width:12px;height:12px;margin-right:6px">{@html playingAll ? IconLoading : IconPlay}</span>{playingAll ? 'Loading Queue…' : 'Play All Songs'}
+      </button>
+      <button class="play-all-btn shuffle-all-btn" onclick={() => playAll(true)} disabled={playingAll || shufflingAll}>
+        <span class="icon" class:icon-spin={shufflingAll} style="width:12px;height:12px;margin-right:6px">{@html shufflingAll ? IconLoading : IconShuffle}</span>{shufflingAll ? 'Loading Queue…' : 'Shuffle'}
       </button>
     </div>
   </div>

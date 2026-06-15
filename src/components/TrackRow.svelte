@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { IconDownload, IconLoading } from '../lib/icons'
+  import { IconDownload, IconLoading, IconChevronUp, IconChevronDown } from '../lib/icons'
   import { loadImage, Api } from '../lib/api'
   import { showPlaylistMenu } from '../lib/playlistMenu'
   import { lazyLoad } from '../lib/lazyLoad'
@@ -8,7 +8,7 @@
   import type { Song } from '../lib/types/tauri-commands'
 
   let {
-    track, idx, playing = false, signal = null, albumArtist, displayNum, showAddButton = true, downloaded = false, onPlay, onRemove,
+    track, idx, playing = false, signal = null, albumArtist, displayNum, showAddButton = true, downloaded = false, onPlay, onRemove, onMove, isFirst = false, isLast = false,
   }: {
     track: Song
     idx: number
@@ -20,6 +20,9 @@
     downloaded?: boolean
     onPlay: (idx: number) => void
     onRemove?: (track: Song, idx: number) => void
+    onMove?: (idx: number, direction: -1 | 1) => void
+    isFirst?: boolean
+    isLast?: boolean
   } = $props()
 
   let downloadState = $state<'idle' | 'loading' | 'done' | 'error'>(downloaded ? 'done' : 'idle')
@@ -81,6 +84,20 @@
       title="Add to playlist"
       onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'tracks', tracks: [track] }) }}
     >+</button>
+  {/if}
+  {#if onMove}
+    <button
+      class="track-move-btn"
+      title="Move up"
+      disabled={isFirst}
+      onclick={e => { e.stopPropagation(); onMove!(idx, -1) }}
+    ><span class="icon" style="width:13px;height:13px">{@html IconChevronUp}</span></button>
+    <button
+      class="track-move-btn"
+      title="Move down"
+      disabled={isLast}
+      onclick={e => { e.stopPropagation(); onMove!(idx, 1) }}
+    ><span class="icon" style="width:13px;height:13px">{@html IconChevronDown}</span></button>
   {/if}
   {#if onRemove}
     <button

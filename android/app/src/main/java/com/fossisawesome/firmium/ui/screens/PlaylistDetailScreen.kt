@@ -23,6 +23,7 @@ fun PlaylistDetailScreen(
     serverLoading: Boolean = false,
     onPlayAll: (List<Song>, Int) -> Unit,
     onRemoveTrack: (trackId: String, index: Int) -> Unit,
+    onMoveTrack: (from: Int, to: Int) -> Unit,
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
     onBack: () -> Unit,
 ) {
@@ -65,6 +66,10 @@ fun PlaylistDetailScreen(
                         isCurrentlyPlaying = false,
                         onClick = { onPlayAll(tracks, index) },
                         onDownloadClick = onDownloadTrack?.invoke(song),
+                        onMoveUp = { onMoveTrack(index, index - 1) },
+                        onMoveDown = { onMoveTrack(index, index + 1) },
+                        canMoveUp = index > 0,
+                        canMoveDown = index < tracks.size - 1,
                     )
                     FirmiumDivider()
                 }

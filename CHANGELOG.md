@@ -1,3 +1,25 @@
+# v6.1.2
+
+## Added
+
+- **Shuffle play** (desktop `src/lib/playback.ts::shufflePlay`, `src/views/PlaylistDetail.svelte`; Android `viewmodel/PlaylistViewModel.kt`): New `shufflePlay(tracks)` function shuffles the input array via Fisher-Yates swap and enables shuffle mode before calling `setQueueSeamless`, so subsequent `nextTrack()` calls pick random queue items. Desktop adds a **Shuffle** button (new `IconShuffle` icon) on the playlist detail page alongside Play All, with the same disabled state when the playlist is empty.
+- **Playlist track reordering** (desktop `src/views/PlaylistDetail.svelte::moveTrack`, `src/lib/stores.ts::playlistsStore.moveTrack`, `src/lib/playback.ts`, `src/components/TrackRow.svelte`; Android `viewmodel/PlaylistViewModel.kt::moveTrack`, `data/storage/PlaylistRepository.kt::moveTrack`, `ui/screens/PlaylistDetailScreen.kt`): Tracks can now be moved up/down within a playlist via new move buttons (up/down chevrons, visible on hover for desktop, always visible on mobile) on each track row. Desktop's TrackRow gains `onMove` callback and `isFirst`/`isLast` props to disable move buttons at boundaries. For local-only playlists, the order is persisted locally via `stores.ts::playlistsStore.moveTrack()`. For synced playlists, the new order is pushed to the server by removing all original indices and re-adding song IDs in the new order (OpenSubsonic's `updatePlaylist` has no native "move" operation). Android's `PlaylistDetailScreen` accepts an `onMoveTrack` callback and decorates each track with `canMoveUp`/`canMoveDown` flags.
+- **Track row move buttons styling** (desktop `src/style.css`): New `.track-move-btn` class and hover/disabled states; buttons are hidden by default (opacity 0) and shown on `.track-row:hover`. Mobile layout (`html.is-mobile-layout`) always shows move buttons (opacity 1) for touch accessibility.
+- **Icon**: New `IconChevronUp` SVG in `src/lib/icons.ts` (inverse polyline of `IconChevronDown`).
+
+## Changed
+
+- **Playlist creation now syncs initial tracks** (desktop `src/views/PlaylistsView.svelte`, Android `data/storage/PlaylistRepository.kt`): When creating a new local playlist with track(s) and immediately syncing to the server, the initial track list is now passed to `Api.updatePlaylist()` (desktop) or `api.updatePlaylist()` (Android) immediately after `createPlaylist()`, instead of deferring to a later sync cycle. Ensures the server playlist contains all intended tracks from the start.
+- **OpenSubsonic JSON edge case handling** (`src-tauri/src/commands/subsonic.rs::array_field`, Android `data/api/ApiClient.kt::jsonArray`): Some OpenSubsonic servers return a single object instead of a one-element array when a collection (playlists, playlist entries, etc.) contains exactly one item. `array_field` now checks if the result is an object and wraps it in a vec, and `ApiClient.jsonArray` (new helper) detects single objects via `isJsonArray` and wraps them in a list. This fixes fetching playlists or entries on servers with single items.
+- **Shuffle button styling** (desktop `src/style.css`): New `.shuffle-all-btn` class, matching the `.play-all-btn` style (transparent bg, border, accent color on hover).
+
+## Fixed
+
+- **Synced playlists with initial tracks**: Creating a new local playlist with tracks, then syncing it to the server, now correctly transfers those tracks instead of creating an empty server playlist.
+- **Single-item playlist/entry fetches**: Fixed OpenSubsonic servers that return a single item as an object instead of an array (e.g., a playlist with one entry).
+
+---
+
 # v6.1.1
 
 ## Added

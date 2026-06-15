@@ -80,6 +80,9 @@
     try {
       const serverPl = await Api.createPlaylist(item.name)
       playlists.setServerId(localId, serverPl.id)
+      if (item.local.tracks.length) {
+        await Api.updatePlaylist(serverPl.id, { songIdsToAdd: item.local.tracks.map(t => t.id) })
+      }
     } catch (e) {
       console.error('Failed to sync playlist to server:', e)
     } finally {

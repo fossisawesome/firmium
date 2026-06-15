@@ -357,6 +357,26 @@ function createPlaylistsStore() {
       })
       return { added, newTracks }
     },
+    moveTrack(id: string, from: number, to: number): Song[] | null {
+      let newTracks: Song[] | null = null
+      update(pls => {
+        const next = pls.map(p => {
+          if (p.id !== id) return p
+          if (from < 0 || from >= p.tracks.length || to < 0 || to >= p.tracks.length || from === to) {
+            newTracks = p.tracks
+            return p
+          }
+          const tracks = [...p.tracks]
+          const [moved] = tracks.splice(from, 1)
+          tracks.splice(to, 0, moved)
+          newTracks = tracks
+          return { ...p, tracks }
+        })
+        _savePlaylists(next)
+        return next
+      })
+      return newTracks
+    },
     removeTrack(id: string, trackId: string): number {
       let removedIndex = -1
       update(pls => {

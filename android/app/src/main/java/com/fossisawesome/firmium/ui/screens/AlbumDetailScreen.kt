@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -217,6 +219,10 @@ fun TrackRow(
     isCurrentlyPlaying: Boolean,
     onClick: () -> Unit,
     onDownloadClick: (suspend () -> Result<Unit>)? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
+    canMoveUp: Boolean = false,
+    canMoveDown: Boolean = false,
 ) {
     val colors = LocalFirmiumColors.current
     Row(
@@ -247,6 +253,16 @@ fun TrackRow(
         Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
         if (onDownloadClick != null) {
             DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp)
+        }
+        if (onMoveUp != null && onMoveDown != null) {
+            FirmiumIconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(32.dp)) {
+                FirmiumIcon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up",
+                    tint = if (canMoveUp) colors.muted else colors.muted.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+            }
+            FirmiumIconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(32.dp)) {
+                FirmiumIcon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down",
+                    tint = if (canMoveDown) colors.muted else colors.muted.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+            }
         }
     }
 }
