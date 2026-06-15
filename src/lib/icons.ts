@@ -37,6 +37,9 @@ export const IconSettings = `<svg viewBox="0 0 24 24" width="100%" height="100%"
 
 export const IconHexagon = `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><polygon points="12,2 22,7 22,17 12,22 2,17 2,7"/></svg>`
 
+// App logo: gold-to-purple gradient hexagon (matches icon-source.svg / firmium-site logo.svg).
+export const IconLogo = `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="firmium-logo-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c97e"/><stop offset="100%" stop-color="#863bff"/></linearGradient></defs><polygon points="12,2 22,7 22,17 12,22 2,17 2,7" stroke="url(#firmium-logo-grad)" stroke-width="2" stroke-linejoin="round"/></svg>`
+
 export const IconClose = `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
 
 export const IconShuffle = `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>`

@@ -60,7 +60,7 @@ fun SearchScreen(
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // Header: back arrow + rounded search input + search button
         // Matches .ms-header: padding 12/12/10, border-bottom, gap 8dp
         Row(

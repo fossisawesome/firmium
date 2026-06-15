@@ -21,12 +21,17 @@ pub struct StreamingReader {
     /// Shared buffer so the seek fallback can rebuild the decoder from buffered bytes.
     buffer: Arc<Mutex<Vec<u8>>>,
     pos: usize,
+    /// Total stream size from the `Content-Length` header, if present. Lets
+    /// symphonia's bisection-based seek (used by OGG/MP4/etc.) compute byte
+    /// offsets from timestamps for forward seeks instead of failing with EOF.
+    total_len: Option<u64>,
 }
 
 impl StreamingReader {
     pub fn new(response: reqwest::blocking::Response) -> (Self, Arc<Mutex<Vec<u8>>>) {
         let buffer = Arc::new(Mutex::new(Vec::new()));
-        let reader = Self { response, buffer: Arc::clone(&buffer), pos: 0 };
+        let total_len = response.content_length();
+        let reader = Self { response, buffer: Arc::clone(&buffer), pos: 0, total_len };
         (reader, buffer)
     }
 
@@ -110,7 +115,7 @@ impl MediaSource for StreamingReader {
     }
 
     fn byte_len(&self) -> Option<u64> {
-        None
+        self.total_len
     }
 }
 

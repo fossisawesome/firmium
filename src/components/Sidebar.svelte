@@ -2,7 +2,7 @@
   import { activeView, navToView, isAuthed, authServer, openAccountModal, type ViewType } from '../lib/stores'
   import {
     IconHome, IconDisc, IconMusic, IconSearch,
-    IconList, IconSettings, IconHexagon, IconUser
+    IconList, IconSettings, IconHexagon, IconLogo, IconUser
   } from '../lib/icons'
 
   const NAV_ITEMS: { view: ViewType; label: string; icon: string }[] = [
@@ -34,10 +34,10 @@
 </script>
 
 <div class="app-brand">
-  <span class="icon logo" style="width:20px;height:20px;color:var(--accent)">{@html IconHexagon}</span>
+  <span class="icon logo" style="width:20px;height:20px">{@html IconLogo}</span>
   <span class="server-lbl">{serverLabel}</span>
-  <button class="account-btn" title={$isAuthed ? 'Account' : 'Connect to server'} onclick={openAccountModal}>
-    <span class="icon" style="width:16px;height:16px">{@html IconUser}</span>
+  <button class="account-btn" title={$isAuthed ? 'Account' : 'Connect to server'} aria-label={$isAuthed ? 'Account' : 'Connect to server'} onclick={openAccountModal}>
+    <span class="icon" style="width:16px;height:16px" aria-hidden="true">{@html IconUser}</span>
   </button>
 </div>
 
@@ -46,9 +46,11 @@
     <button
       class="nav-btn"
       class:active={isActive(item.view)}
+      aria-current={isActive(item.view) ? 'page' : undefined}
+      aria-label={item.label}
       onclick={() => navToView(item.view)}
     >
-      <span class="icon nav-icon">{@html item.icon}</span>
+      <span class="icon nav-icon" aria-hidden="true">{@html item.icon}</span>
       <span class="nav-label">{item.label}</span>
     </button>
   {/each}

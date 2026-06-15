@@ -12,6 +12,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
+// Per-word timing estimated client-side from line-level LRC timestamps (see
+// computeWordTimings below) — used for the karaoke fill animation.
+data class WordTiming(val text: String, val startMs: Long, val endMs: Long)
+
 data class LyricsState(
     val lines: List<LyricLine> = emptyList(),
     val synced: Boolean = false,
@@ -19,7 +23,33 @@ data class LyricsState(
     val isLoading: Boolean = false,
     val isOpen: Boolean = false,
     val trackId: String? = null,
+    val wordTimings: List<List<WordTiming>> = emptyList(),
 )
+
+// Estimates per-word timing from line-level LRC timestamps, distributing each
+// line's duration (to the next line's start, or track end for the last line)
+// proportionally across word character lengths. Mirrors computeWordTimings in
+// playback.ts since real word-level timestamps aren't available from LRC/LRCLIB.
+fun computeWordTimings(lines: List<LyricLine>, trackDurationMs: Long): List<List<WordTiming>> {
+    return lines.mapIndexed { i, line ->
+        val lineStart = line.startMs ?: return@mapIndexed emptyList()
+        val lineEnd = if (i < lines.size - 1) (lines[i + 1].startMs ?: lineStart) else maxOf(trackDurationMs, lineStart)
+        val words = line.text.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (words.isEmpty()) return@mapIndexed emptyList()
+
+        val weights = words.mapIndexed { idx, w -> w.length + if (idx < words.size - 1) 1 else 0 }
+        val totalWeight = weights.sum().takeIf { it > 0 } ?: 1
+        val span = maxOf(0L, lineEnd - lineStart)
+
+        var cursor = lineStart
+        words.mapIndexed { idx, text ->
+            val startMs = cursor
+            val endMs = startMs + (weights[idx].toDouble() / totalWeight * span).toLong()
+            cursor = endMs
+            WordTiming(text, startMs, endMs)
+        }
+    }
+}
 
 // Owns lyrics fetching, caching, and position-sync state for the currently playing track.
 class LyricsController(private val scope: CoroutineScope, private val api: ApiClient) {
@@ -46,7 +76,12 @@ class LyricsController(private val scope: CoroutineScope, private val api: ApiCl
             // coroutine was cancelled.
             if (_state.value.trackId != trackId) return@launch
             if (result != null) {
-                _state.update { it.copy(isLoading = false, lines = result.lines, synced = result.synced) }
+                val wordTimings = if (result.synced) {
+                    computeWordTimings(result.lines, (track.duration * 1000).toLong())
+                } else {
+                    emptyList()
+                }
+                _state.update { it.copy(isLoading = false, lines = result.lines, synced = result.synced, wordTimings = wordTimings) }
             } else {
                 _state.update { it.copy(isLoading = false) }
             }

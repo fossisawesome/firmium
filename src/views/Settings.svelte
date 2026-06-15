@@ -3,7 +3,7 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
@@ -23,7 +23,7 @@
     'firmium_auto_login', 'firmium_lrclib', 'firmium_theme',
     'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
     'firmium_volume', 'firmium_gapless', 'firmium_lastfm',
-    'firmium_download_format',
+    'firmium_download_format', 'firmium_lyrics_word_fill',
   ]
 
   // ── Active category ───────────────────────────────────────────────────────────
@@ -338,6 +338,17 @@
         </div>
         <label class="toggle-switch">
           <input type="checkbox" bind:checked={isLrclibEnabled} onchange={handleLrclib} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Word-by-Word Lyrics Animation</div>
+          <div class="settings-desc">Karaoke-style fill on the active lyric line, with per-word timing estimated from the line's timestamps. Disable for plain line-by-line highlighting.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" bind:checked={$lyricsWordFillEnabled} onchange={(e) => setLyricsWordFillEnabled((e.target as HTMLInputElement).checked)} />
           <span class="toggle-slider"></span>
         </label>
       </div>

@@ -16,6 +16,11 @@
   transform-origin: center;
 }
 
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
 /* Wrapper for inline SVG icons — inherits color from parent */
 .icon {
   display: inline-flex;
@@ -33,7 +38,7 @@
   --surface2: #242424;
   --border: rgba(255,255,255,0.08);
   --text: #f0f0f0;
-  --muted: #888;
+  --muted: #a0a0a0;
   --accent: #e8c97e;
   --accent-dim: rgba(232,201,126,0.15);
   --error: #e06060;
@@ -676,8 +681,14 @@ html.is-mobile-layout.has-player .main-area {
   outline: none;
 }
 
+.search-row input::placeholder {
+  color: var(--muted);
+}
+
 .search-row input:focus {
   border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .search-row button {
@@ -901,11 +912,11 @@ input[type="range"]::-webkit-slider-runnable-track {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   background: var(--accent);
   border-radius: 50%;
-  margin-top: -3px;
+  margin-top: -5px;
   transition: transform var(--timing);
 }
 
@@ -921,8 +932,8 @@ input[type="range"]::-moz-range-track {
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   background: var(--accent);
   border: none;
   border-radius: 50%;
@@ -1495,7 +1506,14 @@ input[type="range"].volume-slider {
 
 /* ── Lyrics Panel ─────────────────────────────────────────────────────────── */
 
+@property --lyrics-glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
 .lyrics-panel {
+  position: relative;
   width: 0;
   overflow: hidden;
   flex-shrink: 0;
@@ -1507,12 +1525,26 @@ input[type="range"].volume-slider {
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Glow tinted with the current track's dominant cover art color */
+.lyrics-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background: radial-gradient(circle at 50% 30%, var(--lyrics-glow) 0%, transparent 70%);
+  transition: background 0.6s ease;
+}
+
 .lyrics-panel.open {
   width: 300px;
   min-width: 300px;
 }
 
 .lyrics-header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1550,6 +1582,8 @@ input[type="range"].volume-slider {
 }
 
 .lyrics-body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   overflow-y: auto;
   padding: 24px 20px 40px;
@@ -1574,28 +1608,42 @@ input[type="range"].volume-slider {
   padding: 7px 0;
   line-height: 1.55;
   opacity: 0.55;
-  transition: color 0.3s ease, font-size 0.25s ease, opacity 0.3s ease, font-weight 0.25s ease;
+  transition: color 0.3s ease, transform 0.25s ease, opacity 0.3s ease, font-weight 0.25s ease, filter 0.3s ease;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* Currently playing line */
+/* Currently playing line — large and centered, Spicy-Lyrics style */
 .lyric-line.active {
   color: var(--accent);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: bold;
   opacity: 1;
   letter-spacing: -0.2px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* Karaoke fill: filled portion (already sung) in accent, rest in muted */
+.lyric-word {
+  background: linear-gradient(to right, var(--accent) 50%, var(--muted) 50%);
+  background-size: 200% 100%;
+  background-position: calc((1 - var(--progress, 0)) * 100%) 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Already-played lines */
 .lyric-line.past {
   opacity: 0.3;
+  filter: blur(1.5px);
 }
 
 /* About to play (next few lines) */
 .lyric-line.upcoming {
   opacity: 0.65;
+  filter: blur(1.5px);
 }
 
 /* Unsynced plain-text lyrics — no highlighting, just show the text */
@@ -1907,6 +1955,14 @@ input[type="range"].volume-slider {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
+}
+
+.track-add-btn:disabled,
+.album-add-btn:disabled,
+.track-download-btn:disabled,
+.album-download-btn:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed;
 }
 
 .download-done {

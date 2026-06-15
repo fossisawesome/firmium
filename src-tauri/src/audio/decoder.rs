@@ -47,6 +47,7 @@ impl DecoderHandle {
         let channels = codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
         let duration = codec_params
             .n_frames
+            .filter(|&n| n > 0)
             .map(|n| n as f64 / sample_rate as f64);
 
         Ok((Self { format, decoder, track_id, sample_rate, channels }, duration))

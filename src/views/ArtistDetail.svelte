@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { IconPlay } from '../lib/icons'
+  import { IconPlay, IconLoading } from '../lib/icons'
   import LoadingState from '../components/LoadingState.svelte'
   import { Keyring } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
@@ -131,7 +131,7 @@ let { id }: { id: string } = $props()
     <div class="artist-page-bio">{bio}</div>
     <div class="artist-page-actions">
       <button class="play-all-btn" onclick={playAll} disabled={playingAll}>
-        {#if !playingAll}<span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>{/if}{playingAll ? 'Loading Queue…' : 'Play All Songs'}
+        <span class="icon" class:icon-spin={playingAll} style="width:12px;height:12px;margin-right:6px">{@html playingAll ? IconLoading : IconPlay}</span>{playingAll ? 'Loading Queue…' : 'Play All Songs'}
       </button>
     </div>
   </div>

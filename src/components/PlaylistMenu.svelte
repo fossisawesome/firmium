@@ -97,6 +97,27 @@
     if (e.key === 'Enter') { e.preventDefault(); confirmCreate() }
     if (e.key === 'Escape') { e.stopPropagation(); hidePlaylistMenu() }
   }
+
+  // Auto-focus the first item when the "add to playlist" popup opens.
+  $effect(() => {
+    if ($playlistMenuState.visible && $playlistMenuState.mode !== 'create' && popupEl) {
+      requestAnimationFrame(() => {
+        popupEl?.querySelector<HTMLElement>('[role="button"]')?.focus()
+      })
+    }
+  })
+
+  function handleItemKeydown(e: KeyboardEvent, onActivate: () => void) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(); return }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    if (!popupEl) return
+    const items = Array.from(popupEl.querySelectorAll<HTMLElement>('[role="button"]'))
+    const idx = items.indexOf(e.currentTarget as HTMLElement)
+    if (idx === -1) return
+    const next = e.key === 'ArrowDown' ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length
+    items[next].focus()
+  }
 </script>
 
 <div
@@ -131,7 +152,7 @@
           role="button"
           tabindex="0"
           onclick={() => addTo(pl.id)}
-          onkeydown={e => (e.key === 'Enter' || e.key === ' ') && addTo(pl.id)}
+          onkeydown={e => handleItemKeydown(e, () => addTo(pl.id))}
         >
           <span class="pl-popup-name">{pl.name}</span>
           <span class="pl-popup-count">{pl.tracks.length}</span>
@@ -144,7 +165,7 @@
       role="button"
       tabindex="0"
       onclick={switchToCreate}
-      onkeydown={e => (e.key === 'Enter' || e.key === ' ') && switchToCreate()}
+      onkeydown={e => handleItemKeydown(e, switchToCreate)}
     >+ Create New</div>
   {/if}
 </div>

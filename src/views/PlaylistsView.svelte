@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { IconList, IconCloud } from '../lib/icons'
-  import { playlists, navToPlaylist, serverPlaylists } from '../lib/stores'
-  import { Api, loadImage, type ServerPlaylist } from '../lib/api'
+  import { playlists, navToPlaylist, serverPlaylists, mergePlaylists } from '../lib/stores'
+  import { Api, loadImage } from '../lib/api'
   import { lazyLoad } from '../lib/lazyLoad'
 
   let showDialog = $state(false)
@@ -11,13 +11,28 @@
   let serverLoading = $state(false)
   let serverError = $state('')
 
-  // On mount, fetch server playlists and store them for display.
+  // On mount, fetch server playlists and retry any local playlists that
+  // haven't been created on the server yet (e.g. created while offline).
   onMount(async () => {
     serverLoading = true
     serverError = ''
     try {
       const fetched = await Api.getPlaylists()
       serverPlaylists.set(fetched)
+
+      for (const p of $playlists) {
+        if (p.serverId || p.createPending === false || (p.createAttempts ?? 0) >= 3) continue
+        // Adopt an existing server playlist with the same name instead of creating a duplicate.
+        const existing = fetched.find(sp => sp.name === p.name)
+        if (existing) { playlists.markCreateAttempt(p.id, true, existing.id); continue }
+        try {
+          const serverPl = await Api.createPlaylist(p.name)
+          playlists.markCreateAttempt(p.id, true, serverPl.id)
+        } catch (e) {
+          console.error('Retry: failed to create playlist on server:', e)
+          playlists.markCreateAttempt(p.id, false)
+        }
+      }
     } catch (e: any) {
       serverError = e.message ?? 'Failed to load server playlists'
     } finally {
@@ -25,9 +40,7 @@
     }
   })
 
-  // Server playlists that don't already exist locally (matched by serverId).
-  const syncedServerIds = $derived(new Set($playlists.map(p => p.serverId).filter(Boolean)))
-  const serverOnlyPlaylists = $derived($serverPlaylists.filter(sp => !syncedServerIds.has(sp.id)))
+  const unified = $derived(mergePlaylists($playlists, $serverPlaylists))
 
   function createNew() {
     nameInput = ''
@@ -46,9 +59,10 @@
     // Then create on the server and record the server ID.
     try {
       const serverPl = await Api.createPlaylist(name)
-      if (serverPl.id) playlists.setServerId(pl.id, serverPl.id)
+      playlists.markCreateAttempt(pl.id, true, serverPl.id)
     } catch (e) {
       console.error('Failed to create playlist on server:', e)
+      playlists.markCreateAttempt(pl.id, false)
     }
   }
 
@@ -59,11 +73,6 @@
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') confirm()
     if (e.key === 'Escape') cancel()
-  }
-
-  // Navigate to a server-only playlist using a prefixed ID so PlaylistDetail can detect it.
-  function openServerPlaylist(sp: ServerPlaylist) {
-    navToPlaylist('server-' + sp.id)
   }
 </script>
 
@@ -88,79 +97,52 @@
   </div>
 {/if}
 
-<!-- Local playlists section -->
 <div class="pl-list-header">
-  <span class="section-header" style="margin:0">Your Playlists</span>
+  <span class="section-header" style="margin:0">Playlists</span>
   <button class="pl-new-btn" onclick={createNew}>+ New</button>
 </div>
 
-{#if $playlists.length === 0}
+{#if serverLoading}
+  <div class="pl-server-loading">Loading server playlists…</div>
+{:else if serverError}
+  <div class="pl-server-error">{serverError}</div>
+{/if}
+
+{#if unified.length === 0}
   <div class="pl-empty-state">
     <div class="pl-empty-icon"><span class="icon" style="width:48px;height:48px;color:var(--muted);opacity:0.4">{@html IconList}</span></div>
     <div>No playlists yet</div>
   </div>
 {:else}
-  {#each $playlists as pl}
+  {#each unified as item}
     <div
       class="pl-card"
       role="button"
       tabindex="0"
-      onclick={() => navToPlaylist(pl.id)}
-      onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navToPlaylist(pl.id)}
+      onclick={() => navToPlaylist(item.id)}
+      onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navToPlaylist(item.id)}
     >
       <div class="pl-card-art">
-        {#if pl.coverDataUrl}
-          <img src={pl.coverDataUrl} alt="" />
-        {:else if pl.coverArtId}
-          <img use:lazyLoad={img => loadImage(img, pl.coverArtId, null)} alt="" />
+        {#if item.coverDataUrl}
+          <img src={item.coverDataUrl} alt="" />
+        {:else if item.coverArtId}
+          <img use:lazyLoad={img => loadImage(img, item.coverArtId, null)} alt="" />
         {:else}
           <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconList}</span></div>
         {/if}
       </div>
       <div class="pl-card-info">
         <div class="pl-card-name">
-          {pl.name}
-          {#if pl.serverId}<span class="pl-synced-badge" title="Synced to server"><span class="icon" style="width:10px;height:10px">{@html IconCloud}</span></span>{/if}
+          {item.name}
+          {#if item.source === 'synced'}
+            <span class="pl-synced-badge" title="Synced to server"><span class="icon" style="width:10px;height:10px">{@html IconCloud}</span></span>
+          {:else if item.source === 'server-only'}
+            <span class="pl-server-badge" title="Server playlist"><span class="icon" style="width:10px;height:10px">{@html IconCloud}</span></span>
+          {/if}
         </div>
         <div class="pl-card-meta">
-          {pl.tracks.length} track{pl.tracks.length !== 1 ? 's' : ''}
-          {#if pl.description} · {pl.description.slice(0, 60)}{/if}
-        </div>
-      </div>
-    </div>
-  {/each}
-{/if}
-
-<!-- Server playlists section (playlists from Navidrome not already in local store) -->
-{#if serverLoading}
-  <div class="pl-server-loading">Loading server playlists…</div>
-{:else if serverError}
-  <div class="pl-server-error">{serverError}</div>
-{:else if serverOnlyPlaylists.length > 0}
-  <div class="section-header pl-server-section-header">From Server</div>
-  {#each serverOnlyPlaylists as sp}
-    <div
-      class="pl-card pl-card--server"
-      role="button"
-      tabindex="0"
-      onclick={() => openServerPlaylist(sp)}
-      onkeydown={e => (e.key === 'Enter' || e.key === ' ') && openServerPlaylist(sp)}
-    >
-      <div class="pl-card-art">
-        {#if sp.coverArt}
-          <img use:lazyLoad={img => loadImage(img, sp.coverArt as string, null)} alt="" />
-        {:else}
-          <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconList}</span></div>
-        {/if}
-      </div>
-      <div class="pl-card-info">
-        <div class="pl-card-name">
-          {sp.name}
-          <span class="pl-server-badge" title="Server playlist"><span class="icon" style="width:10px;height:10px">{@html IconCloud}</span></span>
-        </div>
-        <div class="pl-card-meta">
-          {sp.songCount ?? 0} track{(sp.songCount ?? 0) !== 1 ? 's' : ''}
-          {#if sp.comment} · {sp.comment.slice(0, 60)}{/if}
+          {item.trackCount} track{item.trackCount !== 1 ? 's' : ''}
+          {#if item.description} · {item.description.slice(0, 60)}{/if}
         </div>
       </div>
     </div>
@@ -175,14 +157,6 @@
     color: var(--accent);
     opacity: 0.8;
     vertical-align: middle;
-  }
-
-  .pl-card--server {
-    opacity: 0.9;
-  }
-
-  .pl-server-section-header {
-    margin-top: 16px;
   }
 
   .pl-server-loading, .pl-server-error {

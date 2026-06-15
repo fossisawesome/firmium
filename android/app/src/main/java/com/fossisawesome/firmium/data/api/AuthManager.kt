@@ -76,9 +76,14 @@ class AuthManager(
     }
 
     // Builds a full Subsonic REST URL: ${server}/rest/${action}?${authParams}&${extraParams}
-    fun buildUrl(action: String, extra: Map<String, String> = emptyMap()): String {
+    fun buildUrl(action: String, extra: Map<String, String> = emptyMap()): String =
+        buildUrl(action, extra.toList())
+
+    // Overload accepting a list of pairs so callers can pass repeated query params
+    // (e.g. multiple songIdToAdd entries for updatePlaylist), which a Map can't represent.
+    fun buildUrl(action: String, extra: List<Pair<String, String>>): String {
         val creds = _credentials ?: error("Not authenticated")
-        val params = (authParams() + extra).entries
+        val params = (authParams().toList() + extra)
             .joinToString("&") { (k, v) -> "$k=${v.encodeUrl()}" }
         return "${creds.server}/rest/$action?$params"
     }

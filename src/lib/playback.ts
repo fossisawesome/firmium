@@ -4,11 +4,14 @@ import {
   volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration, gaplessEnabled,
   playbackState, currentPosition, trackDuration, isSeeking,
   lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
+  lyricsWordTimings, lyricsGlowColor,
   bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
 import { getLocalTrackPath } from './localApi'
-import type { Song, PlaybackState } from './types/tauri-commands'
+import { getCoverArt } from './coverCache'
+import { extractDominantColor } from './coverColor'
+import type { Song, PlaybackState, LyricLine, WordTiming } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 
 const replayGainDb = (track: Song): number | null => {
@@ -99,7 +102,7 @@ export function setQueueSeamless(newQueue: Song[], startIdx: number): void {
 
   queue.set(newQueue)
 
-  if (matchIdx !== -1 && get(playbackState) !== 'stopped') {
+  if (matchIdx !== -1 && matchIdx === startIdx && get(playbackState) !== 'stopped') {
     queueIdx.set(matchIdx)
   } else {
     queueIdx.set(startIdx)
@@ -288,18 +291,62 @@ export function wireBridgeEvents(bridge: AudioBridge): void {
 
 // ── Lyrics fetching ───────────────────────────────────────────────────────────
 
+// Estimates per-word timing from line-level LRC timestamps, distributing each
+// line's duration (to the next line's start, or track end for the last line)
+// proportionally across word character lengths. Used for the karaoke fill
+// animation since real word-level timestamps aren't available from LRC/LRCLIB.
+export function computeWordTimings(lines: LyricLine[], trackDurationMs: number): WordTiming[][] {
+  return lines.map((line, i) => {
+    const lineEnd = i < lines.length - 1
+      ? lines[i + 1].start
+      : Math.max(trackDurationMs, line.start)
+    const words = line.value.split(/\s+/).filter(w => w.length > 0)
+    if (words.length === 0) return []
+
+    const weights = words.map((w, idx) => w.length + (idx < words.length - 1 ? 1 : 0))
+    const totalWeight = weights.reduce((a, b) => a + b, 0) || 1
+    const span = Math.max(0, lineEnd - line.start)
+
+    let cursor = line.start
+    return words.map((text, idx) => {
+      const startMs = cursor
+      const endMs = startMs + (weights[idx] / totalWeight) * span
+      cursor = endMs
+      return { text, startMs, endMs }
+    })
+  })
+}
+
+// Extracts the dominant color from the current track's cover art and updates
+// lyricsGlowColor for the lyrics panel's background glow.
+async function updateLyricsGlow(song: Song): Promise<void> {
+  if (!song.coverArtId) { lyricsGlowColor.set('transparent'); return }
+  try {
+    const url = await OpenSubsonicRouter.buildUrl('getCoverArt', { id: song.coverArtId })
+    const assetUrl = await getCoverArt(song.coverArtId, url)
+    const color = await extractDominantColor(assetUrl)
+    if (get(lyricsTrackId) !== song.id) return
+    lyricsGlowColor.set(color ? `rgb(${color.r}, ${color.g}, ${color.b})` : 'transparent')
+  } catch (e) {
+    console.warn('Lyrics glow color extraction failed:', e)
+  }
+}
+
 export async function fetchAndShowLyrics(song: Song): Promise<void> {
   if (!song) return
   lyricsTrackId.set(song.id)
   if (!get(lyricsOpen)) return
   lyricsStatus.set('Loading lyrics…')
   lyricsLines.set([])
+  lyricsWordTimings.set([])
+  updateLyricsGlow(song)
   try {
     const result = await Api.getLyrics(song)
     if (get(lyricsTrackId) !== song.id) { activeLyricIdx.set(-1); return }
     if (result) {
       lyricsLines.set(result.lines)
       lyricsSynced.set(result.synced)
+      lyricsWordTimings.set(result.synced ? computeWordTimings(result.lines, (song.duration ?? 0) * 1000) : [])
       activeLyricIdx.set(-1)
     } else {
       lyricsStatus.set('No lyrics available for this track')

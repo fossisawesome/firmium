@@ -1,3 +1,29 @@
+# v6.1.0
+
+## Added
+
+- **Karaoke-style word-by-word lyrics animation** (`src/lib/playback.ts::computeWordTimings`, `src/components/LyricsPanel.svelte`; Android `viewmodel/LyricsController.kt::computeWordTimings`, `ui/components/LyricsSheet.kt`): for synced lyrics, each line's per-word timing is estimated from its LRC timestamp and the next line's start, proportional to word length. The active line fills word-by-word via a `requestAnimationFrame`/`withFrameNanos` loop interpolating between position-poll updates. New "Word-by-Word Lyrics Animation" toggle (`src/lib/stores.ts::lyricsWordFillEnabled`/`setLyricsWordFillEnabled`, Android `AppPreferences.lyricsWordFillEnabled`) lets users fall back to plain line highlighting.
+- **Lyrics panel cover-art glow** (`src/lib/coverColor.ts::extractDominantColor`, `src/lib/playback.ts::updateLyricsGlow`, `src/lib/stores.ts::lyricsGlowColor`; Android `ui/components/ColorExtraction.kt::rememberDominantColor`): the lyrics panel/sheet background is now tinted with the current track's dominant cover color (8x8x8 histogram bucketing on desktop, `androidx.palette.Palette` on Android), darkened to a subtle radial-gradient glow.
+- **Server-synced playlists** (desktop `src/lib/stores.ts::mergePlaylists`/`Playlist.createPending`/`createAttempts`/`markCreateAttempt`, `src/views/PlaylistsView.svelte`; Android new `data/model/ServerPlaylist.kt`, `data/api/ApiClient.kt::getPlaylists`/`getPlaylistTracks`/`createPlaylist`/`updatePlaylist`/`deletePlaylist`, `data/storage/PlaylistRepository.kt`, `viewmodel/PlaylistViewModel.kt::mergePlaylists`/`PlaylistListItem`): local playlists are now created, renamed, and have tracks added/removed on the server on a best-effort basis (failures are swallowed and retried up to 3 times via `retryPendingCreates`/the `PlaylistsView` `onMount` retry loop). The "Your Playlists"/"From Server" split is replaced by a single merged list (`mergePlaylists`), with a cloud badge distinguishing synced vs. server-only entries. Android's `AuthManager.buildUrl`/`ApiClient.fetch` gain list-of-pairs overloads to support repeated `songIdToAdd`/`songIndexToRemove` params.
+- **App logo icon** (`src/lib/icons.ts::IconLogo`): gold-to-purple gradient hexagon matching `icon-source.svg`/the firmium-site logo, replacing the plain accent-colored `IconHexagon` in `Sidebar.svelte`'s brand area.
+
+## Changed
+
+- **Seek bar and switch touch targets enlarged on Android** (`ui/components/FirmiumSlider.kt::FirmiumSlider`/`FirmiumSeekBar`, `ui/components/FirmiumSwitch.kt`): hit area increased from 20dp to 48dp (sliders) and the switch's clickable bounds grown to a 48dp box around the existing 40x24dp track, for easier touch interaction without changing visual size.
+- **Desktop seek bar feels more responsive** (`src/components/PlayerBar.svelte::endSeek`): the displayed position now jumps to the seek target immediately on release instead of waiting for the next position poll, and `isSeeking` stays true for 300ms afterward to ignore a stale in-flight `playback-position` event reflecting the pre-seek position. `durDisplay`/`seekMax`/`seekValue` now fall back through `trackDuration || currentTrack.duration || 0` instead of only checking `trackDuration`.
+- **Streaming seek improved for OGG/MP4 and other bisection-seeking formats** (`src-tauri/src/audio/streaming_reader.rs::StreamingReader`): `byte_len()` now returns the stream's `Content-Length` (captured at construction) instead of `None`, letting `symphonia`'s bisection-based seek compute byte offsets from timestamps for forward seeks instead of failing with EOF.
+- `decoder.rs::DecoderHandle::try_new` now filters out a reported `n_frames` of `0`, treating it as "unknown duration" rather than a zero-length track.
+- `seek_position` (`src-tauri/src/commands/playback.rs`) is now an `async` command that runs the actual seek via `spawn_blocking`, avoiding blocking the Tauri async runtime during seeks.
+- **Accessibility pass on desktop player/account/sidebar/playlist-menu controls** (`src/components/PlayerBar.svelte`, `AccountModal.svelte`, `Sidebar.svelte`, `PlaylistMenu.svelte`): player buttons (`prev`/`play`/`next`/`repeat`/`lyrics`/`similar tracks`/`visualizer`) and sidebar nav/account buttons gain `aria-label`/`aria-current`/`aria-hidden` attributes; the now-playing cover art gets a descriptive `alt`. `AccountModal` is now a focus-trapped `role="dialog"` (auto-focuses its close button, cycles Tab/Shift+Tab within the modal). The "add to playlist" popup auto-focuses its first item and supports Arrow Up/Down navigation between items (`handleItemKeydown`).
+- **Gapless transition fix** (`src/lib/playback.ts::setQueueSeamless`): the seamless (no-restart) queue swap now only applies when the matched track is also at the target start index (`matchIdx === startIdx`), avoiding incorrectly preserving playback when the resumed queue reorders the current track.
+- `data/api/ApiClient.kt`'s LRCLIB requests now send a `Lrclib-Client` header identifying Firmium, per LRCLIB's API guidelines.
+
+## Removed
+
+- **Separate "Your Playlists"/"From Server" sections** (`src/views/PlaylistsView.svelte`): replaced by the unified, merged playlist list described above.
+
+---
+
 # v6.0.0
 
 ## Changed

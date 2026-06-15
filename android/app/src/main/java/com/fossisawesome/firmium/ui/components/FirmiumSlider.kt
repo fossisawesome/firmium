@@ -33,7 +33,7 @@ fun FirmiumSlider(
 
     BoxWithConstraints(
         modifier = modifier
-            .height(20.dp)
+            .height(48.dp)
             .pointerInput(valueRange) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
@@ -102,7 +102,7 @@ fun FirmiumSeekBar(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(20.dp)
+            .height(48.dp)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()

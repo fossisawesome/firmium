@@ -1,6 +1,5 @@
 package com.fossisawesome.firmium.ui.components
 
-import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -32,7 +31,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,16 +40,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.palette.graphics.Palette
-import coil.imageLoader
-import coil.request.ImageRequest
 import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.PlayerState
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -77,30 +72,11 @@ fun FullScreenPlayer(
     onCreatePlaylistAndAdd: (name: String) -> Unit,
 ) {
     val track = state.currentTrack ?: return
-    val context = LocalContext.current
     val colors = LocalFirmiumColors.current
     val configuration = LocalConfiguration.current
 
     // Extract dominant colour from cover art, darken to 22% (same formula as Svelte version).
-    var bgColor by remember { mutableStateOf<Color?>(null) }
-    LaunchedEffect(coverUrl) {
-        if (coverUrl == null) { bgColor = null; return@LaunchedEffect }
-        withContext(Dispatchers.IO) {
-            try {
-                val req = ImageRequest.Builder(context).data(coverUrl).allowHardware(false).build()
-                val bmp = (context.imageLoader.execute(req).drawable as? BitmapDrawable)?.bitmap
-                    ?: return@withContext
-                val palette = Palette.from(bmp).generate()
-                val swatch = palette.dominantSwatch ?: palette.vibrantSwatch ?: palette.mutedSwatch
-                swatch?.let {
-                    val r = ((it.rgb shr 16 and 0xFF) * 0.22f).toInt()
-                    val g = ((it.rgb shr 8 and 0xFF) * 0.22f).toInt()
-                    val b = ((it.rgb and 0xFF) * 0.22f).toInt()
-                    bgColor = Color(r, g, b)
-                }
-            } catch (_: Exception) { bgColor = null }
-        }
-    }
+    val bgColor = rememberDominantColor(coverUrl)
 
     var showAddToPlaylist by remember { mutableStateOf(false) }
     val screenWidth = configuration.screenWidthDp.dp
@@ -187,13 +163,15 @@ fun FullScreenPlayer(
                     )
                 }
 
-                // Right column: track info + seek + controls + volume, scrollable
+                // Right column: track info + seek + controls + volume, scrollable.
+                // Capped so controls don't stretch absurdly wide on ultra-wide screens.
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
                         .weight(0.58f)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 20.dp)
+                        .widthIn(max = 480.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -541,6 +519,7 @@ private fun FirmiumCircleButton(
     enabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier = Modifier
             .size(size)
@@ -550,7 +529,10 @@ private fun FirmiumCircleButton(
                 awaitEachGesture {
                     awaitFirstDown()
                     val up = waitForUpOrCancellation()
-                    if (up != null) onClick()
+                    if (up != null) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onClick()
+                    }
                 }
             },
         contentAlignment = Alignment.Center,

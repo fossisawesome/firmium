@@ -27,6 +27,7 @@ class AppPreferences(context: Context) {
         val THEME_ID = stringPreferencesKey("theme_id")
         val UI_THEME_ID = stringPreferencesKey("ui_theme_id")
         val LRCLIB_ENABLED = booleanPreferencesKey("lrclib_enabled")
+        val LYRICS_WORD_FILL_ENABLED = booleanPreferencesKey("lyrics_word_fill_enabled")
         val LASTFM_ENABLED = booleanPreferencesKey("lastfm_enabled")
         val AUTO_LOGIN = booleanPreferencesKey("auto_login")
         // Whether to persist the password to the keyring (default true for backwards compat).
@@ -49,6 +50,7 @@ class AppPreferences(context: Context) {
     // "firmium" = icon-only bottom nav with monospace player; "material3" = standard M3 components
     val uiThemeId: Flow<String> = store.data.map { it[UI_THEME_ID] ?: "material3" }
     val lrclibEnabled: Flow<Boolean> = store.data.map { it[LRCLIB_ENABLED] ?: true }
+    val lyricsWordFillEnabled: Flow<Boolean> = store.data.map { it[LYRICS_WORD_FILL_ENABLED] ?: true }
     val lastfmEnabled: Flow<Boolean> = store.data.map { it[LASTFM_ENABLED] ?: false }
     val autoLoginEnabled: Flow<Boolean> = store.data.map { it[AUTO_LOGIN] ?: true }
     // Default true so existing users who already have a saved password stay logged in.
@@ -67,6 +69,7 @@ class AppPreferences(context: Context) {
     suspend fun setThemeId(id: String) = store.edit { it[THEME_ID] = id }
     suspend fun setUiThemeId(id: String) = store.edit { it[UI_THEME_ID] = id }
     suspend fun setLrclibEnabled(v: Boolean) = store.edit { it[LRCLIB_ENABLED] = v }
+    suspend fun setLyricsWordFillEnabled(v: Boolean) = store.edit { it[LYRICS_WORD_FILL_ENABLED] = v }
     suspend fun setLastfmEnabled(v: Boolean) = store.edit { it[LASTFM_ENABLED] = v }
     suspend fun setAutoLoginEnabled(v: Boolean) = store.edit { it[AUTO_LOGIN] = v }
     suspend fun setSavePasswordEnabled(v: Boolean) = store.edit { it[SAVE_PASSWORD] = v }

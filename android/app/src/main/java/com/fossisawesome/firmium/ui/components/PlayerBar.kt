@@ -1,6 +1,7 @@
 package com.fossisawesome.firmium.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +60,7 @@ fun PlayerBar(
                     color = colors.text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee(),
                 )
                 Text(
                     text = track.displayArtist ?: track.artist,
@@ -67,6 +69,7 @@ fun PlayerBar(
                     color = colors.muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee(),
                 )
                 val trackInfo = track.formatTrackInfo()
                 if (trackInfo.isNotEmpty()) {

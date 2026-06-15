@@ -26,7 +26,7 @@ class FirmiumApplication : Application() {
     val api by lazy { ApiClient(auth) }
     val localLibrary by lazy { LocalLibraryRepository(this) }
     val downloadManager by lazy { DownloadManager(this, auth, localLibrary) }
-    val playlists by lazy { PlaylistRepository(prefs) }
+    val playlists by lazy { PlaylistRepository(prefs, api) }
     val audioPlayer by lazy { AudioPlayer(this) }
     val nowPlaying by lazy { NowPlayingController(this) }
 

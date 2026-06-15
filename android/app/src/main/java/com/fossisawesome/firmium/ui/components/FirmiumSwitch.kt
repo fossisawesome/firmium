@@ -44,23 +44,29 @@ fun FirmiumSwitch(
 
     Box(
         modifier = modifier
-            .width(40.dp)
-            .height(24.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(trackColor)
+            .size(48.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = { onCheckedChange(!checked) },
             ),
-        contentAlignment = Alignment.CenterStart,
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
-                .padding(start = thumbOffset + 3.dp)
-                .size(18.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(thumbColor),
-        )
+                .width(40.dp)
+                .height(24.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(trackColor),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(start = thumbOffset + 3.dp)
+                    .size(18.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(thumbColor),
+            )
+        }
     }
 }

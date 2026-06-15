@@ -23,9 +23,10 @@
   const trackInfo = $derived($currentTrack?.trackInfo ?? '')
 
   const posDisplay = $derived(formatDuration($currentPosition))
-  const durDisplay = $derived(formatDuration($trackDuration ?? $currentTrack?.duration ?? 0))
-  const seekMax = $derived($trackDuration ?? 100)
-  const seekValue = $derived($trackDuration ? $currentPosition : 0)
+  const effectiveDuration = $derived($trackDuration || $currentTrack?.duration || 0)
+  const durDisplay = $derived(formatDuration(effectiveDuration))
+  const seekMax = $derived(effectiveDuration || 100)
+  const seekValue = $derived(effectiveDuration ? $currentPosition : 0)
   const progressPct = $derived(seekMax > 0 ? (seekValue / seekMax) * 100 : 0)
 
   function toggleLyrics() {
@@ -81,11 +82,15 @@
 
   function startSeek() { isSeeking.set(true) }
   async function endSeek(e: Event) {
-    isSeeking.set(false)
+    const target = Number((e.target as HTMLInputElement).value)
+    currentPosition.set(target)
     const bridge = get(audioBridge)
     if (bridge) {
-      try { await bridge.seek(Number((e.target as HTMLInputElement).value)) } catch (err) { console.error('Seek failed:', err) }
+      try { await bridge.seek(target) } catch (err) { console.error('Seek failed:', err) }
     }
+    // Keep ignoring position updates briefly: a stale "playback-position" event
+    // (reflecting the pre-seek position) may already be in flight from Rust.
+    setTimeout(() => isSeeking.set(false), 300)
   }
 
   let npCoverImg: HTMLImageElement | undefined = $state()
@@ -100,7 +105,7 @@
   <div class="now-playing">
     <div class="np-art">
       {#if $currentTrack?.coverArtId}
-        <img bind:this={npCoverImg} class="np-cover-img" alt="" />
+        <img bind:this={npCoverImg} class="np-cover-img" alt="{$currentTrack.album ? `${$currentTrack.album} — ${$currentTrack.artist}` : $currentTrack.artist ?? 'Album art'}" />
       {:else}
         <span class="icon" style="width:20px;height:20px;color:var(--muted)">{@html IconMusic}</span>
       {/if}
@@ -143,13 +148,13 @@
   </div>
 
   <div class="controls">
-    <button class="ctrl-btn prev-ctrl" onclick={prevTrack} title="Previous">
+    <button class="ctrl-btn prev-ctrl" onclick={prevTrack} title="Previous" aria-label="Previous track">
       <span class="icon" style="width:15px;height:15px">{@html IconPrev}</span>
     </button>
-    <button class="ctrl-btn main-ctrl" onclick={togglePlay} title="Play/Pause">
+    <button class="ctrl-btn main-ctrl" onclick={togglePlay} title="Play/Pause" aria-label={$playbackState === 'playing' ? 'Pause' : 'Play'}>
       <span class="icon" style="width:20px;height:20px">{@html playIcon}</span>
     </button>
-    <button class="ctrl-btn" onclick={nextTrack} title="Next">
+    <button class="ctrl-btn" onclick={nextTrack} title="Next" aria-label="Next track">
       <span class="icon" style="width:15px;height:15px">{@html IconNext}</span>
     </button>
     <button
@@ -157,17 +162,18 @@
       class:active={$repeatOne || $repeatAll}
       onclick={cycleRepeat}
       title={$repeatOne ? 'Repeat One' : $repeatAll ? 'Repeat All' : 'Repeat Off'}
+      aria-label={$repeatOne ? 'Repeat one track' : $repeatAll ? 'Repeat all tracks' : 'Repeat off'}
     >
       <span class="icon" style="width:16px;height:16px">{@html IconRepeat}</span>
       {#if $repeatOne}<span class="repeat-badge">1</span>{/if}
     </button>
-    <button class="ctrl-btn secondary-ctrl" class:active={$lyricsOpen} onclick={toggleLyrics} title="Lyrics">
+    <button class="ctrl-btn secondary-ctrl" class:active={$lyricsOpen} onclick={toggleLyrics} title="Lyrics" aria-label={$lyricsOpen ? 'Hide lyrics' : 'Show lyrics'}>
       <span class="icon" style="width:16px;height:16px">{@html IconLyrics}</span>
     </button>
-    <button class="ctrl-btn secondary-ctrl" class:active={$similarTracksOpen} onclick={toggleSimilarTracks} title="Similar Tracks">
+    <button class="ctrl-btn secondary-ctrl" class:active={$similarTracksOpen} onclick={toggleSimilarTracks} title="Similar Tracks" aria-label={$similarTracksOpen ? 'Hide similar tracks' : 'Show similar tracks'}>
       <span class="icon" style="width:16px;height:16px">{@html IconHexagon}</span>
     </button>
-    <button class="ctrl-btn secondary-ctrl" class:active={$visualizerOpen} onclick={() => visualizerOpen.update(v => !v)} title="Visualizer">
+    <button class="ctrl-btn secondary-ctrl" class:active={$visualizerOpen} onclick={() => visualizerOpen.update(v => !v)} title="Visualizer" aria-label={$visualizerOpen ? 'Hide visualizer' : 'Show visualizer'}>
       <span class="icon" style="width:16px;height:16px">{@html IconWaveform}</span>
     </button>
   </div>

@@ -81,8 +81,11 @@ pub fn get_current_position<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, 
 }
 
 #[tauri::command]
-pub fn seek_position<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: &str, position: f64) -> Result<(), String> {
-    get_player(&app_handle)?.seek(player_id, position)
+pub async fn seek_position<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, player_id: String, position: f64) -> Result<(), String> {
+    let player = Arc::clone(get_player(&app_handle)?.inner());
+    tauri::async_runtime::spawn_blocking(move || player.seek(&player_id, position))
+        .await
+        .map_err(|e| format!("Seek task failed: {e}"))?
 }
 
 #[tauri::command]

@@ -118,6 +118,15 @@ fun ArtistDetailScreen(
                             }
                         }
 
+                        item(key = "sort_label") {
+                            Text(
+                                "Sorted by type, then year",
+                                fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                                color = colors.muted,
+                                modifier = Modifier.padding(start = 16.dp, top = 12.dp),
+                            )
+                        }
+
                         grouped.forEach { (type, albums) ->
                             val sectionLabel = when (type) {
                                 "Single" -> "Singles"

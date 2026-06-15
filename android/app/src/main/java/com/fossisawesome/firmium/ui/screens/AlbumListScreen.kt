@@ -71,6 +71,14 @@ fun AlbumListScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp),
             ) {
+                item(key = "sort_label") {
+                    Text(
+                        "Sorted by type, then year",
+                        fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        color = colors.muted,
+                        modifier = Modifier.padding(start = 16.dp, top = 12.dp),
+                    )
+                }
                 grouped.forEach { (type, albums) ->
                     // Section header with item count.
                     item(key = "header_$type") {

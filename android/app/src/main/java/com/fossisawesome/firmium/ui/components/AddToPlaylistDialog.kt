@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
@@ -71,6 +72,7 @@ fun AddToPlaylistDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(2.dp))
                             .background(if (newName.isNotBlank()) colors.accent else colors.surface2)
+                            .alpha(if (newName.isNotBlank()) 1f else 0.5f)
                             .clickable(enabled = newName.isNotBlank()) { onCreateAndAdd(newName); onDismiss() }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,

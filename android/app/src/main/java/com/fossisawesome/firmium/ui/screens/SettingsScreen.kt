@@ -46,6 +46,7 @@ fun SettingsScreen(
     appVersion: String,
     currentThemeId: String,
     lrclibEnabled: Boolean,
+    lyricsWordFillEnabled: Boolean,
     lastfmEnabled: Boolean,
     lastfmApiKey: String,
     lastfmSecret: String,
@@ -56,6 +57,7 @@ fun SettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
+    onLyricsWordFillToggle: (Boolean) -> Unit,
     onLastfmToggle: (Boolean) -> Unit,
     onLastfmApiKeyChange: (String) -> Unit,
     onLastfmSecretChange: (String) -> Unit,
@@ -73,6 +75,7 @@ fun SettingsScreen(
         appVersion = appVersion,
         currentThemeId = currentThemeId,
         lrclibEnabled = lrclibEnabled,
+        lyricsWordFillEnabled = lyricsWordFillEnabled,
         lastfmEnabled = lastfmEnabled,
         lastfmApiKey = lastfmApiKey,
         lastfmSecret = lastfmSecret,
@@ -83,6 +86,7 @@ fun SettingsScreen(
         onGaplessToggle = onGaplessToggle,
         onThemeSelected = onThemeSelected,
         onLrclibToggle = onLrclibToggle,
+        onLyricsWordFillToggle = onLyricsWordFillToggle,
         onLastfmToggle = onLastfmToggle,
         onLastfmApiKeyChange = onLastfmApiKeyChange,
         onLastfmSecretChange = onLastfmSecretChange,
@@ -127,6 +131,7 @@ private fun FirmiumSettingsScreen(
     appVersion: String,
     currentThemeId: String,
     lrclibEnabled: Boolean,
+    lyricsWordFillEnabled: Boolean,
     lastfmEnabled: Boolean,
     lastfmApiKey: String,
     lastfmSecret: String,
@@ -137,6 +142,7 @@ private fun FirmiumSettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
+    onLyricsWordFillToggle: (Boolean) -> Unit,
     onLastfmToggle: (Boolean) -> Unit,
     onLastfmApiKeyChange: (String) -> Unit,
     onLastfmSecretChange: (String) -> Unit,
@@ -243,11 +249,13 @@ private fun FirmiumSettingsScreen(
                 }
             } else {
                 // Sub-panel — matches .mset-subpanel--in
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                ) {
+                val scrollState = rememberScrollState()
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState),
+                    ) {
                     when (category) {
                         "appearance" -> FirmiumAppearancePanel(
                             currentThemeId = currentThemeId,
@@ -265,10 +273,12 @@ private fun FirmiumSettingsScreen(
                         )
                         "services" -> FirmiumServicesPanel(
                             lrclibEnabled = lrclibEnabled,
+                            lyricsWordFillEnabled = lyricsWordFillEnabled,
                             lastfmEnabled = lastfmEnabled,
                             lastfmApiKey = lastfmApiKey,
                             lastfmSecret = lastfmSecret,
                             onLrclibToggle = onLrclibToggle,
+                            onLyricsWordFillToggle = onLyricsWordFillToggle,
                             onLastfmToggle = onLastfmToggle,
                             onLastfmApiKeyChange = onLastfmApiKeyChange,
                             onLastfmSecretChange = onLastfmSecretChange,
@@ -287,6 +297,8 @@ private fun FirmiumSettingsScreen(
                             onResetSettings = onResetSettings,
                         )
                     }
+                    }
+                    FirmiumVerticalScrollbar(scrollState, modifier = Modifier.align(Alignment.TopEnd))
                 }
             }
         }
@@ -444,10 +456,12 @@ private fun FirmiumPlaybackPanel(
 @Composable
 private fun FirmiumServicesPanel(
     lrclibEnabled: Boolean,
+    lyricsWordFillEnabled: Boolean,
     lastfmEnabled: Boolean,
     lastfmApiKey: String,
     lastfmSecret: String,
     onLrclibToggle: (Boolean) -> Unit,
+    onLyricsWordFillToggle: (Boolean) -> Unit,
     onLastfmToggle: (Boolean) -> Unit,
     onLastfmApiKeyChange: (String) -> Unit,
     onLastfmSecretChange: (String) -> Unit,
@@ -458,6 +472,10 @@ private fun FirmiumServicesPanel(
     FirmiumSettingsRow("External Lyrics (LRCLIB)",
         "Fetch synced lyrics from lrclib.net when your server has none") {
         FirmiumSwitch(checked = lrclibEnabled, onCheckedChange = onLrclibToggle)
+    }
+    FirmiumSettingsRow("Word-by-Word Lyrics Animation",
+        "Karaoke-style fill on the active lyric line, with per-word timing estimated from the line's timestamps") {
+        FirmiumSwitch(checked = lyricsWordFillEnabled, onCheckedChange = onLyricsWordFillToggle)
     }
     FirmiumSettingsRow("Last.fm Integration",
         "Fetch artist biography and photo via Last.fm") {
@@ -584,8 +602,9 @@ private fun ThemeDropdown(currentThemeId: String, onThemeSelected: (String) -> U
             // Colour preview swatches
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.bg).border(0.5.dp, colors.border, CircleShape))
-                Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.accent))
                 Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.surface2))
+                Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.text).border(0.5.dp, colors.border, CircleShape))
+                Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.accent))
             }
             Text(currentTheme.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
                 color = colors.text, modifier = Modifier.weight(1f))
@@ -617,8 +636,9 @@ private fun ThemeDropdown(currentThemeId: String, onThemeSelected: (String) -> U
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             Box(Modifier.size(12.dp).clip(CircleShape).background(theme.bg).border(0.5.dp, colors.border, CircleShape))
-                            Box(Modifier.size(12.dp).clip(CircleShape).background(theme.accent))
                             Box(Modifier.size(12.dp).clip(CircleShape).background(theme.surface2))
+                            Box(Modifier.size(12.dp).clip(CircleShape).background(theme.text).border(0.5.dp, colors.border, CircleShape))
+                            Box(Modifier.size(12.dp).clip(CircleShape).background(theme.accent))
                         }
                         Text(
                             theme.name, fontSize = 13.sp, fontFamily = FontFamily.Monospace,

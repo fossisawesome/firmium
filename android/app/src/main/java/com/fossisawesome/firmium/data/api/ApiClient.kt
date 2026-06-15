@@ -42,7 +42,12 @@ class ApiClient(private val auth: AuthManager) {
 
     fun hasExtension(name: String): Boolean = openSubsonicExtensions.contains(name)
 
-    private suspend fun fetch(action: String, params: Map<String, String> = emptyMap()): JsonObject {
+    private suspend fun fetch(action: String, params: Map<String, String> = emptyMap()): JsonObject =
+        fetch(action, params.toList())
+
+    // Variant accepting a list of pairs so callers can pass repeated query params
+    // (e.g. multiple songIdToAdd entries for updatePlaylist), which a Map can't represent.
+    private suspend fun fetch(action: String, params: List<Pair<String, String>>): JsonObject {
         val url = auth.buildUrl(action, params)
         return withContext(Dispatchers.IO) {
             val response = http.newCall(Request.Builder().url(url).build()).execute()
@@ -174,6 +179,65 @@ class ApiClient(private val auth: AuthManager) {
         val albums = result?.getAsJsonArray("album")?.map { parseAlbum(it.asJsonObject) } ?: emptyList()
         return SearchResults(songs, albums)
     }
+
+    // ── Playlists ──────────────────────────────────────────────────────────────
+
+    // Returns all playlists visible to the current user.
+    suspend fun getPlaylists(): List<ServerPlaylist> {
+        val data = fetch("getPlaylists")
+        return data.getAsJsonObject("playlists")
+            ?.getAsJsonArray("playlist")
+            ?.map { parsePlaylist(it.asJsonObject) }
+            ?: emptyList()
+    }
+
+    // Fetches a playlist's full track list from the server.
+    suspend fun getPlaylistTracks(id: String): ServerPlaylistTracks {
+        val data = fetch("getPlaylist", mapOf("id" to id))
+        val playlist = data.getAsJsonObject("playlist") ?: JsonObject()
+        return ServerPlaylistTracks(
+            id = playlist.get("id")?.asString ?: "",
+            name = playlist.get("name")?.asString ?: "",
+            comment = playlist.get("comment")?.asString ?: "",
+            songCount = playlist.get("songCount")?.asInt ?: 0,
+            tracks = playlist.getAsJsonArray("entry")?.map { parseSong(it.asJsonObject) } ?: emptyList(),
+        )
+    }
+
+    // Creates a new playlist on the server and returns the created playlist's metadata.
+    suspend fun createPlaylist(name: String): ServerPlaylist {
+        val data = fetch("createPlaylist", mapOf("name" to name))
+        return parsePlaylist(data.getAsJsonObject("playlist") ?: JsonObject())
+    }
+
+    // Updates playlist metadata and/or adds/removes tracks by server-side id/index.
+    suspend fun updatePlaylist(
+        id: String,
+        name: String? = null,
+        comment: String? = null,
+        songIdsToAdd: List<String> = emptyList(),
+        songIndicesToRemove: List<Int> = emptyList(),
+    ) {
+        val params = mutableListOf("playlistId" to id)
+        name?.let { params.add("name" to it) }
+        comment?.let { params.add("comment" to it) }
+        songIdsToAdd.forEach { params.add("songIdToAdd" to it) }
+        songIndicesToRemove.forEach { params.add("songIndexToRemove" to it.toString()) }
+        fetch("updatePlaylist", params)
+    }
+
+    // Deletes a playlist from the server.
+    suspend fun deletePlaylist(id: String) {
+        fetch("deletePlaylist", mapOf("id" to id))
+    }
+
+    private fun parsePlaylist(obj: JsonObject): ServerPlaylist = ServerPlaylist(
+        id = obj.get("id")?.asString ?: "",
+        name = obj.get("name")?.asString ?: "",
+        comment = obj.get("comment")?.asString,
+        songCount = obj.get("songCount")?.asInt ?: 0,
+        coverArt = obj.get("coverArt")?.asString,
+    )
 
     // ── Scrobble ───────────────────────────────────────────────────────────────
 
@@ -317,7 +381,11 @@ class ApiClient(private val auth: AuthManager) {
                     if (durationSec > 0) append("&duration=$durationSec")
                 }
                 val (body, isSuccessful) = withContext(Dispatchers.IO) {
-                    val response = http.newCall(Request.Builder().url(url).build()).execute()
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("Lrclib-Client", "Firmium (https://github.com/fossisawesome/firmium)")
+                        .build()
+                    val response = http.newCall(request).execute()
                     response.body?.string() to response.isSuccessful
                 }
                 if (body == null || !isSuccessful) return@tryFetchLyrics null

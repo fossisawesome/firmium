@@ -80,7 +80,7 @@
 <div class="tracklist-header">
   <div class="tl-art">
     {#if coverArtId}
-      <img bind:this={coverImg} use:lazyLoad={img => loadImage(img, coverArtId, abortCtrl.signal)} alt="" />
+      <img bind:this={coverImg} use:lazyLoad={img => loadImage(img, coverArtId, abortCtrl.signal)} alt="{albumName} by {albumArtist}" />
     {:else}
       <span class="icon" style="width:32px;height:32px;color:var(--muted)">{@html IconMusic}</span>
     {/if}

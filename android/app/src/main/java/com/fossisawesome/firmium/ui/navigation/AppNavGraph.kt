@@ -115,6 +115,7 @@ fun AppNavGraph(
     val playlistsState by playlistViewModel.state.collectAsStateWithLifecycle()
 
     val lrclibEnabled by app.prefs.lrclibEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val lyricsWordFillEnabled by app.prefs.lyricsWordFillEnabled.collectAsStateWithLifecycle(initialValue = true)
     val lastfmEnabled by app.prefs.lastfmEnabled.collectAsStateWithLifecycle(initialValue = false)
     val autoLoginEnabled by app.prefs.autoLoginEnabled.collectAsStateWithLifecycle(initialValue = true)
     val downloadFormat by app.prefs.downloadFormat.collectAsStateWithLifecycle(initialValue = "original")
@@ -341,6 +342,7 @@ fun AppNavGraph(
                         onPlaylistClick = { navController.navigate("playlist/$it") },
                         onCreate = { playlistViewModel.create(it) },
                         onDelete = { playlistViewModel.delete(it) },
+                        onRefreshServer = { playlistViewModel.refreshServerPlaylists() },
                     )
                 }
                 composable(
@@ -351,15 +353,36 @@ fun AppNavGraph(
                     popExitTransition = detailPopExitTransition,
                 ) { back ->
                     val id = back.arguments?.getString("playlistId") ?: return@composable
-                    val playlist = playlistsState.playlists.find { it.id == id }
-                    if (playlist != null) {
-                        PlaylistDetailScreen(
-                            playlist = playlist,
-                            onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
-                            onRemoveTrack = { trackId -> playlistViewModel.removeTrack(id, trackId) },
-                            onDownloadTrack = onDownloadTrack,
-                            onBack = { navController.popBackStack() },
-                        )
+                    if (id.startsWith("server-")) {
+                        val serverId = id.removePrefix("server-")
+                        val server = playlistsState.serverPlaylists.find { it.id == serverId }
+                        val serverTracksMap by playlistViewModel.serverTracks.collectAsStateWithLifecycle()
+                        val cached = serverTracksMap[serverId]
+                        LaunchedEffect(serverId) { playlistViewModel.loadServerPlaylistTracks(serverId) }
+                        if (server != null) {
+                            PlaylistDetailScreen(
+                                title = server.name,
+                                tracks = cached?.tracks ?: emptyList(),
+                                isServerOnly = true,
+                                serverLoading = cached == null,
+                                onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
+                                onRemoveTrack = { _, _ -> },
+                                onDownloadTrack = onDownloadTrack,
+                                onBack = { navController.popBackStack() },
+                            )
+                        }
+                    } else {
+                        val playlist = playlistsState.playlists.find { it.id == id }
+                        if (playlist != null) {
+                            PlaylistDetailScreen(
+                                title = playlist.name,
+                                tracks = playlist.tracks,
+                                onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
+                                onRemoveTrack = { trackId, _ -> playlistViewModel.removeTrack(id, trackId) },
+                                onDownloadTrack = onDownloadTrack,
+                                onBack = { navController.popBackStack() },
+                            )
+                        }
                     }
                 }
                 composable("search") {
@@ -387,6 +410,7 @@ fun AppNavGraph(
                         appVersion = BuildConfig.VERSION_NAME,
                         currentThemeId = currentThemeId,
                         lrclibEnabled = lrclibEnabled,
+                        lyricsWordFillEnabled = lyricsWordFillEnabled,
                         lastfmEnabled = lastfmEnabled,
                         lastfmApiKey = lastfmApiKey,
                         lastfmSecret = lastfmSecret,
@@ -397,6 +421,7 @@ fun AppNavGraph(
                         onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
                         onThemeSelected = onThemeSelected,
                         onLrclibToggle = { scope.launch { app.prefs.setLrclibEnabled(it) } },
+                        onLyricsWordFillToggle = { scope.launch { app.prefs.setLyricsWordFillEnabled(it) } },
                         onLastfmToggle = { scope.launch { app.prefs.setLastfmEnabled(it) } },
                         onLastfmApiKeyChange = { key ->
                             lastfmApiKey = key
@@ -521,6 +546,10 @@ fun AppNavGraph(
         LyricsSheet(
             state = lyricsState,
             trackTitle = playerState.currentTrack?.title ?: "",
+            coverUrl = coverUrl(playerState.currentTrack?.coverArt),
+            positionSeconds = playerState.currentPosition,
+            isPlaying = playerState.playbackState == "playing",
+            wordFillEnabled = lyricsWordFillEnabled,
             onDismiss = {
                 showLyrics = false
                 playerViewModel.closeLyrics()

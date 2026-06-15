@@ -1,7 +1,7 @@
 import { writable, derived, get, type Writable } from 'svelte/store'
 import { SafeStorage } from './utils'
 import { tauriInvoke } from './tauri'
-import type { Song, PlaybackState, LyricLine, SimilarMatch } from './types/tauri-commands'
+import type { Song, PlaybackState, LyricLine, SimilarMatch, WordTiming } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 import type { ServerPlaylist } from './api'
 
@@ -170,6 +170,20 @@ export const lyricsSynced = writable(false)
 export const lyricsTrackId = writable<string | null>(null)
 export const lyricsStatus = writable('No track playing')
 
+// Per-word timing estimates for the active synced lyrics (karaoke fill animation).
+export const lyricsWordTimings = writable<WordTiming[][]>([])
+
+// Dominant color extracted from the current track's cover art, used for the
+// lyrics panel's glow background. CSS color string (e.g. "rgb(120, 80, 60)").
+export const lyricsGlowColor = writable('transparent')
+
+// Word-by-word karaoke fill animation toggle (estimated timing, so optional).
+export const lyricsWordFillEnabled = writable(SafeStorage.getItem('firmium_lyrics_word_fill') !== 'false')
+export function setLyricsWordFillEnabled(enabled: boolean): void {
+  lyricsWordFillEnabled.set(enabled)
+  SafeStorage.setItem('firmium_lyrics_word_fill', enabled ? 'true' : 'false')
+}
+
 // ── Account modal ─────────────────────────────────────────────────────────────
 export const showAccountModal = writable(false)
 export function openAccountModal(): void { showAccountModal.set(true) }
@@ -220,6 +234,51 @@ export interface Playlist {
   coverDataUrl: string | null
   tracks: Song[]
   serverId: string | null
+  // True until the playlist is first created on the server, or until createAttempts hits the retry cap.
+  createPending?: boolean
+  createAttempts?: number
+}
+
+export type PlaylistSource = 'local' | 'synced' | 'server-only'
+
+export interface UnifiedPlaylist {
+  // For 'local'/'synced': the local playlist's id. For 'server-only': `server-<serverId>`.
+  id: string
+  name: string
+  description: string
+  coverArtId: string | null
+  coverDataUrl: string | null
+  trackCount: number
+  serverId: string | null
+  source: PlaylistSource
+  local?: Playlist
+  serverMeta?: ServerPlaylist
+}
+
+// Merges local playlists with the server's playlist list into one display list,
+// matching local entries with `serverId` to their server counterpart.
+export function mergePlaylists(local: Playlist[], server: ServerPlaylist[]): UnifiedPlaylist[] {
+  const serverById = new Map(server.map(sp => [sp.id, sp]))
+  const matchedServerIds = new Set<string>()
+  const result: UnifiedPlaylist[] = local.map(p => {
+    const sm = p.serverId ? serverById.get(p.serverId) : undefined
+    if (sm) matchedServerIds.add(sm.id)
+    return {
+      id: p.id, name: p.name, description: p.description,
+      coverArtId: p.coverArtId, coverDataUrl: p.coverDataUrl,
+      trackCount: p.tracks.length, serverId: p.serverId,
+      source: sm ? 'synced' : 'local', local: p, serverMeta: sm,
+    }
+  })
+  for (const sp of server) {
+    if (matchedServerIds.has(sp.id)) continue
+    result.push({
+      id: 'server-' + sp.id, name: sp.name, description: sp.comment ?? '',
+      coverArtId: (sp.coverArt as string | undefined) ?? null, coverDataUrl: null,
+      trackCount: sp.songCount ?? 0, serverId: sp.id, source: 'server-only', serverMeta: sp,
+    })
+  }
+  return result
 }
 
 type PlaylistChanges = Partial<Pick<Playlist, 'name' | 'description' | 'coverArtId' | 'coverDataUrl' | 'serverId'>>
@@ -236,7 +295,7 @@ function createPlaylistsStore() {
     subscribe,
     create(name = 'New Playlist'): Playlist {
       // serverId is set later once the playlist is created on the server.
-      const pl: Playlist = { id: _uuid(), name: String(name).trim() || 'New Playlist', description: '', coverArtId: null, coverDataUrl: null, tracks: [], serverId: null }
+      const pl: Playlist = { id: _uuid(), name: String(name).trim() || 'New Playlist', description: '', coverArtId: null, coverDataUrl: null, tracks: [], serverId: null, createPending: true, createAttempts: 0 }
       update(pls => { const next = [...pls, pl]; _savePlaylists(next); return next })
       return pl
     },
@@ -256,6 +315,21 @@ function createPlaylistsStore() {
     setServerId(id: string, serverId: string): void {
       update(pls => {
         const next = pls.map(p => p.id === id ? { ...p, serverId } : p)
+        _savePlaylists(next)
+        return next
+      })
+    },
+    // Records the outcome of a (re)attempt to create this playlist on the server.
+    // On success, sets serverId and stops retrying. On failure, increments the
+    // attempt count and stops retrying once the cap is reached.
+    markCreateAttempt(id: string, success: boolean, serverId?: string): void {
+      update(pls => {
+        const next = pls.map(p => {
+          if (p.id !== id) return p
+          if (success) return { ...p, serverId: serverId ?? p.serverId, createPending: false }
+          const createAttempts = (p.createAttempts ?? 0) + 1
+          return { ...p, createAttempts, createPending: createAttempts < 3 }
+        })
         _savePlaylists(next)
         return next
       })

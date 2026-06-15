@@ -42,7 +42,7 @@ pkg/firmium-desktop/
 android/.gradle/
 android/build/
 android/app/build/
-
+android/.kotlin/
 # Android signing key
 release.keystore
 

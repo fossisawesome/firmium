@@ -2,6 +2,7 @@ package com.fossisawesome.firmium.ui.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 
 // One entry per theme — id matches the key stored in AppPreferences.
@@ -91,9 +92,9 @@ fun FirmiumTheme(
     themeId: String = DEFAULT_THEME_ID,
     content: @Composable () -> Unit,
 ) {
-    val theme = themeById(themeId)
+    val theme = remember(themeId) { themeById(themeId) }
     CompositionLocalProvider(
-        LocalFirmiumColors provides theme.toFirmiumColors(),
+        LocalFirmiumColors provides remember(theme) { theme.toFirmiumColors() },
         LocalFirmiumIsDark provides theme.isDark,
         content = content,
     )

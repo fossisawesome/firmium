@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,9 +20,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 import com.fossisawesome.firmium.viewmodel.PlaylistsUiState
 
 @Composable
@@ -30,9 +31,12 @@ fun PlaylistsScreen(
     onPlaylistClick: (String) -> Unit,
     onCreate: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onRefreshServer: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     var showCreateDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { onRefreshServer() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // .pl-list-header: section-header "PLAYLISTS" left + "+ New" button right
@@ -59,7 +63,7 @@ fun PlaylistsScreen(
             }
         }
 
-        if (state.playlists.isEmpty()) {
+        if (state.items.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("No playlists yet", fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = colors.muted)
             }
@@ -68,11 +72,11 @@ fun PlaylistsScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp),
             ) {
-                items(state.playlists, key = { it.id }) { playlist ->
+                items(state.items, key = { it.id }) { item ->
                     PlaylistRow(
-                        playlist = playlist,
-                        onClick = { onPlaylistClick(playlist.id) },
-                        onDelete = { onDelete(playlist.id) },
+                        item = item,
+                        onClick = { onPlaylistClick(item.id) },
+                        onDelete = if (item is PlaylistListItem.Local) ({ onDelete(item.id) }) else null,
                     )
                     FirmiumDivider()
                 }
@@ -93,7 +97,7 @@ fun PlaylistsScreen(
 
 // .pl-card: padding 12/10dp, gap 16dp. Art: 48×48dp, surface2, 8dp radius.
 @Composable
-private fun PlaylistRow(playlist: Playlist, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun PlaylistRow(item: PlaylistListItem, onClick: () -> Unit, onDelete: (() -> Unit)?) {
     val colors = LocalFirmiumColors.current
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
@@ -109,19 +113,27 @@ private fun PlaylistRow(playlist: Playlist, onClick: () -> Unit, onDelete: () ->
             Text("♪", fontSize = 20.sp, color = colors.muted)
         }
         Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    item.name, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                if (item.isSynced) {
+                    FirmiumIcon(Icons.Default.Cloud, contentDescription = "Synced to server",
+                        tint = colors.muted, modifier = Modifier.size(14.dp))
+                }
+            }
             Text(
-                playlist.name, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
-                fontSize = 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                "${playlist.tracks.size} track${if (playlist.tracks.size != 1) "s" else ""}",
+                "${item.trackCount} track${if (item.trackCount != 1) "s" else ""}",
                 fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
             )
         }
-        // Delete — small icon button
-        FirmiumIconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-            FirmiumIcon(Icons.Default.Delete, contentDescription = "Delete",
-                tint = colors.error, modifier = Modifier.size(18.dp))
+        // Delete — small icon button (only for local playlists)
+        if (onDelete != null) {
+            FirmiumIconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                FirmiumIcon(Icons.Default.Delete, contentDescription = "Delete",
+                    tint = colors.error, modifier = Modifier.size(18.dp))
+            }
         }
     }
 }

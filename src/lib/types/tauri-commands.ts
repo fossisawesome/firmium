@@ -93,3 +93,11 @@ export interface LyricsResult {
   lines: LyricLine[]
   synced: boolean
 }
+
+// Per-word timing estimated client-side from line-level LRC timestamps (see
+// computeWordTimings in playback.ts) — used for the karaoke fill animation.
+export interface WordTiming {
+  text: string
+  startMs: number
+  endMs: number
+}

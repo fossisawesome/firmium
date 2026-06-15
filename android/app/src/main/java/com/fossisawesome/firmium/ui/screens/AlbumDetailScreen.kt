@@ -1,6 +1,7 @@
 package com.fossisawesome.firmium.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -109,6 +110,7 @@ fun AlbumDetailScreen(
                                     }
                                     Box(
                                         modifier = Modifier.clip(RoundedCornerShape(2.dp))
+                                            .border(1.dp, colors.border, RoundedCornerShape(2.dp))
                                             .background(colors.surface2).clickable { pendingAllSongs = true }
                                             .padding(horizontal = 16.dp, vertical = 12.dp),
                                         contentAlignment = Alignment.Center,

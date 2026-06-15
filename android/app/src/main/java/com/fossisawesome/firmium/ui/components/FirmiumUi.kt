@@ -3,6 +3,7 @@ package com.fossisawesome.firmium.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +14,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +92,34 @@ fun FirmiumIcon(
     )
 }
 
+// Shared press-feedback animation: an overlay alpha and a shrink/spring-back scale,
+// driven by an interaction source's pressed state.
+@Composable
+private fun rememberPressAnimations(
+    interactionSource: MutableInteractionSource,
+    enabled: Boolean = true,
+    pressedAlpha: Float,
+    pressedScale: Float,
+    label: String,
+): Pair<Float, Float> {
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val overlayAlpha by animateFloatAsState(
+        targetValue = if (isPressed && enabled) pressedAlpha else 0f,
+        animationSpec = tween(durationMillis = 80),
+        label = "${label}Press",
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled) pressedScale else 1f,
+        animationSpec = if (isPressed && enabled) {
+            tween(durationMillis = 80, easing = LinearEasing)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+        },
+        label = "${label}Scale",
+    )
+    return overlayAlpha to scale
+}
+
 // Tap-target Box that wraps icon content — replaces material3 IconButton().
 // Shows a subtle press highlight using the text colour at low alpha.
 @Composable
@@ -100,21 +131,13 @@ fun FirmiumIconButton(
 ) {
     val pressColor = LocalFirmiumColors.current.text
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val overlayAlpha by animateFloatAsState(
-        targetValue = if (isPressed && enabled) 0.12f else 0f,
-        animationSpec = tween(durationMillis = 80),
-        label = "iconBtnPress",
-    )
-    // Shrink slightly on press, then spring back with a gentle overshoot.
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed && enabled) 0.82f else 1f,
-        animationSpec = if (isPressed && enabled) {
-            tween(durationMillis = 80, easing = LinearEasing)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-        },
-        label = "iconBtnScale",
+    val haptic = LocalHapticFeedback.current
+    val (overlayAlpha, scale) = rememberPressAnimations(
+        interactionSource = interactionSource,
+        enabled = enabled,
+        pressedAlpha = 0.12f,
+        pressedScale = 0.82f,
+        label = "iconBtn",
     )
     Box(
         modifier = modifier
@@ -123,7 +146,10 @@ fun FirmiumIconButton(
                 if (enabled) Modifier.clickable(
                     interactionSource = interactionSource,
                     indication = null,
-                    onClick = onClick,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onClick()
+                    },
                 ) else Modifier
             )
             .background(pressColor.copy(alpha = overlayAlpha), shape = CircleShape),
@@ -248,21 +274,11 @@ fun FirmiumTextButton(
 ) {
     val pressColor = LocalFirmiumColors.current.text
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val overlayAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.08f else 0f,
-        animationSpec = tween(durationMillis = 80),
-        label = "textBtnPress",
-    )
-    // Slight scale-down on press, bouncy spring release.
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = if (isPressed) {
-            tween(durationMillis = 80, easing = LinearEasing)
-        } else {
-            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
-        },
-        label = "textBtnScale",
+    val (overlayAlpha, scale) = rememberPressAnimations(
+        interactionSource = interactionSource,
+        pressedAlpha = 0.08f,
+        pressedScale = 0.93f,
+        label = "textBtn",
     )
     Box(
         modifier = modifier
@@ -277,4 +293,35 @@ fun FirmiumTextButton(
         contentAlignment = Alignment.Center,
         content = { content() },
     )
+}
+
+// Thin vertical scroll-position indicator for verticalScroll() containers (no built-in scrollbar).
+@Composable
+fun FirmiumVerticalScrollbar(
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalFirmiumColors.current
+    if (scrollState.maxValue <= 0) return
+
+    val viewport = scrollState.viewportSize.toFloat()
+    val totalHeight = viewport + scrollState.maxValue
+    val thumbFraction = (viewport / totalHeight).coerceIn(0.05f, 1f)
+    val scrollFraction = scrollState.value.toFloat() / scrollState.maxValue
+
+    Canvas(
+        modifier = modifier
+            .fillMaxHeight()
+            .width(3.dp)
+            .padding(vertical = 2.dp),
+    ) {
+        val thumbHeight = size.height * thumbFraction
+        val thumbY = (size.height - thumbHeight) * scrollFraction
+        drawRoundRect(
+            color = colors.muted.copy(alpha = 0.4f),
+            topLeft = androidx.compose.ui.geometry.Offset(0f, thumbY),
+            size = androidx.compose.ui.geometry.Size(size.width, thumbHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width / 2, size.width / 2),
+        )
+    }
 }
