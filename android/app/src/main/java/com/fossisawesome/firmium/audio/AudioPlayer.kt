@@ -178,6 +178,9 @@ class AudioPlayer(private val context: Context) {
         return if (dur != C.TIME_UNSET && dur > 0) dur / 1000.0 else null
     }
 
+    fun getAudioSessionId(playerId: String): Int =
+        sessions[playerId]?.player?.audioSessionId ?: 0
+
     fun isFinished(playerId: String): Boolean {
         val session = sessions[playerId] ?: return true
         return session.player.playbackState == Player.STATE_ENDED
