@@ -47,6 +47,11 @@ class LocalLibraryRepository(private val context: Context) {
     private suspend fun ensureScanned(): Cache =
         cache ?: withContext(Dispatchers.IO) { scan().also { cache = it } }
 
+    // Triggers a background scan without exposing the internal Cache type.
+    // Called from FirmiumApplication on startup so the local library is ready
+    // before the user starts playing tracks.
+    suspend fun prewarm() { ensureScanned() }
+
     suspend fun getAlbums(): List<Album> = ensureScanned().albums
 
     suspend fun getArtists(): List<Artist> = ensureScanned().artists
@@ -82,6 +87,18 @@ class LocalLibraryRepository(private val context: Context) {
     suspend fun getRandomAlbums(size: Int = 12): List<Album> = ensureScanned().albums.shuffled().take(size)
 
     suspend fun getNewestAlbums(size: Int = 100): List<Album> = ensureScanned().albums.takeLast(size).reversed()
+
+    // Finds a locally-downloaded song matching a server song by title + album (case-insensitive).
+    // Used by PlayerViewModel to prefer the local copy over streaming, and by DownloadManager
+    // to skip re-downloading tracks already on disk.
+    suspend fun findLocalMatch(title: String, artist: String, album: String): Song? {
+        val c = ensureScanned()
+        return c.allSongs.firstOrNull { local ->
+            local.title.equals(title, ignoreCase = true) &&
+            (local.album.equals(album, ignoreCase = true) ||
+             local.artist.equals(artist, ignoreCase = true))
+        }
+    }
 
     // Resolves a `local:<hash>` song id to its MediaStore content URI, for ExoPlayer.
     suspend fun getTrackUri(songId: String): Uri? = ensureScanned().trackUris[songId]

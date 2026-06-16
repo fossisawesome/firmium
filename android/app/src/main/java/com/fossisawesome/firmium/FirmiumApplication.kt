@@ -14,6 +14,9 @@ import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import okio.Path.Companion.toOkioPath
 import java.io.File
 
@@ -49,5 +52,12 @@ class FirmiumApplication : Application() {
             .crossfade(true)
             .build()
         Coil.setImageLoader(imageLoader)
+
+        // Pre-scan local files so PlayerViewModel can prefer downloaded tracks over streaming
+        // and DownloadManager can skip already-downloaded songs — even in server mode.
+        @Suppress("OPT_IN_USAGE")
+        GlobalScope.launch(Dispatchers.IO) {
+            try { localLibrary.prewarm() } catch (_: Exception) {}
+        }
     }
 }
