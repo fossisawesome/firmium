@@ -12,9 +12,16 @@ vi.mock('./tauri', () => ({
 }))
 
 vi.mock('./api', () => ({
-  Api: { scrobble: vi.fn(), getLyrics: vi.fn().mockResolvedValue(null) },
+  Api: { scrobble: vi.fn(), reportPlayback: vi.fn(), getLyrics: vi.fn().mockResolvedValue(null) },
   OpenSubsonicRouter: { buildUrl: vi.fn().mockResolvedValue('http://example.com/stream') },
 }))
+
+vi.mock('./localApi', () => ({
+  getLocalTrackPath: vi.fn().mockResolvedValue('/tmp/track'),
+  findLocalMatch: vi.fn().mockResolvedValue(null),
+}))
+
+const flushPromises = async () => { for (let i = 0; i < 10; i++) await Promise.resolve() }
 
 const { wireBridgeEvents, startPositionTracking, stopPositionTracking } = await import('./playback')
 
@@ -66,12 +73,12 @@ describe('position tracking — crossfade trigger', () => {
 
     // Now within the last 5 seconds — should trigger exactly once.
     bridge.emit('position', { position: 96, duration: 100 })
-    await Promise.resolve()
+    await flushPromises()
     expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(1)
 
     // Further updates must not re-trigger.
     bridge.emit('position', { position: 98, duration: 100 })
-    await Promise.resolve()
+    await flushPromises()
     expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(1)
   })
 })
@@ -90,11 +97,11 @@ describe('position tracking — gapless preload trigger', () => {
     expect(bridge.preload).not.toHaveBeenCalled()
 
     bridge.emit('position', { position: 71, duration: 100 })
-    await Promise.resolve()
+    await flushPromises()
     expect(bridge.preload).toHaveBeenCalledTimes(1)
 
     bridge.emit('position', { position: 80, duration: 100 })
-    await Promise.resolve()
+    await flushPromises()
     expect(bridge.preload).toHaveBeenCalledTimes(1)
   })
 
@@ -106,7 +113,7 @@ describe('position tracking — gapless preload trigger', () => {
     startPositionTracking()
 
     bridge.emit('position', { position: 71, duration: 100 })
-    await Promise.resolve()
+    await flushPromises()
     expect(bridge.preload).not.toHaveBeenCalled()
   })
 })
@@ -120,7 +127,7 @@ describe('startPositionTracking / stopPositionTracking', () => {
 
     startPositionTracking()
     bridge.emit('position', { position: 96, duration: 100 })
-    await Promise.resolve()
+    await flushPromises()
     expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(1)
 
     // Simulate moving to a new track: queue index advances, tracking restarts, flags reset.
@@ -128,7 +135,7 @@ describe('startPositionTracking / stopPositionTracking', () => {
     stopPositionTracking()
     startPositionTracking()
     bridge.emit('position', { position: 96, duration: 100 })
-    await Promise.resolve()
+    await flushPromises()
     expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(2)
   })
 })
