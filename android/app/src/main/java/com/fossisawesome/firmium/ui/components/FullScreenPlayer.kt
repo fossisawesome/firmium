@@ -54,6 +54,7 @@ import kotlin.math.roundToInt
 fun FullScreenPlayer(
     state: PlayerState,
     coverUrl: String?,
+    audioSessionId: Int = 0,
     playlistItems: List<PlaylistListItem>,
     onDismiss: () -> Unit,
     onPlayPause: () -> Unit,
@@ -78,6 +79,8 @@ fun FullScreenPlayer(
     // Extract dominant colour from cover art, darken to 22% (same formula as Svelte version).
     val bgColor = rememberDominantColor(coverUrl)
 
+    val orbPalette = rememberOrbPalette(coverUrl)
+    var showOrb by remember { mutableStateOf(false) }
     var showAddToPlaylist by remember { mutableStateOf(false) }
     val screenWidth = configuration.screenWidthDp.dp
     // Used to animate the player fully offscreen before removing it from composition.
@@ -149,9 +152,14 @@ fun FullScreenPlayer(
                         .padding(start = 20.dp, end = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    ArtWithGestures(
+                    ArtOrOrb(
+                        showOrb = showOrb,
+                        onToggle = { showOrb = !showOrb },
                         coverUrl = coverUrl,
                         albumDescription = track.album,
+                        audioSessionId = audioSessionId,
+                        palette = orbPalette,
+                        isPlaying = state.playbackState == "playing",
                         onTap = onLyricsOpen,
                         onSwipeLeft = onNext,
                         onSwipeRight = onPrevious,
@@ -198,10 +206,15 @@ fun FullScreenPlayer(
             ) {
                 Spacer(Modifier.height(40.dp))
 
-                // Album art — tap opens lyrics, swipe left/right for next/prev.
-                ArtWithGestures(
+                // Album art or orb — tap the toggle icon to switch modes.
+                ArtOrOrb(
+                    showOrb = showOrb,
+                    onToggle = { showOrb = !showOrb },
                     coverUrl = coverUrl,
                     albumDescription = track.album,
+                    audioSessionId = audioSessionId,
+                    palette = orbPalette,
+                    isPlaying = state.playbackState == "playing",
                     onTap = onLyricsOpen,
                     onSwipeLeft = onNext,
                     onSwipeRight = onPrevious,
@@ -467,6 +480,57 @@ private fun PlayerControls(
         )
         FirmiumIcon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null,
             tint = colors.muted, modifier = Modifier.size(16.dp))
+    }
+}
+
+// Switches between album art and the NCS orb visualizer.
+// The toggle icon sits in the top-right corner of the art box.
+@Composable
+private fun ArtOrOrb(
+    showOrb: Boolean,
+    onToggle: () -> Unit,
+    coverUrl: String?,
+    albumDescription: String,
+    audioSessionId: Int,
+    palette: OrbPalette,
+    isPlaying: Boolean,
+    onTap: () -> Unit,
+    onSwipeLeft: () -> Unit,
+    onSwipeRight: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        if (showOrb) {
+            MusicOrb(
+                audioSessionId = audioSessionId,
+                palette = palette,
+                isPlaying = isPlaying,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            ArtWithGestures(
+                coverUrl = coverUrl,
+                albumDescription = albumDescription,
+                onTap = onTap,
+                onSwipeLeft = onSwipeLeft,
+                onSwipeRight = onSwipeRight,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        FirmiumIconButton(
+            onClick = onToggle,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(6.dp)
+                .size(32.dp),
+        ) {
+            FirmiumIcon(
+                imageVector = if (showOrb) Icons.Default.Image else Icons.Default.Equalizer,
+                contentDescription = if (showOrb) "Show art" else "Show visualizer",
+                tint = Color.White.copy(alpha = 0.75f),
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 

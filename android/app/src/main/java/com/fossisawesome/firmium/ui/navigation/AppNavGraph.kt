@@ -502,6 +502,7 @@ fun AppNavGraph(
         FullScreenPlayer(
             state = playerState,
             coverUrl = coverUrl(playerState.currentTrack?.coverArt),
+            audioSessionId = playerState.audioSessionId,
             playlistItems = playlistsState.items,
             onDismiss = { showFullPlayer = false },
             onPlayPause = { playerViewModel.togglePlayPause() },

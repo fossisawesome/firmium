@@ -15,6 +15,45 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+// Three vibrant colors pulled from cover art for the orb visualizer.
+data class OrbPalette(
+    val primary: Color,    // vibrant swatch — brightest pop color
+    val secondary: Color,  // light vibrant — highlights / ring ticks
+    val tertiary: Color,   // muted — particles
+)
+
+private val DefaultOrbPalette = OrbPalette(
+    primary = Color(0xFF7C5CFF),
+    secondary = Color(0xFFAA88FF),
+    tertiary = Color(0xFF5533CC),
+)
+
+@Composable
+fun rememberOrbPalette(coverUrl: String?): OrbPalette {
+    val context = LocalContext.current
+    var palette by remember { mutableStateOf(DefaultOrbPalette) }
+    LaunchedEffect(coverUrl) {
+        if (coverUrl == null) { palette = DefaultOrbPalette; return@LaunchedEffect }
+        withContext(Dispatchers.IO) {
+            try {
+                val req = ImageRequest.Builder(context).data(coverUrl).allowHardware(false).build()
+                val bmp = (context.imageLoader.execute(req).drawable as? BitmapDrawable)?.bitmap
+                    ?: return@withContext
+                val p = Palette.from(bmp).generate()
+                val primary = p.vibrantSwatch ?: p.dominantSwatch ?: return@withContext
+                val secondary = p.lightVibrantSwatch ?: p.lightMutedSwatch ?: primary
+                val tertiary = p.mutedSwatch ?: p.darkVibrantSwatch ?: primary
+                palette = OrbPalette(
+                    primary = Color(primary.rgb),
+                    secondary = Color(secondary.rgb),
+                    tertiary = Color(tertiary.rgb),
+                )
+            } catch (_: Exception) {}
+        }
+    }
+    return palette
+}
+
 // Extracts the dominant color from cover art, darkened to 22% (same formula as the
 // Svelte version's full-screen player background). Returns null while loading or
 // if extraction fails (e.g. no cover art).
