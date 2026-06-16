@@ -35,6 +35,6 @@ pub use local_library::{
     get_local_albums, get_local_artists, get_local_album_tracks, get_local_album_track_keys, get_local_artist_details,
     get_local_cover_art, get_local_track_path, search_local, get_local_recent_albums,
     get_local_random_albums, get_local_newest_albums, get_local_genres_list,
-    import_local_files,
+    import_local_files, find_local_match, prewarm_local_library,
 };
 pub use downloads::{download_track, download_album};

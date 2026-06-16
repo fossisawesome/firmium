@@ -57,6 +57,11 @@ export const LocalApi = {
 // Copies dropped audio files/folders into `~/Music/Firmium`, returning the number imported.
 export const importLocalFiles = (paths: string[]): Promise<number> => tauriInvoke<number>('import_local_files', { paths })
 
+// Returns the absolute file path of a locally-downloaded track matching title + (album or artist),
+// or null if not found. Used to prefer the local copy over streaming.
+export const findLocalMatch = (title: string, artist: string, album: string): Promise<string | null> =>
+  tauriInvoke<string | null>('find_local_match', { title, artist, album })
+
 // Resolves a `local:<hash>` song id to its absolute file path, for playback.
 export const getLocalTrackPath = (id: string): Promise<string> => tauriInvoke<string>('get_local_track_path', { id })
 

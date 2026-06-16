@@ -8,7 +8,7 @@ import {
   bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed, shuffleEnabled
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
-import { getLocalTrackPath } from './localApi'
+import { getLocalTrackPath, findLocalMatch } from './localApi'
 import { getCoverArt } from './coverCache'
 import { extractDominantColor } from './coverColor'
 import type { Song, PlaybackState, LyricLine, WordTiming } from './types/tauri-commands'
@@ -19,12 +19,15 @@ const replayGainDb = (track: Song): number | null => {
   return rg?.trackGain ?? rg?.albumGain ?? null
 }
 
-// Local library tracks are played directly from disk via a `file://` URL
-// (audio.rs branches on this prefix instead of fetching over HTTP).
-function streamUrlFor(track: Song): Promise<string> {
+async function streamUrlFor(track: Song): Promise<string> {
   if (track.id.startsWith('local:')) {
-    return getLocalTrackPath(track.id).then(path => `file://${path}`)
+    const path = await getLocalTrackPath(track.id)
+    return `file://${path}`
   }
+  try {
+    const localPath = await findLocalMatch(track.title, track.artist, track.album)
+    if (localPath) return `file://${localPath}`
+  } catch (_) {}
   return OpenSubsonicRouter.buildUrl('stream', { id: track.id })
 }
 

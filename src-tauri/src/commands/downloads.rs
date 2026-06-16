@@ -33,6 +33,15 @@ pub async fn download_track(
     track_number: Option<u32>,
     suffix: Option<String>,
 ) -> Result<(), String> {
+    {
+        let cache = state.local_library.read();
+        if let Some(cache) = cache.as_ref() {
+            if cache.has_local_match(&title, &album) {
+                return Ok(());
+            }
+        }
+    }
+
     let (server, username, password) = {
         let conn = state.connection.read();
         (

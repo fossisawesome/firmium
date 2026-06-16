@@ -107,14 +107,21 @@
       if (devtoolsKey) e.preventDefault()
     }, { capture: true })
 
+    tauriInvoke('prewarm_local_library').catch(() => {})
+
     const savedServer = SafeStorage.getItem('firmium_server')
     const savedUser = SafeStorage.getItem('firmium_user')
     const savePasswordEnabled = SafeStorage.getItem('firmium_save_pass') === 'true'
     const autoLoginEnabled = SafeStorage.getItem('firmium_auto_login') !== 'false'
 
-    if (autoLoginEnabled && savePasswordEnabled && savedServer && savedUser) {
-      try {
-        const savedPass = await Keyring.load(savedUser) as string | null
+    if (autoLoginEnabled && savedServer && savedUser) {
+      if (savePasswordEnabled) {
+        let savedPass: string | null = null
+        try {
+          savedPass = await Keyring.load(savedUser) as string | null
+        } catch (_) {
+          showAccountModal.set(true)
+        }
         if (savedPass) {
           setupError = 'Connecting…'
           try {
@@ -124,8 +131,12 @@
             setupError = err.message ?? 'Auto-login failed'
             showAccountModal.set(true)
           }
+        } else if (!$showAccountModal) {
+          showAccountModal.set(true)
         }
-      } catch (_) {}
+      } else {
+        showAccountModal.set(true)
+      }
     }
   })
 

@@ -6,6 +6,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import kotlinx.coroutines.*
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -23,6 +24,7 @@ class AudioPlayer(private val context: Context) {
     }
 
     var listener: Listener? = null
+    var bitPerfectMode: String = "off"
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val sessions = ConcurrentHashMap<String, AudioSession>()
@@ -32,10 +34,37 @@ class AudioPlayer(private val context: Context) {
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
 
-    private fun buildPlayer(): ExoPlayer =
-        ExoPlayer.Builder(context)
+    private fun buildPlayer(): ExoPlayer {
+        val player = ExoPlayer.Builder(context)
             .setAudioAttributes(audioAttrs, true)
             .build()
+        when (bitPerfectMode) {
+            "strict" -> {
+                player.trackSelectionParameters = player.trackSelectionParameters
+                    .buildUpon()
+                    .setAudioOffloadPreferences(
+                        AudioOffloadPreferences.Builder()
+                            .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_REQUIRED)
+                            .setIsGaplessSupportRequired(true)
+                            .build()
+                    )
+                    .build()
+            }
+            "relaxed" -> {
+                player.trackSelectionParameters = player.trackSelectionParameters
+                    .buildUpon()
+                    .setAudioOffloadPreferences(
+                        AudioOffloadPreferences.Builder()
+                            .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
+                            .setIsGaplessSupportRequired(false)
+                            .build()
+                    )
+                    .build()
+            }
+            // "off" — no offload config; standard ExoPlayer software pipeline
+        }
+        return player
+    }
 
     private fun gainFactor(gainDb: Float?): Float =
         if (gainDb != null) (10.0.pow(gainDb / 20.0)).toFloat().coerceIn(0.01f, 4.0f)

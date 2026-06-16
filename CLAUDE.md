@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 6.1.2
+**Version**: 6.1.3
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -389,3 +389,12 @@ This helps:
 - Confirms dependancys are still safe to use - no supply chain attacks.
 - Also - dont use a dependancy if you dont have to. Unless theres a real need for a dependancy - most of them can be easily be remade here. Expections apply if doing it here - woukd be geneiunlly a stupid, and unmainatble task.
 
+## Questioning
+
+**Always ask the user question and interogate them**
+
+For example:
+- Adding any features.
+- Changing UI.
+- Debugging.
+- ETC.

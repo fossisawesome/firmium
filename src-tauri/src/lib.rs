@@ -125,6 +125,8 @@ pub fn run() {
             get_local_newest_albums,
             get_local_genres_list,
             import_local_files,
+            find_local_match,
+            prewarm_local_library,
             // Downloads
             download_track,
             download_album,

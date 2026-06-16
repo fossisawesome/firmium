@@ -1,3 +1,26 @@
+# v6.1.3
+
+## Added
+
+- **Cover-art-driven orb visualizer palette** (desktop `src/lib/coverColor.ts::extractOrbPalette`, `src/components/VisualizerPanel.svelte`): The orb visualizer now extracts a 3-color palette (primary, secondary, tertiary) from the current track's cover art using a saturation-weighted bucket algorithm. Works for both local and streamed tracks; falls back to the default purple palette on error or missing art.
+- **Richer orb visuals** (`src/components/VisualizerPanel.svelte`): The orb now renders a 4-layer radial glow bloom, a white-hotspot core, 3 staggered expanding rings, 4 orbiting energy wisps, and a 28-particle field. Colors are taken from the cover-art palette. The bar visualizer also now uses palette colors with amplitude-based opacity.
+- **Continuous visualizer animation loop** (`src/components/VisualizerPanel.svelte`): Replaced the event-driven `draw()` call with a `requestAnimationFrame` loop (`animate()`), giving smooth animation independent of audio event frequency. Loop starts when the panel opens and cancels on close.
+- **Local file preference for streamed tracks** (desktop `src/lib/playback.ts::streamUrlFor`, `src-tauri/src/commands/local_library.rs::find_local_match`, `src/lib/localApi.ts::findLocalMatch`): `streamUrlFor` now checks the local library for a matching downloaded file (by title + album/artist, case-insensitive) before falling back to the server stream URL. Works transparently for all queue sources, not just `local:` tracks.
+- **Skip re-download if already cached** (`src-tauri/src/commands/downloads.rs`, `src-tauri/src/commands/local_library.rs::LocalLibraryCache::has_local_match`): `download_track` now exits early if the local library already contains a matching track, preventing redundant downloads.
+- **`find_local_match` Tauri command** (`src-tauri/src/commands/local_library.rs`): Returns the absolute file path of a locally cached track matching title + (album or artist). Exposed to the frontend via `src/lib/localApi.ts`.
+- **`prewarm_local_library` Tauri command** (`src-tauri/src/commands/local_library.rs`): Triggers an eager local library scan on startup so subsequent lookups are instant. Called fire-and-forget from `App.svelte` on mount.
+- **Android bit-perfect audio mode** (Android `audio/AudioPlayer.kt`, `data/storage/AppPreferences.kt`, `viewmodel/PlayerViewModel.kt`, `ui/screens/SettingsScreen.kt`, `ui/navigation/AppNavGraph.kt`): New "Bit-Perfect Audio" setting (Off / Relaxed / Strict) in the Playback panel. **Off**: standard ExoPlayer software pipeline (48 kHz resample). **Relaxed**: hardware audio offload enabled; crossfade fires only when adjacent tracks share the same format (suffix, sample rate, bit depth); gapless disabled. **Strict**: hardware offload required with gapless; hard cuts only. Enabling any bit-perfect mode disables crossfade; enabling crossfade resets bit-perfect to Off. Persisted to `AppPreferences` (`bit_perfect_mode` key).
+
+## Changed
+
+- **Android crossfade / skip respects bit-perfect mode** (`viewmodel/PlayerViewModel.kt::skipToNext`, position-polling loop): In Relaxed bit-perfect mode, crossfade only fires when adjacent tracks have matching audio formats (`audioFormatsMatch` helper checks suffix, sample rate, and bit depth); mismatched formats cause a hard cut. Bit-perfect controls dim and lock incompatible settings (crossfade, gapless) in the UI.
+
+## Fixed
+
+- **Desktop auto-login edge cases** (`src/App.svelte`): Auto-login now correctly handles all credential states: keyring load errors show the account modal; an empty/missing keyring entry shows the modal; `autoLogin` enabled with `savePassword` disabled now shows the modal instead of silently doing nothing.
+
+---
+
 # v6.1.2
 
 ## Added

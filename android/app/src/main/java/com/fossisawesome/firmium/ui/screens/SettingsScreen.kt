@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -55,6 +56,7 @@ fun SettingsScreen(
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
+    onBitPerfectModeSelected: (String) -> Unit,
     onThemeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
@@ -84,6 +86,7 @@ fun SettingsScreen(
         onCrossfadeToggle = onCrossfadeToggle,
         onCrossfadeDurationChange = onCrossfadeDurationChange,
         onGaplessToggle = onGaplessToggle,
+        onBitPerfectModeSelected = onBitPerfectModeSelected,
         onThemeSelected = onThemeSelected,
         onLrclibToggle = onLrclibToggle,
         onLyricsWordFillToggle = onLyricsWordFillToggle,
@@ -140,6 +143,7 @@ private fun FirmiumSettingsScreen(
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
+    onBitPerfectModeSelected: (String) -> Unit,
     onThemeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
@@ -266,6 +270,7 @@ private fun FirmiumSettingsScreen(
                             onCrossfadeToggle = onCrossfadeToggle,
                             onCrossfadeDurationChange = onCrossfadeDurationChange,
                             onGaplessToggle = onGaplessToggle,
+                            onBitPerfectModeSelected = onBitPerfectModeSelected,
                         )
                         "downloads" -> FirmiumDownloadsPanel(
                             downloadFormat = downloadFormat,
@@ -330,6 +335,38 @@ private fun FirmiumSettingsRow(
         content()
     }
     FirmiumDivider()
+}
+
+@Composable
+private fun BitPerfectModeSelector(current: String, onSelected: (String) -> Unit) {
+    val colors = LocalFirmiumColors.current
+    val modes = listOf("off" to "Off", "relaxed" to "Relaxed", "strict" to "Strict")
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(6.dp)),
+    ) {
+        modes.forEachIndexed { i, (id, label) ->
+            val selected = current == id
+            if (i > 0) {
+                Box(modifier = Modifier.width(1.dp).height(32.dp).background(colors.border))
+            }
+            Box(
+                modifier = Modifier
+                    .background(if (selected) colors.accent else Color.Transparent)
+                    .clickable { onSelected(id) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (selected) colors.bg else colors.muted,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -430,15 +467,49 @@ private fun FirmiumPlaybackPanel(
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
+    onBitPerfectModeSelected: (String) -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
-    FirmiumSettingsRow("Crossfade", "Smoothly blend between tracks") {
-        FirmiumSwitch(checked = playerState.crossfadeEnabled, onCheckedChange = onCrossfadeToggle)
+    val bitPerfectMode = playerState.bitPerfectMode
+    val bitPerfectActive = bitPerfectMode != "off"
+
+    FirmiumSettingsRow(
+        "Bit-Perfect Audio",
+        when (bitPerfectMode) {
+            "relaxed" -> "Hardware offload; crossfade when formats match; no gapless"
+            "strict"  -> "Hardware offload; hard cuts; gapless supported"
+            else      -> "Standard software playback; resamples to 48 kHz"
+        },
+    ) {
+        BitPerfectModeSelector(current = bitPerfectMode, onSelected = onBitPerfectModeSelected)
     }
-    if (playerState.crossfadeEnabled) {
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (bitPerfectActive) 0.4f else 1f)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Crossfade", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+            Spacer(Modifier.height(2.dp))
+            Text("Smoothly blend between tracks", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        }
+        Spacer(Modifier.width(12.dp))
+        FirmiumSwitch(
+            checked = playerState.crossfadeEnabled,
+            onCheckedChange = { if (!bitPerfectActive) onCrossfadeToggle(it) },
+        )
+    }
+    FirmiumDivider()
+
+    if (playerState.crossfadeEnabled && !bitPerfectActive) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-            Text("Crossfade: ${playerState.crossfadeDurationMs / 1000}s",
-                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Text(
+                "Crossfade: ${playerState.crossfadeDurationMs / 1000}s",
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+            )
             FirmiumSlider(
                 value = playerState.crossfadeDurationMs.toFloat(),
                 onValueChange = { onCrossfadeDurationChange(it.toInt()) },
@@ -448,9 +519,30 @@ private fun FirmiumPlaybackPanel(
         }
         FirmiumDivider()
     }
-    FirmiumSettingsRow("Gapless Playback", "Pre-buffer the next track for seamless transitions") {
-        FirmiumSwitch(checked = playerState.gaplessEnabled, onCheckedChange = onGaplessToggle)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (bitPerfectMode == "relaxed") 0.4f else 1f)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Gapless Playback", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                if (bitPerfectMode == "relaxed") "Not available in Relaxed mode"
+                else "Pre-buffer the next track for seamless transitions",
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        FirmiumSwitch(
+            checked = playerState.gaplessEnabled,
+            onCheckedChange = { if (bitPerfectMode != "relaxed") onGaplessToggle(it) },
+        )
     }
+    FirmiumDivider()
 }
 
 @Composable

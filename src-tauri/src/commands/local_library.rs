@@ -260,6 +260,16 @@ fn scan(app: &AppHandle) -> Result<LocalLibraryCache, String> {
     })
 }
 
+impl LocalLibraryCache {
+    pub fn has_local_match(&self, title: &str, album: &str) -> bool {
+        let title_lc = title.to_lowercase();
+        let album_lc = album.to_lowercase();
+        self.all_songs.iter().any(|s| {
+            s.title.to_lowercase() == title_lc && s.album.to_lowercase() == album_lc
+        })
+    }
+}
+
 fn ensure_scanned(app: &AppHandle, state: &AppState) -> Result<(), String> {
     if state.local_library.read().is_some() {
         return Ok(());
@@ -524,6 +534,36 @@ pub struct LocalGenre {
     name: String,
     album_count: u32,
     song_count: u32,
+}
+
+/// Returns the absolute file path of a locally-downloaded track that case-insensitively
+/// matches title + (album OR artist). Used by playback.ts to prefer the local copy over streaming.
+#[tauri::command]
+pub fn find_local_match(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    title: String,
+    artist: String,
+    album: String,
+) -> Result<Option<String>, String> {
+    ensure_scanned(&app, &state)?;
+    let cache = state.local_library.read();
+    let cache = cache.as_ref().unwrap();
+    let title_lc = title.to_lowercase();
+    let artist_lc = artist.to_lowercase();
+    let album_lc = album.to_lowercase();
+    let found = cache.all_songs.iter().find(|s| {
+        s.title.to_lowercase() == title_lc
+            && (s.album.to_lowercase() == album_lc || s.artist.to_lowercase() == artist_lc)
+    });
+    Ok(found.and_then(|s| cache.paths.get(&s.id)).map(|p| p.to_string_lossy().into_owned()))
+}
+
+/// Triggers an eager scan of the local library so subsequent lookups are instant.
+/// Called fire-and-forget on startup so the library is warm before the user plays.
+#[tauri::command]
+pub fn prewarm_local_library(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    ensure_scanned(&app, &state)
 }
 
 #[tauri::command]
