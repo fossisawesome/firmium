@@ -20,7 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.lerp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -29,6 +29,18 @@ import kotlin.math.sin
 
 private const val PARTICLE_COUNT = 28
 private const val RING_COUNT = 3
+
+private fun lerpColor(a: Color, b: Color, t: Float): Color =
+    lerp(a, b, t.coerceIn(0f, 1f))
+
+private fun paletteColor(p: OrbPalette, phase: Float): Color {
+    val t = ((phase % 1f) + 1f) % 1f
+    return when {
+        t < 0.33f -> lerpColor(p.primary, p.secondary, t / 0.33f)
+        t < 0.66f -> lerpColor(p.secondary, p.tertiary, (t - 0.33f) / 0.33f)
+        else      -> lerpColor(p.tertiary, p.primary,   (t - 0.66f) / 0.34f)
+    }
+}
 
 // NCS-style audio-reactive orb visualizer.
 // Attaches to ExoPlayer's audio session via android.media.audiofx.Visualizer to get real
@@ -108,7 +120,14 @@ fun MusicOrb(
         // Scale orb radius by up to +55% on bass hits.
         val orbR = baseR * (1f + smoothBass * 0.55f)
 
-        val primaryArgb = palette.primary.toArgb()
+        val coreColor  = paletteColor(palette, clock)
+        val ringColor1 = paletteColor(palette, clock + 0.33f)
+        val ringColor2 = paletteColor(palette, clock + 0.55f)
+        val wispColor0 = paletteColor(palette, clock + 0.17f)
+        val wispColor1 = paletteColor(palette, clock + 0.50f)
+        val particleA  = paletteColor(palette, clock + 0.10f)
+        val particleB  = paletteColor(palette, clock + 0.40f)
+        val particleC  = paletteColor(palette, clock + 0.70f)
 
         // ── Core glow: 4 layered radial gradients to fake a soft-blur bloom ────
         for (layer in 3 downTo 0) {
@@ -118,8 +137,8 @@ fun MusicOrb(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(primaryArgb).copy(alpha = alpha),
-                        Color(primaryArgb).copy(alpha = 0f),
+                        coreColor.copy(alpha = alpha),
+                        coreColor.copy(alpha = 0f),
                     ),
                     center = Offset(cx, cy),
                     radius = r.coerceAtLeast(1f),
@@ -133,8 +152,8 @@ fun MusicOrb(
             brush = Brush.radialGradient(
                 colors = listOf(
                     Color.White.copy(alpha = 0.85f),
-                    palette.primary.copy(alpha = 0.9f),
-                    palette.primary.copy(alpha = 0f),
+                    coreColor.copy(alpha = 0.9f),
+                    coreColor.copy(alpha = 0f),
                 ),
                 center = Offset(cx, cy),
                 radius = orbR.coerceAtLeast(1f),
@@ -149,7 +168,7 @@ fun MusicOrb(
             val ringR = orbR * (1.1f + phase * 2.2f)
             val ringAlpha = (1f - phase) * (0.4f + smoothBass * 0.4f)
             val strokeW = (3f - phase * 2.5f).coerceAtLeast(0.5f)
-            val ringColor = if (i % 2 == 0) palette.primary else palette.secondary
+            val ringColor = if (i % 2 == 0) ringColor1 else ringColor2
             drawCircle(
                 color = ringColor.copy(alpha = ringAlpha),
                 radius = ringR.coerceAtLeast(1f),
@@ -165,7 +184,7 @@ fun MusicOrb(
             val wx = cx + cos(angle) * orbitR
             val wy = cy + sin(angle) * orbitR
             val wispR = (orbR * (0.18f + smoothBass * 0.12f)).coerceAtLeast(1f)
-            val wispColor = if (w % 2 == 0) palette.secondary else palette.tertiary
+            val wispColor = if (w % 2 == 0) wispColor0 else wispColor1
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(wispColor.copy(alpha = 0.7f), wispColor.copy(alpha = 0f)),
@@ -185,9 +204,9 @@ fun MusicOrb(
             val pAlpha = ((1f - age) * 0.7f).coerceAtLeast(0f)
             val pRadius = (3f - age * 2.5f).coerceAtLeast(0.5f)
             val pColor = when {
-                age < 0.33f -> palette.primary
-                age < 0.66f -> palette.secondary
-                else -> palette.tertiary
+                age < 0.33f -> particleA
+                age < 0.66f -> particleB
+                else -> particleC
             }
             drawCircle(
                 color = pColor.copy(alpha = pAlpha),

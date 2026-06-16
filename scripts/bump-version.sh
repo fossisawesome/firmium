@@ -77,5 +77,5 @@ done
 echo "✅ Version bumped to $NEW_VERSION"
 echo ""
 echo "Next steps:"
-echo "  1. Commit changes: git add . && git commit -m 'chore: bump to v$NEW_VERSION'"
-echo "  2. Push to repo: git push origin main"
+echo "  1. Commit changes: git add . && git commit -m 'chore: bump to v$NEW_VERSION' && git push"
+echo "  2. Tag: git tag v$NEW_VERSION && git push origin tag v$NEW_VERSION"

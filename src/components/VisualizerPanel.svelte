@@ -14,124 +14,274 @@
 
   let bass = 0
   let smoothBass = 0
-  let bars: number[] = new Array(24).fill(0)
+  let bars: number[] = new Array(32).fill(0)
 
   const DEFAULT_PALETTE: OrbPalette = {
-    primary: { r: 124, g: 92, b: 255 },
+    primary:   { r: 124, g: 92,  b: 255 },
     secondary: { r: 170, g: 136, b: 255 },
-    tertiary: { r: 85, g: 51, b: 204 },
+    tertiary:  { r: 85,  g: 51,  b: 204 },
   }
   let palette: OrbPalette = DEFAULT_PALETTE
+  let paletteFlat = new Float32Array([
+    124/255, 92/255,  255/255,
+    170/255, 136/255, 255/255,
+    85/255,  51/255,  204/255,
+  ])
 
-  // Continuous animation state (updated each rAF tick)
-  let clock = 0       // 0..1, period = 8 s
-  let breathe = 0     // 0..1, period = 2.4 s
+  let clock = 0
+  let breathe = 0
   let lastTs = 0
   let rafId = 0
 
-  const PARTICLE_COUNT = 28
-  const particles = Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
-    baseAngle: (i / PARTICLE_COUNT) * 2 * Math.PI,
-    speed: 0.3 + (i % 7) * 0.1,
-    phase: i / PARTICLE_COUNT,
-  }))
+  let gl: WebGL2RenderingContext | null = null
+  let orbProg: WebGLProgram | null = null
+  let barsProg: WebGLProgram | null = null
 
-  function rgba(c: { r: number; g: number; b: number }, a: number): string {
-    return `rgba(${c.r},${c.g},${c.b},${Math.max(0, Math.min(1, a))})`
+  // ── Shaders ───────────────────────────────────────────────────────────────
+  //
+  // Fullscreen triangle trick: 3 vertices, no buffers.
+  // VertexID 0→(−1,−1), 1→(3,−1), 2→(−1,3) covers the whole clip quad.
+
+  const VERT_FULL = `#version 300 es
+void main() {
+  vec2 p = vec2(float(gl_VertexID % 2), float(gl_VertexID / 2));
+  gl_Position = vec4(p * 4.0 - 1.0, 0.0, 1.0);
+}
+`
+
+  // Orb: fragment shader draws everything — glow bloom, rings, wisps, particles.
+  // All geometry is computed analytically via distance functions.
+  // Additive blending (ONE, ONE) on black background gives the glow look.
+  const FRAG_ORB = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+
+uniform vec2  u_res;
+uniform float u_bass;
+uniform float u_clock;
+uniform float u_breathe;
+uniform vec3  u_pal[3];
+
+const float TAU = 6.28318530718;
+
+vec3 pal(float t) {
+  t = fract(t);
+  if (t < 0.333) return mix(u_pal[0], u_pal[1], t / 0.333);
+  if (t < 0.666) return mix(u_pal[1], u_pal[2], (t - 0.333) / 0.333);
+  return mix(u_pal[2], u_pal[0], (t - 0.666) / 0.334);
+}
+
+void main() {
+  // Aspect-corrected UV, centered at (0,0)
+  vec2 p = (gl_FragCoord.xy / u_res - 0.5);
+  p.x *= u_res.x / u_res.y;
+
+  float d    = length(p);
+  float bf   = sin(u_breathe * TAU) * 0.5 + 0.5;
+  float orbR = 0.075 + bf * 0.022 + u_bass * 0.04;
+
+  vec3 col = vec3(0.0);
+
+  // 4-layer glow bloom
+  for (int i = 0; i < 4; i++) {
+    float f = float(i) / 3.0;
+    float r = orbR * (1.8 - f * 0.8);
+    float a = 0.12 + f * 0.25;
+    col += pal(u_clock) * a * exp(-d * d / (r * r) * 2.0);
   }
 
-  function drawOrb(ctx: CanvasRenderingContext2D, w: number, h: number) {
-    const cx = w / 2, cy = h / 2
-    const maxR = Math.min(w, h) / 2
-    const breatheFrac = Math.sin(breathe * 2 * Math.PI) * 0.5 + 0.5
-    const baseR = maxR * (0.28 + breatheFrac * 0.08)
-    const orbR = baseR * (1 + smoothBass * 0.55)
+  // Bright core with white hotspot
+  float cm = exp(-d * d / (orbR * orbR) * 3.0);
+  vec3 ch = mix(vec3(1.0), pal(u_clock), smoothstep(0.0, orbR * 0.5, d));
+  col += ch * cm * 0.9;
 
-    // 4-layer glow bloom
-    for (let layer = 3; layer >= 0; layer--) {
-      const factor = layer / 3
-      const alpha = 0.12 + factor * 0.25
-      const r = orbR * (1.8 - factor * 0.8)
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
-      grad.addColorStop(0, rgba(palette.primary, alpha))
-      grad.addColorStop(1, rgba(palette.primary, 0))
-      ctx.fillStyle = grad
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill()
-    }
-
-    // Bright core with white hotspot
-    const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, orbR)
-    coreGrad.addColorStop(0, 'rgba(255,255,255,0.85)')
-    coreGrad.addColorStop(0.5, rgba(palette.primary, 0.9))
-    coreGrad.addColorStop(1, rgba(palette.primary, 0))
-    ctx.fillStyle = coreGrad
-    ctx.beginPath(); ctx.arc(cx, cy, orbR, 0, Math.PI * 2); ctx.fill()
-
-    // 3 staggered expanding rings
-    for (let i = 0; i < 3; i++) {
-      const phase = (clock + i / 3) % 1
-      const ringR = orbR * (1.1 + phase * 2.2)
-      const ringAlpha = (1 - phase) * (0.4 + smoothBass * 0.4)
-      ctx.strokeStyle = rgba(i % 2 === 0 ? palette.primary : palette.secondary, ringAlpha)
-      ctx.lineWidth = Math.max(0.5, 3 - phase * 2.5)
-      ctx.beginPath(); ctx.arc(cx, cy, ringR, 0, Math.PI * 2); ctx.stroke()
-    }
-
-    // 4 orbiting energy wisps
-    for (let w2 = 0; w2 < 4; w2++) {
-      const angle = clock * 2 * Math.PI + w2 * (Math.PI / 2)
-      const orbitR = orbR * (1.35 + Math.sin(breathe * Math.PI + w2) * 0.15)
-      const wx = cx + Math.cos(angle) * orbitR
-      const wy = cy + Math.sin(angle) * orbitR
-      const wispR = Math.max(1, orbR * (0.18 + smoothBass * 0.12))
-      const wispColor = w2 % 2 === 0 ? palette.secondary : palette.tertiary
-      const wGrad = ctx.createRadialGradient(wx, wy, 0, wx, wy, wispR)
-      wGrad.addColorStop(0, rgba(wispColor, 0.7))
-      wGrad.addColorStop(1, rgba(wispColor, 0))
-      ctx.fillStyle = wGrad
-      ctx.beginPath(); ctx.arc(wx, wy, wispR, 0, Math.PI * 2); ctx.fill()
-    }
-
-    // Particle field
-    for (const { baseAngle, speed, phase } of particles) {
-      const age = (clock + phase) % 1
-      const angle = baseAngle + clock * 0.8
-      const dist = orbR * (0.9 + age * 1.8 * (0.6 + smoothBass * 0.8) * speed)
-      const pColor = age < 0.33 ? palette.primary : age < 0.66 ? palette.secondary : palette.tertiary
-      ctx.fillStyle = rgba(pColor, Math.max(0, (1 - age) * 0.7))
-      ctx.beginPath()
-      ctx.arc(cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, Math.max(0.5, 3 - age * 2.5), 0, Math.PI * 2)
-      ctx.fill()
-    }
+  // 3 expanding rings
+  for (int i = 0; i < 3; i++) {
+    float ph  = fract(u_clock + float(i) / 3.0);
+    float rr  = orbR * (1.1 + ph * 2.2);
+    float ra  = (1.0 - ph) * (0.4 + u_bass * 0.4);
+    vec3  rc  = (i % 2 == 0) ? pal(u_clock + 0.33) : pal(u_clock + 0.55);
+    float rw  = max(0.5, 3.0 - ph * 2.5) / min(u_res.x, u_res.y);
+    col += rc * ra * smoothstep(rw, 0.0, abs(d - rr));
   }
 
-  function drawBars(ctx: CanvasRenderingContext2D, w: number, h: number) {
-    const gap = 4
-    const bw = (w - gap * (bars.length - 1)) / bars.length
-    bars.forEach((v, i) => {
-      const bh = Math.max(2, v * h)
-      const alpha = 0.6 + v * 0.4
-      ctx.fillStyle = rgba(palette.primary, alpha)
-      ctx.fillRect(i * (bw + gap), h - bh, bw, bh)
-    })
+  // 4 orbiting wisps — positions in same aspect-corrected space as p
+  for (int w = 0; w < 4; w++) {
+    float ang  = u_clock * TAU + float(w) * (TAU / 4.0);
+    float oR   = orbR * (1.35 + sin(u_breathe * TAU + float(w)) * 0.15);
+    vec2  wpos = vec2(cos(ang), sin(ang)) * oR;
+    float wd   = length(p - wpos);
+    float wR   = orbR * (0.18 + u_bass * 0.12);
+    vec3  wc   = (w % 2 == 0) ? pal(u_clock + 0.17) : pal(u_clock + 0.50);
+    col += wc * 0.7 * exp(-wd * wd / (wR * wR) * 4.0);
   }
+
+  // 28 particles
+  vec3 pa = pal(u_clock + 0.10);
+  vec3 pb = pal(u_clock + 0.40);
+  vec3 pc = pal(u_clock + 0.70);
+  for (int k = 0; k < 28; k++) {
+    float baseA = float(k) / 28.0 * TAU;
+    float speed = 0.3 + float(k % 7) * 0.1;
+    float age   = fract(u_clock + float(k) / 28.0);
+    float ang   = baseA + u_clock * 0.8 * TAU;
+    float pd    = orbR * (0.9 + age * 1.8 * (0.6 + u_bass * 0.8) * speed);
+    vec2  pp    = vec2(cos(ang), sin(ang)) * pd;
+    float dd    = length(p - pp);
+    float pr    = max(0.004, (3.0 - age * 2.5) / min(u_res.x, u_res.y));
+    vec3  pkc   = (age < 0.33) ? pa : (age < 0.66) ? pb : pc;
+    col += pkc * max(0.0, (1.0 - age) * 0.7) * exp(-dd * dd / (pr * pr));
+  }
+
+  fragColor = vec4(col, 1.0);
+}
+`
+
+  // Bars: vertex shader builds 32 quads (6 verts each) from u_bars uniform array.
+  // No vertex buffers — positions derived entirely from gl_VertexID.
+  const VERT_BARS = `#version 300 es
+uniform float u_bars[32];
+uniform vec2  u_res;
+
+out float v_t;    // 0 = bottom of bar, 1 = top of bar
+out float v_idx;  // bar index, 0..31
+
+void main() {
+  int bar     = gl_VertexID / 6;
+  int corner  = gl_VertexID % 6;
+
+  float gap  = 3.0;
+  float barW = (u_res.x - gap * 31.0) / 32.0;
+  float barH = u_bars[bar] * u_res.y;
+
+  float xL = float(bar) * (barW + gap);
+  float xR = xL + barW;
+
+  // 2 triangles CW from bottom-left: BL BR TR  BL TR TL
+  bool right = (corner == 1 || corner == 2 || corner == 4);
+  bool top   = (corner == 2 || corner == 4 || corner == 5);
+
+  float px = right ? xR : xL;
+  float py = top   ? barH : 0.0;
+
+  v_t   = (barH > 0.0) ? py / barH : 0.0;
+  v_idx = float(bar);
+
+  // pixel → clip (WebGL y=0 is bottom)
+  gl_Position = vec4((px / u_res.x) * 2.0 - 1.0,
+                     (py / u_res.y) * 2.0 - 1.0,
+                     0.0, 1.0);
+}
+`
+
+  const FRAG_BARS = `#version 300 es
+precision highp float;
+in  float v_t;
+in  float v_idx;
+out vec4  fragColor;
+
+uniform float u_clock;
+uniform vec3  u_pal[3];
+
+vec3 pal(float t) {
+  t = fract(t);
+  if (t < 0.333) return mix(u_pal[0], u_pal[1], t / 0.333);
+  if (t < 0.666) return mix(u_pal[1], u_pal[2], (t - 0.333) / 0.333);
+  return mix(u_pal[2], u_pal[0], (t - 0.666) / 0.334);
+}
+
+void main() {
+  vec3 col = pal(u_clock + v_idx / 32.0);
+  // Brighter at top, dim at bottom, glow highlight at the peak
+  float bright = 0.45 + v_t * 0.55 + smoothstep(0.85, 1.0, v_t) * 0.5;
+  // Fade low bars more aggressively so noise doesn't glow
+  float alpha = clamp(bright, 0.0, 1.0);
+  fragColor = vec4(col * bright, alpha);
+}
+`
+
+  // ── WebGL init ────────────────────────────────────────────────────────────
+
+  function shader(g: WebGL2RenderingContext, type: number, src: string): WebGLShader {
+    const s = g.createShader(type)!
+    g.shaderSource(s, src)
+    g.compileShader(s)
+    if (!g.getShaderParameter(s, g.COMPILE_STATUS)) {
+      const log = g.getShaderInfoLog(s); g.deleteShader(s)
+      throw new Error(`Shader error: ${log}`)
+    }
+    return s
+  }
+
+  function program(g: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
+    const p = g.createProgram()!
+    g.attachShader(p, shader(g, g.VERTEX_SHADER, vs))
+    g.attachShader(p, shader(g, g.FRAGMENT_SHADER, fs))
+    g.linkProgram(p)
+    if (!g.getProgramParameter(p, g.LINK_STATUS)) {
+      const log = g.getProgramInfoLog(p); g.deleteProgram(p)
+      throw new Error(`Link error: ${log}`)
+    }
+    return p
+  }
+
+  function initGL(c: HTMLCanvasElement): WebGL2RenderingContext | null {
+    // alpha: false → opaque canvas, avoids compositing headaches with additive blend
+    const g = c.getContext('webgl2', { antialias: false, alpha: false })
+    if (!g) { console.error('[visualizer] WebGL2 unavailable'); return null }
+    try {
+      orbProg  = program(g, VERT_FULL, FRAG_ORB)
+      barsProg = program(g, VERT_BARS, FRAG_BARS)
+    } catch (e) {
+      console.error('[visualizer]', e); return null
+    }
+    g.enable(g.BLEND)
+    return g
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  function renderOrb(g: WebGL2RenderingContext, w: number, h: number) {
+    g.blendFunc(g.ONE, g.ONE)        // additive glow on black
+    g.useProgram(orbProg)
+    const u = (n: string) => g.getUniformLocation(orbProg!, n)
+    g.uniform2f(u('u_res'),    w, h)
+    g.uniform1f(u('u_bass'),   smoothBass)
+    g.uniform1f(u('u_clock'),  clock)
+    g.uniform1f(u('u_breathe'), breathe)
+    g.uniform3fv(u('u_pal'),   paletteFlat)
+    g.drawArrays(g.TRIANGLES, 0, 3)
+  }
+
+  function renderBars(g: WebGL2RenderingContext, w: number, h: number) {
+    g.blendFunc(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA)
+    g.useProgram(barsProg)
+    const u = (n: string) => g.getUniformLocation(barsProg!, n)
+    g.uniform2f(u('u_res'),   w, h)
+    g.uniform1fv(u('u_bars'), new Float32Array(bars))
+    g.uniform1f(u('u_clock'), clock)
+    g.uniform3fv(u('u_pal'),  paletteFlat)
+    g.drawArrays(g.TRIANGLES, 0, 32 * 6)
+  }
+
+  // ── Animation loop ────────────────────────────────────────────────────────
 
   function animate(ts: number) {
     if (!get(visualizerOpen)) { rafId = 0; return }
 
     const dt = lastTs ? (ts - lastTs) / 1000 : 0
-    lastTs = ts
-    clock = (clock + dt / 8) % 1
+    lastTs  = ts
+    clock   = (clock   + dt / 8)   % 1
     breathe = (breathe + dt / 2.4) % 1
     smoothBass += (bass - smoothBass) * 0.25
 
-    if (canvas) {
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        if (get(visualizerMode) === 'orb') drawOrb(ctx, canvas.width, canvas.height)
-        else drawBars(ctx, canvas.width, canvas.height)
-      }
+    if (canvas && gl) {
+      const w = canvas.width, h = canvas.height
+      gl.viewport(0, 0, w, h)
+      gl.clearColor(0, 0, 0, 1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      if (get(visualizerMode) === 'orb') renderOrb(gl, w, h)
+      else renderBars(gl, w, h)
     }
 
     rafId = requestAnimationFrame(animate)
@@ -140,8 +290,8 @@
   function resizeCanvas() {
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    canvas.width = rect.width
-    canvas.height = rect.height
+    canvas.width  = Math.round(rect.width)
+    canvas.height = Math.round(rect.height)
   }
 
   function close() { visualizerOpen.set(false) }
@@ -163,11 +313,11 @@
   $effect(() => {
     tauriInvoke('set_visualizer_enabled', { enabled: $visualizerOpen }).catch(() => {})
     if ($visualizerOpen) {
-      setTimeout(resizeCanvas, 260)
-      if (!rafId) {
-        lastTs = 0
-        rafId = requestAnimationFrame(animate)
-      }
+      setTimeout(() => {
+        resizeCanvas()
+        if (canvas && !gl) gl = initGL(canvas)
+        if (!rafId) { lastTs = 0; rafId = requestAnimationFrame(animate) }
+      }, 260)
     } else {
       if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
     }
@@ -181,7 +331,7 @@
         try {
           const path = await tauriInvoke<string>('get_local_cover_art', { id: track.coverArtId })
           palette = await extractOrbPalette(convertFileSrc(path))
-        } catch (_) { palette = DEFAULT_PALETTE }
+        } catch { palette = DEFAULT_PALETTE }
       })()
     } else {
       ;(async () => {
@@ -189,9 +339,17 @@
           const url = await OpenSubsonicRouter.buildUrl('getCoverArt', { id: track.coverArtId! })
           const assetUrl = await getCoverArt(track.coverArtId!, url)
           palette = await extractOrbPalette(assetUrl)
-        } catch (_) { palette = DEFAULT_PALETTE }
+        } catch { palette = DEFAULT_PALETTE }
       })()
     }
+  })
+
+  $effect(() => {
+    paletteFlat = new Float32Array([
+      palette.primary.r   / 255, palette.primary.g   / 255, palette.primary.b   / 255,
+      palette.secondary.r / 255, palette.secondary.g / 255, palette.secondary.b / 255,
+      palette.tertiary.r  / 255, palette.tertiary.g  / 255, palette.tertiary.b  / 255,
+    ])
   })
 </script>
 

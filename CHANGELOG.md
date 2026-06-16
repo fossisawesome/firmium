@@ -1,3 +1,21 @@
+# v6.1.4
+
+## Changed
+
+- **Desktop visualizer FFT resolution** (`src-tauri/src/visualizer.rs`): FFT window doubled (1024 → 2048), ring buffer doubled (4096 → 8192), bar count increased (24 → 32), analysis interval reduced from 50 ms to 16 ms (~60 fps).
+- **Desktop visualizer smoothing** (`src-tauri/src/visualizer.rs`): Bass and per-bar values now use exponential attack/decay smoothing (fast rise, slow fall) instead of raw FFT output, eliminating flicker.
+- **Desktop bass detection** (`src-tauri/src/visualizer.rs`): Bass now uses the peak magnitude in the 40–250 Hz band (skipping DC and subsonic), replacing the 0–250 Hz average.
+- **Desktop bar frequency mapping** (`src-tauri/src/visualizer.rs::compute_bars`): Bars now map 40 Hz–18 kHz log-spaced using the actual sample rate, using peak per band instead of average for more reactive display.
+- **Desktop visualizer renderer** (`src/components/VisualizerPanel.svelte`): Rewritten from Canvas 2D to WebGL2 — orb and bars rendered via GLSL fragment shaders (fullscreen-triangle technique, additive blending for glow).
+- **Android orb color cycling** (`android/app/src/main/java/com/fossisawesome/firmium/ui/components/MusicOrb.kt`): Orb elements (core glow, rings, wisps, particles) now cycle continuously through all three palette colors via smooth linear interpolation, instead of static palette assignments.
+- **Android cover art shadow** (`android/app/src/main/java/com/fossisawesome/firmium/ui/components/FullScreenPlayer.kt`): Drop shadow on cover art is suppressed when the orb is active to prevent visual bleed through orb layers.
+
+## Added
+
+- **Android `RECORD_AUDIO` permission** (`android/app/src/main/AndroidManifest.xml`): Required for the `Visualizer` API attachment used by the orb.
+
+---
+
 # v6.1.3
 
 ## Added

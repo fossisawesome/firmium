@@ -166,7 +166,7 @@ fun FullScreenPlayer(
                         modifier = Modifier
                             .size(artSize)
                             .scale(artScale)
-                            .shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp))
+                            .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp)) else Modifier)
                             .clip(RoundedCornerShape(16.dp)),
                     )
                 }
@@ -221,7 +221,7 @@ fun FullScreenPlayer(
                     modifier = Modifier
                         .size(artSize)
                         .scale(artScale)
-                        .shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp))
+                        .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp)) else Modifier)
                         .clip(RoundedCornerShape(20.dp)),
                 )
 
