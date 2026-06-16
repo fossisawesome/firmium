@@ -28,6 +28,7 @@ data class PlayerState(
     val crossfadeDurationMs: Int = 3000,
     val gaplessEnabled: Boolean = true,
     val isSeeking: Boolean = false,
+    val audioSessionId: Int = 0,
 ) {
     val currentTrack: Song? get() = queue.getOrNull(queueIndex)
     val hasNext: Boolean get() = queueIndex < queue.size - 1 || repeatMode == "all"
@@ -123,11 +124,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Queue management ───────────────────────────────────────────────────────
 
-    // Local library tracks are played directly from MediaStore via their content:// URI
-    // (ExoPlayer's MediaItem.fromUri handles content:// natively, no decoder changes needed).
-    private suspend fun streamUrlFor(song: Song): String =
-        if (song.id.startsWith("local:")) localLibrary.getTrackUri(song.id)?.toString() ?: ""
-        else auth.streamUrl(song.id)
+    // Local library tracks are played directly from MediaStore via their content:// URI.
+    // For server tracks, prefer a locally-downloaded copy if one exists — avoids unnecessary
+    // streaming and lets already-downloaded tracks play offline.
+    private suspend fun streamUrlFor(song: Song): String {
+        if (song.id.startsWith("local:")) {
+            return localLibrary.getTrackUri(song.id)?.toString() ?: ""
+        }
+        val local = localLibrary.findLocalMatch(song.title, song.artist, song.album)
+        if (local != null) {
+            val uri = localLibrary.getTrackUri(local.id)
+            if (uri != null) return uri.toString()
+        }
+        return auth.streamUrl(song.id)
+    }
 
     fun playAt(songs: List<Song>, startIndex: Int) {
         viewModelScope.launch {
@@ -141,7 +151,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val playerId = audioPlayer.setQueue(tracks, startIndex, _state.value.volume)
             currentPlayerId = playerId
             val actualIndex = startIndex.coerceIn(0, (songs.size - 1).coerceAtLeast(0))
-            _state.update { it.copy(queue = songs, queueIndex = actualIndex, playbackState = "loading", currentPosition = 0.0) }
+            _state.update { it.copy(
+                queue = songs, queueIndex = actualIndex,
+                playbackState = "loading", currentPosition = 0.0,
+                audioSessionId = audioPlayer.getAudioSessionId(playerId),
+            ) }
             updateNowPlayingNotification()
             scrobbleCurrent(false)
             reportPlaybackCurrent("starting", 0L)
@@ -295,7 +309,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 replayGainDb = (nextSong.replayGainTrack ?: nextSong.replayGainAlbum)?.toFloat(),
             )
             currentPlayerId = newPid
-            _state.update { it.copy(queueIndex = nextIdx, currentPosition = 0.0) }
+            _state.update { it.copy(
+                queueIndex = nextIdx, currentPosition = 0.0,
+                audioSessionId = audioPlayer.getAudioSessionId(newPid),
+            ) }
             updateNowPlayingNotification()
             scrobbleCurrent(false)
             reportPlaybackCurrent("starting", 0L)

@@ -36,6 +36,11 @@ class DownloadManager(
     suspend fun downloadTrack(song: Song, format: String, albumArtist: String = song.artist): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
+                // Skip if this track is already in the local library — no need to re-download.
+                if (localLibrary.findLocalMatch(song.title, song.artist, song.album) != null) {
+                    return@withContext Result.success(Unit)
+                }
+
                 val url = auth.downloadUrl(song.id, format)
                 val request = Request.Builder().url(url).build()
                 http.newCall(request).execute().use { response ->
