@@ -20,6 +20,9 @@ data class AuthState(
     val savedServer: String = "",
     val savedUsername: String = "",
     val savePassword: Boolean = true,
+    // True when saved server+username exist but credentials couldn't be restored —
+    // triggers the AccountDialog to open automatically so the user can re-enter their password.
+    val needsLogin: Boolean = false,
 )
 
 class AuthViewModel(app: Application) : AndroidViewModel(app) {
@@ -32,18 +35,31 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
     init {
-        // Attempt to restore saved credentials on startup (mirrors auto-login in App.svelte).
         viewModelScope.launch {
             val server = prefs.serverUrl.first() ?: ""
             val username = prefs.username.first() ?: ""
             val savePass = prefs.savePasswordEnabled.first()
-            val restored = auth.tryRestoreCredentials()
+            val autoLogin = prefs.autoLoginEnabled.first()
+
+            val (restored, needsLogin) = if (autoLogin && server.isNotEmpty() && username.isNotEmpty()) {
+                try {
+                    val ok = auth.tryRestoreCredentials()
+                    // Credentials were expected on disk but couldn't be loaded → prompt re-login.
+                    Pair(ok, !ok)
+                } catch (e: Exception) {
+                    Pair(false, true)
+                }
+            } else {
+                Pair(false, false)
+            }
+
             _state.value = AuthState(
                 isAuthenticated = restored,
                 isLoading = false,
                 savedServer = server,
                 savedUsername = username,
                 savePassword = savePass,
+                needsLogin = needsLogin,
             )
         }
     }
@@ -60,7 +76,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 // Persist now that we know they work.
                 auth.persistCredentials(server, username, password, savePassword)
                 prefs.setSavePasswordEnabled(savePassword)
-                _state.value = AuthState(isAuthenticated = true, isLoading = false)
+                _state.value = AuthState(isAuthenticated = true, isLoading = false, needsLogin = false)
             } catch (e: Exception) {
                 auth.clearCredentials()
                 _state.value = AuthState(

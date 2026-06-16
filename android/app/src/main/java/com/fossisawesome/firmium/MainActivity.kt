@@ -120,6 +120,11 @@ class MainActivity : ComponentActivity() {
                     val scope = rememberCoroutineScope()
                     var showAccountDialog by remember { mutableStateOf(false) }
 
+                    // Auto-open login dialog when saved credentials couldn't be restored.
+                    LaunchedEffect(authState.needsLogin) {
+                        if (authState.needsLogin) showAccountDialog = true
+                    }
+
                     AppNavGraph(
                         auth = app.auth,
                         authViewModel = authViewModel,
@@ -149,8 +154,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Close the dialog automatically once a login succeeds, and refresh
-                    // library state so it switches from local files to server data.
+                    // Close the dialog automatically once a login succeeds and refresh the library.
                     LaunchedEffect(authState.isAuthenticated) {
                         if (authState.isAuthenticated && showAccountDialog) {
                             libraryViewModel.invalidateAll()
