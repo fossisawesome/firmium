@@ -162,6 +162,7 @@ pub fn run() {
             toggle_shuffle,
             set_crossfade_settings,
             set_gapless_enabled,
+            set_replay_gain_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

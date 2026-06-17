@@ -49,6 +49,8 @@ pub struct Session {
     /// Decoded interleaved f32 samples awaiting playback.
     pub ring: Mutex<VecDeque<f32>>,
     pub volume: Mutex<f32>,
+    /// Live-updateable replay gain multiplier (stored as f32 bits in an AtomicU32).
+    pub replay_gain_factor: AtomicU32,
     pub playing: AtomicBool,
     /// Set once the decode-feeder hits end-of-stream.
     pub finished_decoding: AtomicBool,
@@ -77,6 +79,7 @@ impl Session {
         Self {
             ring: Mutex::new(VecDeque::with_capacity(RING_HIGH_WATER * 2)),
             volume: Mutex::new(1.0),
+            replay_gain_factor: AtomicU32::new(1.0f32.to_bits()),
             playing: AtomicBool::new(false),
             finished_decoding: AtomicBool::new(false),
             loading: AtomicBool::new(true),
@@ -111,8 +114,9 @@ impl Session {
 ///
 /// `apply_fade_in` ramps the first 25ms of audio linearly from silence (used
 /// only for the initial decode-feeder of a track, not seek-rebuilds).
-/// `replay_gain_factor` is a linear amplitude multiplier applied to every
-/// sample. `visualizer` receives a copy of each decoded chunk for analysis.
+/// `replay_gain_factor` is written to `session.replay_gain_factor` so it can be
+/// updated live (e.g. when the user toggles ReplayGain off). `visualizer`
+/// receives a copy of each decoded chunk for analysis.
 pub fn spawn_decode_feeder(
     session: Arc<Session>,
     mut decoder: DecoderHandle,
@@ -122,6 +126,7 @@ pub fn spawn_decode_feeder(
     cancel: Arc<AtomicBool>,
     seek_rx: Receiver<SeekRequest>,
 ) {
+    session.replay_gain_factor.store(replay_gain_factor.to_bits(), Ordering::Relaxed);
     tauri::async_runtime::spawn_blocking(move || {
         let channels = decoder.channels.max(1) as usize;
         let sample_rate = decoder.sample_rate;
@@ -174,9 +179,10 @@ pub fn spawn_decode_feeder(
 
             match decoder.next_samples() {
                 Ok(Some(mut samples)) => {
-                    if replay_gain_factor != 1.0 {
+                    let rg = f32::from_bits(session.replay_gain_factor.load(Ordering::Relaxed));
+                    if rg != 1.0 {
                         for s in &mut samples {
-                            *s *= replay_gain_factor;
+                            *s *= rg;
                         }
                     }
 

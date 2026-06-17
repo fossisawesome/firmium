@@ -3,7 +3,7 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, bitPerfectMode, setBitPerfectMode, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, replayGainEnabled, setReplayGainEnabled, bitPerfectMode, setBitPerfectMode, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
@@ -24,6 +24,7 @@
     'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
     'firmium_volume', 'firmium_gapless', 'firmium_lastfm',
     'firmium_download_format', 'firmium_lyrics_word_fill', 'firmium_bit_perfect_mode',
+    'firmium_replaygain',
   ]
 
   // ── Active category ───────────────────────────────────────────────────────────
@@ -267,6 +268,17 @@
         </div>
         <label class="toggle-switch">
           <input type="checkbox" checked={$gaplessEnabled} onchange={handleGaplessToggle} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">ReplayGain</div>
+          <div class="settings-desc">Normalize track loudness using server-provided gain values</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" checked={$replayGainEnabled} onchange={(e) => setReplayGainEnabled((e.target as HTMLInputElement).checked)} />
           <span class="toggle-slider"></span>
         </label>
       </div>

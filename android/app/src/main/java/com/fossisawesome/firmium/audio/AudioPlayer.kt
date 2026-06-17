@@ -178,6 +178,13 @@ class AudioPlayer(private val context: Context) {
 
     fun getVolume(playerId: String): Float = sessions[playerId]?.baseVolume ?: 1f
 
+    fun setReplayGainEnabled(enabled: Boolean) {
+        sessions.values.forEach { session ->
+            val factor = if (enabled) session.replayGainFactor else 1.0f
+            session.player.volume = session.baseVolume * factor
+        }
+    }
+
     fun getState(playerId: String): String {
         val session = sessions[playerId] ?: return "stopped"
         return when {

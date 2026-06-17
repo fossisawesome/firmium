@@ -40,9 +40,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.audio.PlayerState
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
-import com.fossisawesome.firmium.viewmodel.PlayerState
 import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 import kotlinx.coroutines.launch
 import kotlin.math.abs

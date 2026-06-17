@@ -106,6 +106,7 @@
     "set_repeat_mode",
     "toggle_shuffle",
     "set_crossfade_settings",
-    "set_gapless_enabled"
+    "set_gapless_enabled",
+    "set_replay_gain_enabled"
   ]
 }

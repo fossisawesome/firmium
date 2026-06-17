@@ -23,7 +23,7 @@ pub use cover_colors::{extract_cover_colors, extract_cover_colors_from_path};
 pub use queue::{
     init_playback_settings, set_queue, set_queue_seamless, shuffle_and_play, play_queue_index,
     queue_next, queue_prev, toggle_play, seek_queue, set_queue_volume,
-    set_repeat_mode, toggle_shuffle, set_crossfade_settings, set_gapless_enabled,
+    set_repeat_mode, toggle_shuffle, set_crossfade_settings, set_gapless_enabled, set_replay_gain_enabled,
 };
 pub use subsonic::{
     set_connection, validate_connection, get_open_subsonic_extensions, get_albums, get_artists, get_album_tracks,

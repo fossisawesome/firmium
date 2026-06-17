@@ -115,6 +115,7 @@ export interface QueueStatePayload {
   crossfadeEnabled: boolean
   crossfadeDuration: number
   gaplessEnabled: boolean
+  replayGainEnabled: boolean
   volume: number
   playerId: string | null
 }

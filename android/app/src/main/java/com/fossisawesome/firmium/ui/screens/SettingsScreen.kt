@@ -32,10 +32,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.audio.PlayerState
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.ALL_THEMES
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
-import com.fossisawesome.firmium.viewmodel.PlayerState
 
 // Settings screen — category list → sub-panel drill-down, exact port of MobileSettings.svelte.
 @Composable
@@ -55,6 +55,7 @@ fun SettingsScreen(
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
+    onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
@@ -84,6 +85,7 @@ fun SettingsScreen(
         onCrossfadeToggle = onCrossfadeToggle,
         onCrossfadeDurationChange = onCrossfadeDurationChange,
         onGaplessToggle = onGaplessToggle,
+        onReplayGainToggle = onReplayGainToggle,
         onThemeSelected = onThemeSelected,
         onLrclibToggle = onLrclibToggle,
         onLyricsWordFillToggle = onLyricsWordFillToggle,
@@ -140,6 +142,7 @@ private fun FirmiumSettingsScreen(
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
+    onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
@@ -266,6 +269,7 @@ private fun FirmiumSettingsScreen(
                             onCrossfadeToggle = onCrossfadeToggle,
                             onCrossfadeDurationChange = onCrossfadeDurationChange,
                             onGaplessToggle = onGaplessToggle,
+                            onReplayGainToggle = onReplayGainToggle,
                         )
                         "downloads" -> FirmiumDownloadsPanel(
                             downloadFormat = downloadFormat,
@@ -431,6 +435,7 @@ private fun FirmiumPlaybackPanel(
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
+    onReplayGainToggle: (Boolean) -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
 
@@ -471,6 +476,10 @@ private fun FirmiumPlaybackPanel(
 
     FirmiumSettingsRow("Gapless Playback", "Pre-buffer the next track for seamless transitions") {
         FirmiumSwitch(checked = playerState.gaplessEnabled, onCheckedChange = onGaplessToggle)
+    }
+
+    FirmiumSettingsRow("ReplayGain", "Normalize track loudness using server-provided gain values") {
+        FirmiumSwitch(checked = playerState.replayGainEnabled, onCheckedChange = onReplayGainToggle)
     }
 }
 

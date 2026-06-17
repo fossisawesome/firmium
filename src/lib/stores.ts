@@ -139,6 +139,15 @@ export function setCrossfadeDuration(v: number): void {
 // Mutually exclusive with crossfade; gapless is skipped when crossfade is active.
 export const gaplessEnabled = writable(SafeStorage.getItem('firmium_gapless') !== 'false')
 
+export const replayGainEnabled = writable(SafeStorage.getItem('firmium_replaygain') !== 'false')
+
+export function setReplayGainEnabled(v: unknown): void {
+  const val = Boolean(v)
+  replayGainEnabled.set(val)
+  SafeStorage.setItem('firmium_replaygain', val ? 'true' : 'false')
+  tauriInvoke('set_replay_gain_enabled', { enabled: val }).catch(() => {})
+}
+
 export function setGaplessEnabled(v: unknown): void {
   const val = Boolean(v)
   gaplessEnabled.set(val)
@@ -159,6 +168,7 @@ export function listenToQueueState(): () => void {
     crossfadeEnabled.set(payload.crossfadeEnabled)
     crossfadeDuration.set(payload.crossfadeDuration)
     gaplessEnabled.set(payload.gaplessEnabled)
+    replayGainEnabled.set(payload.replayGainEnabled)
     if (payload.volume !== get(volume)) {
       volume.set(payload.volume)
       SafeStorage.setItem('firmium_volume', String(payload.volume))

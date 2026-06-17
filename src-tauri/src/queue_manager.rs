@@ -234,7 +234,7 @@ async fn do_crossfade(
 ) {
     let CrossfadeContext { next_idx, old_player_id, fade_ms, volume } = ctx;
     // Extract next song, update queue_idx, reset per-track flags
-    let (song, outgoing_id) = {
+    let (song, outgoing_id, rg_enabled) = {
         let mut inner = queue_state.inner.lock();
         let song = match inner.queue.get(next_idx).cloned() {
             Some(s) => s,
@@ -243,7 +243,7 @@ async fn do_crossfade(
         let outgoing_id = inner.queue.get(inner.queue_idx as usize).map(|s| s.id.clone());
         inner.queue_idx = next_idx as i32;
         inner.reset_track_progress();
-        (song, outgoing_id)
+        (song, outgoing_id, inner.replay_gain_enabled)
     };
 
     // Scrobble outgoing
@@ -259,7 +259,7 @@ async fn do_crossfade(
     };
 
     // Do crossfade — no lock held
-    let rg = crate::commands::queue::replay_gain_db_pub(&song);
+    let rg = if rg_enabled { crate::commands::queue::replay_gain_db_pub(&song) } else { None };
     let new_pid = match AudioPlayer::crossfade_to(&audio_player, &old_player_id, &stream_url, song.id.clone(), fade_ms, volume, rg) {
         Ok(pid) => pid,
         Err(e) => { eprintln!("Crossfade failed: {e}"); return; }
@@ -281,9 +281,10 @@ async fn do_gapless_preload(
     audio_player: Arc<AudioPlayer>,
     next_idx: usize,
 ) {
-    let song = {
+    let (song, rg_enabled) = {
         let inner = queue_state.inner.lock();
-        inner.queue.get(next_idx).cloned()
+        let song = inner.queue.get(next_idx).cloned();
+        (song, inner.replay_gain_enabled)
     };
     let song = match song { Some(s) => s, None => return };
 
@@ -292,7 +293,7 @@ async fn do_gapless_preload(
         Err(e) => { eprintln!("Gapless preload URL error: {e}"); return; }
     };
 
-    let rg = crate::commands::queue::replay_gain_db_pub(&song);
+    let rg = if rg_enabled { crate::commands::queue::replay_gain_db_pub(&song) } else { None };
     match AudioPlayer::preload_stream(&audio_player, &stream_url, song.id.clone(), rg) {
         Ok(preload_pid) => {
             let mut inner = queue_state.inner.lock();

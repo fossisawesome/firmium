@@ -425,6 +425,7 @@ fun AppNavGraph(
                         onCrossfadeToggle = { playerViewModel.setCrossfadeEnabled(it) },
                         onCrossfadeDurationChange = { playerViewModel.setCrossfadeDuration(it) },
                         onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
+                        onReplayGainToggle = { playerViewModel.setReplayGainEnabled(it) },
                         onThemeSelected = onThemeSelected,
                         onLrclibToggle = { scope.launch { app.prefs.setLrclibEnabled(it) } },
                         onLyricsWordFillToggle = { scope.launch { app.prefs.setLyricsWordFillEnabled(it) } },

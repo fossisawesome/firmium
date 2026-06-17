@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 6.2.0
+**Version**: 6.3.0
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

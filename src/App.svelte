@@ -6,7 +6,7 @@
     authServer, activeView, lyricsOpen, currentTrack,
     openSubsonicExtensions, showAccountModal, bumpDataSourceVersion,
     listenToQueueState, recentlyPlayedSongs,
-    crossfadeEnabled, crossfadeDuration, gaplessEnabled, volume,
+    crossfadeEnabled, crossfadeDuration, gaplessEnabled, volume, replayGainEnabled,
   } from './lib/stores'
   import { SafeStorage } from './lib/utils'
   import { Keyring, Api } from './lib/api'
@@ -119,6 +119,7 @@
       crossfadeEnabled: get(crossfadeEnabled),
       crossfadeDuration: get(crossfadeDuration),
       gaplessEnabled: get(gaplessEnabled),
+      replayGainEnabled: get(replayGainEnabled),
     }).catch(() => {})
 
     const unlistenQueue = listenToQueueState()

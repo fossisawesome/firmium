@@ -15,6 +15,7 @@ pub struct QueueStateInner {
     pub crossfade_enabled: bool,
     pub crossfade_duration: f32,
     pub gapless_enabled: bool,
+    pub replay_gain_enabled: bool,
     pub volume: f32,
     // Per-track progress flags — reset on each new track
     pub crossfade_started: bool,
@@ -41,6 +42,7 @@ impl QueueState {
                 crossfade_enabled: false,
                 crossfade_duration: 5.0,
                 gapless_enabled: true,
+                replay_gain_enabled: true,
                 volume: 0.8,
                 crossfade_started: false,
                 preload_started: false,
@@ -66,6 +68,7 @@ pub struct QueueStateSnapshot {
     pub crossfade_enabled: bool,
     pub crossfade_duration: f32,
     pub gapless_enabled: bool,
+    pub replay_gain_enabled: bool,
     pub volume: f32,
     /// Active audio session ID — forwarded to TS so AudioBridge can filter events correctly.
     pub player_id: Option<String>,
@@ -82,6 +85,7 @@ impl QueueStateInner {
             crossfade_enabled: self.crossfade_enabled,
             crossfade_duration: self.crossfade_duration,
             gapless_enabled: self.gapless_enabled,
+            replay_gain_enabled: self.replay_gain_enabled,
             volume: self.volume,
             player_id: self.current_player_id.clone(),
         }

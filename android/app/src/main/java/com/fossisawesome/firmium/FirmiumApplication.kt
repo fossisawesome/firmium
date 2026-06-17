@@ -7,6 +7,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.fossisawesome.firmium.audio.AudioPlayer
 import com.fossisawesome.firmium.audio.NowPlayingController
+import com.fossisawesome.firmium.audio.PlaybackController
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
 import com.fossisawesome.firmium.data.download.DownloadManager
@@ -32,6 +33,9 @@ class FirmiumApplication : Application() {
     val playlists by lazy { PlaylistRepository(prefs, api) }
     val audioPlayer by lazy { AudioPlayer(this) }
     val nowPlaying by lazy { NowPlayingController(this) }
+    // App-scoped playback orchestration shared by the phone UI (PlayerViewModel) and Android Auto
+    // (FirmiumMediaBrowserService), so the car can browse and play without an Activity present.
+    val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists) }
 
     override fun onCreate() {
         super.onCreate()

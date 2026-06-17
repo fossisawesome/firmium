@@ -3,7 +3,7 @@ import {
   audioBridge, lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
   lyricsWordTimings, lyricsGlowColor,
   playbackState, currentPosition, trackDuration, isSeeking, queue, queueIdx,
-  crossfadeEnabled, crossfadeDuration, gaplessEnabled, repeatOne, volume,
+  crossfadeEnabled, crossfadeDuration, gaplessEnabled, repeatOne, volume, replayGainEnabled,
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
 import { tauriInvoke } from './tauri'
@@ -48,7 +48,7 @@ function _handlePositionUpdate(position: number, duration: number | null): void 
         const targetVolume = get(volume)
         const fadeDurationMs = crossfadeSecs * 1000
         const rg = nextSong.replayGain as { albumGain?: number; trackGain?: number } | null | undefined
-        const replayGainDb = rg?.albumGain ?? rg?.trackGain ?? null
+        const replayGainDb = get(replayGainEnabled) ? (rg?.albumGain ?? rg?.trackGain ?? null) : null
         OpenSubsonicRouter.buildUrl('stream', { id: nextSong.id })
           .then(url => bridge.startCrossfadeIn(url, nextSong.id, targetVolume, fadeDurationMs, replayGainDb))
           .catch(() => {})
@@ -65,7 +65,7 @@ function _handlePositionUpdate(position: number, duration: number | null): void 
       const nextSong = $queue[$idx + 1] ?? null
       if (nextSong) {
         const rg = nextSong.replayGain as { albumGain?: number; trackGain?: number } | null | undefined
-        const replayGainDb = rg?.albumGain ?? rg?.trackGain ?? null
+        const replayGainDb = get(replayGainEnabled) ? (rg?.albumGain ?? rg?.trackGain ?? null) : null
         OpenSubsonicRouter.buildUrl('stream', { id: nextSong.id })
           .then(url => bridge.preload(url, nextSong.id, replayGainDb))
           .catch(() => {})

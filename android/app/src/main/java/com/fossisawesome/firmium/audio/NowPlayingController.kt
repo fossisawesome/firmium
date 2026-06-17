@@ -39,6 +39,9 @@ class NowPlayingController(private val context: Context) {
         fun onNext()
         fun onPrevious()
         fun onSeekTo(posMs: Long) {}  // default no-op for backwards compat
+        // Android Auto browse/voice playback — default no-op for backwards compat.
+        fun onPlayFromMediaId(mediaId: String) {}
+        fun onPlayFromSearch(query: String) {}
     }
 
     var listener: Listener? = null
@@ -76,6 +79,10 @@ class NowPlayingController(private val context: Context) {
         notificationManager.createNotificationChannel(channel)
     }
 
+    // Exposes the shared media session (creating it on demand) so FirmiumMediaBrowserService can
+    // publish its token to Android Auto in onCreate, before any track has played.
+    fun session(): MediaSessionCompat = ensureMediaSession()
+
     private fun ensureMediaSession(): MediaSessionCompat {
         return mediaSession ?: MediaSessionCompat(context, "FirmiumMediaSession").also { session ->
             session.setCallback(object : MediaSessionCompat.Callback() {
@@ -84,7 +91,34 @@ class NowPlayingController(private val context: Context) {
                 override fun onSkipToNext() { listener?.onNext() }
                 override fun onSkipToPrevious() { listener?.onPrevious() }
                 override fun onSeekTo(pos: Long) { listener?.onSeekTo(pos) }
+                override fun onPlayFromMediaId(mediaId: String?, extras: android.os.Bundle?) {
+                    mediaId?.let { listener?.onPlayFromMediaId(it) }
+                }
+                override fun onPrepareFromMediaId(mediaId: String?, extras: android.os.Bundle?) {
+                    mediaId?.let { listener?.onPlayFromMediaId(it) }
+                }
+                override fun onPlayFromSearch(query: String?, extras: android.os.Bundle?) {
+                    listener?.onPlayFromSearch(query ?: "")
+                }
             })
+            // Advertise the browse/voice play actions on an idle state so Android Auto can start
+            // playback from cold (no track loaded yet); buildNotification() overwrites this once
+            // a track is playing.
+            session.setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(PlaybackStateCompat.STATE_NONE, 0L, 0f)
+                    .setActions(
+                        PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
+                        PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH or
+                        PlaybackStateCompat.ACTION_PREPARE_FROM_MEDIA_ID or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_SEEK_TO
+                    )
+                    .build()
+            )
             session.isActive = true
             mediaSession = session
         }

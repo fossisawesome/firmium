@@ -89,7 +89,7 @@ pub(crate) async fn play_at(
     idx: usize,
 ) -> Result<(), String> {
     // 1. Lock → extract data, update idx, reset flags → unlock
-    let (song, volume, old_player_id, preloaded_id, preloaded_track_id) = {
+    let (song, volume, old_player_id, preloaded_id, preloaded_track_id, rg_enabled) = {
         let mut inner = queue_state.inner.lock();
         let song = inner.queue.get(idx).cloned()
             .ok_or_else(|| format!("Queue index {idx} out of range"))?;
@@ -101,10 +101,11 @@ pub(crate) async fn play_at(
             inner.current_player_id.clone(),
             inner.preloaded_player_id.clone(),
             inner.preloaded_track_id.clone(),
+            inner.replay_gain_enabled,
         )
     }; // lock released
 
-    let rg = replay_gain_db(&song);
+    let rg = if rg_enabled { replay_gain_db(&song) } else { None };
 
     // 2. Check for gapless promotion (preloaded session for this exact track)
     if let (Some(preloaded_pid), Some(preloaded_tid)) = (&preloaded_id, &preloaded_track_id) {
@@ -195,12 +196,27 @@ pub fn init_playback_settings(
     crossfade_enabled: bool,
     crossfade_duration: f32,
     gapless_enabled: bool,
+    replay_gain_enabled: bool,
 ) -> Result<(), String> {
     let mut inner = state.inner.lock();
     inner.volume = volume.clamp(0.0, 1.0);
     inner.crossfade_enabled = crossfade_enabled;
     inner.crossfade_duration = crossfade_duration.clamp(1.0, 12.0);
     inner.gapless_enabled = gapless_enabled;
+    inner.replay_gain_enabled = replay_gain_enabled;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_replay_gain_enabled(
+    state: State<'_, Arc<QueueState>>,
+    audio_player: State<'_, Arc<AudioPlayer>>,
+    enabled: bool,
+) -> Result<(), String> {
+    state.inner.lock().replay_gain_enabled = enabled;
+    if !enabled {
+        audio_player.set_all_replay_gain_factors(1.0);
+    }
     Ok(())
 }
 

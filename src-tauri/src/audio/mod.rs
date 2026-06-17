@@ -503,4 +503,13 @@ impl AudioPlayer {
 
         Ok(new_player_id)
     }
+
+    /// Update the live replay-gain multiplier on every active session.
+    /// Pass `1.0` to disable gain (ReplayGain toggled off).
+    pub fn set_all_replay_gain_factors(&self, factor: f32) {
+        let bits = factor.to_bits();
+        for session in self.sessions.read().values() {
+            session.replay_gain_factor.store(bits, Ordering::Relaxed);
+        }
+    }
 }

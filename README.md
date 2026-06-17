@@ -81,6 +81,22 @@ Or transfer the APK to your device and open it with a file manager. You may need
 
 > **Note:** Firmium for Android requires Android 8.0 (API 26) or later.
 
+#### Using Android Auto
+
+Firmium supports Android Auto, so you can browse your library and play music from your car's
+display. Installing the APK alone is not enough, though: because Firmium is sideloaded rather than
+installed from the Google Play Store, Android Auto hides it by default. To use it in your car,
+allow it once:
+
+1. Install Firmium on your phone (above).
+2. Open the **Android Auto** settings on your phone, scroll to the bottom and tap **Version** about
+   ten times to unlock **Developer settings**, then turn on **Unknown sources**.
+3. Connect your phone to the car and choose **Firmium** from the car's app launcher.
+
+The "Unknown sources" step is required only because Firmium is not distributed through the Play
+Store; it would not be needed for a Play Store release approved for Android Auto. See the
+[Android Auto guide](https://docs.firmium.app/android-auto) for browsing, voice control, and more.
+
 ### System Dependencies
 
 Before running Firmium, install the required system libraries for your distribution.
