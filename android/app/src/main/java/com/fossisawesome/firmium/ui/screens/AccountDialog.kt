@@ -152,6 +152,18 @@ private fun AccountConnectForm(
 
     val canSubmit = server.isNotBlank() && username.isNotBlank() && password.isNotBlank() && !state.isLoading
 
+    val cleartextWarning = remember(server) {
+        try {
+            val uri = URI(server.trim())
+            val host = uri.host ?: ""
+            val isLocal = host == "localhost" || host == "127.0.0.1" || host == "::1" ||
+                host.matches(Regex("^10\\..*|^192\\.168\\..*|^172\\.(1[6-9]|2\\d|3[01])\\..*|\\.local$"))
+            if (uri.scheme == "http" && !isLocal) {
+                "Connecting over plain HTTP to a non-local server sends your credentials unencrypted. Use HTTPS if possible."
+            } else null
+        } catch (_: Exception) { null }
+    }
+
     SetupField(
         label = "Server URL",
         value = server,
@@ -160,6 +172,15 @@ private fun AccountConnectForm(
         imeAction = ImeAction.Next,
         onImeAction = { userFocus.requestFocus() },
     )
+    if (cleartextWarning != null) {
+        Text(
+            text = cleartextWarning,
+            color = colors.muted,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(bottom = 16.dp),
+        )
+    }
 
     SetupField(
         label = "Username",

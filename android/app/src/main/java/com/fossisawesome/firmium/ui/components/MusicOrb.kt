@@ -56,8 +56,14 @@ fun MusicOrb(
     var bass by remember { mutableFloatStateOf(0f) }
     var smoothBass by remember { mutableFloatStateOf(0f) }
 
-    DisposableEffect(audioSessionId) {
-        if (audioSessionId == 0) return@DisposableEffect onDispose {}
+    DisposableEffect(audioSessionId, isPlaying) {
+        if (audioSessionId == 0 || !isPlaying) {
+            // No Visualizer captures while paused/detached, so clear the last bass
+            // amplitude — otherwise the always-running draw loop keeps the orb frozen
+            // at whatever radius the final pre-pause capture left it at.
+            bass = 0f
+            return@DisposableEffect onDispose {}
+        }
         val viz = try {
             Visualizer(audioSessionId).apply {
                 captureSize = Visualizer.getCaptureSizeRange()[0]

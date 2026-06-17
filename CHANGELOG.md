@@ -1,3 +1,19 @@
+# v6.1.5
+
+## Fixed
+
+- **Android HTTP cleartext in release builds** (`android/app/build.gradle.kts`): Added `manifestPlaceholders["usesCleartextTraffic"] = "true"` to the release build type so plain-HTTP Subsonic servers remain reachable after Proguard/minification (debug builds already allowed this via the debug manifest).
+- **Android API error parsing robustness** (`android/.../data/api/ApiClient.kt`): Malformed or non-JSON responses (e.g. HTML error pages from a misconfigured reverse proxy) now fail with a clear `"Invalid response from <action>"` message instead of an opaque `NullPointerException`. Also guards against a missing `subsonic-response` key and a null `status` field, preventing crashes on partial or unexpected server responses.
+- **Android MusicOrb frozen on pause** (`android/.../ui/components/MusicOrb.kt`): The `DisposableEffect` now also keys on `isPlaying`. When playback is paused or the audio session is detached, the Visualizer is torn down and `bass` is reset to `0f`, so the orb returns to its idle (collapsed) state instead of remaining frozen at its last captured radius.
+- **Android AlbumDetailScreen null safety** (`android/.../ui/screens/AlbumDetailScreen.kt`): Replaced `pendingSong != null` / `pendingSong!!` double-check with `pendingSong?.let { song -> … }`, eliminating a potential race-condition null dereference when showing the add-to-playlist dialog.
+- **Desktop `StreamingReader` seek overflow** (`src-tauri/src/audio/streaming_reader.rs`): `SeekFrom::Current` and `SeekFrom::End` arithmetic now uses `saturating_add` instead of plain `+`, preventing integer overflow panics when the seek offset or buffer length is near `i64::MAX`.
+
+## Added
+
+- **Android plain-HTTP warning in account setup** (`android/.../ui/screens/AccountDialog.kt`): When the server URL uses `http://` and the host is not a recognized local address (localhost, 127.0.0.1, `::1`, RFC 1918 ranges, `.local`), a muted warning line is shown below the Server URL field: _"Connecting over plain HTTP to a non-local server sends your credentials unencrypted. Use HTTPS if possible."_
+
+---
+
 # v6.1.4
 
 ## Changed

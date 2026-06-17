@@ -12,8 +12,8 @@ android {
         applicationId = "com.fossisawesome.firmium"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "6.1.4"
+        versionCode = 19
+        versionName = "6.1.5"
         manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
@@ -40,6 +40,7 @@ android {
             isDebuggable = true
         }
         release {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
             if (canSign) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

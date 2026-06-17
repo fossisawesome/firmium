@@ -79,13 +79,13 @@ impl Seek for StreamingReader {
     fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
         let new_pos = match from {
             SeekFrom::Start(n) => n as usize,
-            SeekFrom::Current(n) => (self.pos as i64 + n).max(0) as usize,
+            SeekFrom::Current(n) => (self.pos as i64).saturating_add(n).max(0) as usize,
             SeekFrom::End(n) => {
                 let mut rest = Vec::new();
                 self.response.read_to_end(&mut rest)?;
                 let mut buf = self.buffer.lock();
                 buf.extend_from_slice(&rest);
-                (buf.len() as i64 + n).max(0) as usize
+                (buf.len() as i64).saturating_add(n).max(0) as usize
             }
         };
 

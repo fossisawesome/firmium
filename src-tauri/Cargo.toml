@@ -1,6 +1,6 @@
 [package]
 name = "firmium"
-version = "6.1.4"
+version = "6.1.5"
 description = "Subsonic Desktop Music Streamer"
 authors = ["fossisawesome"]
 edition = "2021"

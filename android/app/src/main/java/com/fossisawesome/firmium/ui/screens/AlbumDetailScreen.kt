@@ -141,8 +141,7 @@ fun AlbumDetailScreen(
         }
     }
 
-    if (pendingSong != null) {
-        val song = pendingSong!!
+    pendingSong?.let { song ->
         AddToPlaylistDialog(
             items = playlistItems,
             onAddTo = { item -> onAddToPlaylist(item, listOf(song)); pendingSong = null },

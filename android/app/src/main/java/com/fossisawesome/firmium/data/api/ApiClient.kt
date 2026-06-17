@@ -53,12 +53,16 @@ class ApiClient(private val auth: AuthManager) {
         return withContext(Dispatchers.IO) {
             val response = http.newCall(Request.Builder().url(url).build()).execute()
             val body = response.body?.string() ?: error("Empty response from $action")
-            val root = JsonParser.parseString(body).asJsonObject
+            // A misconfigured URL or reverse proxy can return HTML / non-JSON; fail with a
+            // clear message instead of an opaque NullPointerException.
+            val root = try { JsonParser.parseString(body).asJsonObject }
+                       catch (_: Exception) { error("Invalid response from $action") }
             val data = root.getAsJsonObject("subsonic-response")
+                       ?: error("Invalid response from $action")
             data.getAsJsonArray("openSubsonicExtensions")?.let { extensions ->
                 openSubsonicExtensions = extensions.mapNotNull { it.asJsonObject.get("name")?.asString }.toSet()
             }
-            if (data.get("status").asString != "ok") {
+            if (data.get("status")?.asString != "ok") {
                 val code = data.getAsJsonObject("error")?.get("code")?.asInt
                 val msg = data.getAsJsonObject("error")?.get("message")?.asString
                 if (code == 40 || code == 41) throw SessionExpiredException()
