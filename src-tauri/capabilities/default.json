@@ -48,6 +48,8 @@
     "fetch_lrclib_lyrics",
     "get_cover_art",
     "clear_cover_cache",
+    "extract_cover_colors",
+    "extract_cover_colors_from_path",
     "set_connection",
     "validate_connection",
     "get_open_subsonic_extensions",
@@ -90,6 +92,20 @@
     "find_local_match",
     "prewarm_local_library",
     "download_track",
-    "download_album"
+    "download_album",
+    "init_playback_settings",
+    "set_queue",
+    "set_queue_seamless",
+    "shuffle_and_play",
+    "play_queue_index",
+    "queue_next",
+    "queue_prev",
+    "toggle_play",
+    "seek_queue",
+    "set_queue_volume",
+    "set_repeat_mode",
+    "toggle_shuffle",
+    "set_crossfade_settings",
+    "set_gapless_enabled"
   ]
 }

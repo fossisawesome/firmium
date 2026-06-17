@@ -1,6 +1,6 @@
 <script lang="ts">
   import { similarTracksOpen, similarTracksResults, similarTracksStatus, currentTrack } from '../lib/stores'
-  import { setQueueSeamless } from '../lib/playback'
+  import { tauriInvoke } from '../lib/tauri'
   import { loadImage } from '../lib/api'
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration, createAbortController } from '../lib/utils'
@@ -13,7 +13,7 @@
   }
 
   function playMatch(idx: number) {
-    setQueueSeamless($similarTracksResults.map(m => m.song), idx)
+    tauriInvoke('set_queue_seamless', { songs: $similarTracksResults.map(m => m.song), startIdx: idx }).catch(console.error)
   }
 
   function isPlaying(songId: string) {

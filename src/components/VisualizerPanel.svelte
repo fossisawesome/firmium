@@ -2,13 +2,11 @@
   import { onMount } from 'svelte'
   import { get } from 'svelte/store'
   import { listen } from '@tauri-apps/api/event'
-  import { convertFileSrc } from '@tauri-apps/api/core'
   import { tauriInvoke } from '../lib/tauri'
   import { visualizerOpen, visualizerMode, setVisualizerMode, currentTrack, isAuthed } from '../lib/stores'
   import { IconClose } from '../lib/icons'
-  import { getCoverArt } from '../lib/coverCache'
   import { OpenSubsonicRouter } from '../lib/api'
-  import { extractOrbPalette, type OrbPalette } from '../lib/coverColor'
+  import type { OrbPalette, CoverColorsResult } from '../lib/types/tauri-commands'
 
   let canvas: HTMLCanvasElement | undefined = $state()
 
@@ -330,15 +328,16 @@ void main() {
       ;(async () => {
         try {
           const path = await tauriInvoke<string>('get_local_cover_art', { id: track.coverArtId })
-          palette = await extractOrbPalette(convertFileSrc(path))
+          const result = await tauriInvoke<CoverColorsResult>('extract_cover_colors_from_path', { path })
+          palette = result?.orb ?? DEFAULT_PALETTE
         } catch { palette = DEFAULT_PALETTE }
       })()
     } else {
       ;(async () => {
         try {
           const url = await OpenSubsonicRouter.buildUrl('getCoverArt', { id: track.coverArtId! })
-          const assetUrl = await getCoverArt(track.coverArtId!, url)
-          palette = await extractOrbPalette(assetUrl)
+          const result = await tauriInvoke<CoverColorsResult>('extract_cover_colors', { coverId: track.coverArtId, url })
+          palette = result?.orb ?? DEFAULT_PALETTE
         } catch { palette = DEFAULT_PALETTE }
       })()
     }

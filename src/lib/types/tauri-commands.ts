@@ -101,3 +101,20 @@ export interface WordTiming {
   startMs: number
   endMs: number
 }
+
+export interface Rgb { r: number; g: number; b: number }
+export interface OrbPalette { primary: Rgb; secondary: Rgb; tertiary: Rgb }
+export interface CoverColorsResult { orb: OrbPalette; dominant: Rgb | null }
+
+export interface QueueStatePayload {
+  queue: Song[]
+  queueIdx: number
+  repeatOne: boolean
+  repeatAll: boolean
+  shuffleEnabled: boolean
+  crossfadeEnabled: boolean
+  crossfadeDuration: number
+  gaplessEnabled: boolean
+  volume: number
+  playerId: string | null
+}

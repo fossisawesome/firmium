@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { get } from 'svelte/store'
   import {
     isAuthed, setAuth, clearAuth, navToView,
     authServer, activeView, lyricsOpen, currentTrack,
     openSubsonicExtensions, showAccountModal, bumpDataSourceVersion,
+    listenToQueueState, recentlyPlayedSongs,
+    crossfadeEnabled, crossfadeDuration, gaplessEnabled, volume,
   } from './lib/stores'
   import { SafeStorage } from './lib/utils'
   import { Keyring, Api } from './lib/api'
@@ -92,12 +95,33 @@
     document.documentElement.classList.toggle('has-player', !!$currentTrack)
   })
 
+  // When the playing track changes, update title, recently played, and lyrics.
+  let _prevTrackId: string | null = null
+  $effect(() => {
+    const track = $currentTrack
+    if (!track || track.id === _prevTrackId) return
+    _prevTrackId = track.id
+    document.title = `▶ ${track.title} - Firmium`
+    recentlyPlayedSongs.push(track)
+    fetchAndShowLyrics(track)
+  })
+
   onMount(async () => {
     try {
       loadedThemes = await tauriInvoke<Theme[]>('list_themes')
     } catch (_) {}
     applyThemeById(SafeStorage.getItem('firmium_theme') || 'firmium')
     applyDecorations()
+
+    // Bootstrap Rust queue state with values from localStorage.
+    tauriInvoke('init_playback_settings', {
+      volume: get(volume),
+      crossfadeEnabled: get(crossfadeEnabled),
+      crossfadeDuration: get(crossfadeDuration),
+      gaplessEnabled: get(gaplessEnabled),
+    }).catch(() => {})
+
+    const unlistenQueue = listenToQueueState()
     document.addEventListener('contextmenu', e => e.preventDefault())
 
     // Block devtools shortcuts.

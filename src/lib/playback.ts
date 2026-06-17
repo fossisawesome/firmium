@@ -1,237 +1,27 @@
 import { get, writable } from 'svelte/store'
 import {
-  audioBridge, queue, queueIdx, currentTrack,
-  volume, repeatOne, repeatAll, crossfadeEnabled, crossfadeDuration, gaplessEnabled,
-  playbackState, currentPosition, trackDuration, isSeeking,
-  lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
+  audioBridge, lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
   lyricsWordTimings, lyricsGlowColor,
-  bumpToken, getPlayToken, recentlyPlayedSongs, isAuthed, shuffleEnabled
+  playbackState, currentPosition, trackDuration, isSeeking,
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
-import { getLocalTrackPath, findLocalMatch } from './localApi'
-import { getCoverArt } from './coverCache'
-import { extractDominantColor } from './coverColor'
-import type { Song, PlaybackState, LyricLine, WordTiming } from './types/tauri-commands'
+import { tauriInvoke } from './tauri'
+import type { Song, PlaybackState, LyricLine, WordTiming, CoverColorsResult } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
-
-const replayGainDb = (track: Song): number | null => {
-  const rg = track.replayGain as { trackGain?: number; albumGain?: number } | undefined
-  return rg?.trackGain ?? rg?.albumGain ?? null
-}
-
-async function streamUrlFor(track: Song): Promise<string> {
-  if (track.id.startsWith('local:')) {
-    const path = await getLocalTrackPath(track.id)
-    return `file://${path}`
-  }
-  try {
-    const localPath = await findLocalMatch(track.title, track.artist, track.album)
-    if (localPath) return `file://${localPath}`
-  } catch (_) {}
-  return OpenSubsonicRouter.buildUrl('stream', { id: track.id })
-}
-
-// ── Play a track ──────────────────────────────────────────────────────────────
-
-export async function playAt(idx: number): Promise<void> {
-  const bridge = get(audioBridge)
-  const $queue = get(queue)
-  if (!bridge || idx < 0 || idx >= $queue.length) return
-
-  // If gapless is promoting a preloaded track, scrobble the outgoing track before
-  // the bridge swaps player IDs (the finished event won't fire for the old session).
-  const outgoing = get(currentTrack)
-  const isGaplessPromotion = get(gaplessEnabled) && !get(crossfadeEnabled) && bridge.preloadedTrackId === $queue[idx]?.id
-
-  queueIdx.set(idx)
-  const track = $queue[idx]
-  if (!track) return
-
-  const currentToken = bumpToken()
-
-  try {
-    const streamUrl = await streamUrlFor(track)
-    if (currentToken !== getPlayToken()) return
-
-    if (isGaplessPromotion && outgoing) Api.scrobble(outgoing.id, true)
-
-    await bridge.play(streamUrl, track.id, replayGainDb(track))
-    Api.scrobble(track.id, false)
-    Api.reportPlayback(track.id, 0, 'starting')
-    schedulePlayQueueSave()
-    recentlyPlayedSongs.push(track)
-    await bridge.setVolume(get(volume))
-    fetchAndShowLyrics(track)
-
-    document.title = `▶ ${track.title} - Firmium`
-  } catch (e) {
-    if (currentToken === getPlayToken()) {
-      console.error('Playback error:', e)
-    }
-  }
-}
-
-// ── Cross-device play queue sync ───────────────────────────────────────────────
-// Debounced save of the current queue/position to the server, so playback can be
-// resumed on another device. Local-only tracks (id starting "local:") aren't sent,
-// since the server has no record of them.
-
-const PLAY_QUEUE_SAVE_DEBOUNCE_MS = 4000
-
-let _playQueueSaveTimer: ReturnType<typeof setTimeout> | null = null
-
-export function schedulePlayQueueSave(): void {
-  if (!get(isAuthed)) return
-  if (_playQueueSaveTimer) clearTimeout(_playQueueSaveTimer)
-  _playQueueSaveTimer = setTimeout(() => {
-    _playQueueSaveTimer = null
-    const track = get(currentTrack)
-    if (!track || track.id.startsWith('local:')) return
-    const ids = get(queue).filter(t => !t.id.startsWith('local:')).map(t => t.id)
-    if (!ids.length) return
-    Api.savePlayQueue(ids, track.id, Math.round(get(currentPosition) * 1000))
-  }, PLAY_QUEUE_SAVE_DEBOUNCE_MS)
-}
-
-// ── Switch to a new queue without interrupting playback ────────────────────────
-
-// Replaces the queue with `newQueue`. If the currently playing track is also in
-// `newQueue`, playback continues uninterrupted from its current position (only the
-// queue and the current index are updated). Otherwise behaves like `queue.set()` +
-// `playAt(startIdx)`.
-export function setQueueSeamless(newQueue: Song[], startIdx: number): void {
-  const current = get(currentTrack)
-  const matchIdx = current ? newQueue.findIndex(t => t.id === current.id) : -1
-
-  queue.set(newQueue)
-
-  if (matchIdx !== -1 && matchIdx === startIdx && get(playbackState) !== 'stopped') {
-    queueIdx.set(matchIdx)
-  } else {
-    queueIdx.set(startIdx)
-    playAt(startIdx)
-  }
-}
-
-// Shuffles `tracks` and starts playback from the first shuffled track, enabling
-// shuffle mode so subsequent `nextTrack()` calls keep picking random queue items.
-export function shufflePlay(tracks: Song[]): void {
-  if (!tracks.length) return
-  const shuffled = [...tracks]
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-  }
-  shuffleEnabled.set(true)
-  setQueueSeamless(shuffled, 0)
-}
-
-// ── Crossfade to next track ───────────────────────────────────────────────────
-
-export async function crossfadeToNext(nextIdx: number): Promise<void> {
-  const bridge = get(audioBridge)
-  if (!bridge) return
-
-  const currentTrackVal = get(currentTrack)
-  if (currentTrackVal) Api.scrobble(currentTrackVal.id, true)
-
-  queueIdx.set(nextIdx)
-  const nextTrack = get(currentTrack)
-  if (!nextTrack) return
-
-  const currentToken = bumpToken()
-
-  try {
-    const streamUrl = await streamUrlFor(nextTrack)
-    if (currentToken !== getPlayToken()) return
-
-    const fadeDurationMs = get(crossfadeDuration) * 1000
-    await bridge.startCrossfadeIn(streamUrl, nextTrack.id, get(volume), fadeDurationMs, replayGainDb(nextTrack))
-
-    Api.scrobble(nextTrack.id, false)
-    Api.reportPlayback(nextTrack.id, 0, 'starting')
-    schedulePlayQueueSave()
-    recentlyPlayedSongs.push(nextTrack)
-    fetchAndShowLyrics(nextTrack)
-    document.title = `▶ ${nextTrack.title} - Firmium`
-  } catch (e) {
-    console.error('Crossfade error:', e)
-  }
-}
 
 // ── Position tracking ─────────────────────────────────────────────────────────
 // Driven by Rust "playback-position" events (~300ms cadence) via AudioBridge.
 
 let _positionHandler: ((data: { position: number; duration: number }) => void) | null = null
 
-// Per-track playback tracking state, reset at the start of each track via startPositionTracking().
-interface TrackProgressState {
-  cachedDuration: number | null
-  crossfadeStarted: boolean
-  preloadStarted: boolean
-  lastQueueSavePosition: number
-}
-
-let _trackProgress: TrackProgressState = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false, lastQueueSavePosition: 0 }
-
 function _handlePositionUpdate(position: number, duration: number | null): void {
-  if (!_trackProgress.cachedDuration && duration != null) {
-    _trackProgress.cachedDuration = duration
-    trackDuration.set(duration)
-  }
-
+  if (duration != null) trackDuration.set(duration)
   if (!get(isSeeking)) currentPosition.set(position)
-
   if (get(lyricsOpen)) syncLyricsToPosition(position)
-
-  // Periodically save the play queue/position for cross-device resume.
-  if (position - _trackProgress.lastQueueSavePosition >= 30) {
-    _trackProgress.lastQueueSavePosition = position
-    schedulePlayQueueSave()
-  }
-
-  const cachedDuration = _trackProgress.cachedDuration
-
-  // Trigger crossfade when approaching end of track.
-  if (!_trackProgress.crossfadeStarted && cachedDuration && get(crossfadeEnabled) && !get(repeatOne)) {
-    const fadeSec = get(crossfadeDuration)
-    if (position >= cachedDuration - fadeSec) {
-      const $queue = get(queue)
-      let nextIdx = get(queueIdx) + 1
-      if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
-      if (nextIdx < $queue.length) {
-        _trackProgress.crossfadeStarted = true
-        crossfadeToNext(nextIdx)
-      }
-    }
-  }
-
-  // Preload next track for gapless playback — crossfade off, 30s before end.
-  if (!_trackProgress.preloadStarted && cachedDuration && get(gaplessEnabled) && !get(crossfadeEnabled) && !get(repeatOne)) {
-    const preloadAt = Math.max(0, cachedDuration - 30)
-    if (position >= preloadAt) {
-      const $queue = get(queue)
-      let nextIdx = get(queueIdx) + 1
-      if (nextIdx >= $queue.length && get(repeatAll)) nextIdx = 0
-      if (nextIdx < $queue.length) {
-        _trackProgress.preloadStarted = true
-        const nextTrack = $queue[nextIdx]
-        if (nextTrack) {
-          const rgDb = replayGainDb(nextTrack)
-          streamUrlFor(nextTrack)
-            .then(url => get(audioBridge)?.preload(url, nextTrack.id, rgDb))
-            .catch(e => console.error('Preload URL error:', e))
-        }
-      }
-    }
-  }
 }
 
 export function startPositionTracking(): void {
   stopPositionTracking()
-  _trackProgress = { cachedDuration: null, crossfadeStarted: false, preloadStarted: false, lastQueueSavePosition: 0 }
-
-  // Subscribe to Rust-emitted position events — no IPC polling overhead.
   const bridge = get(audioBridge)
   if (!bridge) return
   _positionHandler = ({ position, duration }) => _handlePositionUpdate(position, duration)
@@ -278,39 +68,20 @@ export function wireBridgeEvents(bridge: AudioBridge): void {
   })
 
   bridge.on('finished', () => {
-    const track = get(currentTrack)
-    if (track) {
-      Api.scrobble(track.id, true)
-      Api.reportPlayback(track.id, (get(trackDuration) ?? track.duration ?? 0) * 1000, 'stopped')
-    }
-
-    if (get(repeatOne)) {
-      repeatOne.set(false)
-      playAt(get(queueIdx))
-    } else if (get(queueIdx) < get(queue).length - 1) {
-      playAt(get(queueIdx) + 1)
-    } else if (get(repeatAll)) {
-      playAt(0)
-    } else {
-      stopPositionTracking()
-      playbackState.set('stopped')
-      document.title = 'Firmium'
-      currentPosition.set(0)
-    }
+    stopPositionTracking()
+    currentPosition.set(0)
   })
 
   bridge.on('volumechange', (vol: number) => {
-    volume.set(vol)
+    // Volume changes from the device layer are reflected back; no localStorage update needed here.
   })
-
 }
 
 // ── Lyrics fetching ───────────────────────────────────────────────────────────
 
 // Estimates per-word timing from line-level LRC timestamps, distributing each
 // line's duration (to the next line's start, or track end for the last line)
-// proportionally across word character lengths. Used for the karaoke fill
-// animation since real word-level timestamps aren't available from LRC/LRCLIB.
+// proportionally across word character lengths.
 export function computeWordTimings(lines: LyricLine[], trackDurationMs: number): WordTiming[][] {
   return lines.map((line, i) => {
     const lineEnd = i < lines.length - 1
@@ -333,16 +104,14 @@ export function computeWordTimings(lines: LyricLine[], trackDurationMs: number):
   })
 }
 
-// Extracts the dominant color from the current track's cover art and updates
-// lyricsGlowColor for the lyrics panel's background glow.
 async function updateLyricsGlow(song: Song): Promise<void> {
   if (!song.coverArtId) { lyricsGlowColor.set('transparent'); return }
   try {
     const url = await OpenSubsonicRouter.buildUrl('getCoverArt', { id: song.coverArtId })
-    const assetUrl = await getCoverArt(song.coverArtId, url)
-    const color = await extractDominantColor(assetUrl)
+    const result = await tauriInvoke<CoverColorsResult>('extract_cover_colors', { coverId: song.coverArtId, url })
     if (get(lyricsTrackId) !== song.id) return
-    lyricsGlowColor.set(color ? `rgb(${color.r}, ${color.g}, ${color.b})` : 'transparent')
+    const c = result?.dominant
+    lyricsGlowColor.set(c ? `rgb(${c.r}, ${c.g}, ${c.b})` : 'transparent')
   } catch (e) {
     console.warn('Lyrics glow color extraction failed:', e)
   }

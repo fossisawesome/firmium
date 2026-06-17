@@ -1,17 +1,15 @@
 <script lang="ts">
-  import { setQueueSeamless } from '../lib/playback'
-  import { audioBridge } from '../lib/stores'
-  import { get } from 'svelte/store'
+  import { tauriInvoke } from '../lib/tauri'
   import type { RemotePlayQueue } from '../lib/types/tauri-commands'
 
   let { remoteQueue, onDismiss }: { remoteQueue: RemotePlayQueue, onDismiss: () => void } = $props()
 
-  function resume() {
+  async function resume() {
     const idx = remoteQueue.current ? remoteQueue.entries.findIndex(t => t.id === remoteQueue.current) : 0
-    setQueueSeamless(remoteQueue.entries, idx >= 0 ? idx : 0)
+    await tauriInvoke('set_queue_seamless', { songs: remoteQueue.entries, startIdx: idx >= 0 ? idx : 0 }).catch(console.error)
     const positionSec = (remoteQueue.positionMs ?? 0) / 1000
     if (positionSec > 0) {
-      setTimeout(() => { get(audioBridge)?.seek(positionSec) }, 300)
+      setTimeout(() => tauriInvoke('seek_queue', { position: positionSec }).catch(console.error), 300)
     }
     onDismiss()
   }

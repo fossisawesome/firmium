@@ -1,3 +1,41 @@
+# v6.2.0
+
+## Added
+
+- **Queue management moved to Rust backend** (`src-tauri/src/queue_manager.rs`, `src-tauri/src/queue_state.rs`, `src-tauri/src/commands/queue.rs`): All queue orchestration, playback sequencing, track advance, crossfade triggering, scrobbling, and play queue synchronization are now driven by a Rust background task (`queue_manager.rs`) that listens to playback events (`playback-position`, `playback-finished`) from the audio engine. This eliminates race conditions and timing issues that arose from split orchestration across TypeScript and Rust. The queue is persisted server-side via `savePlayQueue` (debounced 4s) whenever a new track starts or the queue is shuffled. Frontend changes are minimal: `src/lib/playback.ts` now has only position-tracking and lyrics-sync logic; all queue mutation calls have been replaced with Rust command invocations (`set_queue`, `play_queue_index`, `queue_next`, etc.).
+
+- **13 new Rust-side queue commands** (`src-tauri/src/commands/queue.rs`): `init_playback_settings`, `set_queue`, `set_queue_seamless`, `shuffle_and_play`, `play_queue_index`, `queue_next`, `queue_prev`, `toggle_play`, `seek_queue`, `set_queue_volume`, `set_repeat_mode`, `toggle_shuffle`, `set_crossfade_settings`, `set_gapless_enabled`. All queue mutations now go through Rust, ensuring atomicity and correctness. The frontend calls these via `tauriInvoke()` and listens to `queue-state-changed` events for reactive updates.
+
+- **Cover color extraction** (`src-tauri/src/commands/cover_colors.rs`, `src/lib/types/tauri-commands.ts`, `src/lib/playback.ts`): New `extract_cover_colors` and `extract_cover_colors_from_path` Tauri commands extract a 3-color `OrbPalette` (primary, secondary, tertiary) and an optional dominant color from cover art via saturation-weighted pixel bucketing (similar to the old `coverColor.ts` logic, now in Rust). The frontend uses this in the visualizer and other UI elements. The old `src/lib/coverColor.ts` file has been deleted; color extraction now lives entirely in Rust via the new `image` crate dependency.
+
+- **Queue state event sync** (`src/lib/stores.ts::listenToQueueState`, event listener for `queue-state-changed`): Frontend subscribes to `queue-state-changed` events emitted by the Rust queue manager whenever queue, playback settings, or volume change. The `QueueStatePayload` includes the full queue, current index, repeat/shuffle/crossfade/gapless flags, volume, and current player ID. This keeps all Svelte stores (queue, queueIdx, repeatOne, repeatAll, shuffleEnabled, volume, etc.) in sync with Rust ground truth without polling.
+
+- **API documentation** (`API.md`): Comprehensive reference for Navidrome's Subsonic/OpenSubsonic endpoints, authentication, browsing, search, playlists, media streaming, and known Navidrome-specific caveats. Documents the endpoints and parameters Firmium uses, OpenSubsonic extensions advertised by Navidrome, and extended response fields. Also covers Firmium-specific implementation details (auth token generation, streaming reader, cover cache, lyrics cascade, etc.).
+
+## Changed
+
+- **Playback orchestration** (`src/lib/playback.ts`): Stripped down to lyrics and position tracking only. Queue navigation (`playAt`, `crossfadeToNext`, `setQueueSeamless`, `shufflePlay`), track advance, and play queue save logic have been moved to the Rust queue manager. Frontend now calls `set_queue`, `play_queue_index`, `queue_next`, `queue_prev`, `toggle_play` commands instead.
+
+- **Volume and settings changes** (`src/lib/stores.ts`): `setVolume()`, `setCrossfadeEnabled()`, `setCrossfadeDuration()`, `setGaplessEnabled()` now invoke corresponding Rust commands (`set_queue_volume`, `set_crossfade_settings`, `set_gapless_enabled`) in addition to updating localStorage. Changes are immediately reflected server-side and broadcast to other clients via `queue-state-changed`.
+
+- **PlayerBar controls** (`src/components/PlayerBar.svelte`): Volume and seek now invoke `set_queue_volume` and `seek_queue` Rust commands directly instead of going through the `AudioBridge` class. The `AudioBridge` no longer handles volume or seek; it is now read-only (for playback state polling and visualizer event wiring).
+
+- **AudioBridge interface** (`src/lib/audio-bridge.ts`): Removed `setVolume()`, `seek()`, `play()`, `startCrossfadeIn()`, `pause()`, `resume()`, `stop()` methods. The bridge is now a passive listener for `playback-position` and `playback-finished` events; all playback mutations go through the queue manager's Rust commands. `currentPlayerId` property added to allow filtering events when multiple audio sessions might fire (safety-only, normally one active session).
+
+- **Image crate dependency** (`src-tauri/Cargo.toml`): Added `image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }` for cover color extraction.
+
+## Fixed
+
+- **Race conditions in crossfade and track advance** (`src-tauri/src/queue_manager.rs`): The old split architecture (frontend decides when to crossfade, Rust decides when the track is finished) could lead to lost scrobble events or double-scrobbles if timing was unlucky. Now all decisions are centralized in Rust, eliminating race windows.
+
+- **Stale token tracking removed** (`src/lib/stores.ts`, `src/lib/playback.ts`): The old `_playToken` / `bumpToken()` / `getPlayToken()` mechanism (which tried to cancel stale play requests) has been removed as it is no longer needed; the queue manager ensures requests are sequential and atomic.
+
+## Deprecated
+
+- **`AudioBridge.play()`, `pause()`, `resume()`, `stop()`, `seek()`, `setVolume()`, `startCrossfadeIn()`**: These methods are now no-ops or removed. Use the corresponding Rust queue commands instead. The `AudioBridge` class remains as a status-polling and event-wiring utility but no longer drives playback.
+
+---
+
 # v6.1.6
 
 ## Added

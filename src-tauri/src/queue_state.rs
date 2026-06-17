@@ -1,0 +1,101 @@
+use crate::commands::mappers::Song;
+use parking_lot::Mutex;
+use tauri::{AppHandle, Emitter};
+
+pub struct QueueState {
+    pub inner: Mutex<QueueStateInner>,
+}
+
+pub struct QueueStateInner {
+    pub queue: Vec<Song>,
+    pub queue_idx: i32,
+    pub repeat_one: bool,
+    pub repeat_all: bool,
+    pub shuffle_enabled: bool,
+    pub crossfade_enabled: bool,
+    pub crossfade_duration: f32,
+    pub gapless_enabled: bool,
+    pub volume: f32,
+    // Per-track progress flags — reset on each new track
+    pub crossfade_started: bool,
+    pub preload_started: bool,
+    pub cached_duration: Option<f64>,
+    pub last_queue_save_position: f64,
+    // Active audio session IDs
+    pub current_player_id: Option<String>,
+    pub preloaded_player_id: Option<String>,
+    pub preloaded_track_id: Option<String>,
+    // Debounced play-queue save timer
+    pub save_timer: Option<tauri::async_runtime::JoinHandle<()>>,
+}
+
+impl QueueState {
+    pub fn new() -> Self {
+        QueueState {
+            inner: Mutex::new(QueueStateInner {
+                queue: Vec::new(),
+                queue_idx: -1,
+                repeat_one: false,
+                repeat_all: false,
+                shuffle_enabled: false,
+                crossfade_enabled: false,
+                crossfade_duration: 5.0,
+                gapless_enabled: true,
+                volume: 0.8,
+                crossfade_started: false,
+                preload_started: false,
+                cached_duration: None,
+                last_queue_save_position: 0.0,
+                current_player_id: None,
+                preloaded_player_id: None,
+                preloaded_track_id: None,
+                save_timer: None,
+            }),
+        }
+    }
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct QueueStateSnapshot {
+    pub queue: Vec<Song>,
+    pub queue_idx: i32,
+    pub repeat_one: bool,
+    pub repeat_all: bool,
+    pub shuffle_enabled: bool,
+    pub crossfade_enabled: bool,
+    pub crossfade_duration: f32,
+    pub gapless_enabled: bool,
+    pub volume: f32,
+    /// Active audio session ID — forwarded to TS so AudioBridge can filter events correctly.
+    pub player_id: Option<String>,
+}
+
+impl QueueStateInner {
+    pub fn snapshot(&self) -> QueueStateSnapshot {
+        QueueStateSnapshot {
+            queue: self.queue.clone(),
+            queue_idx: self.queue_idx,
+            repeat_one: self.repeat_one,
+            repeat_all: self.repeat_all,
+            shuffle_enabled: self.shuffle_enabled,
+            crossfade_enabled: self.crossfade_enabled,
+            crossfade_duration: self.crossfade_duration,
+            gapless_enabled: self.gapless_enabled,
+            volume: self.volume,
+            player_id: self.current_player_id.clone(),
+        }
+    }
+
+    pub fn reset_track_progress(&mut self) {
+        self.crossfade_started = false;
+        self.preload_started = false;
+        self.cached_duration = None;
+        self.last_queue_save_position = 0.0;
+    }
+}
+
+pub fn emit_queue_state(app: &AppHandle, qs: &QueueState) {
+    let snapshot = qs.inner.lock().snapshot();
+    let _ = app.emit("queue-state-changed", snapshot);
+}

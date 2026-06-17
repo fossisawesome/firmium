@@ -6,6 +6,8 @@ pub mod app_info;
 pub mod playback;
 pub mod lyrics;
 pub mod cover_cache;
+pub mod cover_colors;
+pub mod queue;
 pub mod subsonic;
 pub mod local_library;
 pub mod downloads;
@@ -17,6 +19,12 @@ pub use auth::generate_auth_params;
 pub use app_info::get_app_version;
 pub use lyrics::{parse_lrc, fetch_lrclib_lyrics};
 pub use cover_cache::{get_cover_art, clear_cover_cache};
+pub use cover_colors::{extract_cover_colors, extract_cover_colors_from_path};
+pub use queue::{
+    init_playback_settings, set_queue, set_queue_seamless, shuffle_and_play, play_queue_index,
+    queue_next, queue_prev, toggle_play, seek_queue, set_queue_volume,
+    set_repeat_mode, toggle_shuffle, set_crossfade_settings, set_gapless_enabled,
+};
 pub use subsonic::{
     set_connection, validate_connection, get_open_subsonic_extensions, get_albums, get_artists, get_album_tracks,
     get_artist_details, get_artist_info, search, get_recent_albums, get_random_albums,

@@ -3,7 +3,7 @@
   import { IconList, IconPlay, IconCloud, IconShuffle } from '../lib/icons'
   import { playlists, currentTrack, navToView, serverPlaylists, type Playlist } from '../lib/stores'
   import { Api, loadImage } from '../lib/api'
-  import { setQueueSeamless, shufflePlay } from '../lib/playback'
+  import { tauriInvoke } from '../lib/tauri'
   import { showPlaylistMenu } from '../lib/playlistMenu'
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration } from '../lib/utils'
@@ -125,12 +125,12 @@
 
   function playAll() {
     if (!pl || !pl.tracks.length) return
-    setQueueSeamless(pl.tracks, 0)
+    tauriInvoke('set_queue_seamless', { songs: pl.tracks, startIdx: 0 }).catch(console.error)
   }
 
   function shuffleAll() {
     if (!pl || !pl.tracks.length) return
-    shufflePlay(pl.tracks)
+    tauriInvoke('shuffle_and_play', { songs: pl.tracks }).catch(console.error)
   }
 
   function deletePl() {
@@ -181,7 +181,7 @@
 
   function playTrack(idx: number) {
     if (!pl) return
-    setQueueSeamless(pl.tracks, idx)
+    tauriInvoke('set_queue_seamless', { songs: pl.tracks, startIdx: idx }).catch(console.error)
   }
 
   // Pushes the playlist's new track order to the server by removing every

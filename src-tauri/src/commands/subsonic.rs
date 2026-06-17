@@ -367,6 +367,69 @@ pub async fn delete_playlist(app: AppHandle, state: State<'_, Arc<AppState>>, id
 
 // ── Scrobble ─────────────────────────────────────────────────────────────────
 
+// ── Internal helpers for queue_manager / queue commands ─────────────────────
+
+/// Builds an authenticated `stream` URL for a given track ID without making
+/// an HTTP request. Used by the Rust queue manager when starting playback.
+pub(crate) fn build_stream_url(state: &AppState, track_id: &str) -> Result<String, String> {
+    let (server, username, password) = {
+        let conn = state.connection.read();
+        (
+            conn.server.clone().ok_or("Not connected")?,
+            conn.username.clone().unwrap_or_default(),
+            conn.password.clone().unwrap_or_default(),
+        )
+    };
+    let auth = generate_auth_params(username, password);
+    let mut url = reqwest::Url::parse(&format!("{server}/rest/stream")).map_err(|e| e.to_string())?;
+    {
+        let mut query = url.query_pairs_mut();
+        for key in ["u", "t", "s", "v", "c", "f"] {
+            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        }
+        query.append_pair("id", track_id);
+    }
+    Ok(url.to_string())
+}
+
+/// Fire-and-forget scrobble, callable from Rust without going through the Tauri command layer.
+pub(crate) fn fire_scrobble(app: AppHandle, state: Arc<AppState>, id: String, submission: bool) {
+    tauri::async_runtime::spawn(async move {
+        let params = [("id", id), ("submission", submission.to_string()), ("time", "0".to_string())];
+        if let Err(e) = subsonic_request(&app, &state, "scrobble", &params, true).await {
+            eprintln!("Scrobble failed: {e}");
+        }
+    });
+}
+
+/// Fire-and-forget playback report, callable from Rust without going through the Tauri command layer.
+pub(crate) fn fire_report_playback(app: AppHandle, state: Arc<AppState>, media_id: String, position_ms: i64, playback_state: String) {
+    if !has_extension(&state, "playbackReport") { return; }
+    tauri::async_runtime::spawn(async move {
+        let params = [
+            ("mediaId", media_id),
+            ("mediaType", "song".to_string()),
+            ("positionMs", position_ms.to_string()),
+            ("state", playback_state),
+        ];
+        if let Err(e) = subsonic_request(&app, &state, "reportPlayback", &params, true).await {
+            eprintln!("Report playback failed: {e}");
+        }
+    });
+}
+
+/// Fire-and-forget save-play-queue, callable from Rust without going through the Tauri command layer.
+pub(crate) fn fire_save_play_queue(app: AppHandle, state: Arc<AppState>, ids: Vec<String>, current: Option<String>, position_ms: Option<i64>) {
+    tauri::async_runtime::spawn(async move {
+        let mut params: Vec<(&str, String)> = ids.into_iter().map(|id| ("id", id)).collect();
+        if let Some(c) = current { params.push(("current", c)); }
+        if let Some(p) = position_ms { params.push(("position", p.to_string())); }
+        if let Err(e) = subsonic_request(&app, &state, "savePlayQueue", &params, true).await {
+            eprintln!("Save play queue failed: {e}");
+        }
+    });
+}
+
 /// Reports playback progress to the server. Fire-and-forget: errors are logged,
 /// not surfaced, and never trigger a session-expiry prompt.
 #[tauri::command]

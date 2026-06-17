@@ -31,7 +31,7 @@ pub struct Artist {
 }
 
 /// Mapped song, returned to JS in camelCase via serde.
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Song {
     pub id: String,

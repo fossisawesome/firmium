@@ -25,6 +25,9 @@ mod commands;
 use commands::*;
 mod state;
 use state::AppState;
+mod queue_state;
+use queue_state::QueueState;
+mod queue_manager;
 
 // ============================================================================
 // APPLICATION ENTRY POINT
@@ -42,8 +45,19 @@ pub fn run() {
             let audio_player = Arc::new(
                 AudioPlayer::new(_app.handle().clone()).expect("Failed to initialize audio player"),
             );
+            let app_state = Arc::new(AppState::new());
+            let queue_state = Arc::new(QueueState::new());
+
+            queue_manager::start(
+                _app.handle().clone(),
+                Arc::clone(&queue_state),
+                Arc::clone(&app_state),
+                Arc::clone(&audio_player),
+            );
+
             _app.manage(audio_player);
-            _app.manage(Arc::new(AppState::new()));
+            _app.manage(app_state);
+            _app.manage(queue_state);
 
             Ok(())
         })
@@ -85,6 +99,8 @@ pub fn run() {
             // Cover art cache
             get_cover_art,
             clear_cover_cache,
+            extract_cover_colors,
+            extract_cover_colors_from_path,
             // OpenSubsonic API
             set_connection,
             validate_connection,
@@ -131,6 +147,21 @@ pub fn run() {
             // Downloads
             download_track,
             download_album,
+            // Queue management
+            init_playback_settings,
+            set_queue,
+            set_queue_seamless,
+            shuffle_and_play,
+            play_queue_index,
+            queue_next,
+            queue_prev,
+            toggle_play,
+            seek_queue,
+            set_queue_volume,
+            set_repeat_mode,
+            toggle_shuffle,
+            set_crossfade_settings,
+            set_gapless_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

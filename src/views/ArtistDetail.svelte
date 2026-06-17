@@ -4,7 +4,7 @@
   import { Keyring } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
   import { dataSourceVersion } from '../lib/stores'
-  import { setQueueSeamless, shufflePlay } from '../lib/playback'
+  import { tauriInvoke } from '../lib/tauri'
   import { pooledMap, SafeStorage, createAbortController } from '../lib/utils'
   import { PLAY_ALL_CONCURRENCY } from '../lib/api'
   import { tauriFetch } from '../lib/tauri'
@@ -110,8 +110,8 @@ let { id }: { id: string } = $props()
       const completed = await pooledMap(allAlbums, PLAY_ALL_CONCURRENCY, a => $dataSource.getAlbumTracks(a.id))
       const allTracks = completed.flatMap(r => r.tracks)
       if (allTracks.length > 0) {
-        if (shuffle) shufflePlay(allTracks)
-        else setQueueSeamless(allTracks, 0)
+        if (shuffle) tauriInvoke('shuffle_and_play', { songs: allTracks }).catch(console.error)
+        else tauriInvoke('set_queue_seamless', { songs: allTracks, startIdx: 0 }).catch(console.error)
       } else alert('No playable tracks found for this artist.')
     } catch (err) {
       console.error('Play artist all failed:', err)

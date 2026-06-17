@@ -1,57 +1,31 @@
 import { get } from 'svelte/store'
-import { audioBridge, currentTrack, currentPosition, queue, queueIdx, repeatOne, repeatAll, shuffleEnabled } from './stores'
-import { playAt, schedulePlayQueueSave } from './playback'
-import { Api } from './api'
+import { repeatOne, repeatAll } from './stores'
+import { tauriInvoke } from './tauri'
 
 export async function togglePlay(): Promise<void> {
-  const bridge = get(audioBridge)
-  if (!get(currentTrack) || !bridge) return
-  const state = bridge.lastKnownState
-  const track = get(currentTrack)
-  if (state === 'paused') {
-    await bridge.resume()
-    if (track) Api.reportPlayback(track.id, get(currentPosition) * 1000, 'playing')
-  } else if (state === 'playing') {
-    await bridge.pause()
-    if (track) Api.reportPlayback(track.id, get(currentPosition) * 1000, 'paused')
-    schedulePlayQueueSave()
-  } else if (!state || state === 'stopped') playAt(get(queueIdx))
+  await tauriInvoke('toggle_play').catch(console.error)
 }
 
 export function prevTrack(): void {
-  const idx = get(queueIdx)
-  if (get(currentPosition) > 3) {
-    get(audioBridge)?.seek(0)
-  } else if (idx > 0) {
-    playAt(idx - 1)
-  }
+  tauriInvoke('queue_prev').catch(console.error)
 }
 
 export function nextTrack(): void {
-  const idx = get(queueIdx)
-  const len = get(queue).length
-  if (get(shuffleEnabled) && len > 1) {
-    let next
-    do { next = Math.floor(Math.random() * len) } while (next === idx)
-    playAt(next)
-  } else if (idx < len - 1) {
-    playAt(idx + 1)
-  } else if (get(repeatAll)) {
-    playAt(0)
-  }
+  tauriInvoke('queue_next').catch(console.error)
 }
 
 export function toggleShuffle(): void {
-  shuffleEnabled.update(v => !v)
+  tauriInvoke('toggle_shuffle').catch(console.error)
 }
 
 export function cycleRepeat(): void {
-  if (!get(repeatOne) && !get(repeatAll)) {
-    repeatOne.set(true)
-  } else if (get(repeatOne)) {
-    repeatOne.set(false)
-    repeatAll.set(true)
+  const $repeatOne = get(repeatOne)
+  const $repeatAll = get(repeatAll)
+  if (!$repeatOne && !$repeatAll) {
+    tauriInvoke('set_repeat_mode', { repeatOne: true, repeatAll: false }).catch(console.error)
+  } else if ($repeatOne) {
+    tauriInvoke('set_repeat_mode', { repeatOne: false, repeatAll: true }).catch(console.error)
   } else {
-    repeatAll.set(false)
+    tauriInvoke('set_repeat_mode', { repeatOne: false, repeatAll: false }).catch(console.error)
   }
 }

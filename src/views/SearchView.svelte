@@ -3,7 +3,7 @@
   import { currentTrack, navToAlbum } from '../lib/stores'
   import { loadImage } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
-  import { setQueueSeamless } from '../lib/playback'
+  import { tauriInvoke } from '../lib/tauri'
   import { showPlaylistMenu } from '../lib/playlistMenu'
   import { lazyLoad } from '../lib/lazyLoad'
   import { formatDuration, createAbortController } from '../lib/utils'
@@ -39,7 +39,7 @@
   }
 
   function playTrack(idx: number) {
-    setQueueSeamless(songs, idx)
+    tauriInvoke('set_queue_seamless', { songs, startIdx: idx }).catch(console.error)
   }
 
   function isPlaying(track: Song) {

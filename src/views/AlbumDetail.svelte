@@ -4,7 +4,7 @@
   import { loadImage, Api } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
   import { dataSourceVersion } from '../lib/stores'
-  import { setQueueSeamless, shufflePlay } from '../lib/playback'
+  import { tauriInvoke } from '../lib/tauri'
   import { lazyLoad } from '../lib/lazyLoad'
   import { createAbortController } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
@@ -69,17 +69,17 @@
   })
 
   function playTrack(idx: number) {
-    setQueueSeamless(tracks, idx)
+    tauriInvoke('set_queue_seamless', { songs: tracks, startIdx: idx }).catch(console.error)
   }
 
   function playAll() {
     if (!tracks.length) return
-    setQueueSeamless(tracks, 0)
+    tauriInvoke('set_queue_seamless', { songs: tracks, startIdx: 0 }).catch(console.error)
   }
 
   function shuffleAll() {
     if (!tracks.length) return
-    shufflePlay(tracks)
+    tauriInvoke('shuffle_and_play', { songs: tracks }).catch(console.error)
   }
 
   function isPlaying(track: Song) {

@@ -1,6 +1,6 @@
 [package]
 name = "firmium"
-version = "6.1.6"
+version = "6.2.0"
 description = "Subsonic Desktop Music Streamer"
 authors = ["fossisawesome"]
 edition = "2021"
@@ -32,6 +32,7 @@ rand = "0.10"
 toml = "1.1"
 lofty = "0.24"
 rustfft = "6.4.1"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 
 # Platform-specific keyring backends: each OS uses its own secure credential store.
 # Android has no keyring dependency; the Rust commands return errors and the JS

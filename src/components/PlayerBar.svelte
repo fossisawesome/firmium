@@ -2,11 +2,12 @@
   import { get } from 'svelte/store'
   import {
     currentTrack, playbackState, currentPosition, trackDuration, isSeeking,
-    volume, repeatOne, repeatAll, audioBridge,
+    volume, repeatOne, repeatAll,
     lyricsOpen, setVolume,
     hasSonicSimilarity, similarTracksOpen, similarTracksTrackId, similarTracksResults, similarTracksStatus,
-    visualizerOpen
+    visualizerOpen,
   } from '../lib/stores'
+  import { tauriInvoke } from '../lib/tauri'
   import { fetchAndShowLyrics } from '../lib/playback'
   import { formatDuration } from '../lib/utils'
   import { Api, loadImage } from '../lib/api'
@@ -75,19 +76,15 @@
   }
 
   function handleVolumeInput(e: Event) {
-    const v = setVolume(Number((e.target as HTMLInputElement).value))
-    const bridge = get(audioBridge)
-    if (bridge) bridge.setVolume(v).catch(console.error)
+    // setVolume updates the store, localStorage, and calls set_queue_volume Rust command.
+    setVolume(Number((e.target as HTMLInputElement).value))
   }
 
   function startSeek() { isSeeking.set(true) }
   async function endSeek(e: Event) {
     const target = Number((e.target as HTMLInputElement).value)
     currentPosition.set(target)
-    const bridge = get(audioBridge)
-    if (bridge) {
-      try { await bridge.seek(target) } catch (err) { console.error('Seek failed:', err) }
-    }
+    try { await tauriInvoke('seek_queue', { position: target }) } catch (err) { console.error('Seek failed:', err) }
     // Keep ignoring position updates briefly: a stale "playback-position" event
     // (reflecting the pre-seek position) may already be in flight from Rust.
     setTimeout(() => isSeeking.set(false), 300)

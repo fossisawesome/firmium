@@ -1,7 +1,8 @@
 import { writable, derived, get, type Writable } from 'svelte/store'
+import { listen } from '@tauri-apps/api/event'
 import { SafeStorage } from './utils'
 import { tauriInvoke } from './tauri'
-import type { Song, PlaybackState, LyricLine, SimilarMatch, WordTiming } from './types/tauri-commands'
+import type { Song, PlaybackState, LyricLine, SimilarMatch, WordTiming, QueueStatePayload } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 import type { ServerPlaylist } from './api'
 
@@ -107,15 +108,11 @@ export const currentPosition = writable(0)
 export const trackDuration = writable<number | null>(null)
 export const isSeeking = writable(false)
 
-// Used to cancel stale play requests when a new one supersedes them.
-let _playToken = 0
-export const bumpToken = (): number => ++_playToken
-export const getPlayToken = (): number => _playToken
-
 export function setVolume(v: number): number {
   const normalized = Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : DEFAULT_VOLUME))
   volume.set(normalized)
   SafeStorage.setItem('firmium_volume', String(normalized))
+  tauriInvoke('set_queue_volume', { volume: normalized }).catch(() => {})
   return normalized
 }
 
@@ -128,12 +125,14 @@ export function setCrossfadeEnabled(v: unknown): void {
     SafeStorage.setItem('firmium_bit_perfect_mode', 'relaxed')
     tauriInvoke('set_bit_perfect_mode', { mode: 'relaxed' }).catch(() => {})
   }
+  tauriInvoke('set_crossfade_settings', { enabled: val, durationSecs: get(crossfadeDuration) }).catch(() => {})
 }
 
 export function setCrossfadeDuration(v: number): void {
   const val = Math.max(1, Math.min(12, Number(v) || 5))
   crossfadeDuration.set(val)
   SafeStorage.setItem('firmium_crossfade_duration', String(val))
+  tauriInvoke('set_crossfade_settings', { enabled: get(crossfadeEnabled), durationSecs: val }).catch(() => {})
 }
 
 // Gapless playback — pre-buffers the next track so there's no pause between songs.
@@ -144,6 +143,30 @@ export function setGaplessEnabled(v: unknown): void {
   const val = Boolean(v)
   gaplessEnabled.set(val)
   SafeStorage.setItem('firmium_gapless', val ? 'true' : 'false')
+  tauriInvoke('set_gapless_enabled', { enabled: val }).catch(() => {})
+}
+
+// Subscribes to queue-state-changed events from Rust, keeping all queue/settings
+// stores in sync and forwarding the active player ID to AudioBridge for event filtering.
+export function listenToQueueState(): () => void {
+  let unlisten: (() => void) | undefined
+  listen<QueueStatePayload>('queue-state-changed', ({ payload }) => {
+    queue.set(payload.queue)
+    queueIdx.set(payload.queueIdx)
+    repeatOne.set(payload.repeatOne)
+    repeatAll.set(payload.repeatAll)
+    shuffleEnabled.set(payload.shuffleEnabled)
+    crossfadeEnabled.set(payload.crossfadeEnabled)
+    crossfadeDuration.set(payload.crossfadeDuration)
+    gaplessEnabled.set(payload.gaplessEnabled)
+    if (payload.volume !== get(volume)) {
+      volume.set(payload.volume)
+      SafeStorage.setItem('firmium_volume', String(payload.volume))
+    }
+    const bridge = get(audioBridge)
+    if (bridge) bridge.currentPlayerId = payload.playerId ?? null
+  }).then(fn => { unlisten = fn })
+  return () => unlisten?.()
 }
 
 // Bit-perfect mode — controls whether the output stream is reopened to match each

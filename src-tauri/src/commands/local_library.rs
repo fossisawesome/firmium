@@ -433,6 +433,30 @@ pub fn get_local_track_path(app: AppHandle, state: State<'_, Arc<AppState>>, id:
         .ok_or_else(|| "Track not found".to_string())
 }
 
+/// Internal version of `get_local_track_path` taking `Arc<AppState>` directly.
+pub(crate) fn get_local_track_path_internal(app: &AppHandle, state: &AppState, id: &str) -> Result<String, String> {
+    ensure_scanned(app, state)?;
+    let cache = state.local_library.read();
+    cache.as_ref().unwrap().paths.get(id)
+        .map(|p| p.to_string_lossy().into_owned())
+        .ok_or_else(|| "Track not found".to_string())
+}
+
+/// Internal version of `find_local_match` taking `Arc<AppState>` directly.
+pub(crate) fn find_local_match_internal(app: &AppHandle, state: &AppState, title: &str, artist: &str, album: &str) -> Option<String> {
+    ensure_scanned(app, state).ok()?;
+    let cache = state.local_library.read();
+    let cache = cache.as_ref()?;
+    let title_lc = title.to_lowercase();
+    let artist_lc = artist.to_lowercase();
+    let album_lc = album.to_lowercase();
+    let found = cache.all_songs.iter().find(|s| {
+        s.title.to_lowercase() == title_lc
+            && (s.album.to_lowercase() == album_lc || s.artist.to_lowercase() == artist_lc)
+    })?;
+    cache.paths.get(&found.id).map(|p| p.to_string_lossy().into_owned())
+}
+
 fn find_cached(dir: &Path, safe_id: &str) -> Option<PathBuf> {
     let entries = std::fs::read_dir(dir).ok()?;
     let prefix = format!("{safe_id}.");
