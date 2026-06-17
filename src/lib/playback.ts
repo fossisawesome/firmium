@@ -2,7 +2,8 @@ import { get, writable } from 'svelte/store'
 import {
   audioBridge, lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
   lyricsWordTimings, lyricsGlowColor,
-  playbackState, currentPosition, trackDuration, isSeeking,
+  playbackState, currentPosition, trackDuration, isSeeking, queue, queueIdx,
+  crossfadeEnabled, crossfadeDuration, gaplessEnabled, repeatOne, repeatAll,
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
 import { tauriInvoke } from './tauri'
@@ -13,15 +14,55 @@ import type { AudioBridge } from './audio-bridge'
 // Driven by Rust "playback-position" events (~300ms cadence) via AudioBridge.
 
 let _positionHandler: ((data: { position: number; duration: number }) => void) | null = null
+let _crossfadeStarted = false
+let _preloadStarted = false
+let _lastQueueIdx = -1
 
 function _handlePositionUpdate(position: number, duration: number | null): void {
   if (duration != null) trackDuration.set(duration)
   if (!get(isSeeking)) currentPosition.set(position)
   if (get(lyricsOpen)) syncLyricsToPosition(position)
+
+  // Check for track changes (reset per-track flags)
+  const currentQueueIdx = get(queueIdx)
+  if (currentQueueIdx !== _lastQueueIdx) {
+    _lastQueueIdx = currentQueueIdx
+    _crossfadeStarted = false
+    _preloadStarted = false
+  }
+
+  if (duration == null || duration <= 0) return
+
+  const bridge = get(audioBridge)
+  if (!bridge) return
+
+  // Crossfade trigger: position >= duration - crossfadeDuration
+  if (!_crossfadeStarted && get(crossfadeEnabled) && !get(repeatOne)) {
+    const crossfadeSecs = get(crossfadeDuration)
+    if (position >= duration - crossfadeSecs) {
+      _crossfadeStarted = true
+      bridge.startCrossfadeIn()
+    }
+  }
+
+  // Preload trigger: position >= duration - 30 (gapless preload window)
+  if (!_preloadStarted && get(gaplessEnabled) && !get(repeatOne)) {
+    if (position >= duration - 30) {
+      _preloadStarted = true
+      const $queue = get(queue)
+      const $queueIdx = get(queueIdx)
+      if ($queueIdx + 1 < $queue.length) {
+        bridge.preload()
+      }
+    }
+  }
 }
 
 export function startPositionTracking(): void {
   stopPositionTracking()
+  _lastQueueIdx = get(queueIdx)
+  _crossfadeStarted = false
+  _preloadStarted = false
   const bridge = get(audioBridge)
   if (!bridge) return
   _positionHandler = ({ position, duration }) => _handlePositionUpdate(position, duration)

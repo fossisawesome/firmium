@@ -180,7 +180,7 @@ pub(crate) fn random_idx_excluding(queue_len: usize, current_idx: usize) -> usiz
     candidates[0]
 }
 
-fn fisher_yates(songs: &mut Vec<Song>) {
+fn fisher_yates(songs: &mut [Song]) {
     songs.shuffle(&mut rand::rng());
 }
 

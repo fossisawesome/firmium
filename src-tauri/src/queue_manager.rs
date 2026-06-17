@@ -19,6 +19,13 @@ struct PositionPayload {
     duration: f64,
 }
 
+struct CrossfadeContext {
+    next_idx: usize,
+    old_player_id: String,
+    fade_ms: u64,
+    volume: f32,
+}
+
 #[derive(serde::Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct FinishedPayload {
@@ -128,25 +135,25 @@ fn handle_position(
     }
 
     // Crossfade trigger
-    if !crossfade_started && crossfade_enabled && !repeat_one && dur > 0.0 {
-        if position >= dur - crossfade_secs as f64 {
-            let next_idx = if shuffle && queue_len > 1 {
-                Some(random_idx_excluding(queue_len, queue_idx as usize))
-            } else {
-                compute_next_idx(queue_idx, queue_len, repeat_all)
-            };
-            if let Some(next_idx) = next_idx {
-                queue_state.inner.lock().crossfade_started = true;
-                let qs = Arc::clone(queue_state);
-                let as_ = Arc::clone(app_state);
-                let ap = Arc::clone(audio_player);
-                let app2 = app.clone();
-                let old_pid = current_player_id.unwrap_or_default();
-                let fade_ms = (crossfade_secs * 1000.0) as u64;
-                tauri::async_runtime::spawn(async move {
-                    do_crossfade(app2, qs, as_, ap, next_idx, old_pid, fade_ms, volume).await;
-                });
-            }
+    if !crossfade_started && crossfade_enabled && !repeat_one && dur > 0.0
+        && position >= dur - crossfade_secs as f64
+    {
+        let next_idx = if shuffle && queue_len > 1 {
+            Some(random_idx_excluding(queue_len, queue_idx as usize))
+        } else {
+            compute_next_idx(queue_idx, queue_len, repeat_all)
+        };
+        if let Some(next_idx) = next_idx {
+            queue_state.inner.lock().crossfade_started = true;
+            let qs = Arc::clone(queue_state);
+            let as_ = Arc::clone(app_state);
+            let ap = Arc::clone(audio_player);
+            let app2 = app.clone();
+            let old_pid = current_player_id.unwrap_or_default();
+            let fade_ms = (crossfade_secs * 1000.0) as u64;
+            tauri::async_runtime::spawn(async move {
+                do_crossfade(app2, qs, as_, ap, CrossfadeContext { next_idx, old_player_id: old_pid, fade_ms, volume }).await;
+            });
         }
     }
 
@@ -223,11 +230,9 @@ async fn do_crossfade(
     queue_state: Arc<QueueState>,
     app_state: Arc<AppState>,
     audio_player: Arc<AudioPlayer>,
-    next_idx: usize,
-    old_player_id: String,
-    fade_ms: u64,
-    volume: f32,
+    ctx: CrossfadeContext,
 ) {
+    let CrossfadeContext { next_idx, old_player_id, fade_ms, volume } = ctx;
     // Extract next song, update queue_idx, reset per-track flags
     let (song, outgoing_id) = {
         let mut inner = queue_state.inner.lock();
