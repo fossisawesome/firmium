@@ -3,7 +3,7 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, bitPerfectMode, setBitPerfectMode, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
@@ -23,7 +23,7 @@
     'firmium_auto_login', 'firmium_lrclib', 'firmium_theme',
     'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
     'firmium_volume', 'firmium_gapless', 'firmium_lastfm',
-    'firmium_download_format', 'firmium_lyrics_word_fill',
+    'firmium_download_format', 'firmium_lyrics_word_fill', 'firmium_bit_perfect_mode',
   ]
 
   // ── Active category ───────────────────────────────────────────────────────────
@@ -102,6 +102,11 @@
     const checked = (e.target as HTMLInputElement).checked
     setCrossfadeEnabled(checked)
     if (checked) setGaplessEnabled(false)
+  }
+
+  function handleBitPerfectMode(mode: string) {
+    setBitPerfectMode(mode)
+    if (mode === 'strict') setGaplessEnabled(false)
   }
   function handleCrossfadeDuration(e: Event) { setCrossfadeDuration(Number((e.target as HTMLInputElement).value)) }
   function handleGaplessToggle(e: Event) {
@@ -264,6 +269,30 @@
           <input type="checkbox" checked={$gaplessEnabled} onchange={handleGaplessToggle} />
           <span class="toggle-slider"></span>
         </label>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Bit-Perfect Audio</div>
+          <div class="settings-desc">
+            {#if $bitPerfectMode === 'off'}
+              Resamples all audio to the device default rate
+            {:else if $bitPerfectMode === 'strict'}
+              Matches native sample rate; crossfade is disabled
+            {:else}
+              Tries to match each track's native sample rate; falls back to resampling
+            {/if}
+          </div>
+        </div>
+        <div class="bp-mode-selector">
+          {#each [['off', 'Off'], ['relaxed', 'Relaxed'], ['strict', 'Strict']] as [id, label]}
+            <button
+              class="bp-mode-btn"
+              class:bp-mode-btn--active={$bitPerfectMode === id}
+              onclick={() => handleBitPerfectMode(id)}
+            >{label}</button>
+          {/each}
+        </div>
       </div>
 
     {:else if activeCategory === 'downloads'}

@@ -123,6 +123,11 @@ export function setCrossfadeEnabled(v: unknown): void {
   const val = Boolean(v)
   crossfadeEnabled.set(val)
   SafeStorage.setItem('firmium_crossfade', val ? 'true' : 'false')
+  if (val && get(bitPerfectMode) === 'strict') {
+    bitPerfectMode.set('relaxed')
+    SafeStorage.setItem('firmium_bit_perfect_mode', 'relaxed')
+    tauriInvoke('set_bit_perfect_mode', { mode: 'relaxed' }).catch(() => {})
+  }
 }
 
 export function setCrossfadeDuration(v: number): void {
@@ -139,6 +144,17 @@ export function setGaplessEnabled(v: unknown): void {
   const val = Boolean(v)
   gaplessEnabled.set(val)
   SafeStorage.setItem('firmium_gapless', val ? 'true' : 'false')
+}
+
+// Bit-perfect mode — controls whether the output stream is reopened to match each
+// track's native sample rate. "strict" also disables crossfade.
+export const bitPerfectMode = writable<string>(SafeStorage.getItem('firmium_bit_perfect_mode') ?? 'relaxed')
+
+export function setBitPerfectMode(mode: string): void {
+  bitPerfectMode.set(mode)
+  SafeStorage.setItem('firmium_bit_perfect_mode', mode)
+  tauriInvoke('set_bit_perfect_mode', { mode }).catch(() => {})
+  if (mode === 'strict') setCrossfadeEnabled(false)
 }
 
 

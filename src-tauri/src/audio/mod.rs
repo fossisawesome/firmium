@@ -57,6 +57,9 @@ pub struct AudioPlayer {
     crossfade_in_progress: AtomicBool,
     /// Shared state for the audio visualizer (sample ring buffer + analysis toggle).
     pub(crate) visualizer: Arc<VisualizerState>,
+    /// "off" | "relaxed" | "strict" — controls whether the output stream is reopened
+    /// to match each track's native sample rate. "off" skips reopening entirely.
+    bit_perfect_mode: parking_lot::Mutex<String>,
 }
 
 impl AudioPlayer {
@@ -80,12 +83,17 @@ impl AudioPlayer {
             app_handle,
             crossfade_in_progress: AtomicBool::new(false),
             visualizer,
+            bit_perfect_mode: parking_lot::Mutex::new("relaxed".to_string()),
         })
     }
 
     /// Enable or disable the audio visualizer analysis task.
     pub fn set_visualizer_enabled(&self, enabled: bool) {
         self.visualizer.set_enabled(enabled);
+    }
+
+    pub fn set_bit_perfect_mode(&self, mode: String) {
+        *self.bit_perfect_mode.lock() = mode;
     }
 
     /// Reopen the output device to match `target_rate`/`target_channels` if they
@@ -169,7 +177,7 @@ impl AudioPlayer {
 
                     // Reopen the output stream to this track's native rate when it's the
                     // sole active session, avoiding resampling for the common case.
-                    if sessions.read().len() <= 1 {
+                    if sessions.read().len() <= 1 && *player.bit_perfect_mode.lock() != "off" {
                         if let Err(e) = player.reopen_stream_if_needed(native_rate, native_channels) {
                             eprintln!("Output stream reopen failed: {e}");
                         }
@@ -484,7 +492,7 @@ impl AudioPlayer {
             // Now that the fade is done and only the new session remains, reopen
             // the output stream to its native rate for bit-perfect playback.
             let target = player.sessions.read().get(&new_id).map(|s| (s.sample_rate(), s.channels()));
-            if player.sessions.read().len() <= 1 {
+            if player.sessions.read().len() <= 1 && *player.bit_perfect_mode.lock() != "off" {
                 if let Some((rate, channels)) = target {
                     if let Err(e) = player.reopen_stream_if_needed(rate, channels) {
                         eprintln!("Output stream reopen failed: {e}");

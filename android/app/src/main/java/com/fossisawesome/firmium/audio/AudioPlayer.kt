@@ -1,16 +1,19 @@
 package com.fossisawesome.firmium.audio
 
 import android.content.Context
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import kotlinx.coroutines.*
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.pow
+
+private const val TAG = "FirmiumAudio"
 
 // Native ExoPlayer-based audio engine. Ported from AudioPlugin.kt with Tauri removed.
 // All methods are main-thread-safe; callers use the exposed suspend functions or callbacks.
@@ -24,7 +27,6 @@ class AudioPlayer(private val context: Context) {
     }
 
     var listener: Listener? = null
-    var bitPerfectMode: String = "off"
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val sessions = ConcurrentHashMap<String, AudioSession>()
@@ -34,37 +36,10 @@ class AudioPlayer(private val context: Context) {
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
 
-    private fun buildPlayer(): ExoPlayer {
-        val player = ExoPlayer.Builder(context)
+    private fun buildPlayer(): ExoPlayer =
+        ExoPlayer.Builder(context)
             .setAudioAttributes(audioAttrs, true)
             .build()
-        when (bitPerfectMode) {
-            "strict" -> {
-                player.trackSelectionParameters = player.trackSelectionParameters
-                    .buildUpon()
-                    .setAudioOffloadPreferences(
-                        AudioOffloadPreferences.Builder()
-                            .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_REQUIRED)
-                            .setIsGaplessSupportRequired(true)
-                            .build()
-                    )
-                    .build()
-            }
-            "relaxed" -> {
-                player.trackSelectionParameters = player.trackSelectionParameters
-                    .buildUpon()
-                    .setAudioOffloadPreferences(
-                        AudioOffloadPreferences.Builder()
-                            .setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
-                            .setIsGaplessSupportRequired(false)
-                            .build()
-                    )
-                    .build()
-            }
-            // "off" — no offload config; standard ExoPlayer software pipeline
-        }
-        return player
-    }
 
     private fun gainFactor(gainDb: Float?): Float =
         if (gainDb != null) (10.0.pow(gainDb / 20.0)).toFloat().coerceIn(0.01f, 4.0f)
@@ -76,15 +51,29 @@ class AudioPlayer(private val context: Context) {
                 val state = if (isPlaying) "playing"
                     else if (session.player.playbackState == Player.STATE_READY) "paused"
                     else return
+                Log.d(TAG, "isPlaying=$isPlaying state=$state volume=${session.player.volume} audioSessionId=${session.player.audioSessionId}")
                 listener?.onStateChanged(playerId, state)
             }
 
             override fun onPlaybackStateChanged(state: Int) {
+                val stateName = when (state) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN($state)"
+                }
+                Log.d(TAG, "playbackState=$stateName volume=${session.player.volume}")
                 when (state) {
                     Player.STATE_BUFFERING -> listener?.onStateChanged(playerId, "loading")
                     Player.STATE_IDLE -> listener?.onStateChanged(playerId, "stopped")
                     else -> {}
                 }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e(TAG, "ExoPlayer error: ${error.errorCodeName} (${error.errorCode})", error)
+                listener?.onStateChanged(playerId, "stopped")
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -242,6 +231,8 @@ class AudioPlayer(private val context: Context) {
         sessions[playerId] = session
         attachListeners(playerId, session)
 
+        Log.d(TAG, "setQueue tracks=${tracks.size} startIdx=$idx volume=$volume initialGain=$initialGain effectiveVol=${volume * initialGain}")
+        tracks.forEachIndexed { i, t -> Log.d(TAG, "  track[$i] url=${t.streamUrl.take(80)} replayGain=${t.replayGainDb}") }
         player.setMediaItems(tracks.map { MediaItem.fromUri(it.streamUrl) }, idx, 0L)
         player.prepare()
         player.playWhenReady = true

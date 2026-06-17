@@ -1414,6 +1414,38 @@ input[type="range"].volume-slider {
   text-align: right;
 }
 
+.bp-mode-selector {
+  display: flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.bp-mode-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.bp-mode-btn:first-child { border-left: none; }
+
+.bp-mode-btn--active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.bp-mode-btn:not(.bp-mode-btn--active):hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
 .debug-btn {
   flex-shrink: 0;
   align-self: center;

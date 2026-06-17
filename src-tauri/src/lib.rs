@@ -78,6 +78,7 @@ pub fn run() {
             list_audio_devices,
             crossfade_to,
             set_visualizer_enabled,
+            set_bit_perfect_mode,
             // Lyrics
             parse_lrc,
             fetch_lrclib_lyrics,

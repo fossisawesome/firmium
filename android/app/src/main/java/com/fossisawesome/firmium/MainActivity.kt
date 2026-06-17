@@ -63,6 +63,12 @@ class MainActivity : ComponentActivity() {
 
     private var notificationPermissionRequested = false
 
+    private val recordAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Visualizer works if granted; breathes without audio reactivity if denied — no action needed. */ }
+
+    private var recordAudioPermissionRequested = false
+
     private val storagePermission: String =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
         else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -180,6 +186,13 @@ class MainActivity : ComponentActivity() {
             if (ContextCompat.checkSelfPermission(this, storagePermission)
                 != PackageManager.PERMISSION_GRANTED) {
                 storagePermissionLauncher.launch(storagePermission)
+            }
+        }
+        if (!recordAudioPermissionRequested) {
+            recordAudioPermissionRequested = true
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
     }

@@ -27,7 +27,6 @@ data class PlayerState(
     val crossfadeEnabled: Boolean = false,
     val crossfadeDurationMs: Int = 3000,
     val gaplessEnabled: Boolean = true,
-    val bitPerfectMode: String = "off",
     val isSeeking: Boolean = false,
     val audioSessionId: Int = 0,
 ) {
@@ -79,12 +78,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             prefs.gaplessEnabled.collect { gap ->
                 _state.update { it.copy(gaplessEnabled = gap) }
-            }
-        }
-        viewModelScope.launch {
-            prefs.bitPerfectMode.collect { mode ->
-                _state.update { it.copy(bitPerfectMode = mode) }
-                audioPlayer.bitPerfectMode = mode
             }
         }
 
@@ -207,23 +200,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val nextIdx = s.queueIndex + 1
         when {
             s.repeatMode == "one" -> seek(0.0)
-            nextIdx < s.queue.size -> when (s.bitPerfectMode) {
-                "relaxed" -> {
-                    val current = s.currentTrack
-                    val next = s.queue.getOrNull(nextIdx)
-                    if (current != null && next != null && audioFormatsMatch(current, next)) {
-                        crossfadeToNext()
-                    } else {
-                        // Formats differ — hard cut by restarting the queue from nextIdx.
-                        // Can't rely on ExoPlayer skipToNext() here because the current
-                        // player may be a single-track crossfade player with no queued items.
-                        playAt(s.queue, nextIdx)
-                    }
-                }
-                else -> {
-                    if (s.crossfadeEnabled) crossfadeToNext()
-                    else currentPlayerId?.let { audioPlayer.skipToNext(it) }
-                }
+            nextIdx < s.queue.size -> {
+                if (s.crossfadeEnabled) crossfadeToNext()
+                else currentPlayerId?.let { audioPlayer.skipToNext(it) }
             }
             s.repeatMode == "all" -> skipToIndex(0)
         }
@@ -264,17 +243,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setCrossfadeEnabled(enabled: Boolean) {
-        _state.update {
-            it.copy(
-                crossfadeEnabled = enabled,
-                bitPerfectMode = if (enabled) "off" else it.bitPerfectMode,
-            )
-        }
-        viewModelScope.launch {
-            prefs.setCrossfadeEnabled(enabled)
-            if (enabled) prefs.setBitPerfectMode("off")
-        }
-        if (enabled) audioPlayer.bitPerfectMode = "off"
+        _state.update { it.copy(crossfadeEnabled = enabled) }
+        viewModelScope.launch { prefs.setCrossfadeEnabled(enabled) }
     }
 
     fun setCrossfadeDuration(ms: Int) {
@@ -285,21 +255,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setGaplessEnabled(enabled: Boolean) {
         _state.update { it.copy(gaplessEnabled = enabled) }
         viewModelScope.launch { prefs.setGaplessEnabled(enabled) }
-    }
-
-    fun setBitPerfectMode(mode: String) {
-        audioPlayer.bitPerfectMode = mode
-        val disableCrossfade = mode != "off"
-        _state.update {
-            it.copy(
-                bitPerfectMode = mode,
-                crossfadeEnabled = if (disableCrossfade) false else it.crossfadeEnabled,
-            )
-        }
-        viewModelScope.launch {
-            prefs.setBitPerfectMode(mode)
-            if (disableCrossfade) prefs.setCrossfadeEnabled(false)
-        }
     }
 
     // ── Lyrics ─────────────────────────────────────────────────────────────────
@@ -334,11 +289,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ── Internal helpers ───────────────────────────────────────────────────────
-
-    private fun audioFormatsMatch(a: Song, b: Song): Boolean =
-        a.suffix?.lowercase() == b.suffix?.lowercase() &&
-        a.samplingRate == b.samplingRate &&
-        a.bitDepth == b.bitDepth
 
     private fun fetchLyricsForCurrent() {
         _state.value.currentTrack?.let { lyrics.fetchForTrack(it) }
@@ -428,14 +378,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 nowPlaying.updatePosition((pos * 1000).toLong(), (dur * 1000).toLong(), _state.value.playbackState == "playing")
                 val s = _state.value
                 if (dur > 0 && s.playbackState == "playing" && s.hasNext) {
-                    val shouldFade = when (s.bitPerfectMode) {
-                        "relaxed" -> {
-                            val current = s.currentTrack
-                            val next = s.queue.getOrNull(s.queueIndex + 1)
-                            current != null && next != null && audioFormatsMatch(current, next)
-                        }
-                        else -> s.crossfadeEnabled
-                    }
+                    val shouldFade = s.crossfadeEnabled
                     if (shouldFade) {
                         val fadeAt = dur - (s.crossfadeDurationMs / 1000.0)
                         if (pos >= fadeAt) { skipToNext(); break }

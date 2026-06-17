@@ -1,5 +1,7 @@
 package com.fossisawesome.firmium.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.audiofx.Visualizer
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -11,6 +13,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +57,7 @@ fun MusicOrb(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     var bass by remember { mutableFloatStateOf(0f) }
     var smoothBass by remember { mutableFloatStateOf(0f) }
 
@@ -64,6 +69,13 @@ fun MusicOrb(
             bass = 0f
             return@DisposableEffect onDispose {}
         }
+        // Visualizer requires RECORD_AUDIO at runtime. Without the grant, Samsung's audio
+        // stack can mute the ExoPlayer session when a Visualizer is attached to it — so we
+        // skip the Visualizer entirely rather than risk silencing playback.
+        val hasRecordAudio = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasRecordAudio) return@DisposableEffect onDispose {}
         val viz = try {
             Visualizer(audioSessionId).apply {
                 captureSize = Visualizer.getCaptureSizeRange()[0]

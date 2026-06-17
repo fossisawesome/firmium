@@ -1,3 +1,19 @@
+# v6.1.6
+
+## Added
+
+- **Desktop bit-perfect audio mode** (`src/views/Settings.svelte`, `src/lib/stores.ts`, `src/style.css`, `src-tauri/src/commands/playback.rs`, `src-tauri/src/audio/mod.rs`, `src-tauri/src/lib.rs`): New "Bit-Perfect Audio" selector (Off / Relaxed / Strict) in the desktop Playback settings panel. **Off**: all audio is resampled to the device default rate. **Relaxed**: attempts to reopen the output stream to each track's native sample rate; falls back to resampling on failure. **Strict**: same rate-matching, but also disables crossfade. Mode is persisted to localStorage (`firmium_bit_perfect_mode`) and forwarded to the Rust backend via the new `set_bit_perfect_mode` Tauri command. Enabling Strict disables crossfade; enabling crossfade while in Strict downgrades the mode to Relaxed.
+
+## Changed
+
+- **Android bit-perfect mode removed** (`android/.../audio/AudioPlayer.kt`, `android/.../data/storage/AppPreferences.kt`, `android/.../viewmodel/PlayerViewModel.kt`, `android/.../ui/screens/SettingsScreen.kt`, `android/.../ui/navigation/AppNavGraph.kt`): The Android bit-perfect audio setting (Off / Relaxed / Strict), `bitPerfectMode` preference key, `setBitPerfectMode` ViewModel function, `BitPerfectModeSelector` composable, and all related crossfade/gapless interlock logic have been removed. ExoPlayer now always uses the standard software pipeline; crossfade and gapless settings are no longer locked or dimmed.
+
+## Fixed
+
+- **Android visualizer mutes playback on Samsung devices** (`android/.../ui/components/MusicOrb.kt`, `android/.../MainActivity.kt`): Attaching a `Visualizer` to an ExoPlayer audio session without the `RECORD_AUDIO` permission can cause Samsung's audio stack to silence playback. The orb's `DisposableEffect` now checks for the permission at runtime and skips `Visualizer` creation entirely if it is not granted — the orb continues its idle animation without audio reactivity. `MainActivity` now requests `RECORD_AUDIO` at launch so users who grant it get full visualizer functionality.
+
+---
+
 # v6.1.5
 
 ## Fixed

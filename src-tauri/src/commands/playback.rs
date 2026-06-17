@@ -94,6 +94,12 @@ pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
 }
 
 #[tauri::command]
+pub fn set_bit_perfect_mode<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, mode: String) -> Result<(), String> {
+    get_player(&app_handle)?.set_bit_perfect_mode(mode);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn crossfade_to<R: tauri::Runtime>(
     app_handle: tauri::AppHandle<R>,
     old_player_id: &str,

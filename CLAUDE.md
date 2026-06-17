@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 6.1.5
+**Version**: 6.1.6
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -244,7 +244,7 @@ Currently no automated tests. Manual testing workflow:
 ## Documentation
 
 - End-user documentation (installing, building from source, usage, custom themes, and a settings reference) lives in the `firmium-docs` repo, in `src/content/*.md`, built with Vite + Svelte and deployed via GitHub Pages
-- For which changes require updating which docs page, see agents.md "Keep Docs in Sync"
+- For which changes require updating which docs page, see AGENTS.md "Keep Docs in Sync"
 
 ## Key Files
 
@@ -358,7 +358,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
-**For autonomous tool use and multi-step workflows, see `agents.md`.**
+**For autonomous tool use and multi-step workflows, see `AGENTS.md`.**
 
 ## Meta: Guidelines Are Defaults, Not Laws
 
