@@ -3,7 +3,7 @@ import {
   audioBridge, lyricsOpen, lyricsTrackId, lyricsLines, lyricsSynced, lyricsStatus,
   lyricsWordTimings, lyricsGlowColor,
   playbackState, currentPosition, trackDuration, isSeeking, queue, queueIdx,
-  crossfadeEnabled, crossfadeDuration, gaplessEnabled, repeatOne, repeatAll,
+  crossfadeEnabled, crossfadeDuration, gaplessEnabled, repeatOne, volume,
 } from './stores'
 import { Api, OpenSubsonicRouter } from './api'
 import { tauriInvoke } from './tauri'
@@ -41,7 +41,18 @@ function _handlePositionUpdate(position: number, duration: number | null): void 
     const crossfadeSecs = get(crossfadeDuration)
     if (position >= duration - crossfadeSecs) {
       _crossfadeStarted = true
-      bridge.startCrossfadeIn()
+      const $queue = get(queue)
+      const $idx = get(queueIdx)
+      const nextSong = $queue[$idx + 1] ?? null
+      if (nextSong) {
+        const targetVolume = get(volume)
+        const fadeDurationMs = crossfadeSecs * 1000
+        const rg = nextSong.replayGain as { albumGain?: number; trackGain?: number } | null | undefined
+        const replayGainDb = rg?.albumGain ?? rg?.trackGain ?? null
+        OpenSubsonicRouter.buildUrl('stream', { id: nextSong.id })
+          .then(url => bridge.startCrossfadeIn(url, nextSong.id, targetVolume, fadeDurationMs, replayGainDb))
+          .catch(() => {})
+      }
     }
   }
 
@@ -50,9 +61,14 @@ function _handlePositionUpdate(position: number, duration: number | null): void 
     if (position >= duration - 30) {
       _preloadStarted = true
       const $queue = get(queue)
-      const $queueIdx = get(queueIdx)
-      if ($queueIdx + 1 < $queue.length) {
-        bridge.preload()
+      const $idx = get(queueIdx)
+      const nextSong = $queue[$idx + 1] ?? null
+      if (nextSong) {
+        const rg = nextSong.replayGain as { albumGain?: number; trackGain?: number } | null | undefined
+        const replayGainDb = rg?.albumGain ?? rg?.trackGain ?? null
+        OpenSubsonicRouter.buildUrl('stream', { id: nextSong.id })
+          .then(url => bridge.preload(url, nextSong.id, replayGainDb))
+          .catch(() => {})
       }
     }
   }
