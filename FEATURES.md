@@ -132,6 +132,17 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 ---
 
+## Wear OS
+
+| Feature | Android |
+|---|:---:|
+| Companion watch app — remote-controls playback running on your phone | ✅ |
+| Now-playing display on the watch (title, artist, cover art) | ✅ |
+| Transport controls from the wrist (play/pause, next, previous) | ✅ |
+| Volume control via the rotating crown/bezel or on-screen buttons | ✅ |
+
+---
+
 ## Android-Only Features
 
 - **Full-screen player** — portrait and landscape layouts with cover art, controls, and visualizer

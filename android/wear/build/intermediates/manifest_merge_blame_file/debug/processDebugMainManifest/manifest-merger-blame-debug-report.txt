@@ -1,0 +1,188 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.fossisawesome.firmium"
+4    android:versionCode="25"
+5    android:versionName="6.4.1" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="30"
+9        android:targetSdkVersion="36" />
+10
+11    <uses-feature android:name="android.hardware.type.watch" />
+11-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:4:5-64
+11-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:4:19-61
+12
+13    <permission
+13-->[androidx.core:core:1.16.0] /home/larp/.gradle/caches/9.5.1/transforms/d848a2cc3262780a20dc2f6c82654dea/transformed/core-1.16.0/AndroidManifest.xml:22:5-24:47
+14        android:name="com.fossisawesome.firmium.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+14-->[androidx.core:core:1.16.0] /home/larp/.gradle/caches/9.5.1/transforms/d848a2cc3262780a20dc2f6c82654dea/transformed/core-1.16.0/AndroidManifest.xml:23:9-81
+15        android:protectionLevel="signature" />
+15-->[androidx.core:core:1.16.0] /home/larp/.gradle/caches/9.5.1/transforms/d848a2cc3262780a20dc2f6c82654dea/transformed/core-1.16.0/AndroidManifest.xml:24:9-44
+16
+17    <uses-permission android:name="com.fossisawesome.firmium.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+17-->[androidx.core:core:1.16.0] /home/larp/.gradle/caches/9.5.1/transforms/d848a2cc3262780a20dc2f6c82654dea/transformed/core-1.16.0/AndroidManifest.xml:26:5-97
+17-->[androidx.core:core:1.16.0] /home/larp/.gradle/caches/9.5.1/transforms/d848a2cc3262780a20dc2f6c82654dea/transformed/core-1.16.0/AndroidManifest.xml:26:22-94
+18
+19    <application
+19-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:6:5-33:19
+20        android:allowBackup="false"
+20-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:7:9-36
+21        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+21-->[androidx.core:core:1.16.0] /home/larp/.gradle/caches/9.5.1/transforms/d848a2cc3262780a20dc2f6c82654dea/transformed/core-1.16.0/AndroidManifest.xml:28:18-86
+22        android:debuggable="true"
+23        android:extractNativeLibs="false"
+24        android:icon="@drawable/ic_launcher"
+24-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:8:9-45
+25        android:label="@string/app_name"
+25-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:10:9-41
+26        android:roundIcon="@drawable/ic_launcher"
+26-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:9:9-50
+27        android:supportsRtl="true"
+27-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:11:9-35
+28        android:theme="@style/MainTheme" >
+28-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:12:9-41
+29        <uses-library
+29-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:14:9-16:39
+30            android:name="com.google.android.wearable"
+30-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:15:13-55
+31            android:required="true" />
+31-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:16:13-36
+32
+33        <!-- This is a remote for the phone app, not a standalone player. -->
+34        <meta-data
+34-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:19:9-21:37
+35            android:name="com.google.android.wearable.standalone"
+35-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:20:13-66
+36            android:value="false" />
+36-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:21:13-34
+37
+38        <activity
+38-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:23:9-31:20
+39            android:name="com.fossisawesome.firmium.wear.MainActivity"
+39-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:24:13-41
+40            android:exported="true"
+40-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:25:13-36
+41            android:theme="@style/MainTheme" >
+41-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:26:13-45
+42            <intent-filter>
+42-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:27:13-30:29
+43                <action android:name="android.intent.action.MAIN" />
+43-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:28:17-69
+43-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:28:25-66
+44
+45                <category android:name="android.intent.category.LAUNCHER" />
+45-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:29:17-77
+45-->/home/larp/firmium-app/firmium/android/wear/src/main/AndroidManifest.xml:29:27-74
+46            </intent-filter>
+47        </activity>
+48
+49        <uses-library
+49-->[androidx.wear.compose:compose-foundation:1.4.1] /home/larp/.gradle/caches/9.5.1/transforms/605c9ae710d4cb22a1b8fe557e41c7b8/transformed/compose-foundation-1.4.1/AndroidManifest.xml:23:9-25:40
+50            android:name="wear-sdk"
+50-->[androidx.wear.compose:compose-foundation:1.4.1] /home/larp/.gradle/caches/9.5.1/transforms/605c9ae710d4cb22a1b8fe557e41c7b8/transformed/compose-foundation-1.4.1/AndroidManifest.xml:24:13-36
+51            android:required="false" />
+51-->[androidx.wear.compose:compose-foundation:1.4.1] /home/larp/.gradle/caches/9.5.1/transforms/605c9ae710d4cb22a1b8fe557e41c7b8/transformed/compose-foundation-1.4.1/AndroidManifest.xml:25:13-37
+52
+53        <activity
+53-->[androidx.compose.ui:ui-tooling-android:1.11.2] /home/larp/.gradle/caches/9.5.1/transforms/ba38cbf2ecb37480ce5d97f51ab9991c/transformed/ui-tooling/AndroidManifest.xml:23:9-25:39
+54            android:name="androidx.compose.ui.tooling.PreviewActivity"
+54-->[androidx.compose.ui:ui-tooling-android:1.11.2] /home/larp/.gradle/caches/9.5.1/transforms/ba38cbf2ecb37480ce5d97f51ab9991c/transformed/ui-tooling/AndroidManifest.xml:24:13-71
+55            android:exported="true" />
+55-->[androidx.compose.ui:ui-tooling-android:1.11.2] /home/larp/.gradle/caches/9.5.1/transforms/ba38cbf2ecb37480ce5d97f51ab9991c/transformed/ui-tooling/AndroidManifest.xml:25:13-36
+56        <activity
+56-->[com.google.android.gms:play-services-base:18.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d909f4526e5f812974b001b163ae2e63/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:9-173
+57            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+57-->[com.google.android.gms:play-services-base:18.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d909f4526e5f812974b001b163ae2e63/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:19-85
+58            android:exported="false"
+58-->[com.google.android.gms:play-services-base:18.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d909f4526e5f812974b001b163ae2e63/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:146-170
+59            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+59-->[com.google.android.gms:play-services-base:18.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d909f4526e5f812974b001b163ae2e63/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:86-145
+60
+61        <meta-data
+61-->[com.google.android.gms:play-services-basement:18.4.0] /home/larp/.gradle/caches/9.5.1/transforms/a3fd767a89b32e43113173fa5a7a6bae/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:9-122
+62            android:name="com.google.android.gms.version"
+62-->[com.google.android.gms:play-services-basement:18.4.0] /home/larp/.gradle/caches/9.5.1/transforms/a3fd767a89b32e43113173fa5a7a6bae/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:20-65
+63            android:value="@integer/google_play_services_version" />
+63-->[com.google.android.gms:play-services-basement:18.4.0] /home/larp/.gradle/caches/9.5.1/transforms/a3fd767a89b32e43113173fa5a7a6bae/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:66-119
+64
+65        <uses-library
+65-->[androidx.window:window:1.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d387cb47cf1d06fba6cfbba86953cd96/transformed/window-1.5.0/AndroidManifest.xml:23:9-25:40
+66            android:name="androidx.window.extensions"
+66-->[androidx.window:window:1.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d387cb47cf1d06fba6cfbba86953cd96/transformed/window-1.5.0/AndroidManifest.xml:24:13-54
+67            android:required="false" />
+67-->[androidx.window:window:1.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d387cb47cf1d06fba6cfbba86953cd96/transformed/window-1.5.0/AndroidManifest.xml:25:13-37
+68        <uses-library
+68-->[androidx.window:window:1.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d387cb47cf1d06fba6cfbba86953cd96/transformed/window-1.5.0/AndroidManifest.xml:26:9-28:40
+69            android:name="androidx.window.sidecar"
+69-->[androidx.window:window:1.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d387cb47cf1d06fba6cfbba86953cd96/transformed/window-1.5.0/AndroidManifest.xml:27:13-51
+70            android:required="false" />
+70-->[androidx.window:window:1.5.0] /home/larp/.gradle/caches/9.5.1/transforms/d387cb47cf1d06fba6cfbba86953cd96/transformed/window-1.5.0/AndroidManifest.xml:28:13-37
+71
+72        <provider
+72-->[androidx.emoji2:emoji2:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/5e9201e55519b0690ba967c859242cff/transformed/emoji2-1.4.0/AndroidManifest.xml:24:9-32:20
+73            android:name="androidx.startup.InitializationProvider"
+73-->[androidx.emoji2:emoji2:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/5e9201e55519b0690ba967c859242cff/transformed/emoji2-1.4.0/AndroidManifest.xml:25:13-67
+74            android:authorities="com.fossisawesome.firmium.androidx-startup"
+74-->[androidx.emoji2:emoji2:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/5e9201e55519b0690ba967c859242cff/transformed/emoji2-1.4.0/AndroidManifest.xml:26:13-68
+75            android:exported="false" >
+75-->[androidx.emoji2:emoji2:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/5e9201e55519b0690ba967c859242cff/transformed/emoji2-1.4.0/AndroidManifest.xml:27:13-37
+76            <meta-data
+76-->[androidx.emoji2:emoji2:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/5e9201e55519b0690ba967c859242cff/transformed/emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+77                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+77-->[androidx.emoji2:emoji2:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/5e9201e55519b0690ba967c859242cff/transformed/emoji2-1.4.0/AndroidManifest.xml:30:17-75
+78                android:value="androidx.startup" />
+78-->[androidx.emoji2:emoji2:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/5e9201e55519b0690ba967c859242cff/transformed/emoji2-1.4.0/AndroidManifest.xml:31:17-49
+79            <meta-data
+79-->[androidx.lifecycle:lifecycle-process:2.10.0] /home/larp/.gradle/caches/9.5.1/transforms/c18bb7c55010af1c95867d561dba002b/transformed/lifecycle-process-2.10.0/AndroidManifest.xml:29:13-31:52
+80                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+80-->[androidx.lifecycle:lifecycle-process:2.10.0] /home/larp/.gradle/caches/9.5.1/transforms/c18bb7c55010af1c95867d561dba002b/transformed/lifecycle-process-2.10.0/AndroidManifest.xml:30:17-78
+81                android:value="androidx.startup" />
+81-->[androidx.lifecycle:lifecycle-process:2.10.0] /home/larp/.gradle/caches/9.5.1/transforms/c18bb7c55010af1c95867d561dba002b/transformed/lifecycle-process-2.10.0/AndroidManifest.xml:31:17-49
+82            <meta-data
+82-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+83                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+83-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+84                android:value="androidx.startup" />
+84-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+85        </provider>
+86
+87        <receiver
+87-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+88            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+88-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+89            android:directBootAware="false"
+89-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+90            android:enabled="true"
+90-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+91            android:exported="true"
+91-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+92            android:permission="android.permission.DUMP" >
+92-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+93            <intent-filter>
+93-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+94                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+94-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+94-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+95            </intent-filter>
+96            <intent-filter>
+96-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+97                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+97-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+97-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+98            </intent-filter>
+99            <intent-filter>
+99-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+100                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+100-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+100-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+101            </intent-filter>
+102            <intent-filter>
+102-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+103                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+103-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+103-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/larp/.gradle/caches/9.5.1/transforms/f4e61ac3b32f81a70a710005faf6812f/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+104            </intent-filter>
+105        </receiver>
+106    </application>
+107
+108</manifest>

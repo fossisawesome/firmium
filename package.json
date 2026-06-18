@@ -1,7 +1,7 @@
 {
   "name": "firmium",
   "private": true,
-  "version": "6.4.1",
+  "version": "6.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -11,9 +11,12 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "release": "npm run build && npm run tauri:build",
-    "android:build": "cd android && ./gradlew assembleRelease",
-    "android:debug": "cd android && ./gradlew assembleDebug",
-    "android:install": "cd android && ./gradlew installDebug",
+    "android:build": "cd android && ./gradlew :app:assembleRelease",
+    "android:debug": "cd android && ./gradlew :app:assembleDebug",
+    "android:install": "cd android && ./gradlew :app:installDebug",
+    "wear:build": "cd android && ./gradlew :wear:assembleRelease",
+    "wear:debug": "cd android && ./gradlew :wear:assembleDebug",
+    "wear:install": "cd android && ./gradlew :wear:installDebug",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run"
   },

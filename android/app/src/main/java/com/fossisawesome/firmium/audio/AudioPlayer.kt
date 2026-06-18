@@ -67,6 +67,15 @@ class AudioPlayer(private val context: Context) {
                 when (state) {
                     Player.STATE_BUFFERING -> listener?.onStateChanged(playerId, "loading")
                     Player.STATE_IDLE -> listener?.onStateChanged(playerId, "stopped")
+                    // Use the ExoPlayer callback directly instead of a polling loop — the polling
+                    // loop runs on Dispatchers.Main which Android throttles in the background,
+                    // causing repeat/next to not fire when the app isn't in the foreground.
+                    Player.STATE_ENDED -> scope.launch {
+                        if (sessions.remove(playerId) != null) {
+                            session.player.release()
+                            listener?.onPlaybackFinished(playerId)
+                        }
+                    }
                     else -> {}
                 }
             }
@@ -89,24 +98,10 @@ class AudioPlayer(private val context: Context) {
             }
         })
 
-        val job = scope.launch {
-            while (sessions.containsKey(playerId)) {
-                delay(100)
-                val s = sessions[playerId] ?: break
-                if (s.player.playbackState == Player.STATE_ENDED) {
-                    sessions.remove(playerId)
-                    s.player.release()
-                    listener?.onPlaybackFinished(playerId)
-                    break
-                }
-            }
-        }
-        session.finishWatchJob = job
     }
 
     private fun releaseSession(playerId: String) {
         sessions.remove(playerId)?.let { s ->
-            s.finishWatchJob?.cancel()
             s.fadeJob?.cancel()
             s.player.stop()
             s.player.release()
@@ -312,7 +307,6 @@ private data class AudioSession(
     var currentTrackId: String,
     var baseVolume: Float = 1.0f,
     var replayGainFactor: Float = 1.0f,
-    var finishWatchJob: Job? = null,
     var fadeJob: Job? = null,
     val queueTrackIds: List<String>? = null,
     val queueReplayGainFactors: List<Float>? = null,

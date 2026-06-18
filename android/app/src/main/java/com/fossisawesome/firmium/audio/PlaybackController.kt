@@ -378,7 +378,9 @@ class PlaybackController(
                 setRepeatMode("none")
                 if (s.currentTrack != null) playAt(s.queue, s.queueIndex)
             }
-            "all" -> if (s.queue.isNotEmpty()) skipToIndex(0)
+            // skipToIndex won't work here — the session was just released. Use playAt to
+            // create a fresh ExoPlayer instance with the queue starting from the top.
+            "all" -> if (s.queue.isNotEmpty()) playAt(s.queue, 0)
             else -> if (s.hasNext) skipToNext() else {
                 _state.update { it.copy(playbackState = "stopped") }
                 // Keep the media session and notification alive so OS media controls

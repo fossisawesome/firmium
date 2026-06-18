@@ -15,6 +15,7 @@ import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
+import com.fossisawesome.firmium.wear.WearStateSync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -36,6 +37,8 @@ class FirmiumApplication : Application() {
     // App-scoped playback orchestration shared by the phone UI (PlayerViewModel) and Android Auto
     // (FirmiumMediaBrowserService), so the car can browse and play without an Activity present.
     val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists) }
+    // Mirrors now-playing state to a paired Wear OS watch and applies its transport commands.
+    val wearSync by lazy { WearStateSync(this) }
 
     override fun onCreate() {
         super.onCreate()
@@ -56,6 +59,10 @@ class FirmiumApplication : Application() {
             .crossfade(true)
             .build()
         Coil.setImageLoader(imageLoader)
+
+        // Begin mirroring playback state to a paired watch (also forces PlaybackController to
+        // initialize so the watch's transport commands have a controller to drive).
+        wearSync.start()
 
         // Pre-scan local files so PlayerViewModel can prefer downloaded tracks over streaming
         // and DownloadManager can skip already-downloaded songs — even in server mode.

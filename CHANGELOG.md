@@ -1,3 +1,41 @@
+# v6.5.0
+
+## Android
+
+### New features
+
+- **Wear OS companion app** — a new `:wear` Gradle module delivers a native Wear OS remote control for the phone app. The watch shows the now-playing track (title, artist, cover art) and exposes play/pause, next, previous, and volume controls. Communication uses the Wearable Data Layer: the phone pushes state via `DataClient`; the watch sends transport commands back via `MessageClient`. Phone-side bridge: `wear/WearStateSync.kt` (pushes state), `wear/WearRemoteService.kt` (receives commands), `wear/WearContract.kt` (shared path/key constants). Watch-side: `WearPlaybackClient.kt`, `RemoteScreen.kt`, `MainActivity.kt`.
+
+- **Unified server + local library** — the library screen now merges both sources when a server is connected rather than switching between them exclusively. Albums and artists from the local library that are not present on the server are appended to the server results; server entries win on duplicates to preserve server IDs for scrobbling and lyrics. Album/artist detail routing uses an `albumId`/`artistId` prefix (`local:`) to pick the right source per item. `LibraryViewModel.kt`.
+
+- **Home screen local-only cards** — when a server is connected, local-only albums (downloaded but not on the server) are surfaced in the Recent and Random album rows on the home screen alongside server content. `LibraryViewModel.kt`.
+
+### Bug fixes
+
+- **Repeat-all broken after last track** — the previous `skipToIndex(0)` call at end-of-queue failed because the session had already been released. Now calls `playAt(queue, 0)` to recreate a fresh ExoPlayer instance. `PlaybackController.kt`.
+
+- **Playback finish not firing in background** — replaced the `100ms` polling loop that detected `Player.STATE_ENDED` with a direct `onPlaybackStateChanged` callback. The polling loop ran on `Dispatchers.Main`, which Android throttles when the app is backgrounded, causing repeat and auto-next to silently stop. `AudioPlayer.kt`.
+
+### Visualizer tuning
+
+- **Capture buffer size** — changed from the maximum capture size to the midpoint between min and max. The largest buffer was over-resolving for the orb/bar renders and causing latency. `Visualizers.kt`.
+
+- **Bass sensitivity reduced** — bass energy multiplier dropped from `3.5×` to `1.8×` to reduce over-triggering on bass-heavy tracks. `Visualizers.kt`.
+
+- **Bar count reduced** — `BAR_COUNT` reduced from 40 to 10 for a cleaner look at typical phone screen sizes. `Visualizers.kt`.
+
+- **Bar frequency mapping** — switched from quadratic (`pow(2)`) to `pow(1.5)` band spacing and raised the upper frequency bound from 75% to 90% of the spectrum so the bars cover a wider range more evenly. Gain multiplier reduced from `1.6×` to `1.1×`. `Visualizers.kt`.
+
+## Build
+
+- **Gradle multi-module** — `:wear` module added to `android/settings.gradle.kts`. Android build scripts now target `:app` explicitly (`assembleRelease` → `:app:assembleRelease`) so the root-level tasks don't ambiguously include the wear module.
+
+- **npm wear scripts** — added `wear:build`, `wear:debug`, and `wear:install` npm scripts that delegate to `:wear:assembleRelease`, `:wear:assembleDebug`, and `:wear:installDebug` respectively. `package.json`.
+
+- **Wearable dependency** — `com.google.android.gms:play-services-wearable:19.0.0` added to `:app`'s dependencies for the Wearable Data Layer client. `android/app/build.gradle.kts`.
+
+---
+
 # v6.4.1
 
 ## Android

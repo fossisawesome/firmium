@@ -12,8 +12,8 @@ android {
         applicationId = "com.fossisawesome.firmium"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "6.4.1"
+        versionCode = 26
+        versionName = "6.5.0"
         manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
@@ -91,6 +91,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
     implementation("androidx.media:media:1.7.0")
+
+    // Wear OS companion: phone <-> watch communication (Wearable Data Layer)
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
 
     // Secure storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

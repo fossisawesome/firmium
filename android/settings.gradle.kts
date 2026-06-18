@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "firmium"
 include(":app")
+include(":wear")

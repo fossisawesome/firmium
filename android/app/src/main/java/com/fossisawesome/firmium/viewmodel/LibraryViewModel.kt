@@ -62,9 +62,19 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val auth: AuthManager = getApplication<FirmiumApplication>().auth
     private val localLibrary: LocalLibraryRepository = getApplication<FirmiumApplication>().localLibrary
 
-    // Picks between the server API and the local-library repository depending on whether the
-    // user is connected — mirrors `dataSource` (dataSource.ts) on desktop.
-    private val useLocal: Boolean get() = !auth.isAuthenticated
+    private fun albumKey(a: Album) = "${a.name.trim().lowercase()}|${a.artist.trim().lowercase()}"
+
+    // Merges server and local album lists: server wins on duplicates (preserves server IDs for
+    // scrobbling/lyrics), local-only albums are appended.
+    private fun mergeAlbums(server: List<Album>, local: List<Album>): List<Album> {
+        val serverKeys = server.map { albumKey(it) }.toHashSet()
+        return server + local.filter { albumKey(it) !in serverKeys }
+    }
+
+    private fun mergeArtists(server: List<Artist>, local: List<Artist>): List<Artist> {
+        val serverNames = server.map { it.name.trim().lowercase() }.toHashSet()
+        return server + local.filter { it.name.trim().lowercase() !in serverNames }
+    }
 
     private val _homeState = MutableStateFlow(HomeState())
     val homeState: StateFlow<HomeState> = _homeState.asStateFlow()
@@ -98,20 +108,26 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _homeState.value = HomeState(isLoading = true)
         viewModelScope.launch {
             try {
-                // Fetch recent and random albums concurrently — they are independent requests.
-                val recentDeferred = async { if (useLocal) localLibrary.getRecentAlbums(12) else api.getRecentAlbums(12) }
-                val randomDeferred = async { if (useLocal) localLibrary.getRandomAlbums(12) else api.getRandomAlbums(12) }
+                val localDeferred = async { localLibrary.getAlbums() }
+                val recentDeferred = async { if (auth.isAuthenticated) api.getRecentAlbums(12) else localLibrary.getRecentAlbums(12) }
+                val randomDeferred = async { if (auth.isAuthenticated) api.getRandomAlbums(12) else localLibrary.getRandomAlbums(12) }
                 val recent = recentDeferred.await()
                 val random = randomDeferred.await()
+                val localAlbums = if (auth.isAuthenticated) localDeferred.await() else emptyList()
+                // Append local-only albums not represented in either server list.
+                val serverKeys = (recent + random).map { albumKey(it) }.toHashSet()
+                val localOnly = localAlbums.filter { albumKey(it) !in serverKeys }
+                val mergedRecent = recent + localOnly.take(4)
+                val mergedRandom = random + localOnly.drop(4).shuffled().take(4)
                 // Derive unique artists from recent albums, preserving first-seen order.
                 val artists = mutableListOf<RecentArtist>()
                 val seen = mutableSetOf<String>()
-                for (album in recent) {
+                for (album in mergedRecent) {
                     if (album.artistId.isNotBlank() && seen.add(album.artistId)) {
                         artists.add(RecentArtist(album.artistId, album.artist, album.coverArt))
                     }
                 }
-                _homeState.value = HomeState(recentAlbums = recent, recentArtists = artists, randomAlbums = random)
+                _homeState.value = HomeState(recentAlbums = mergedRecent, recentArtists = artists, randomAlbums = mergedRandom)
             } catch (e: Exception) {
                 _homeState.value = HomeState(error = e.message)
             }
@@ -124,7 +140,14 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _albumListState.value = AlbumListState(isLoading = true)
         viewModelScope.launch {
             try {
-                _albumListState.value = AlbumListState(albums = if (useLocal) localLibrary.getAlbums() else api.getAlbums())
+                val albums = if (auth.isAuthenticated) {
+                    val serverDeferred = async { api.getAlbums() }
+                    val localDeferred = async { localLibrary.getAlbums() }
+                    mergeAlbums(serverDeferred.await(), localDeferred.await())
+                } else {
+                    localLibrary.getAlbums()
+                }
+                _albumListState.value = AlbumListState(albums = albums)
             } catch (e: Exception) {
                 _albumListState.value = AlbumListState(error = e.message)
             }
@@ -137,7 +160,14 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _artistListState.value = ArtistListState(isLoading = true)
         viewModelScope.launch {
             try {
-                _artistListState.value = ArtistListState(artists = if (useLocal) localLibrary.getArtists() else api.getArtists())
+                val artists = if (auth.isAuthenticated) {
+                    val serverDeferred = async { api.getArtists() }
+                    val localDeferred = async { localLibrary.getArtists() }
+                    mergeArtists(serverDeferred.await(), localDeferred.await())
+                } else {
+                    localLibrary.getArtists()
+                }
+                _artistListState.value = ArtistListState(artists = artists)
             } catch (e: Exception) {
                 _artistListState.value = ArtistListState(error = e.message)
             }
@@ -149,7 +179,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _albumDetailState.value = AlbumDetailState(isLoading = true)
         viewModelScope.launch {
             try {
-                _albumDetailState.value = AlbumDetailState(album = if (useLocal) localLibrary.getAlbumDetail(albumId) else api.getAlbumDetail(albumId))
+                val album = if (albumId.startsWith("local:")) localLibrary.getAlbumDetail(albumId) else api.getAlbumDetail(albumId)
+                _albumDetailState.value = AlbumDetailState(album = album)
             } catch (e: Exception) {
                 _albumDetailState.value = AlbumDetailState(error = e.message)
             }
@@ -161,7 +192,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         _artistDetailState.value = ArtistDetailState(isLoading = true)
         viewModelScope.launch {
             try {
-                _artistDetailState.value = ArtistDetailState(detail = if (useLocal) localLibrary.getArtistDetail(artistId) else api.getArtistDetail(artistId))
+                val detail = if (artistId.startsWith("local:")) localLibrary.getArtistDetail(artistId) else api.getArtistDetail(artistId)
+                _artistDetailState.value = ArtistDetailState(detail = detail)
             } catch (e: Exception) {
                 _artistDetailState.value = ArtistDetailState(error = e.message)
             }

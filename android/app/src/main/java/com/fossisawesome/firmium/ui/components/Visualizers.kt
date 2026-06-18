@@ -32,6 +32,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
 
 // Visualizer kinds selectable in Settings and cycled in the player.
@@ -76,7 +77,7 @@ fun rememberVisualizerData(audioSessionId: Int, isPlaying: Boolean): VisualizerD
         val viz = try {
             Visualizer(audioSessionId).apply {
                 // Largest capture size for the best frequency/time resolution.
-                captureSize = Visualizer.getCaptureSizeRange()[1]
+                captureSize = (Visualizer.getCaptureSizeRange()[0] + Visualizer.getCaptureSizeRange()[1]) / 2
                 setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(v: Visualizer, wave: ByteArray, sr: Int) {
                         val wf = FloatArray(wave.size)
@@ -103,7 +104,7 @@ fun rememberVisualizerData(audioSessionId: Int, isPlaying: Boolean): VisualizerD
                             if (k <= bassCutoff) { bassSum += mag; bassCount++ }
                         }
                         data.magnitudes = mags
-                        val target = if (bassCount > 0) (bassSum / bassCount * 3.5f).coerceIn(0f, 1f) else 0f
+                        val target = if (bassCount > 0) (bassSum / bassCount * 1.8f).coerceIn(0f, 1f) else 0f
                         // Fast attack, slow decay — reads as "on the beat" rather than mushy.
                         data.bass = if (target > data.bass) target else data.bass * 0.86f + target * 0.14f
                     }
@@ -143,7 +144,7 @@ fun VisualizerView(
     }
 }
 
-private const val BAR_COUNT = 40
+private const val BAR_COUNT = 10
 
 // Classic frequency-bar visualizer. Bars use a log-ish band mapping so bass doesn't dominate.
 @Composable
@@ -172,11 +173,11 @@ fun BarVisualizer(
             val target = if (bins == 0) 0f else {
                 // Map bar i to a frequency band over the lower ~75% of the spectrum (log spacing).
                 val loF = (i.toFloat() / n); val hiF = ((i + 1f) / n)
-                val lo = (loF * loF * bins * 0.75f).toInt().coerceIn(0, bins - 1)
-                val hi = (hiF * hiF * bins * 0.75f).toInt().coerceIn(lo + 1, bins)
+                val lo = (loF.pow(1.5f) * bins * 0.9f).toInt().coerceIn(0, bins - 1)
+                val hi = (hiF.pow(1.5f) * bins * 0.9f).toInt().coerceIn(lo + 1, bins)
                 var m = 0f
                 for (k in lo until hi) m = max(m, mags[k])
-                (m * 1.6f).coerceIn(0f, 1f)
+                (m * 1.1f).coerceIn(0f, 1f)
             }
             smoothed[i] = if (target > smoothed[i]) target else smoothed[i] * 0.82f + target * 0.18f
             val h = (smoothed[i] * size.height).coerceIn(2f, size.height)

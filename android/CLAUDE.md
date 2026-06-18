@@ -14,11 +14,12 @@ Guidance specific to the native Android app in `android/`. See the root [CLAUDE.
 
 ## Architecture (android/app/src/main/java/com/fossisawesome/firmium/)
 
-Native Kotlin/Compose app, independent of the Tauri build, sharing the OpenSubsonic API contract with the desktop app.
+Native Kotlin/Compose app, independent of the Tauri build, sharing the OpenSubsonic API contract with the desktop app. A second Gradle module, `wear/`, is the Wear OS companion (a remote control for phone playback over the Wearable Data Layer); it shares the phone's `applicationId` but no code.
 
 - **MainActivity.kt / FirmiumApplication.kt**: App entry points
 - **viewmodel/**: `AuthViewModel`, `LibraryViewModel`, `PlayerViewModel`, `PlaylistViewModel`, `SearchViewModel` — state holders feeding Compose UI
 - **audio/**: `AudioPlayer`, `NowPlayingService` (foreground media service), `NowPlayingController`
+- **wear/**: Wear OS companion bridge — `WearRemoteService` (receives watch transport commands), `WearStateSync` (pushes now-playing state + art to the watch), `WearContract` (Data Layer paths/keys, mirrored in the `:wear` module)
 - **data/api/**: `ApiClient`, `AuthManager` — OpenSubsonic REST client and auth/token handling
 - **data/model/**: `Artist`, `Album`, `Song`, `Playlist` data classes
 - **data/storage/**: `AppPreferences`, `PlaylistRepository`, `SecureStorage` (Keystore-backed credential storage)
@@ -30,9 +31,13 @@ Native Kotlin/Compose app, independent of the Tauri build, sharing the OpenSubso
 Run from the repo root:
 
 ```bash
-npm run android:build   # assembleRelease via Gradle
-npm run android:debug   # assembleDebug via Gradle
-npm run android:install # installDebug via adb
+npm run android:build   # :app assembleRelease via Gradle
+npm run android:debug   # :app assembleDebug via Gradle
+npm run android:install # :app installDebug via adb
+
+npm run wear:build      # :wear assembleRelease (Wear OS companion)
+npm run wear:debug      # :wear assembleDebug
+npm run wear:install    # :wear installDebug (installs on the connected watch/emulator)
 ```
 
 ## Development Notes
