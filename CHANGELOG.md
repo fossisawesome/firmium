@@ -1,3 +1,21 @@
+# v6.4.1
+
+## Android
+
+### Bug fixes
+
+- **Web CI test failure** — fixed a failing assertion in `MediaTreeTest.kt` that was breaking the CI test run on the web target.
+
+- **Adaptive launcher icon** — added `mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml` with an adaptive-icon definition (foreground `@mipmap/ic_launcher_foreground`, background `@color/ic_launcher_background`). The launcher background color is set to `#1a1a2e` (dark navy) in `res/values/colors.xml`, so the icon shapes correctly on all Android 8+ launchers.
+
+---
+
+## Misc
+
+- **FEATURES.md** — added a comprehensive user-facing feature reference listing every capability across desktop and Android in one place.
+
+---
+
 # v6.4.0
 
 ## Android
