@@ -203,11 +203,12 @@ export function setDownloadFormat(v: string): void {
 
 // ── Visualizer ───────────────────────────────────────────────────────────────
 export const visualizerOpen = writable(false)
-export const visualizerMode = writable<'orb' | 'bars'>(
-  (SafeStorage.getItem('firmium_visualizer_mode') as 'orb' | 'bars') ?? 'orb'
+export type VisualizerMode = 'orb' | 'bars' | 'oscilloscope'
+export const visualizerMode = writable<VisualizerMode>(
+  (SafeStorage.getItem('firmium_visualizer_mode') as VisualizerMode) ?? 'orb'
 )
 
-export function setVisualizerMode(mode: 'orb' | 'bars'): void {
+export function setVisualizerMode(mode: VisualizerMode): void {
   visualizerMode.set(mode)
   SafeStorage.setItem('firmium_visualizer_mode', mode)
 }
@@ -396,10 +397,9 @@ function createPlaylistsStore() {
           newTracks = tracks.filter(t => !existingIds.has(t.id))
           added = newTracks.length
           const updatedTracks = [...p.tracks, ...newTracks]
-          const coverArtId = (!p.coverArtId && !p.coverDataUrl)
-            ? updatedTracks.find(t => t.coverArtId)?.coverArtId ?? null
-            : p.coverArtId
-          return { ...p, tracks: updatedTracks, coverArtId }
+          // Don't auto-pick a single "default" cover — when no cover is explicitly
+          // chosen/uploaded, the UI renders a mosaic of the first tracks' covers instead.
+          return { ...p, tracks: updatedTracks }
         })
         _savePlaylists(next)
         return next

@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.ui.navigation.AppNavGraph
 import com.fossisawesome.firmium.ui.screens.AccountDialog
+import com.fossisawesome.firmium.ui.screens.OnboardingScreen
 import com.fossisawesome.firmium.ui.theme.FirmiumTheme
 import com.fossisawesome.firmium.viewmodel.*
 import kotlinx.coroutines.launch
@@ -44,40 +45,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-            AlertDialog.Builder(this)
-                .setTitle("Notifications disabled")
-                .setMessage("Enable notifications to see media controls on the lock screen.")
-                .setPositiveButton("Open Settings") { _, _ ->
-                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", packageName, null)
-                    })
-                }
-                .setNegativeButton("Not now", null)
-                .show()
-        }
-    }
-
-    private var notificationPermissionRequested = false
-
-    private val recordAudioPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* Visualizer works if granted; breathes without audio reactivity if denied — no action needed. */ }
-
-    private var recordAudioPermissionRequested = false
-
     private val storagePermission: String =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
         else Manifest.permission.READ_EXTERNAL_STORAGE
 
-    private val storagePermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) app.localLibrary.invalidate()
-        else if (!shouldShowRequestPermissionRationale(storagePermission)) {
+    // Request notifications, microphone (visualizer), and audio/storage (local music) together.
+    // A single RequestMultiplePermissions flow is required: launching several single-permission
+    // requests back-to-back drops all but the first dialog, so only notifications ever showed.
+    private val permissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results[storagePermission] == true) app.localLibrary.invalidate()
+        if (results[storagePermission] == false && !shouldShowRequestPermissionRationale(storagePermission)) {
             AlertDialog.Builder(this)
                 .setTitle("Storage access disabled")
                 .setMessage("Enable storage access so Firmium can show music saved to Music/Firmium.")
@@ -91,7 +70,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private var storagePermissionRequested = false
+    private var permissionsRequested = false
+
+    // Notifications (media controls), microphone (visualizer), and audio storage (local library).
+    private fun permissionsToRequest(): List<String> {
+        val perms = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            perms.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        perms.add(storagePermission)
+        perms.add(Manifest.permission.RECORD_AUDIO)
+        return perms
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -117,8 +107,15 @@ class MainActivity : ComponentActivity() {
             FirmiumTheme(themeId = themeId) {
                 val authViewModel: AuthViewModel = viewModel()
                 val authState by authViewModel.state.collectAsStateWithLifecycle()
+                val onboarded by app.prefs.onboarded.collectAsStateWithLifecycle(initialValue = true)
+                val serverUrl by app.prefs.serverUrl.collectAsStateWithLifecycle(initialValue = null)
+                val onboardScope = rememberCoroutineScope()
 
-                if (!authState.isLoading) {
+                if (!onboarded && serverUrl == null) {
+                    OnboardingScreen(onFinish = {
+                        onboardScope.launch { app.prefs.setOnboarded(true) }
+                    })
+                } else if (!authState.isLoading) {
                     val playerViewModel: PlayerViewModel = viewModel()
                     val libraryViewModel: LibraryViewModel = viewModel()
                     val searchViewModel: SearchViewModel = viewModel()
@@ -174,26 +171,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationPermissionRequested) {
-            notificationPermissionRequested = true
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (!permissionsRequested) {
+            permissionsRequested = true
+            val needed = permissionsToRequest().filter {
+                ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
             }
-        }
-        if (!storagePermissionRequested) {
-            storagePermissionRequested = true
-            if (ContextCompat.checkSelfPermission(this, storagePermission)
-                != PackageManager.PERMISSION_GRANTED) {
-                storagePermissionLauncher.launch(storagePermission)
-            }
-        }
-        if (!recordAudioPermissionRequested) {
-            recordAudioPermissionRequested = true
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
+            if (needed.isNotEmpty()) permissionsLauncher.launch(needed.toTypedArray())
         }
     }
 

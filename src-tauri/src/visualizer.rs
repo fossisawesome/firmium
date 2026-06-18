@@ -22,6 +22,8 @@ use tauri::{AppHandle, Emitter};
 const BUFFER_CAPACITY: usize = 8192;
 const FFT_SIZE: usize = 2048;
 const BAR_COUNT: usize = 32;
+// Points emitted for the circular oscilloscope (downsampled from FFT_SIZE samples).
+const WAVE_POINTS: usize = 128;
 const ANALYSIS_INTERVAL: Duration = Duration::from_millis(16);
 
 pub struct VisualizerState {
@@ -129,9 +131,17 @@ pub fn spawn_analysis_task(app_handle: AppHandle, state: Arc<VisualizerState>) {
             let bars_out: Vec<f32> = smooth.clone();
             drop(smooth);
 
+            // Downsample the raw samples (newest-first) to a chronological waveform for the
+            // oscilloscope. samples[FFT_SIZE - 1] is the oldest, samples[0] the newest.
+            let step = (FFT_SIZE / WAVE_POINTS).max(1);
+            let wave_out: Vec<f32> = (0..WAVE_POINTS)
+                .map(|i| samples[FFT_SIZE - 1 - i * step].clamp(-1.0, 1.0))
+                .collect();
+
             let _ = app_handle.emit("firmium:audio-analysis", serde_json::json!({
                 "bass": bass_out,
                 "bars": bars_out,
+                "wave": wave_out,
             }));
         }
     });

@@ -342,6 +342,7 @@ fun AppNavGraph(
                 composable("playlists") {
                     PlaylistsScreen(
                         state = playlistsState,
+                        coverUrlFor = coverUrl,
                         onPlaylistClick = { navController.navigate("playlist/$it") },
                         onCreate = { playlistViewModel.create(it) },
                         onDelete = { playlistViewModel.delete(it) },
@@ -427,6 +428,8 @@ fun AppNavGraph(
                         onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
                         onReplayGainToggle = { playerViewModel.setReplayGainEnabled(it) },
                         onThemeSelected = onThemeSelected,
+                        onVisualizerToggle = { playerViewModel.setVisualizerEnabled(it) },
+                        onVisualizerTypeSelected = { playerViewModel.setVisualizerType(it) },
                         onLrclibToggle = { scope.launch { app.prefs.setLrclibEnabled(it) } },
                         onLyricsWordFillToggle = { scope.launch { app.prefs.setLyricsWordFillEnabled(it) } },
                         onLastfmToggle = { scope.launch { app.prefs.setLastfmEnabled(it) } },

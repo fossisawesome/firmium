@@ -4,6 +4,7 @@
   import { playlists, navToPlaylist, serverPlaylists, mergePlaylists } from '../lib/stores'
   import { Api, loadImage } from '../lib/api'
   import { lazyLoad } from '../lib/lazyLoad'
+  import PlaylistMosaic from '../components/PlaylistMosaic.svelte'
 
   let showDialog = $state(false)
   let nameInput = $state('')
@@ -149,6 +150,8 @@
           <img src={item.coverDataUrl} alt="" />
         {:else if item.coverArtId}
           <img use:lazyLoad={img => loadImage(img, item.coverArtId, null)} alt="" />
+        {:else if item.local && item.local.tracks.length}
+          <PlaylistMosaic covers={item.local.tracks.map(t => t.coverArtId)} />
         {:else}
           <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconList}</span></div>
         {/if}

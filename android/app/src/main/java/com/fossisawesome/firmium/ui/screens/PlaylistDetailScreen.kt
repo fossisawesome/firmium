@@ -70,6 +70,7 @@ fun PlaylistDetailScreen(
                         onMoveDown = { onMoveTrack(index, index + 1) },
                         canMoveUp = index > 0,
                         canMoveDown = index < tracks.size - 1,
+                        onRemove = { onRemoveTrack(song.id, index) },
                     )
                     FirmiumDivider()
                 }

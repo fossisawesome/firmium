@@ -1,8 +1,5 @@
 package com.fossisawesome.firmium.ui.components
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.media.audiofx.Visualizer
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -12,9 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -26,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -57,47 +50,9 @@ fun MusicOrb(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    var bass by remember { mutableFloatStateOf(0f) }
+    // Bass comes from the shared FFT capture (real low-frequency bins) so the orb stays on-beat.
+    val data = rememberVisualizerData(audioSessionId, isPlaying)
     var smoothBass by remember { mutableFloatStateOf(0f) }
-
-    DisposableEffect(audioSessionId, isPlaying) {
-        if (audioSessionId == 0 || !isPlaying) {
-            // No Visualizer captures while paused/detached, so clear the last bass
-            // amplitude — otherwise the always-running draw loop keeps the orb frozen
-            // at whatever radius the final pre-pause capture left it at.
-            bass = 0f
-            return@DisposableEffect onDispose {}
-        }
-        // Visualizer requires RECORD_AUDIO at runtime. Without the grant, Samsung's audio
-        // stack can mute the ExoPlayer session when a Visualizer is attached to it — so we
-        // skip the Visualizer entirely rather than risk silencing playback.
-        val hasRecordAudio = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!hasRecordAudio) return@DisposableEffect onDispose {}
-        val viz = try {
-            Visualizer(audioSessionId).apply {
-                captureSize = Visualizer.getCaptureSizeRange()[0]
-                setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
-                    override fun onWaveFormDataCapture(v: Visualizer, wave: ByteArray, sr: Int) {
-                        val half = wave.size / 2
-                        var sum = 0f
-                        for (i in 0 until half) {
-                            sum += abs((wave[i].toInt() and 0xFF) - 128).toFloat()
-                        }
-                        bass = (sum / (half * 128f)).coerceIn(0f, 1f)
-                    }
-                    override fun onFftDataCapture(v: Visualizer, fft: ByteArray, sr: Int) {}
-                }, Visualizer.getMaxCaptureRate() / 2, true, false)
-                enabled = true
-            }
-        } catch (_: Exception) { null }
-
-        onDispose {
-            try { viz?.enabled = false; viz?.release() } catch (_: Exception) {}
-        }
-    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "orb")
 
@@ -127,7 +82,7 @@ fun MusicOrb(
 
     Canvas(modifier = modifier.fillMaxSize()) {
         // Lerp smoothBass toward the raw value — prevents jarring jumps on beat drops.
-        smoothBass = smoothBass + (bass - smoothBass) * 0.25f
+        smoothBass = smoothBass + (data.bass - smoothBass) * 0.25f
 
         val cx = size.width / 2f
         val cy = size.height / 2f

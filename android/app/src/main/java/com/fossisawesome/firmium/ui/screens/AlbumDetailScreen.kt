@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
@@ -222,6 +223,7 @@ fun TrackRow(
     onMoveDown: (() -> Unit)? = null,
     canMoveUp: Boolean = false,
     canMoveDown: Boolean = false,
+    onRemove: (() -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     Row(
@@ -261,6 +263,12 @@ fun TrackRow(
             FirmiumIconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(32.dp)) {
                 FirmiumIcon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down",
                     tint = if (canMoveDown) colors.muted else colors.muted.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+            }
+        }
+        if (onRemove != null) {
+            FirmiumIconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                FirmiumIcon(Icons.Default.Close, contentDescription = "Remove from playlist",
+                    tint = colors.error, modifier = Modifier.size(18.dp))
             }
         }
     }

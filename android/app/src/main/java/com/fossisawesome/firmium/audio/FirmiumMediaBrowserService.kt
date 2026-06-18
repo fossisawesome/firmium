@@ -78,12 +78,17 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
         return when (val node = MediaTree.parse(parentId)) {
             MediaNode.Root -> mutableListOf(
                 browsable(MediaTree.HOME, "Home", null, null),
-                browsable(MediaTree.ALBUMS, "Albums", null, null),
+                browsable(MediaTree.MUSIC, "Music", null, null),
                 browsable(MediaTree.ARTISTS, "Artists", null, null),
                 browsable(MediaTree.PLAYLISTS, "Playlists", null, null),
             )
             MediaNode.Home -> homeChildren()
-            MediaNode.Albums -> albums().map { browsableAlbum(it) }.toMutableList()
+            // A–Z index instead of one giant album list — the letters render instantly and only
+            // the chosen letter's albums are fetched/filtered, avoiding the "loads forever" stall.
+            MediaNode.Music -> musicLetters()
+            is MediaNode.MusicLetter -> allAlbumsCached()
+                .filter { letterBucket(it.name) == node.bucket }
+                .map { browsableAlbum(it) }.toMutableList()
             MediaNode.Artists -> artists().map { browsableArtist(it) }.toMutableList()
             MediaNode.Playlists -> playlistChildren()
             is MediaNode.Album -> albumDetail(node.albumId).tracks
@@ -122,10 +127,32 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
     private suspend fun playlistTrackItems(playlistId: String): MutableList<MediaItem> {
         val localTracks = playlists.playlists.first().find { it.id == playlistId }?.tracks
         val tracks = localTracks ?: if (auth.isAuthenticated) api.getPlaylistTracks(playlistId).tracks else emptyList()
-        return tracks.map {
-            playable(MediaTree.playlistTrackId(playlistId, it.id), it.title, it.displayArtist ?: it.artist, coverUri(it.coverArt))
-        }.toMutableList()
+        val items = mutableListOf<MediaItem>()
+        // A "Shuffle" entry at the top lets the car shuffle the whole playlist in one tap.
+        if (tracks.isNotEmpty()) {
+            items.add(playable(MediaTree.playlistShuffleId(playlistId), "Shuffle", "Shuffle this playlist", null))
+        }
+        tracks.forEach {
+            items.add(playable(MediaTree.playlistTrackId(playlistId, it.id), it.title, it.displayArtist ?: it.artist, coverUri(it.coverArt)))
+        }
+        return items
     }
+
+    // A–Z (+ "#") letter buckets for the Music browse node. No network — renders instantly.
+    private fun musicLetters(): MutableList<MediaItem> {
+        val buckets = ('A'..'Z').map { it.toString() } + "#"
+        return buckets.map { browsable(MediaTree.musicLetterId(it), it, null, null) }.toMutableList()
+    }
+
+    private fun letterBucket(name: String): String {
+        val c = name.trim().firstOrNull()?.uppercaseChar() ?: '#'
+        return if (c in 'A'..'Z') c.toString() else "#"
+    }
+
+    // Albums are fetched once and reused across letter taps so a poor connection only pays the
+    // cost a single time (and never blocks just opening the Music node).
+    @Volatile private var albumCache: List<Album>? = null
+    private suspend fun allAlbumsCached(): List<Album> = albumCache ?: albums().also { albumCache = it }
 
     private suspend fun searchItems(query: String): MutableList<MediaItem> {
         val results = if (auth.isAuthenticated) api.search(query) else localLibrary.search(query)

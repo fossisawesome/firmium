@@ -26,6 +26,8 @@ data class PlayerState(
     val replayGainEnabled: Boolean = true,
     val isSeeking: Boolean = false,
     val audioSessionId: Int = 0,
+    val visualizerEnabled: Boolean = false,
+    val visualizerType: String = "orb",
 ) {
     val currentTrack: Song? get() = queue.getOrNull(queueIndex)
     val hasNext: Boolean get() = queueIndex < queue.size - 1 || repeatMode == "all"
@@ -73,6 +75,10 @@ class PlaybackController(
         scope.launch {
             prefs.replayGainEnabled.collect { rg -> _state.update { it.copy(replayGainEnabled = rg) } }
         }
+        scope.launch {
+            combine(prefs.visualizerEnabled, prefs.visualizerType) { en, ty -> en to ty }
+                .collect { (en, ty) -> _state.update { it.copy(visualizerEnabled = en, visualizerType = ty) } }
+        }
 
         audioPlayer.listener = object : AudioPlayer.Listener {
             override fun onStateChanged(playerId: String, state: String) {
@@ -113,6 +119,11 @@ class PlaybackController(
             override fun onSeekTo(posMs: Long) { seek(posMs / 1000.0) }
             override fun onPlayFromMediaId(mediaId: String) { playFromMediaId(mediaId) }
             override fun onPlayFromSearch(query: String) { playFromSearch(query) }
+            override fun onSkipToQueueItem(index: Long) { skipToIndex(index.toInt()) }
+            override fun onSetShuffleMode(enabled: Boolean) {
+                if (enabled != _state.value.shuffleEnabled) toggleShuffle()
+            }
+            override fun onSetRepeatMode(repeatMode: String) { setRepeatMode(repeatMode) }
         }
     }
 
@@ -228,12 +239,14 @@ class PlaybackController(
     fun setRepeatMode(mode: String) {
         _state.update { it.copy(repeatMode = mode) }
         scope.launch { prefs.setRepeatMode(mode) }
+        nowPlaying.setRepeatMode(mode)
     }
 
     fun toggleShuffle() {
         val next = !_state.value.shuffleEnabled
         _state.update { it.copy(shuffleEnabled = next) }
         scope.launch { prefs.setShuffleEnabled(next) }
+        nowPlaying.setShuffleMode(next)
     }
 
     fun setCrossfadeEnabled(enabled: Boolean) {
@@ -257,6 +270,16 @@ class PlaybackController(
         audioPlayer.setReplayGainEnabled(enabled)
     }
 
+    fun setVisualizerEnabled(enabled: Boolean) {
+        _state.update { it.copy(visualizerEnabled = enabled) }
+        scope.launch { prefs.setVisualizerEnabled(enabled) }
+    }
+
+    fun setVisualizerType(type: String) {
+        _state.update { it.copy(visualizerType = type) }
+        scope.launch { prefs.setVisualizerType(type) }
+    }
+
     // ── Android Auto entry points ────────────────────────────────────────────────
 
     // Resolves a browse-tree media id to a queue and starts playback. Called from the media
@@ -274,6 +297,13 @@ class PlaybackController(
                 }
                 is MediaNode.Album -> { val t = albumTracks(node.albumId); if (t.isNotEmpty()) playAt(t, 0) }
                 is MediaNode.Playlist -> { val t = playlistTracks(node.playlistId); if (t.isNotEmpty()) playAt(t, 0) }
+                is MediaNode.PlaylistShuffle -> {
+                    val t = playlistTracks(node.playlistId)
+                    if (t.isNotEmpty()) {
+                        if (!_state.value.shuffleEnabled) toggleShuffle()
+                        playAt(t.shuffled(), 0)
+                    }
+                }
                 else -> { /* category nodes are not playable */ }
             }
         }
@@ -368,6 +398,18 @@ class PlaybackController(
             coverUrl = coverArt?.let { if (it.startsWith("file://")) it else auth.coverArtUrl(it, 512) },
             isPlaying = _state.value.playbackState == "playing",
         )
+        // Publish the queue + shuffle/repeat to the session so Android Auto shows them.
+        val s = _state.value
+        nowPlaying.setQueue(s.queue.map {
+            NowPlayingController.QueueEntry(
+                id = it.id,
+                title = it.title,
+                artist = it.displayArtist ?: it.artist,
+                coverUrl = it.coverArt?.let { c -> if (c.startsWith("file://")) c else auth.coverArtUrl(c, 256) },
+            )
+        })
+        nowPlaying.setShuffleMode(s.shuffleEnabled)
+        nowPlaying.setRepeatMode(s.repeatMode)
     }
 
     private suspend fun scrobbleCurrent(submission: Boolean) {

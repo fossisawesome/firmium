@@ -1,11 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 140 155">
   <defs>
-    <linearGradient id="hex" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="g" x1="70" y1="15" x2="70" y2="148" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#e8c97e"/>
+      <stop offset="40%" stop-color="#e8c97e"/>
       <stop offset="100%" stop-color="#863bff"/>
     </linearGradient>
   </defs>
-
-  <polygon points="512,128 838,320 838,704 512,896 186,704 186,320"
-    fill="none" stroke="url(#hex)" stroke-width="56" stroke-linejoin="round"/>
+  <rect x="28" y="15" width="13" height="133" rx="6" fill="url(#g)"/>
+  <rect x="45" y="15" width="13" height="133" rx="6" fill="url(#g)"/>
+  <rect x="63" y="15" width="10" height="34" rx="5" fill="url(#g)"/>
+  <rect x="77" y="15" width="10" height="30" rx="5" fill="url(#g)"/>
+  <rect x="91" y="15" width="10" height="26" rx="5" fill="url(#g)"/>
+  <rect x="105" y="15" width="10" height="22" rx="5" fill="url(#g)"/>
+  <rect x="63" y="80" width="10" height="28" rx="5" fill="url(#g)"/>
+  <rect x="77" y="80" width="10" height="24" rx="5" fill="url(#g)"/>
+  <rect x="91" y="80" width="10" height="20" rx="5" fill="url(#g)"/>
 </svg>

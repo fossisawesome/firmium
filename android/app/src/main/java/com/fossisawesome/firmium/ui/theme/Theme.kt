@@ -68,6 +68,9 @@ val ALL_THEMES: List<FirmiumTheme> = listOf(
     FirmiumTheme("monokai", "Monokai Classic", true,
         bg = hex("272822"), surface = hex("3e3d32"), surface2 = hex("49483e"),
         text = hex("f8f8f2"), muted = hex("75715e"), accent = hex("a6e22e"), error = hex("f92672")),
+    FirmiumTheme("svalbard", "Svalbard", true,
+        bg = hex("0b1117"), surface = hex("121d27"), surface2 = hex("1c2c39"),
+        text = hex("e8f1f7"), muted = hex("7e9bb0"), accent = hex("6cc8e0"), error = hex("e06c75")),
     // Light themes
     FirmiumTheme("adwaita", "Adwaita", false,
         bg = hex("fafafa"), surface = hex("ffffff"), surface2 = hex("f0f0f0"),

@@ -69,6 +69,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setCrossfadeDuration(ms: Int) = controller.setCrossfadeDuration(ms)
     fun setGaplessEnabled(enabled: Boolean) = controller.setGaplessEnabled(enabled)
     fun setReplayGainEnabled(enabled: Boolean) = controller.setReplayGainEnabled(enabled)
+    fun setVisualizerEnabled(enabled: Boolean) = controller.setVisualizerEnabled(enabled)
+    fun setVisualizerType(type: String) = controller.setVisualizerType(type)
 
     // ── Lyrics ─────────────────────────────────────────────────────────────────
 

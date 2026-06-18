@@ -8,13 +8,16 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
 import android.os.Build
+import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.media.app.NotificationCompat.MediaStyle
+import androidx.palette.graphics.Palette
 import coil.imageLoader
 import coil.request.ImageRequest
 import com.fossisawesome.firmium.MainActivity
@@ -42,6 +45,10 @@ class NowPlayingController(private val context: Context) {
         // Android Auto browse/voice playback — default no-op for backwards compat.
         fun onPlayFromMediaId(mediaId: String) {}
         fun onPlayFromSearch(query: String) {}
+        // Android Auto queue list + shuffle/repeat toggles.
+        fun onSkipToQueueItem(index: Long) {}
+        fun onSetShuffleMode(enabled: Boolean) {}
+        fun onSetRepeatMode(repeatMode: String) {}
     }
 
     var listener: Listener? = null
@@ -49,6 +56,12 @@ class NowPlayingController(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main)
     // Tracks the current art-fetch coroutine so it can be cancelled on track change or clear().
     private var artJob: Job? = null
+    // Last position/duration reported by updatePosition(); reused by updatePlaybackState()
+    // so the paused notification keeps the real elapsed time instead of 0:00.
+    private var lastPositionMs: Long = 0L
+    private var lastDurationMs: Long = 0L
+    // Dominant cover-art color, used to tint the notification and the Android Auto UI.
+    private var accentColor: Int? = null
     private var mediaSession: MediaSessionCompat? = null
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -99,6 +112,17 @@ class NowPlayingController(private val context: Context) {
                 }
                 override fun onPlayFromSearch(query: String?, extras: android.os.Bundle?) {
                     listener?.onPlayFromSearch(query ?: "")
+                }
+                override fun onSkipToQueueItem(id: Long) { listener?.onSkipToQueueItem(id) }
+                override fun onSetShuffleMode(shuffleMode: Int) {
+                    listener?.onSetShuffleMode(shuffleMode != PlaybackStateCompat.SHUFFLE_MODE_NONE)
+                }
+                override fun onSetRepeatMode(repeatMode: Int) {
+                    listener?.onSetRepeatMode(when (repeatMode) {
+                        PlaybackStateCompat.REPEAT_MODE_ONE -> "one"
+                        PlaybackStateCompat.REPEAT_MODE_ALL, PlaybackStateCompat.REPEAT_MODE_GROUP -> "all"
+                        else -> "none"
+                    })
                 }
             })
             // Advertise the browse/voice play actions on an idle state so Android Auto can start
@@ -164,16 +188,21 @@ class NowPlayingController(private val context: Context) {
                     if (isPlaying) 1f else 0f,
                 )
                 .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or
+                    PlaybackStateCompat.ACTION_PAUSE or
                     PlaybackStateCompat.ACTION_PLAY_PAUSE or
                     PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                     PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                    PlaybackStateCompat.ACTION_SKIP_TO_QUEUE_ITEM or
+                    PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE or
+                    PlaybackStateCompat.ACTION_SET_REPEAT_MODE or
                     PlaybackStateCompat.ACTION_SEEK_TO,
                 )
                 .build()
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_firmium)
             .setContentTitle(title)
             .setContentText(artist)
             .setLargeIcon(art)
@@ -190,12 +219,18 @@ class NowPlayingController(private val context: Context) {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setOngoing(isPlaying)
+            .apply { accentColor?.let { setColor(it); setColorized(true) } }
             .build()
     }
 
     fun update(title: String, artist: String, album: String, coverUrl: String?, isPlaying: Boolean) {
         ensureChannel()
         val session = ensureMediaSession()
+        // Reset cached position so a pause right after a track starts reads 0, not the
+        // previous track's elapsed time.
+        lastPositionMs = 0L
+        lastDurationMs = 0L
+        accentColor = null
 
         // Update metadata immediately (no art yet) so the session reflects the new track at once.
         session.setMetadata(buildMetadata(title, artist, album))
@@ -247,6 +282,10 @@ class NowPlayingController(private val context: Context) {
                 // track having started while art was loading.
                 if (session !== mediaSession) return@launch
                 if (art != null) {
+                    // Pull a dominant color so the notification + Android Auto tint to the cover.
+                    accentColor = runCatching {
+                        Palette.from(art).generate().let { it.vibrantSwatch ?: it.dominantSwatch }?.rgb
+                    }.getOrNull()
                     session.setMetadata(buildMetadata(title, artist, album, art))
                     val artNotification = buildNotification(title, artist, isPlaying, art, 0L, 0L)
                     NowPlayingService.pendingNotification = artNotification
@@ -275,6 +314,9 @@ class NowPlayingController(private val context: Context) {
         val meta = session.controller?.metadata ?: return
         val title = meta.getString(MediaMetadataCompat.METADATA_KEY_TITLE) ?: return
 
+        lastPositionMs = positionMs
+        lastDurationMs = durationMs
+
         // Update duration in metadata if it changed.
         if (meta.getLong(MediaMetadataCompat.METADATA_KEY_DURATION) != durationMs) {
             session.setMetadata(
@@ -297,9 +339,42 @@ class NowPlayingController(private val context: Context) {
         val art = meta?.getBitmap(MediaMetadataCompat.METADATA_KEY_ART)
         val title = meta?.getString(MediaMetadataCompat.METADATA_KEY_TITLE) ?: return
         val artist = meta.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: ""
-        val notification = buildNotification(title, artist, isPlaying, art, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 0L)
+        val notification = buildNotification(title, artist, isPlaying, art, lastPositionMs, lastDurationMs)
         NowPlayingService.pendingNotification = notification
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    }
+
+    // One entry of the Android Auto / lock-screen queue list.
+    data class QueueEntry(val id: String, val title: String, val artist: String, val coverUrl: String?)
+
+    // Publishes the queue so Android Auto shows an "Up Next" list and onSkipToQueueItem works.
+    fun setQueue(entries: List<QueueEntry>) {
+        val session = mediaSession ?: return
+        val items = entries.mapIndexed { i, e ->
+            val desc = MediaDescriptionCompat.Builder()
+                .setMediaId(e.id)
+                .setTitle(e.title)
+                .setSubtitle(e.artist)
+                .apply { e.coverUrl?.let { setIconUri(Uri.parse(it)) } }
+                .build()
+            MediaSessionCompat.QueueItem(desc, i.toLong())
+        }
+        session.setQueue(items)
+        session.setQueueTitle("Up Next")
+    }
+
+    fun setShuffleMode(enabled: Boolean) {
+        mediaSession?.setShuffleMode(
+            if (enabled) PlaybackStateCompat.SHUFFLE_MODE_ALL else PlaybackStateCompat.SHUFFLE_MODE_NONE
+        )
+    }
+
+    fun setRepeatMode(mode: String) {
+        mediaSession?.setRepeatMode(when (mode) {
+            "one" -> PlaybackStateCompat.REPEAT_MODE_ONE
+            "all" -> PlaybackStateCompat.REPEAT_MODE_ALL
+            else -> PlaybackStateCompat.REPEAT_MODE_NONE
+        })
     }
 
     fun clear() {
@@ -307,6 +382,10 @@ class NowPlayingController(private val context: Context) {
         // call setMetadata() or notify() on a dead session after this returns.
         artJob?.cancel()
         artJob = null
+        lastPositionMs = 0L
+        lastDurationMs = 0L
+        accentColor = null
+        mediaSession?.setQueue(null)
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
         context.stopService(Intent(context, NowPlayingService::class.java))
         mediaSession?.release()

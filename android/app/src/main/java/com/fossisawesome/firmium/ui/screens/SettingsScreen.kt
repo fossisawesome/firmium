@@ -57,6 +57,8 @@ fun SettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
+    onVisualizerToggle: (Boolean) -> Unit,
+    onVisualizerTypeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
     onLastfmToggle: (Boolean) -> Unit,
@@ -87,6 +89,8 @@ fun SettingsScreen(
         onGaplessToggle = onGaplessToggle,
         onReplayGainToggle = onReplayGainToggle,
         onThemeSelected = onThemeSelected,
+        onVisualizerToggle = onVisualizerToggle,
+        onVisualizerTypeSelected = onVisualizerTypeSelected,
         onLrclibToggle = onLrclibToggle,
         onLyricsWordFillToggle = onLyricsWordFillToggle,
         onLastfmToggle = onLastfmToggle,
@@ -144,6 +148,8 @@ private fun FirmiumSettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
+    onVisualizerToggle: (Boolean) -> Unit,
+    onVisualizerTypeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
     onLastfmToggle: (Boolean) -> Unit,
@@ -263,6 +269,10 @@ private fun FirmiumSettingsScreen(
                         "appearance" -> FirmiumAppearancePanel(
                             currentThemeId = currentThemeId,
                             onThemeSelected = onThemeSelected,
+                            visualizerEnabled = playerState.visualizerEnabled,
+                            visualizerType = playerState.visualizerType,
+                            onVisualizerToggle = onVisualizerToggle,
+                            onVisualizerTypeSelected = onVisualizerTypeSelected,
                         )
                         "playback" -> FirmiumPlaybackPanel(
                             playerState = playerState,
@@ -341,6 +351,10 @@ private fun FirmiumSettingsRow(
 private fun FirmiumAppearancePanel(
     currentThemeId: String,
     onThemeSelected: (String) -> Unit,
+    visualizerEnabled: Boolean,
+    visualizerType: String,
+    onVisualizerToggle: (Boolean) -> Unit,
+    onVisualizerTypeSelected: (String) -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
@@ -348,6 +362,81 @@ private fun FirmiumAppearancePanel(
         Text("Color Theme", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
             color = colors.muted, modifier = Modifier.padding(bottom = 4.dp))
         ThemeDropdown(currentThemeId = currentThemeId, onThemeSelected = onThemeSelected)
+
+        Text("Visualizer", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            color = colors.muted, modifier = Modifier.padding(top = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Audio Visualizer", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                Spacer(Modifier.height(2.dp))
+                Text("Show an audio-reactive visualizer on the now playing screen",
+                    fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            }
+            Spacer(Modifier.width(12.dp))
+            FirmiumSwitch(checked = visualizerEnabled, onCheckedChange = onVisualizerToggle)
+        }
+        if (visualizerEnabled) {
+            VisualizerDropdown(visualizerType = visualizerType, onTypeSelected = onVisualizerTypeSelected)
+        }
+    }
+}
+
+@Composable
+private fun VisualizerDropdown(visualizerType: String, onTypeSelected: (String) -> Unit) {
+    val colors = LocalFirmiumColors.current
+    val current = VisualizerType.fromId(visualizerType)
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(6.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(current.label, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                color = colors.text, modifier = Modifier.weight(1f))
+            FirmiumIcon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp),
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .background(colors.surface),
+            ) {
+                VisualizerType.entries.forEachIndexed { i, t ->
+                    if (i > 0) FirmiumDivider(color = colors.border)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onTypeSelected(t.id); expanded = false }
+                            .background(if (t.id == visualizerType) colors.surface2.copy(alpha = 0.5f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            t.label, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            color = if (t.id == visualizerType) colors.accent else colors.text,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (t.id == visualizerType) {
+                            FirmiumIcon(Icons.Default.Check, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

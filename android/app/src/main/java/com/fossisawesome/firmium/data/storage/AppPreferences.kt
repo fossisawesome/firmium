@@ -37,6 +37,11 @@ class AppPreferences(context: Context) {
         // Format used for track/album downloads: "original" (raw), "mp3", "flac", "wav", or "opus".
         val DOWNLOAD_FORMAT = stringPreferencesKey("download_format")
         val REPLAY_GAIN_ENABLED = booleanPreferencesKey("replay_gain_enabled")
+        // First-run onboarding tour completion flag.
+        val ONBOARDED = booleanPreferencesKey("onboarded")
+        // Audio visualizer: off by default; type is "orb" | "bars" | "oscilloscope".
+        val VISUALIZER_ENABLED = booleanPreferencesKey("visualizer_enabled")
+        val VISUALIZER_TYPE = stringPreferencesKey("visualizer_type")
     }
 
     val serverUrl: Flow<String?> = store.data.map { it[SERVER_URL] }
@@ -59,6 +64,9 @@ class AppPreferences(context: Context) {
     val playlistsJson: Flow<String?> = store.data.map { it[PLAYLISTS_JSON] }
     val downloadFormat: Flow<String> = store.data.map { it[DOWNLOAD_FORMAT] ?: "original" }
     val replayGainEnabled: Flow<Boolean> = store.data.map { it[REPLAY_GAIN_ENABLED] ?: true }
+    val onboarded: Flow<Boolean> = store.data.map { it[ONBOARDED] ?: false }
+    val visualizerEnabled: Flow<Boolean> = store.data.map { it[VISUALIZER_ENABLED] ?: false }
+    val visualizerType: Flow<String> = store.data.map { it[VISUALIZER_TYPE] ?: "orb" }
 
     suspend fun setServerUrl(url: String) = store.edit { it[SERVER_URL] = url }
     suspend fun setUsername(name: String) = store.edit { it[USERNAME] = name }
@@ -78,6 +86,9 @@ class AppPreferences(context: Context) {
     suspend fun setPlaylistsJson(json: String) = store.edit { it[PLAYLISTS_JSON] = json }
     suspend fun setDownloadFormat(format: String) = store.edit { it[DOWNLOAD_FORMAT] = format }
     suspend fun setReplayGainEnabled(v: Boolean) = store.edit { it[REPLAY_GAIN_ENABLED] = v }
+    suspend fun setOnboarded(v: Boolean) = store.edit { it[ONBOARDED] = v }
+    suspend fun setVisualizerEnabled(v: Boolean) = store.edit { it[VISUALIZER_ENABLED] = v }
+    suspend fun setVisualizerType(t: String) = store.edit { it[VISUALIZER_TYPE] = t }
 
     suspend fun clear() = store.edit { it.clear() }
 }

@@ -19,6 +19,7 @@
   import type { Theme } from './lib/types/tauri-commands'
 
   import AccountModal from './components/AccountModal.svelte'
+  import Onboarding from './components/Onboarding.svelte'
   import ResumeQueuePrompt from './components/ResumeQueuePrompt.svelte'
   import Sidebar from './components/Sidebar.svelte'
   import PlayerBar from './components/PlayerBar.svelte'
@@ -37,6 +38,13 @@
   import HomeView from './views/HomeView.svelte'
 
   let setupError = $state('')
+  let showOnboarding = $state(false)
+
+  function finishOnboarding() {
+    SafeStorage.setItem('firmium_onboarded', 'true')
+    showOnboarding = false
+    showAccountModal.set(true)
+  }
   let loadedThemes = $state<Theme[]>([])
   let dragActive = $state(false)
   let remoteQueue = $state<RemotePlayQueue | null>(null)
@@ -136,6 +144,11 @@
 
     const savedServer = SafeStorage.getItem('firmium_server')
     const savedUser = SafeStorage.getItem('firmium_user')
+
+    const onboarded = SafeStorage.getItem('firmium_onboarded') === 'true'
+    if (!onboarded && !savedServer) {
+      showOnboarding = true
+    }
     const savePasswordEnabled = SafeStorage.getItem('firmium_save_pass') === 'true'
     const autoLoginEnabled = SafeStorage.getItem('firmium_auto_login') !== 'false'
 
@@ -240,6 +253,9 @@
   })
 </script>
 
+{#if showOnboarding}
+  <Onboarding onFinish={finishOnboarding} />
+{/if}
 <div class="sidebar">
   <Sidebar />
 </div>

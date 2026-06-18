@@ -12,13 +12,17 @@ package com.fossisawesome.firmium.audio
 object MediaTree {
     const val ROOT = "root"
     const val HOME = "home"
-    const val ALBUMS = "albums"
+    const val MUSIC = "music"
     const val ARTISTS = "artists"
     const val PLAYLISTS = "playlists"
 
     fun albumId(albumId: String) = "album:$albumId"
     fun artistId(artistId: String) = "artist:$artistId"
     fun playlistId(playlistId: String) = "playlist:$playlistId"
+    // A–Z index node under "Music"; bucket is a single letter A-Z or "#" for non-alphabetic.
+    fun musicLetterId(bucket: String) = "music_letter:$bucket"
+    // Special playable that shuffles a whole playlist.
+    fun playlistShuffleId(playlistId: String) = "shuffle|playlist|$playlistId"
 
     fun albumTrackId(albumId: String, songId: String) = "track|album|$albumId|$songId"
     fun playlistTrackId(playlistId: String, songId: String) = "track|playlist|$playlistId|$songId"
@@ -26,9 +30,11 @@ object MediaTree {
     fun parse(mediaId: String): MediaNode = when {
         mediaId == ROOT -> MediaNode.Root
         mediaId == HOME -> MediaNode.Home
-        mediaId == ALBUMS -> MediaNode.Albums
+        mediaId == MUSIC -> MediaNode.Music
         mediaId == ARTISTS -> MediaNode.Artists
         mediaId == PLAYLISTS -> MediaNode.Playlists
+        mediaId.startsWith("music_letter:") -> MediaNode.MusicLetter(mediaId.removePrefix("music_letter:"))
+        mediaId.startsWith("shuffle|playlist|") -> MediaNode.PlaylistShuffle(mediaId.removePrefix("shuffle|playlist|"))
         mediaId.startsWith("track|album|") -> {
             val body = mediaId.removePrefix("track|album|")
             MediaNode.AlbumTrack(body.substringBeforeLast('|'), body.substringAfterLast('|'))
@@ -47,9 +53,11 @@ object MediaTree {
 sealed interface MediaNode {
     object Root : MediaNode
     object Home : MediaNode
-    object Albums : MediaNode
+    object Music : MediaNode
     object Artists : MediaNode
     object Playlists : MediaNode
+    data class MusicLetter(val bucket: String) : MediaNode
+    data class PlaylistShuffle(val playlistId: String) : MediaNode
     data class Album(val albumId: String) : MediaNode
     data class Artist(val artistId: String) : MediaNode
     data class Playlist(val playlistId: String) : MediaNode

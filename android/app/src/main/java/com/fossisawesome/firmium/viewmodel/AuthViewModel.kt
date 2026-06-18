@@ -90,6 +90,9 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                             "Can't reach server — check the URL"
                         e.message?.contains("40") == true || e.message?.contains("wrong") == true ->
                             "Wrong username or password"
+                        e.message?.contains("Unable to parse TLS") == true ||
+                        e.message?.contains("SSLHandshakeException") == true ->
+                            "Login failed: ${e.message}\n\nTry using http:// instead of https:// — your server may not have TLS enabled."
                         else -> "Login failed: ${e.message}"
                     }
                 )

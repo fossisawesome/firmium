@@ -1,0 +1,13 @@
+name = "Svalbard"
+color_scheme = "dark"
+
+[colors]
+bg = "#0b1117"
+surface = "#121d27"
+surface2 = "#1c2c39"
+border = "rgba(255,255,255,0.08)"
+text = "#e8f1f7"
+muted = "#7e9bb0"
+accent = "#6cc8e0"
+accent_dim = "rgba(108,200,224,0.15)"
+error = "#e06c75"

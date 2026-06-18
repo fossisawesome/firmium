@@ -28,6 +28,7 @@ import com.fossisawesome.firmium.viewmodel.PlaylistsUiState
 @Composable
 fun PlaylistsScreen(
     state: PlaylistsUiState,
+    coverUrlFor: (String?) -> String?,
     onPlaylistClick: (String) -> Unit,
     onCreate: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -76,6 +77,7 @@ fun PlaylistsScreen(
                 items(state.items, key = { it.id }) { item ->
                     PlaylistRow(
                         item = item,
+                        coverUrlFor = coverUrlFor,
                         onClick = { onPlaylistClick(item.id) },
                         onDelete = if (item is PlaylistListItem.Local) ({ onDelete(item.id) }) else null,
                         onSync = if (item is PlaylistListItem.Local && !item.isSynced) ({ onSync(item.id) }) else null,
@@ -99,8 +101,21 @@ fun PlaylistsScreen(
 
 // .pl-card: padding 12/10dp, gap 16dp. Art: 48×48dp, surface2, 8dp radius.
 @Composable
-private fun PlaylistRow(item: PlaylistListItem, onClick: () -> Unit, onDelete: (() -> Unit)?, onSync: (() -> Unit)?) {
+private fun PlaylistRow(
+    item: PlaylistListItem,
+    coverUrlFor: (String?) -> String?,
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)?,
+    onSync: (() -> Unit)?,
+) {
     val colors = LocalFirmiumColors.current
+    // Local/synced playlists have their tracks in memory, so build a true mosaic from
+    // the first distinct song covers. Server-only playlists only carry a single server
+    // cover id (no track list loaded yet), so fall back to that — avoids per-row fetches.
+    val coverUrls = when (item) {
+        is PlaylistListItem.Local -> item.playlist.tracks.map { coverUrlFor(it.coverArt) }
+        is PlaylistListItem.ServerOnly -> listOf(coverUrlFor(item.server.coverArt))
+    }
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 12.dp),
@@ -112,7 +127,7 @@ private fun PlaylistRow(item: PlaylistListItem, onClick: () -> Unit, onDelete: (
             modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(colors.surface2),
             contentAlignment = Alignment.Center,
         ) {
-            Text("♪", fontSize = 20.sp, color = colors.muted)
+            PlaylistMosaic(coverUrls = coverUrls, modifier = Modifier.fillMaxSize())
         }
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -9,6 +9,7 @@
   import { formatDuration } from '../lib/utils'
   import VirtualList from '../lib/VirtualList.svelte'
   import TrackRow from '../components/TrackRow.svelte'
+  import PlaylistMosaic from '../components/PlaylistMosaic.svelte'
   import type { Song } from '../lib/types/tauri-commands'
 
   const TRACK_ROW_HEIGHT = 56
@@ -227,6 +228,8 @@
         <img src={pl.coverDataUrl} alt="" />
       {:else if pl.coverArtId}
         <img use:lazyLoad={img => loadImage(img, pl.coverArtId, null)} alt="" />
+      {:else if uniqueCovers.length}
+        <PlaylistMosaic covers={uniqueCovers.map(t => t.coverArtId)} />
       {:else}
         <span class="icon" style="width:40px;height:40px;color:var(--muted)">{@html IconList}</span>
       {/if}

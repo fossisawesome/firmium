@@ -81,6 +81,9 @@ fun FullScreenPlayer(
 
     val orbPalette = rememberOrbPalette(coverUrl)
     var showOrb by remember { mutableStateOf(false) }
+    // In-player visualizer type, seeded from settings; tapping the visualizer cycles it live.
+    var vizType by remember(state.visualizerType) { mutableStateOf(VisualizerType.fromId(state.visualizerType)) }
+    val cycleViz = { vizType = VisualizerType.entries[(vizType.ordinal + 1) % VisualizerType.entries.size] }
     var showAddToPlaylist by remember { mutableStateOf(false) }
     val screenWidth = configuration.screenWidthDp.dp
     // Used to animate the player fully offscreen before removing it from composition.
@@ -152,23 +155,32 @@ fun FullScreenPlayer(
                         .padding(start = 20.dp, end = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    ArtOrOrb(
-                        showOrb = showOrb,
-                        onToggle = { showOrb = !showOrb },
-                        coverUrl = coverUrl,
-                        albumDescription = track.album,
-                        audioSessionId = audioSessionId,
-                        palette = orbPalette,
-                        isPlaying = state.playbackState == "playing",
-                        onTap = onLyricsOpen,
-                        onSwipeLeft = onNext,
-                        onSwipeRight = onPrevious,
-                        modifier = Modifier
-                            .size(artSize)
-                            .scale(artScale)
-                            .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp)) else Modifier)
-                            .clip(RoundedCornerShape(16.dp)),
-                    )
+                    Box {
+                        ArtOrOrb(
+                            showOrb = showOrb,
+                            onToggle = { showOrb = !showOrb },
+                            visualizerEnabled = state.visualizerEnabled,
+                            vizType = vizType,
+                            onCycleType = cycleViz,
+                            coverUrl = coverUrl,
+                            albumDescription = track.album,
+                            audioSessionId = audioSessionId,
+                            palette = orbPalette,
+                            isPlaying = state.playbackState == "playing",
+                            onTap = onLyricsOpen,
+                            onSwipeLeft = onNext,
+                            onSwipeRight = onPrevious,
+                            modifier = Modifier
+                                .size(artSize)
+                                .scale(artScale)
+                                .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp)) else Modifier)
+                                .clip(RoundedCornerShape(16.dp)),
+                        )
+                        AddToPlaylistFab(
+                            onClick = { showAddToPlaylist = true },
+                            modifier = Modifier.align(Alignment.BottomEnd).offset(x = 14.dp, y = 14.dp),
+                        )
+                    }
                 }
 
                 // Right column: track info + seek + controls + volume, scrollable.
@@ -188,7 +200,7 @@ fun FullScreenPlayer(
                         onSeekStart = onSeekStart, onSeek = onSeek, onSeekEnd = onSeekEnd,
                         onPrevious = onPrevious, onPlayPause = onPlayPause, onNext = onNext,
                         onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
-                        onAddToPlaylist = { showAddToPlaylist = true }, onQueueOpen = onQueueOpen,
+                        onQueueOpen = onQueueOpen,
                         onSimilarTracksOpen = onSimilarTracksOpen,
                         onVolumeChange = onVolumeChange, compact = true,
                     )
@@ -207,23 +219,33 @@ fun FullScreenPlayer(
                 Spacer(Modifier.height(40.dp))
 
                 // Album art or orb — tap the toggle icon to switch modes.
-                ArtOrOrb(
-                    showOrb = showOrb,
-                    onToggle = { showOrb = !showOrb },
-                    coverUrl = coverUrl,
-                    albumDescription = track.album,
-                    audioSessionId = audioSessionId,
-                    palette = orbPalette,
-                    isPlaying = state.playbackState == "playing",
-                    onTap = onLyricsOpen,
-                    onSwipeLeft = onNext,
-                    onSwipeRight = onPrevious,
-                    modifier = Modifier
-                        .size(artSize)
-                        .scale(artScale)
-                        .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp)) else Modifier)
-                        .clip(RoundedCornerShape(20.dp)),
-                )
+                Box {
+                    ArtOrOrb(
+                        showOrb = showOrb,
+                        onToggle = { showOrb = !showOrb },
+                        visualizerEnabled = state.visualizerEnabled,
+                        vizType = vizType,
+                        onCycleType = cycleViz,
+                        coverUrl = coverUrl,
+                        albumDescription = track.album,
+                        audioSessionId = audioSessionId,
+                        palette = orbPalette,
+                        isPlaying = state.playbackState == "playing",
+                        onTap = onLyricsOpen,
+                        onSwipeLeft = onNext,
+                        onSwipeRight = onPrevious,
+                        modifier = Modifier
+                            .size(artSize)
+                            .scale(artScale)
+                            .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp)) else Modifier)
+                            .clip(RoundedCornerShape(20.dp)),
+                    )
+                    // + sits just off the lower-right corner of the art (not on the image).
+                    AddToPlaylistFab(
+                        onClick = { showAddToPlaylist = true },
+                        modifier = Modifier.align(Alignment.BottomEnd).offset(x = 14.dp, y = 14.dp),
+                    )
+                }
 
                 Spacer(Modifier.height(32.dp))
 
@@ -232,7 +254,7 @@ fun FullScreenPlayer(
                     onSeekStart = onSeekStart, onSeek = onSeek, onSeekEnd = onSeekEnd,
                     onPrevious = onPrevious, onPlayPause = onPlayPause, onNext = onNext,
                     onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
-                    onAddToPlaylist = { showAddToPlaylist = true }, onQueueOpen = onQueueOpen,
+                    onQueueOpen = onQueueOpen,
                     onSimilarTracksOpen = onSimilarTracksOpen,
                     onVolumeChange = onVolumeChange, compact = false,
                 )
@@ -310,7 +332,6 @@ private fun PlayerControls(
     onNext: () -> Unit,
     onShuffleToggle: () -> Unit,
     onRepeatCycle: () -> Unit,
-    onAddToPlaylist: () -> Unit,
     onQueueOpen: () -> Unit,
     onSimilarTracksOpen: (() -> Unit)? = null,
     onVolumeChange: (Float) -> Unit,
@@ -377,14 +398,20 @@ private fun PlayerControls(
 
     Spacer(Modifier.height(gap))
 
-    // Primary controls: prev / play / next.
+    val secSize = if (compact) 42.dp else 48.dp
+
+    // Primary controls: shuffle / prev / play / next / repeat.
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val btnSize = if (compact) 52.dp else 60.dp
         val playSize = if (compact) 62.dp else 72.dp
+        FirmiumCircleButton(size = secSize, onClick = onShuffleToggle) {
+            FirmiumIcon(Icons.Default.Shuffle, contentDescription = "Shuffle",
+                tint = if (state.shuffleEnabled) colors.accent else colors.muted, modifier = Modifier.size(22.dp))
+        }
         FirmiumCircleButton(size = btnSize, onClick = onPrevious, enabled = state.hasPrev) {
             FirmiumIcon(Icons.Default.SkipPrevious, contentDescription = "Previous",
                 tint = if (state.hasPrev) colors.text else colors.muted, modifier = Modifier.size(28.dp))
@@ -416,21 +443,6 @@ private fun PlayerControls(
             FirmiumIcon(Icons.Default.SkipNext, contentDescription = "Next",
                 tint = if (state.hasNext) colors.text else colors.muted, modifier = Modifier.size(28.dp))
         }
-    }
-
-    Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
-
-    // Secondary controls: shuffle / repeat / add / queue.
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val secSize = if (compact) 42.dp else 48.dp
-        FirmiumCircleButton(size = secSize, onClick = onShuffleToggle) {
-            FirmiumIcon(Icons.Default.Shuffle, contentDescription = "Shuffle",
-                tint = if (state.shuffleEnabled) colors.accent else colors.muted, modifier = Modifier.size(22.dp))
-        }
         Box(contentAlignment = Alignment.TopEnd) {
             FirmiumCircleButton(size = secSize, onClick = onRepeatCycle) {
                 FirmiumIcon(
@@ -445,10 +457,16 @@ private fun PlayerControls(
                     modifier = Modifier.offset(x = (-4).dp, y = 4.dp))
             }
         }
-        FirmiumCircleButton(size = secSize, onClick = onAddToPlaylist) {
-            FirmiumIcon(Icons.Default.PlaylistAdd, contentDescription = "Add to playlist",
-                tint = colors.muted, modifier = Modifier.size(22.dp))
-        }
+    }
+
+    Spacer(Modifier.height(if (compact) 12.dp else 20.dp))
+
+    // Secondary controls: queue / similar.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         FirmiumCircleButton(size = secSize, onClick = onQueueOpen) {
             FirmiumIcon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue",
                 tint = colors.muted, modifier = Modifier.size(22.dp))
@@ -489,6 +507,9 @@ private fun PlayerControls(
 private fun ArtOrOrb(
     showOrb: Boolean,
     onToggle: () -> Unit,
+    visualizerEnabled: Boolean,
+    vizType: VisualizerType,
+    onCycleType: () -> Unit,
     coverUrl: String?,
     albumDescription: String,
     audioSessionId: Int,
@@ -499,14 +520,34 @@ private fun ArtOrOrb(
     onSwipeRight: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The visualizer is only available when enabled in Settings.
+    val showViz = showOrb && visualizerEnabled
     Box(modifier = modifier) {
-        if (showOrb) {
-            MusicOrb(
-                audioSessionId = audioSessionId,
-                palette = palette,
-                isPlaying = isPlaying,
-                modifier = Modifier.fillMaxSize(),
-            )
+        if (showViz) {
+            Box(
+                modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown()
+                        val up = waitForUpOrCancellation()
+                        if (up != null) onCycleType()  // tap visualizer = next type
+                    }
+                },
+            ) {
+                VisualizerView(
+                    type = vizType,
+                    audioSessionId = audioSessionId,
+                    palette = palette,
+                    isPlaying = isPlaying,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Text(
+                    vizType.label,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color.White.copy(alpha = 0.65f),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
+                )
+            }
         } else {
             ArtWithGestures(
                 coverUrl = coverUrl,
@@ -517,19 +558,21 @@ private fun ArtOrOrb(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        FirmiumIconButton(
-            onClick = onToggle,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(6.dp)
-                .size(32.dp),
-        ) {
-            FirmiumIcon(
-                imageVector = if (showOrb) Icons.Default.Image else Icons.Default.Equalizer,
-                contentDescription = if (showOrb) "Show art" else "Show visualizer",
-                tint = Color.White.copy(alpha = 0.75f),
-                modifier = Modifier.size(18.dp),
-            )
+        if (visualizerEnabled) {
+            FirmiumIconButton(
+                onClick = onToggle,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(32.dp),
+            ) {
+                FirmiumIcon(
+                    imageVector = if (showViz) Icons.Default.Image else Icons.Default.Equalizer,
+                    contentDescription = if (showViz) "Show art" else "Show visualizer",
+                    tint = Color.White.copy(alpha = 0.75f),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }
@@ -602,6 +645,30 @@ private fun FirmiumCircleButton(
         contentAlignment = Alignment.Center,
         content = content,
     )
+}
+
+// Accent "+" button anchored to the lower-right corner of the album art.
+@Composable
+private fun AddToPlaylistFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalFirmiumColors.current
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .shadow(elevation = 8.dp, shape = CircleShape)
+            .clip(CircleShape)
+            .background(colors.accent)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown()
+                    val up = waitForUpOrCancellation()
+                    if (up != null) onClick()
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist",
+            tint = colors.bg, modifier = Modifier.size(24.dp))
+    }
 }
 
 private fun formatSeconds(seconds: Double): String {
