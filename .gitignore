@@ -41,6 +41,7 @@ pkg/firmium-desktop/
 # Android build cache and output
 android/.gradle/
 android/build/
+android/wear/build/
 android/app/build/
 android/.kotlin/
 # Android signing key
