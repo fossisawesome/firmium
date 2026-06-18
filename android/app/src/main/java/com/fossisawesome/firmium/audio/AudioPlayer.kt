@@ -126,7 +126,6 @@ class AudioPlayer(private val context: Context) {
 
     fun resume(playerId: String) {
         val session = sessions[playerId] ?: return
-        if (session.finishWatchJob == null) attachListeners(playerId, session)
         session.player.play()
     }
 
