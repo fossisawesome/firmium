@@ -9,7 +9,7 @@ class MediaTreeTest {
     fun parse_categoryIds_returnCategoryNodes() {
         assertEquals(MediaNode.Root, MediaTree.parse(MediaTree.ROOT))
         assertEquals(MediaNode.Home, MediaTree.parse(MediaTree.HOME))
-        assertEquals(MediaNode.Albums, MediaTree.parse(MediaTree.ALBUMS))
+        assertEquals(MediaNode.Music, MediaTree.parse(MediaTree.MUSIC))
         assertEquals(MediaNode.Artists, MediaTree.parse(MediaTree.ARTISTS))
         assertEquals(MediaNode.Playlists, MediaTree.parse(MediaTree.PLAYLISTS))
     }

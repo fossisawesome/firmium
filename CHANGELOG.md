@@ -1,3 +1,49 @@
+# v6.4.0
+
+## Android
+
+### New features
+
+- **Onboarding screen** — first-run pager (5 panels) introduces the app before the server login prompt. Only shown once; completion stored in `AppPreferences.ONBOARDED`. `OnboardingScreen.kt`.
+- **Multiple visualizer types** — the audio visualizer now supports three modes: Orb (default), Bars, and Oscilloscope. A single `rememberVisualizerData` composable captures FFT + waveform data from one shared `android.media.audiofx.Visualizer` and feeds all three renderers. Tap the visualizer in the full-screen player to cycle types live; the selected type persists across sessions. `Visualizers.kt`, `MusicOrb.kt`.
+- **Visualizer settings** — new "Visualizer" section in Settings with an enable/disable switch and a dropdown to choose the visualizer type. `SettingsScreen.kt`, `AppPreferences.kt`.
+- **Add-to-playlist FAB on album art** — a circular accent-color "+" button sits at the lower-right corner of the album art in the full-screen player (both portrait and landscape orientations). Replaces the "Add to playlist" button that was in the secondary controls row. `FullScreenPlayer.kt`.
+- **Shuffle and repeat moved to main controls row** — the shuffle and repeat toggles are now inline with the prev/play/next buttons. The secondary controls row is now queue and similar tracks only. `FullScreenPlayer.kt`.
+- **Android Auto: A–Z music browser** — the flat "Albums" browse node is replaced by "Music", which shows an A–Z + "#" letter index. Opening a letter filters the album list for that bucket. Albums are cached after the first fetch so subsequent letter taps are instant. `FirmiumMediaBrowserService.kt`, `MediaTree.kt`.
+- **Android Auto: playlist shuffle entry** — each playlist in the Android Auto browser now includes a "Shuffle" playable item at the top, letting the user shuffle the whole playlist in one tap. `FirmiumMediaBrowserService.kt`, `MediaTree.kt`.
+- **Android Auto: queue list, shuffle, and repeat** — the `MediaSession` queue is published on every track change so Android Auto shows an "Up Next" list and lets the user skip to any item. Shuffle and repeat state are reflected in the session and respond to steering-wheel control commands. `NowPlayingController.kt`, `PlaybackController.kt`.
+- **Notification cover art accent color** — the notification and Android Auto UI are tinted to the dominant (or vibrant) color extracted from the cover art via `androidx.palette`. `NowPlayingController.kt`.
+- **Playlist mosaic covers** — the music-note placeholder in the playlists list is replaced by a Spotify-style mosaic built from up to 4 distinct track covers (1 full / 2 side-by-side / 3 left-tall + 2 stacked right / 4 grid). `PlaylistMosaic.kt`, `PlaylistsScreen.kt`.
+- **Remove track from playlist** — each track row in the playlist detail screen now has a remove button. `PlaylistDetailScreen.kt`.
+- **Svalbard theme** — new built-in dark blue theme (bg `#0b1117`, accent `#6cc8e0`). Available from Settings. `Theme.kt`.
+
+### Bug fixes
+
+- **Notification showed 0:00 elapsed when paused** — `NowPlayingController` now tracks `lastPositionMs`/`lastDurationMs` so pausing mid-track keeps the real elapsed time in the notification rather than resetting to 0:00. `NowPlayingController.kt`.
+- **Status-bar icon was the full launcher icon** — switched to a dedicated monochrome vector drawable `ic_stat_firmium` so the notification icon meets Android Material guidelines. `NowPlayingController.kt`, `res/drawable/ic_stat_firmium.xml`.
+- **Multiple permission dialogs only showed notifications** — three separate single-permission launchers (notifications, `RECORD_AUDIO`, storage) were replaced by one `RequestMultiplePermissions` launcher. Launching several single-permission requests back-to-back caused all but the first dialog to be silently dropped. `MainActivity.kt`.
+
+---
+
+## Desktop
+
+- **Onboarding screen** — new `Onboarding.svelte` first-run pager matching the Android flow: 5 panels, dot indicators, animated hex logo on the welcome panel, and a "Get started" button on the last panel. `src/components/Onboarding.svelte`.
+- **Playlist mosaic covers** — new `PlaylistMosaic.svelte` component with the same 1/2/3/4-cover grid layout as Android, used on the playlists view. `src/components/PlaylistMosaic.svelte`.
+
+---
+
+## Themes
+
+- **Svalbard** — new dark blue theme. `themes/svalbard.toml`.
+
+---
+
+## Assets
+
+- Updated app icons across all resolutions and platforms: Android launcher icons (all mipmap densities, round and foreground variants), iOS app icons (all @1x/@2x/@3x sizes), desktop icons (32×32, 64×64, 128×128, 128×128@2x, all Windows Store tile sizes, icns, ico, png), icon source SVG, and site favicon. `src-tauri/icons/`, `android/app/src/main/res/mipmap-*/`, `readme/favicon.svg`.
+
+---
+
 # v6.3.0
 
 ## Android Auto support
