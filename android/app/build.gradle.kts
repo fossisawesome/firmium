@@ -53,6 +53,10 @@ android {
     }
     buildFeatures { compose = true; buildConfig = true }
 
+    lint {
+        disable += "InvalidFragmentVersionForActivityResult"
+    }
+
     packaging {
         resources {
             excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
