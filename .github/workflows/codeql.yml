@@ -48,7 +48,7 @@ jobs:
       - name: Build Android app
         if: matrix.language == 'java-kotlin'
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew compileDebugKotlin compileDebugJavaWithJavac --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
