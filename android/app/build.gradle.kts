@@ -85,7 +85,7 @@ dependencies {
     // HTTP + JSON
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
     implementation("com.squareup.okhttp3:logging-interceptor:5.4.0")
-    implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.google.code.gson:gson:2.14.0")
 
     // Image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
@@ -104,7 +104,7 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // DataStore for non-sensitive preferences (server URL, settings)
-    implementation("androidx.datastore:datastore-preferences:1.1.2")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Adaptive layout: WindowSizeClass + FoldingFeature for foldable / large screen support
     implementation("androidx.window:window:1.3.0")
@@ -115,5 +115,5 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
-    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito:mockito-core:5.23.0")
 }
