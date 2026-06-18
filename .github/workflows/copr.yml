@@ -21,6 +21,8 @@ jobs:
     # For workflow_run: only proceed if the Release workflow succeeded.
     # For workflow_dispatch: always run (conclusion is empty).
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     # Run in a Fedora container so rpmbuild uses the correct macros and
     # doesn't inject Ubuntu-style xcb BuildRequires into the SRPM.
@@ -39,11 +41,17 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        # workflow_run exposes the tag in head_branch; workflow_dispatch uses the input
+        # workflow_run exposes the tag in head_branch; workflow_dispatch uses the input.
+        # The value is passed via env (not inline ${{ }}) and validated against a strict
+        # semver pattern before use so a malicious branch name cannot inject shell code.
         env:
           TAG_INPUT: ${{ github.event.workflow_run.head_branch || inputs.tag }}
         run: |
           TAG="$TAG_INPUT"
+          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid tag format: '$TAG' (expected vX.Y.Z)" >&2
+            exit 1
+          fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
