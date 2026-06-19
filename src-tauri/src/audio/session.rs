@@ -118,6 +118,7 @@ impl Session {
 /// `replay_gain_factor` is written to `session.replay_gain_factor` so it can be
 /// updated live (e.g. when the user toggles ReplayGain off). `visualizer`
 /// receives a copy of each decoded chunk for analysis.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_decode_feeder(
     session: Arc<Session>,
     mut decoder: DecoderHandle,

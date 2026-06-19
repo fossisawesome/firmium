@@ -53,6 +53,7 @@ pub struct Song {
     pub suffix: Option<String>,
     pub content_type: Option<String>,
     pub track_info: Option<String>,
+    pub user_rating: Option<u32>,
 }
 
 impl Song {
@@ -177,6 +178,7 @@ fn map_song(s: &serde_json::Value) -> Song {
         suffix: s.get("suffix").and_then(|v| v.as_str()).map(|v| v.to_string()),
         content_type: s.get("contentType").and_then(|v| v.as_str()).map(|v| v.to_string()),
         track_info: format_track_info(s),
+        user_rating: s.get("userRating").and_then(|v| v.as_u64()).map(|n| n as u32),
     }
 }
 

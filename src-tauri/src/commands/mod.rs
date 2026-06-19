@@ -32,7 +32,7 @@ pub use subsonic::{
     set_connection, validate_connection, get_open_subsonic_extensions, get_albums, get_artists, get_album_tracks,
     get_artist_details, get_artist_info, search, get_recent_albums, get_random_albums,
     get_newest_albums, get_genres_list, get_playlists, get_playlist_tracks, create_playlist,
-    update_playlist, delete_playlist, scrobble, report_playback,
+    update_playlist, delete_playlist, scrobble, set_rating, report_playback,
     save_play_queue, get_play_queue,
     get_sonic_similar_tracks, find_sonic_path, get_similar_tracks_fallback, get_song_lyrics,
     get_songs_by_genre, get_random_songs, get_similar_artists,

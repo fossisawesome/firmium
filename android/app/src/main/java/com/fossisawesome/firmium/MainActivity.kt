@@ -148,6 +148,12 @@ class MainActivity : ComponentActivity() {
                             onLogin = { server, user, pass, savePass ->
                                 authViewModel.login(server, user, pass, savePass)
                             },
+                            onSwitchServer = { url, user ->
+                                authViewModel.switchToServer(url, user)
+                            },
+                            onRemoveServer = { url, user ->
+                                authViewModel.removeServer(url, user)
+                            },
                             onDisconnect = {
                                 authViewModel.logout()
                                 libraryViewModel.invalidateAll()

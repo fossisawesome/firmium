@@ -262,6 +262,14 @@ class ApiClient(private val auth: AuthManager) {
         } catch (_: Exception) { /* scrobble failures are non-fatal */ }
     }
 
+    // ── Rating ─────────────────────────────────────────────────────────────────
+
+    suspend fun setRating(songId: String, rating: Int) {
+        try {
+            fetch("setRating", mapOf("id" to songId, "rating" to rating.toString()))
+        } catch (_: Exception) { /* rating failures are non-fatal */ }
+    }
+
     // ── Playback reporting ────────────────────────────────────────────────────
 
     // Reports playback state/position via the playbackReport OpenSubsonic extension
@@ -577,6 +585,7 @@ class ApiClient(private val auth: AuthManager) {
             replayGainTrackPeak = replayGain?.get("trackPeak")?.asDouble,
             replayGainAlbumPeak = replayGain?.get("albumPeak")?.asDouble,
             bpm = obj.get("bpm")?.asInt,
+            userRating = obj.get("userRating")?.asInt,
         )
     }
 

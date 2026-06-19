@@ -93,6 +93,15 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setVisualizerEnabled(enabled: Boolean) = controller.setVisualizerEnabled(enabled)
     fun setVisualizerType(type: String) = controller.setVisualizerType(type)
 
+    // ── Rating ─────────────────────────────────────────────────────────────────
+
+    fun setRating(songId: String, rating: Int) {
+        viewModelScope.launch {
+            api.setRating(songId, rating)
+            controller.updateTrackRating(songId, rating)
+        }
+    }
+
     // ── Lyrics ─────────────────────────────────────────────────────────────────
 
     fun openLyrics() { lyrics.open() }

@@ -1,12 +1,19 @@
 package com.fossisawesome.firmium.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Album
@@ -44,6 +51,36 @@ fun AlbumListScreen(
 
     val colors = LocalFirmiumColors.current
     var pendingAlbumId by remember { mutableStateOf<String?>(null) }
+    var selectedGenres by remember { mutableStateOf(emptySet<String>()) }
+    var selectedDecades by remember { mutableStateOf(emptySet<String>()) }
+
+    val allGenres = remember(state.albums) {
+        val counts = mutableMapOf<String, Int>()
+        state.albums.forEach { a -> a.genres.forEach { g -> counts[g] = (counts[g] ?: 0) + 1 } }
+        counts.entries.sortedByDescending { it.value }.map { it.key }
+    }
+
+    val allDecades = remember(state.albums) {
+        state.albums.mapNotNull { a ->
+            val y = a.year ?: return@mapNotNull null
+            if (y < 1900) return@mapNotNull null
+            "${(y / 10) * 10}s"
+        }.distinct().sorted()
+    }
+
+    val filteredAlbums = remember(state.albums, selectedGenres, selectedDecades) {
+        var list = state.albums
+        if (selectedGenres.isNotEmpty()) {
+            list = list.filter { a -> a.genres.any { it in selectedGenres } }
+        }
+        if (selectedDecades.isNotEmpty()) {
+            list = list.filter { a ->
+                val y = a.year ?: return@filter false
+                "${(y / 10) * 10}s" in selectedDecades
+            }
+        }
+        list
+    }
 
     when {
         state.isLoading && state.albums.isEmpty() -> Box(
@@ -62,8 +99,7 @@ fun AlbumListScreen(
         }
 
         else -> {
-            // Sort into Singles → EPs → Albums → special types, then by year within each group.
-            val grouped = state.albums
+            val grouped = filteredAlbums
                 .sortedWith(compareBy({ it.effectiveType().releaseTypeSortOrder() }, { -(it.year ?: 0) }))
                 .groupBy { it.effectiveType() }
 
@@ -71,6 +107,23 @@ fun AlbumListScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp),
             ) {
+                if (allDecades.isNotEmpty() || allGenres.isNotEmpty()) {
+                    item(key = "filters") {
+                        FilterChipsRow(
+                            decades = allDecades,
+                            genres = allGenres.take(20),
+                            selectedDecades = selectedDecades,
+                            selectedGenres = selectedGenres,
+                            onToggleDecade = { d ->
+                                selectedDecades = if (d in selectedDecades) selectedDecades - d else selectedDecades + d
+                            },
+                            onToggleGenre = { g ->
+                                selectedGenres = if (g in selectedGenres) selectedGenres - g else selectedGenres + g
+                            },
+                            onClear = { selectedGenres = emptySet(); selectedDecades = emptySet() },
+                        )
+                    }
+                }
                 item(key = "sort_label") {
                     Text(
                         "Sorted by type, then year",
@@ -80,7 +133,6 @@ fun AlbumListScreen(
                     )
                 }
                 grouped.forEach { (type, albums) ->
-                    // Section header with item count.
                     item(key = "header_$type") {
                         val label = when (type) {
                             "Single" -> "Singles"
@@ -120,4 +172,55 @@ fun AlbumListScreen(
         )
     }
 }
+
+@Composable
+private fun FilterChipsRow(
+    decades: List<String>,
+    genres: List<String>,
+    selectedDecades: Set<String>,
+    selectedGenres: Set<String>,
+    onToggleDecade: (String) -> Unit,
+    onToggleGenre: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    val hasActive = selectedDecades.isNotEmpty() || selectedGenres.isNotEmpty()
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        @Composable
+        fun Chip(label: String, active: Boolean, onClick: () -> Unit) {
+            val bg = if (active) colors.accent else colors.surface
+            val fg = if (active) Color.Black else colors.muted
+            val borderColor = if (active) colors.accent else colors.border
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(bg)
+                    .border(1.dp, borderColor, RoundedCornerShape(2.dp))
+                    .clickable { onClick() }
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            ) {
+                Text(label, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = fg)
+            }
+        }
+
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            decades.forEach { d -> Chip(d, d in selectedDecades) { onToggleDecade(d) } }
+            genres.forEach { g -> Chip(g, g in selectedGenres) { onToggleGenre(g) } }
+            if (hasActive) {
+                Box(
+                    modifier = Modifier
+                        .clickable { onClear() }
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                ) {
+                    Text("Clear", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        color = colors.muted, fontWeight = FontWeight.Normal)
+                }
+            }
+        }
+    }
+}
+
 

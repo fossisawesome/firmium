@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { IconList, IconPlay, IconCloud, IconShuffle } from '../lib/icons'
-  import { playlists, currentTrack, navToView, serverPlaylists, type Playlist } from '../lib/stores'
+  import { playlists, currentTrack, navToView, serverPlaylists, isAuthed, type Playlist } from '../lib/stores'
   import { Api, loadImage } from '../lib/api'
   import { tauriInvoke } from '../lib/tauri'
   import { showPlaylistMenu } from '../lib/playlistMenu'
@@ -185,6 +185,13 @@
     tauriInvoke('set_queue_seamless', { songs: pl.tracks, startIdx: idx }).catch(console.error)
   }
 
+  function rateTrack(track: Song, rating: number) {
+    if (!pl) return
+    Api.setRating(track.id, rating)
+    const idx = pl.tracks.findIndex(t => t.id === track.id)
+    if (idx >= 0) pl.tracks[idx] = { ...pl.tracks[idx], userRating: rating || undefined }
+  }
+
   // Pushes the playlist's new track order to the server by removing every
   // original index and re-adding the song IDs in the new order (OpenSubsonic
   // updatePlaylist has no native "move" operation).
@@ -192,6 +199,23 @@
     const ids = newTracks.map(t => t.id)
     Api.updatePlaylist(serverIdToUse, { songIndicesToRemove: ids.map((_, i) => i), songIdsToAdd: ids }).catch(console.error)
   }
+
+  const BPM_RANGES = [
+    { label: 'All', min: 0, max: Infinity },
+    { label: '<80', min: 0, max: 79 },
+    { label: '80-120', min: 80, max: 120 },
+    { label: '120+', min: 121, max: Infinity },
+  ] as const
+
+  let selectedBpm = $state(0)
+
+  const hasBpmData = $derived(pl ? pl.tracks.some(t => t.bpm && t.bpm > 0) : false)
+
+  const filteredPlTracks = $derived.by(() => {
+    if (!pl || selectedBpm === 0) return pl?.tracks ?? []
+    const range = BPM_RANGES[selectedBpm]
+    return pl.tracks.filter(t => t.bpm && t.bpm >= range.min && t.bpm <= range.max)
+  })
 
   function moveTrack(idx: number, direction: -1 | 1) {
     if (!pl) return
@@ -338,8 +362,21 @@
   {#if pl.tracks.length === 0}
     <div class="loading-msg">{pl.isServerOnly ? 'No tracks in this playlist.' : 'No tracks yet — use the + button on any song or album.'}</div>
   {:else}
+    {#if hasBpmData}
+      <div class="filter-bar">
+        <div class="filter-group">
+          {#each BPM_RANGES as range, i}
+            <button
+              class="filter-chip"
+              class:active={selectedBpm === i}
+              onclick={() => selectedBpm = i}
+            >BPM {range.label}</button>
+          {/each}
+        </div>
+      </div>
+    {/if}
     <div class="track-list">
-      <VirtualList items={pl.tracks} itemHeight={TRACK_ROW_HEIGHT}>
+      <VirtualList items={filteredPlTracks} itemHeight={TRACK_ROW_HEIGHT}>
         {#snippet children(track, idx)}
           <TrackRow
             {track} {idx}
@@ -347,10 +384,11 @@
             displayNum={idx + 1}
             showAddButton={!pl.isServerOnly}
             onPlay={playTrack}
+            onRate={$isAuthed ? rateTrack : undefined}
             onRemove={removeTrack}
             onMove={moveTrack}
             isFirst={idx === 0}
-            isLast={idx === pl.tracks.length - 1}
+            isLast={idx === filteredPlTracks.length - 1}
           />
         {/snippet}
       </VirtualList>

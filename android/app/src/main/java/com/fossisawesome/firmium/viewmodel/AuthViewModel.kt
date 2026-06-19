@@ -16,13 +16,11 @@ data class AuthState(
     val isAuthenticated: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null,
-    // Pre-filled login form values from persisted prefs.
     val savedServer: String = "",
     val savedUsername: String = "",
     val savePassword: Boolean = true,
-    // True when saved server+username exist but credentials couldn't be restored —
-    // triggers the AccountDialog to open automatically so the user can re-enter their password.
     val needsLogin: Boolean = false,
+    val savedServers: List<AuthManager.SavedServer> = emptyList(),
 )
 
 class AuthViewModel(app: Application) : AndroidViewModel(app) {
@@ -53,6 +51,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 Pair(false, false)
             }
 
+            val servers = auth.savedServers()
             _state.value = AuthState(
                 isAuthenticated = restored,
                 isLoading = false,
@@ -60,6 +59,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 savedUsername = username,
                 savePassword = savePass,
                 needsLogin = needsLogin,
+                savedServers = servers,
             )
         }
     }
@@ -97,6 +97,32 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 )
             }
+        }
+    }
+
+    fun switchToServer(url: String, username: String) {
+        _state.value = _state.value.copy(isLoading = true, error = null)
+        viewModelScope.launch {
+            try {
+                val ok = auth.switchToSaved(url, username)
+                if (!ok) {
+                    _state.value = _state.value.copy(isLoading = false, error = "Saved password not found — log in again")
+                    return@launch
+                }
+                api.getArtists()
+                val servers = auth.savedServers()
+                _state.value = AuthState(isAuthenticated = true, isLoading = false, savedServers = servers)
+            } catch (e: Exception) {
+                auth.clearCredentials()
+                _state.value = _state.value.copy(isLoading = false, error = "Switch failed: ${e.message}")
+            }
+        }
+    }
+
+    fun removeServer(url: String, username: String) {
+        viewModelScope.launch {
+            auth.removeFromServerList(url, username)
+            _state.value = _state.value.copy(savedServers = auth.savedServers())
         }
     }
 

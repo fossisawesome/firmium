@@ -128,6 +128,7 @@ pub fn run() {
             delete_playlist,
             get_open_subsonic_extensions,
             scrobble,
+            set_rating,
             report_playback,
             save_play_queue,
             get_play_queue,

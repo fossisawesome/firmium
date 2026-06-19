@@ -1,3 +1,35 @@
+# v6.6.0
+
+## Android
+
+### New features
+
+- **Multi-server support** — the account dialog now lists previously connected servers. Tapping "Connect" switches to that server immediately using the saved password; entries can be removed individually. Server list persists across restarts via `DataStore`. `AuthManager.kt`, `AuthViewModel.kt`, `AccountDialog.kt`, `AppPreferences.kt`.
+
+- **Star ratings** — tracks show a 1–5 star rating row in the full-screen player. Tapping the current rating clears it. Ratings are submitted to the server via `setRating` (OpenSubsonic API) and reflected immediately in local state. `FullScreenPlayer.kt`, `PlayerViewModel.kt`, `PlaybackController.kt`, `ApiClient.kt`, `Song.kt`.
+
+- **Notification favorite toggle** — the now-playing notification exposes a custom Favorite/Unfavorite action (star icon) that toggles a 5-star rating on the current track and updates the notification icon immediately. `NowPlayingController.kt`, `PlaybackController.kt`.
+
+- **Album list decade + genre filters** — the album list screen surfaces filter chips for decade (e.g. "1990s") and genre derived from the loaded library. Multiple chips can be active; active filters combine (AND between groups). A "Clear" chip appears when any filter is active. `AlbumListScreen.kt`.
+
+- **Album detail BPM filter** — album detail shows BPM range filter chips (All / <80 / 80–120 / 120+) when at least one track in the album has BPM data. Filtering updates the track list and play-all indices in place. `AlbumDetailScreen.kt`.
+
+## Desktop
+
+### New features
+
+- **Multi-server support** — the setup screen lists previously connected servers above the login form. Clicking "Connect" restores the saved password from the OS keyring (keyed per server URL) and reconnects without re-entering credentials. Server list stored in `localStorage` via the `serverList` store. `Setup.svelte`, `stores.ts`, `api.ts` (Keyring now accepts optional `service` for per-server keyring entries), `credentials.rs`.
+
+- **Star ratings** — track rows in album detail and playlist detail show a 1–5 star rating control when connected to a server. Tapping the active star clears the rating. Ratings call `set_rating` (Rust/Tauri → OpenSubsonic `setRating`) and update local track state immediately. `TrackRow.svelte`, `AlbumDetail.svelte`, `PlaylistDetail.svelte`, `subsonic.rs`, `api.ts`, `mappers.rs`, `tauri-commands.ts`.
+
+- **Album list decade + genre filters** — the desktop album list surfaces filter chips for decade and genre derived from the loaded library. Chips combine; a clear button appears when filters are active. `AlbumList.svelte`, `utils.ts` (`extractGenres`, `albumDecade`).
+
+- **Album detail BPM filter** — same BPM range filter chips as Android, shown when BPM data is present. `AlbumDetail.svelte`.
+
+- **Playlist detail BPM filter** — BPM range filter chips on playlist detail when BPM data is available. `PlaylistDetail.svelte`.
+
+---
+
 # v6.5.0
 
 ## Android
@@ -33,6 +65,10 @@
 - **npm wear scripts** — added `wear:build`, `wear:debug`, and `wear:install` npm scripts that delegate to `:wear:assembleRelease`, `:wear:assembleDebug`, and `:wear:installDebug` respectively. `package.json`.
 
 - **Wearable dependency** — `com.google.android.gms:play-services-wearable:19.0.0` added to `:app`'s dependencies for the Wearable Data Layer client. `android/app/build.gradle.kts`.
+
+- **Kotlin JVM target** — moved `jvmTarget` from `android { kotlinOptions {} }` (deprecated) to top-level `kotlin { compilerOptions {} }` in both `:app` and `:wear` modules. `android/app/build.gradle.kts`, `android/wear/build.gradle.kts`.
+
+- **COPR CI hardening** — tag input validated against `^v[0-9]+\.[0-9]+\.[0-9]+$` before use in shell to prevent injection from malicious branch names. Job granted minimal `contents: read` permission. `.github/workflows/copr.yml`.
 
 ---
 

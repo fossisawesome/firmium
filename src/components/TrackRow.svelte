@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { IconDownload, IconLoading, IconChevronUp, IconChevronDown } from '../lib/icons'
+  import { IconDownload, IconLoading, IconChevronUp, IconChevronDown, IconStarFilled, IconStarEmpty } from '../lib/icons'
   import { loadImage, Api } from '../lib/api'
   import { showPlaylistMenu } from '../lib/playlistMenu'
   import { lazyLoad } from '../lib/lazyLoad'
@@ -8,7 +8,7 @@
   import type { Song } from '../lib/types/tauri-commands'
 
   let {
-    track, idx, playing = false, signal = null, albumArtist, displayNum, showAddButton = true, downloaded = false, onPlay, onRemove, onMove, isFirst = false, isLast = false,
+    track, idx, playing = false, signal = null, albumArtist, displayNum, showAddButton = true, downloaded = false, onPlay, onRate, onRemove, onMove, isFirst = false, isLast = false,
   }: {
     track: Song
     idx: number
@@ -19,6 +19,7 @@
     showAddButton?: boolean
     downloaded?: boolean
     onPlay: (idx: number) => void
+    onRate?: (track: Song, rating: number) => void
     onRemove?: (track: Song, idx: number) => void
     onMove?: (idx: number, direction: -1 | 1) => void
     isFirst?: boolean
@@ -66,6 +67,17 @@
     <div class="track-artist">{track.artist}</div>
   </div>
   <div class="track-duration">{formatDuration(track.duration)}</div>
+  {#if onRate}
+    <div class="track-stars" class:has-rating={track.userRating && track.userRating > 0}>
+      {#each [1, 2, 3, 4, 5] as star}
+        <button
+          class="star-btn"
+          title="Rate {star}"
+          onclick={e => { e.stopPropagation(); onRate!(track, track.userRating === star ? 0 : star) }}
+        ><span class="icon" style="width:12px;height:12px">{@html star <= (track.userRating ?? 0) ? IconStarFilled : IconStarEmpty}</span></button>
+      {/each}
+    </div>
+  {/if}
   {#if $isAuthed}
     <button
       class="track-download-btn"

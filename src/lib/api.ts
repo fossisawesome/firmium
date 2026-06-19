@@ -11,9 +11,9 @@ export const PLAY_ALL_CONCURRENCY = 5
 
 // ── Keyring ───────────────────────────────────────────────────────────────────
 export const Keyring = {
-  save: (user: string, pass: string) => tauriInvoke('save_password', { user, pass }),
-  load: (user: string) => tauriInvoke('get_password', { user }),
-  remove: (user: string) => tauriInvoke('delete_password', { user }),
+  save: (user: string, pass: string, service?: string) => tauriInvoke('save_password', { service: service ?? null, user, pass }),
+  load: (user: string, service?: string) => tauriInvoke('get_password', { service: service ?? null, user }),
+  remove: (user: string, service?: string) => tauriInvoke('delete_password', { service: service ?? null, user }),
 }
 
 // ── URL builder ───────────────────────────────────────────────────────────────
@@ -87,6 +87,10 @@ export const Api = {
   getNewestAlbums: async (size = 100, _signal?: AbortSignal | null): Promise<Album[]> => tauriInvoke('get_newest_albums', { size }),
 
   getGenresList: async (_signal?: AbortSignal | null): Promise<Genre[]> => tauriInvoke<Genre[]>('get_genres_list'),
+
+  setRating: (id: string, rating: number): void => {
+    tauriInvoke('set_rating', { id, rating }).catch(() => {})
+  },
 
   scrobble: (id: string, submission: boolean, time: number = Date.now()): void => {
     tauriInvoke('scrobble', { id, submission, time }).catch(() => {})

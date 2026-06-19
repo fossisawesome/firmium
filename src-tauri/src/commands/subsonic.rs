@@ -443,6 +443,19 @@ pub fn scrobble(app: AppHandle, state: State<'_, Arc<AppState>>, id: String, sub
     });
 }
 
+/// Sets a 1–5 star rating on a track. Fire-and-forget, like `scrobble`.
+/// Rating of 0 clears the rating.
+#[tauri::command]
+pub fn set_rating(app: AppHandle, state: State<'_, Arc<AppState>>, id: String, rating: u32) {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn(async move {
+        let params = [("id", id), ("rating", rating.to_string())];
+        if let Err(e) = subsonic_request(&app, &state, "setRating", &params, true).await {
+            eprintln!("Set rating failed: {e}");
+        }
+    });
+}
+
 /// Reports playback state/position via the `playbackReport` OpenSubsonic extension
 /// (`reportPlayback`). No-op if the server hasn't advertised the extension.
 /// Fire-and-forget, like `scrobble`.

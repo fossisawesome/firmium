@@ -1,6 +1,6 @@
 # CLAUDE.md (Android)
 
-Guidance specific to the native Android app in `android/`. See the root [CLAUDE.md](../CLAUDE.md) for project-wide conventions, principles, and the desktop (Tauri/Svelte) architecture.
+Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../CLAUDE.md) for project-wide conventions, principles, and desktop (Tauri/Svelte) architecture.
 
 ## Tech Stack
 
@@ -14,12 +14,12 @@ Guidance specific to the native Android app in `android/`. See the root [CLAUDE.
 
 ## Architecture (android/app/src/main/java/com/fossisawesome/firmium/)
 
-Native Kotlin/Compose app, independent of the Tauri build, sharing the OpenSubsonic API contract with the desktop app. A second Gradle module, `wear/`, is the Wear OS companion (a remote control for phone playback over the Wearable Data Layer); it shares the phone's `applicationId` but no code.
+Native Kotlin/Compose app, independent of Tauri build, sharing OpenSubsonic API contract with desktop. Second Gradle module, `wear/`, is Wear OS companion (remote control for phone playback over Wearable Data Layer); shares phone's `applicationId` but no code.
 
 - **MainActivity.kt / FirmiumApplication.kt**: App entry points
 - **viewmodel/**: `AuthViewModel`, `LibraryViewModel`, `PlayerViewModel`, `PlaylistViewModel`, `SearchViewModel` — state holders feeding Compose UI
 - **audio/**: `AudioPlayer`, `NowPlayingService` (foreground media service), `NowPlayingController`
-- **wear/**: Wear OS companion bridge — `WearRemoteService` (receives watch transport commands), `WearStateSync` (pushes now-playing state + art to the watch), `WearContract` (Data Layer paths/keys, mirrored in the `:wear` module)
+- **wear/**: Wear OS companion bridge — `WearRemoteService` (receives watch transport commands), `WearStateSync` (pushes now-playing state + art to watch), `WearContract` (Data Layer paths/keys, mirrored in `:wear` module)
 - **data/api/**: `ApiClient`, `AuthManager` — OpenSubsonic REST client and auth/token handling
 - **data/model/**: `Artist`, `Album`, `Song`, `Playlist` data classes
 - **data/storage/**: `AppPreferences`, `PlaylistRepository`, `SecureStorage` (Keystore-backed credential storage)
@@ -28,7 +28,7 @@ Native Kotlin/Compose app, independent of the Tauri build, sharing the OpenSubso
 
 ## Build Commands
 
-Run from the repo root:
+Run from repo root:
 
 ```bash
 npm run android:build   # :app assembleRelease via Gradle
@@ -37,19 +37,19 @@ npm run android:install # :app installDebug via adb
 
 npm run wear:build      # :wear assembleRelease (Wear OS companion)
 npm run wear:debug      # :wear assembleDebug
-npm run wear:install    # :wear installDebug (installs on the connected watch/emulator)
+npm run wear:install    # :wear installDebug (installs on connected watch/emulator)
 ```
 
 ## Development Notes
 
-- **Foreground service**: `NowPlayingService` requires `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permissions (declared in `AndroidManifest.xml`). It must be started via `startForegroundService()` before calling `startForeground()` within 5 seconds or Android kills the app.
-- **Compose recomposition**: ViewModels are the state source of truth. Never hoist mutable state into composables that are also updated from `viewModelScope` — it causes recomposition conflicts. Use `collectAsState()` from the ViewModel's `StateFlow`.
+- **Foreground service**: `NowPlayingService` requires `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permissions (declared in `AndroidManifest.xml`). Must be started via `startForegroundService()` before calling `startForeground()` within 5 seconds or Android kills app.
+- **Compose recomposition**: ViewModels are state source of truth. Never hoist mutable state into composables also updated from `viewModelScope` — causes recomposition conflicts. Use `collectAsState()` from ViewModel's `StateFlow`.
 - **Credential storage**: `SecureStorage` uses Android Keystore — not `SharedPreferences`. Don't store passwords or tokens in `AppPreferences` (which uses `DataStore`/plain prefs).
 
 ## Networking Notes
 
-- This app does **not** use `src/lib/*.js` — all networking goes through `ApiClient.kt` (OkHttp).
-- `getLyrics`/`fetchLyricsForCurrent` and similar coroutine-based calls run on `viewModelScope.launch` (main dispatcher). Any blocking OkHttp `.execute()` call must be wrapped in `withContext(Dispatchers.IO)`, or it throws `NetworkOnMainThreadException` — which can be silently swallowed by surrounding catch blocks.
+- App does **not** use `src/lib/*.js` — all networking goes through `ApiClient.kt` (OkHttp).
+- `getLyrics`/`fetchLyricsForCurrent` and similar coroutine-based calls run on `viewModelScope.launch` (main dispatcher). Any blocking OkHttp `.execute()` call must be wrapped in `withContext(Dispatchers.IO)`, or throws `NetworkOnMainThreadException` — can be silently swallowed by surrounding catch blocks.
 
 ## Key Files
 

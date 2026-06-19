@@ -62,3 +62,16 @@ export const safeText = (str: unknown): string =>
   String(str ?? '').replace(/[&<>"']/g, m => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   } as Record<string, string>)[m])
+
+export function extractGenres(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((g: unknown) => (typeof g === 'object' && g !== null && 'name' in g) ? String((g as { name: unknown }).name) : null)
+    .filter((n): n is string => n !== null && n.length > 0)
+}
+
+export function albumDecade(year: number | undefined): string | null {
+  if (!year || year < 1900) return null
+  const decade = Math.floor(year / 10) * 10
+  return `${decade}s`
+}

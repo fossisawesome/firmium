@@ -52,6 +52,7 @@ class AppPreferences(context: Context) {
         val EQ_MODE = stringPreferencesKey("eq_mode")
         val EQ_ACTIVE_PROFILE = stringPreferencesKey("eq_active_profile")
         val EQ_PROFILES_JSON = stringPreferencesKey("eq_profiles_json")
+        val SERVER_LIST_JSON = stringPreferencesKey("server_list_json")
     }
 
     val serverUrl: Flow<String?> = store.data.map { it[SERVER_URL] }
@@ -83,6 +84,7 @@ class AppPreferences(context: Context) {
     val eqMode: Flow<String> = store.data.map { it[EQ_MODE] ?: "graphic" }
     val eqActiveProfile: Flow<String?> = store.data.map { it[EQ_ACTIVE_PROFILE] }
     val eqProfilesJson: Flow<String?> = store.data.map { it[EQ_PROFILES_JSON] }
+    val serverListJson: Flow<String?> = store.data.map { it[SERVER_LIST_JSON] }
 
     suspend fun setServerUrl(url: String) = store.edit { it[SERVER_URL] = url }
     suspend fun setUsername(name: String) = store.edit { it[USERNAME] = name }
@@ -111,6 +113,7 @@ class AppPreferences(context: Context) {
     suspend fun setEqMode(mode: String) = store.edit { it[EQ_MODE] = mode }
     suspend fun setEqActiveProfile(name: String) = store.edit { it[EQ_ACTIVE_PROFILE] = name }
     suspend fun setEqProfilesJson(json: String) = store.edit { it[EQ_PROFILES_JSON] = json }
+    suspend fun setServerListJson(json: String) = store.edit { it[SERVER_LIST_JSON] = json }
 
     suspend fun clear() = store.edit { it.clear() }
 }

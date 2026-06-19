@@ -75,6 +75,7 @@
     "update_playlist",
     "delete_playlist",
     "scrobble",
+    "set_rating",
     "report_playback",
     "save_play_queue",
     "get_play_queue",

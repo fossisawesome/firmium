@@ -5,6 +5,7 @@ import { tauriInvoke } from './tauri'
 import type { Song, PlaybackState, LyricLine, SimilarMatch, WordTiming, QueueStatePayload } from './types/tauri-commands'
 import type { AudioBridge } from './audio-bridge'
 import type { ServerPlaylist } from './api'
+import { clearAll as clearListCache } from './listCache'
 
 const DEFAULT_VOLUME = 0.8
 
@@ -31,6 +32,44 @@ export function clearAuth(): void {
   authUsername.set(null)
   authPassword.set(null)
   tauriInvoke('set_connection', { server: null, username: null, password: null })
+}
+
+// ── Multi-server ─────────────────────────────────────────────────────────────
+export interface SavedServer { url: string; username: string; active?: boolean }
+
+function loadServerList(): SavedServer[] {
+  try { return JSON.parse(SafeStorage.getItem('firmium_servers') ?? '[]') }
+  catch { return [] }
+}
+
+export const serverList = writable<SavedServer[]>(loadServerList())
+serverList.subscribe(list => SafeStorage.setItem('firmium_servers', JSON.stringify(list)))
+
+export function addSavedServer(url: string, username: string): void {
+  serverList.update(list => {
+    const normalized = url.replace(/\/+$/, '')
+    const existing = list.findIndex(s => s.url === normalized && s.username === username)
+    const updated = list.map(s => ({ ...s, active: false }))
+    if (existing >= 0) {
+      updated[existing] = { ...updated[existing], active: true }
+    } else {
+      updated.push({ url: normalized, username, active: true })
+    }
+    return updated
+  })
+}
+
+export function removeSavedServer(url: string, username: string): void {
+  serverList.update(list => list.filter(s => !(s.url === url && s.username === username)))
+}
+
+export function switchServer(url: string, username: string, password: string): void {
+  queue.set([])
+  queueIdx.set(-1)
+  clearListCache()
+  setAuth(url, username, password)
+  addSavedServer(url, username)
+  dataSourceVersion.update(n => n + 1)
 }
 
 // Bumped after local-library imports/downloads so local-data views refetch even

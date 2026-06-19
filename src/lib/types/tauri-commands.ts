@@ -50,6 +50,7 @@ export interface Song {
   suffix?: string
   contentType?: string
   trackInfo?: string
+  userRating?: number
 }
 
 // A song paired with a similarity score, from the sonicSimilarity extension

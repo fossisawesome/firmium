@@ -73,6 +73,7 @@ fun FullScreenPlayer(
     onAddToPlaylist: (item: PlaylistListItem) -> Unit,
     onCreatePlaylistAndAdd: (name: String) -> Unit,
     onStartRadio: (() -> Unit)? = null,
+    onRate: ((songId: String, rating: Int) -> Unit)? = null,
 ) {
     val track = state.currentTrack ?: return
     val colors = LocalFirmiumColors.current
@@ -205,6 +206,7 @@ fun FullScreenPlayer(
                         onQueueOpen = onQueueOpen,
                         onSimilarTracksOpen = onSimilarTracksOpen,
                         onVolumeChange = onVolumeChange, compact = true,
+                        onRate = onRate,
                     )
                 }
             }
@@ -259,6 +261,7 @@ fun FullScreenPlayer(
                     onQueueOpen = onQueueOpen,
                     onSimilarTracksOpen = onSimilarTracksOpen,
                     onVolumeChange = onVolumeChange, compact = false,
+                    onRate = onRate,
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -339,6 +342,7 @@ private fun PlayerControls(
     onSimilarTracksOpen: (() -> Unit)? = null,
     onVolumeChange: (Float) -> Unit,
     compact: Boolean,
+    onRate: ((songId: String, rating: Int) -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     val gap: Dp = if (compact) 12.dp else 28.dp
@@ -368,6 +372,19 @@ private fun PlayerControls(
             maxLines = 1,
             modifier = Modifier.basicMarquee(),
         )
+
+        // Star rating row
+        if (onRate != null) {
+            Spacer(Modifier.height(8.dp))
+            StarRating(
+                rating = track.userRating ?: 0,
+                onRate = { rating -> onRate(track.id, if (rating == track.userRating) 0 else rating) },
+                starSize = if (compact) 18.dp else 22.dp,
+                accentColor = colors.accent,
+                mutedColor = colors.muted,
+            )
+        }
+
         val trackInfo = track.formatTrackInfo()
         var statsExpanded by remember { mutableStateOf(false) }
         if (trackInfo.isNotEmpty()) {
@@ -717,6 +734,32 @@ private fun AddToPlaylistFab(onClick: () -> Unit, modifier: Modifier = Modifier)
     ) {
         FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist",
             tint = colors.bg, modifier = Modifier.size(24.dp))
+    }
+}
+
+// 1–5 star rating row. Tapping the current rating clears it (via caller logic).
+@Composable
+private fun StarRating(
+    rating: Int,
+    onRate: (Int) -> Unit,
+    starSize: Dp,
+    accentColor: Color,
+    mutedColor: Color,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (i in 1..5) {
+            FirmiumIcon(
+                imageVector = if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                contentDescription = "Rate $i",
+                tint = if (i <= rating) accentColor else mutedColor,
+                modifier = Modifier
+                    .size(starSize)
+                    .clickable { onRate(i) },
+            )
+        }
     }
 }
 

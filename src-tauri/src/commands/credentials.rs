@@ -6,18 +6,28 @@ use keyring::Entry;
 // KEYRING / CREDENTIALS MANAGEMENT
 // ============================================================================
 
-/// Keyring service name for all Firmium credentials. Pinned here rather than
-/// accepted from the frontend so the IPC surface can't be used to read/write
-/// arbitrary keyring entries.
+/// Default keyring service name. Used when no explicit service is provided
+/// (backwards compatibility with single-server setups).
 #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
-const SERVICE: &str = "firmium-desktop";
+const DEFAULT_SERVICE: &str = "firmium-desktop";
+
+/// Resolves the keyring service name. For multi-server support, the frontend
+/// can pass the server URL as the service; if empty/missing, falls back to
+/// the default so existing single-server keyring entries keep working.
+#[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
+fn resolve_service(service: Option<&str>) -> &str {
+    match service {
+        Some(s) if !s.is_empty() => s,
+        _ => DEFAULT_SERVICE,
+    }
+}
 
 /// Save a password to the OS keyring.
 #[tauri::command]
-pub fn save_password(_user: &str, _pass: &str) -> Result<(), String> {
+pub fn save_password(_service: Option<&str>, _user: &str, _pass: &str) -> Result<(), String> {
     #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
     {
-        let entry = Entry::new(SERVICE, _user).map_err(|e| e.to_string())?;
+        let entry = Entry::new(resolve_service(_service), _user).map_err(|e| e.to_string())?;
         entry.set_password(_pass).map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -25,10 +35,10 @@ pub fn save_password(_user: &str, _pass: &str) -> Result<(), String> {
 
 /// Retrieve a password from the OS keyring.
 #[tauri::command]
-pub fn get_password(_user: &str) -> Result<String, String> {
+pub fn get_password(_service: Option<&str>, _user: &str) -> Result<String, String> {
     #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
     {
-        let entry = Entry::new(SERVICE, _user).map_err(|e| e.to_string())?;
+        let entry = Entry::new(resolve_service(_service), _user).map_err(|e| e.to_string())?;
         return entry.get_password().map_err(|e| e.to_string());
     }
     #[allow(unreachable_code)]
@@ -37,10 +47,10 @@ pub fn get_password(_user: &str) -> Result<String, String> {
 
 /// Delete a password from the OS keyring.
 #[tauri::command]
-pub fn delete_password(_user: &str) -> Result<(), String> {
+pub fn delete_password(_service: Option<&str>, _user: &str) -> Result<(), String> {
     #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
     {
-        let entry = Entry::new(SERVICE, _user).map_err(|e| e.to_string())?;
+        let entry = Entry::new(resolve_service(_service), _user).map_err(|e| e.to_string())?;
         entry.delete_credential().map_err(|e| e.to_string())?;
     }
     Ok(())

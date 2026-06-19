@@ -1,6 +1,6 @@
 <script lang="ts">
   import { IconMusic, IconPlay, IconShuffle } from '../lib/icons'
-  import { currentTrack } from '../lib/stores'
+  import { currentTrack, isAuthed } from '../lib/stores'
   import { loadImage, Api } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
   import { dataSourceVersion } from '../lib/stores'
@@ -82,6 +82,29 @@
     tauriInvoke('shuffle_and_play', { songs: tracks }).catch(console.error)
   }
 
+  function rateTrack(track: Song, rating: number) {
+    Api.setRating(track.id, rating)
+    const idx = tracks.findIndex(t => t.id === track.id)
+    if (idx >= 0) tracks[idx] = { ...tracks[idx], userRating: rating || undefined }
+  }
+
+  const BPM_RANGES = [
+    { label: 'All', min: 0, max: Infinity },
+    { label: '<80', min: 0, max: 79 },
+    { label: '80-120', min: 80, max: 120 },
+    { label: '120+', min: 121, max: Infinity },
+  ] as const
+
+  let selectedBpm = $state(0)
+
+  const hasBpmData = $derived(tracks.some(t => t.bpm && t.bpm > 0))
+
+  const filteredTracks = $derived.by(() => {
+    if (selectedBpm === 0) return tracks
+    const range = BPM_RANGES[selectedBpm]
+    return tracks.filter(t => t.bpm && t.bpm >= range.min && t.bpm <= range.max)
+  })
+
   function isPlaying(track: Song) {
     return $currentTrack?.id === track.id
   }
@@ -107,8 +130,21 @@
 </div>
 
 <LoadingState {loading} {error} empty={tracks.length === 0} loadingMessage="Loading album tracks…" emptyMessage="No tracks found.">
+  {#if hasBpmData}
+    <div class="filter-bar">
+      <div class="filter-group">
+        {#each BPM_RANGES as range, i}
+          <button
+            class="filter-chip"
+            class:active={selectedBpm === i}
+            onclick={() => selectedBpm = i}
+          >BPM {range.label}</button>
+        {/each}
+      </div>
+    </div>
+  {/if}
   <div class="track-list">
-    <VirtualList items={tracks} itemHeight={TRACK_ROW_HEIGHT}>
+    <VirtualList items={filteredTracks} itemHeight={TRACK_ROW_HEIGHT}>
       {#snippet children(track, idx)}
         <TrackRow
           {track} {idx}
@@ -117,6 +153,7 @@
           {albumArtist}
           downloaded={isDownloaded(track)}
           onPlay={playTrack}
+          onRate={$isAuthed ? rateTrack : undefined}
         />
       {/snippet}
     </VirtualList>

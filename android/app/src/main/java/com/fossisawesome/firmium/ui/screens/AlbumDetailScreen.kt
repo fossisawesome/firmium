@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,11 +23,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.AlbumDetailState
 import com.fossisawesome.firmium.viewmodel.PlaylistListItem
+
+private data class BpmRange(val label: String, val min: Int, val max: Int)
 
 @Composable
 fun AlbumDetailScreen(
@@ -46,6 +50,16 @@ fun AlbumDetailScreen(
     var pendingSong by remember { mutableStateOf<Song?>(null) }
     var pendingAllSongs by remember { mutableStateOf(false) }
     val colors = LocalFirmiumColors.current
+    var selectedBpm by remember { mutableIntStateOf(0) }
+
+    val bpmRanges = remember {
+        listOf(
+            BpmRange("All", 0, Int.MAX_VALUE),
+            BpmRange("<80", 0, 79),
+            BpmRange("80-120", 80, 120),
+            BpmRange("120+", 121, Int.MAX_VALUE),
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         FirmiumDetailHeader(title = state.album?.name ?: "", onBack = onBack)
@@ -126,12 +140,46 @@ fun AlbumDetailScreen(
                         FirmiumDivider()
                     }
 
-                    itemsIndexed(album.tracks, key = { _, s -> s.id }) { index, song ->
+                    val hasBpm = album.tracks.any { (it.bpm ?: 0) > 0 }
+                    if (hasBpm) {
+                        item(key = "bpm_filter") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                bpmRanges.forEachIndexed { i, range ->
+                                    val active = selectedBpm == i
+                                    val bg = if (active) colors.accent else colors.surface
+                                    val fg = if (active) Color.Black else colors.muted
+                                    val borderColor = if (active) colors.accent else colors.border
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(bg)
+                                            .border(1.dp, borderColor, RoundedCornerShape(2.dp))
+                                            .clickable { selectedBpm = i }
+                                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                                    ) {
+                                        Text("BPM ${range.label}", fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace, color = fg)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    val displayTracks = if (selectedBpm == 0) album.tracks
+                    else {
+                        val r = bpmRanges[selectedBpm]
+                        album.tracks.filter { (it.bpm ?: 0) in r.min..r.max }
+                    }
+
+                    itemsIndexed(displayTracks, key = { _, s -> s.id }) { index, song ->
                         AlbumTrackRow(
                             track = song,
                             index = index + 1,
                             coverUrl = coverUrlFor(song.coverArt),
-                            onClick = { onPlayAll(album.tracks, index) },
+                            onClick = { onPlayAll(displayTracks, index) },
                             onAddClick = { pendingSong = song },
                             onDownloadClick = onDownloadTrack?.invoke(song),
                         )

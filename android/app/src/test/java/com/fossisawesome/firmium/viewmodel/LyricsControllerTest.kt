@@ -21,7 +21,8 @@ private fun song(id: String) = Song(
     albumId = "album-$id", artistId = "artist-1", duration = 180, track = null, year = null,
     genre = null, genres = emptyList(), coverArt = null, size = null, bitRate = null,
     samplingRate = null, bitDepth = null, suffix = null,
-    replayGainTrack = null, replayGainAlbum = null, bpm = null,
+    replayGainTrack = null, replayGainAlbum = null,
+    replayGainTrackPeak = null, replayGainAlbumPeak = null, bpm = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)

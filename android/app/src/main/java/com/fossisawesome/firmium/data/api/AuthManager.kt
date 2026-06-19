@@ -3,6 +3,8 @@ package com.fossisawesome.firmium.data.api
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.SecureStorage
 import kotlinx.coroutines.flow.first
+import org.json.JSONArray
+import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -51,13 +53,68 @@ class AuthManager(
     // Server URL and username are always saved; password is only saved if savePassword=true.
     suspend fun persistCredentials(server: String, username: String, password: String, savePassword: Boolean = true) {
         setCredentials(server, username, password)
-        prefs.setServerUrl(server.trimEnd('/'))
+        val normalized = server.trimEnd('/')
+        prefs.setServerUrl(normalized)
         prefs.setUsername(username)
+        val key = serverStorageKey(normalized, username)
         if (savePassword) {
             secureStorage.save("firmium", username, password)
+            secureStorage.save(key, username, password)
         } else {
             secureStorage.delete("firmium", username)
+            secureStorage.delete(key, username)
         }
+        addToServerList(normalized, username)
+    }
+
+    data class SavedServer(val url: String, val username: String)
+
+    suspend fun savedServers(): List<SavedServer> {
+        val json = prefs.serverListJson.first() ?: return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                SavedServer(obj.getString("url"), obj.getString("username"))
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private suspend fun addToServerList(url: String, username: String) {
+        val list = savedServers().toMutableList()
+        list.removeAll { it.url == url && it.username == username }
+        list.add(0, SavedServer(url, username))
+        prefs.setServerListJson(serverListToJson(list))
+    }
+
+    suspend fun removeFromServerList(url: String, username: String) {
+        val key = serverStorageKey(url, username)
+        secureStorage.delete(key, username)
+        val list = savedServers().filter { !(it.url == url && it.username == username) }
+        prefs.setServerListJson(serverListToJson(list))
+    }
+
+    suspend fun switchToSaved(url: String, username: String): Boolean {
+        val key = serverStorageKey(url, username)
+        val password = secureStorage.get(key, username)
+            ?: secureStorage.get("firmium", username)
+            ?: return false
+        setCredentials(url, username, password)
+        prefs.setServerUrl(url)
+        prefs.setUsername(username)
+        addToServerList(url, username)
+        return true
+    }
+
+    private fun serverStorageKey(url: String, username: String): String =
+        "firmium::$url"
+
+    private fun serverListToJson(list: List<SavedServer>): String {
+        val arr = JSONArray()
+        list.forEach { s ->
+            arr.put(JSONObject().put("url", s.url).put("username", s.username))
+        }
+        return arr.toString()
     }
 
     // Builds the full auth query param map for a Subsonic request.

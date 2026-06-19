@@ -172,7 +172,7 @@ pub fn get_eq_state<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>) -> EqSta
         .into_iter()
         .map(|(name, p)| ProfileInfo { name, kind: p.kind, bands: p.bands })
         .collect();
-    profiles.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    profiles.sort_by_key(|a| a.name.to_lowercase());
 
     EqState { enabled: file.settings.enabled, profiles, default_device, active_profile, device_profiles }
 }

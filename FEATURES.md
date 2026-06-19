@@ -34,6 +34,9 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Artist pages with photos and Last.fm biography | ✅ | ✅ |
 | Album detail pages with full track list | ✅ | ✅ |
 | Search across your whole library | ✅ | ✅ |
+| Track ratings — 1-5 star rating on tracks, synced to your server | ✅ | ✅ |
+| Genre and decade filter chips on the album list | ✅ | ✅ |
+| BPM range filter on track lists (album detail, playlists) | ✅ | ✅ |
 
 ---
 
@@ -143,6 +146,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Shuffle a whole playlist in one tap | ✅ |
 | "Up Next" queue visible on the car display | ✅ |
 | Notification tinted to the track's cover art color | ✅ |
+| Thumbs up/down favorite toggle on the car display | ✅ |
 
 ---
 
@@ -176,6 +180,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | Credentials stored in OS keyring — never saved as plaintext | ✅ | ✅ |
+| Multi-server quick switcher — save and switch between multiple servers | ✅ | ✅ |
 | Auto-login on startup | ✅ | ✅ |
 | Scrobbling — reports plays to the server (Last.fm via Navidrome, etc.) | ✅ | ✅ |
 | ListenBrainz scrobbling — submits completed tracks to ListenBrainz with your user token | ✅ | ✅ |

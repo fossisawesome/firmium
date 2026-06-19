@@ -565,6 +565,7 @@ fun AppNavGraph(
                 playerState.currentTrack?.let { playlistViewModel.createAndAdd(name, listOf(it)) }
             },
             onStartRadio = { playerState.currentTrack?.let { playerViewModel.startRadio(it) } },
+            onRate = { songId, rating -> playerViewModel.setRating(songId, rating) },
         )
     }
 

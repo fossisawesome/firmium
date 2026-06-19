@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.fossisawesome.firmium.data.api.AuthManager
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.AuthState
@@ -43,6 +44,8 @@ fun AccountDialog(
     isAuthenticated: Boolean,
     serverUrl: String?,
     onLogin: (server: String, username: String, password: String, savePassword: Boolean) -> Unit,
+    onSwitchServer: (url: String, username: String) -> Unit,
+    onRemoveServer: (url: String, username: String) -> Unit,
     onDisconnect: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -114,6 +117,14 @@ fun AccountDialog(
                         )
                     }
                 } else {
+                    if (state.savedServers.isNotEmpty()) {
+                        SavedServersList(
+                            servers = state.savedServers,
+                            isLoading = state.isLoading,
+                            onConnect = onSwitchServer,
+                            onRemove = onRemoveServer,
+                        )
+                    }
                     AccountConnectForm(state = state, onLogin = onLogin)
                 }
             }
@@ -311,6 +322,76 @@ private fun SetupField(
             keyboardActions = KeyboardActions(onNext = { onImeAction?.invoke() }, onDone = { onImeAction?.invoke() }),
             modifier = if (focusRequester != null) Modifier.fillMaxWidth().focusRequester(focusRequester)
                        else Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun SavedServersList(
+    servers: List<AuthManager.SavedServer>,
+    isLoading: Boolean,
+    onConnect: (url: String, username: String) -> Unit,
+    onRemove: (url: String, username: String) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    Column(modifier = Modifier.padding(bottom = 16.dp)) {
+        Text(
+            "Saved Servers".uppercase(),
+            fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+            color = colors.muted, letterSpacing = 0.5.sp,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        servers.forEach { server ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(colors.bg)
+                    .border(1.dp, colors.border, RoundedCornerShape(2.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        server.url,
+                        fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                        color = colors.text, maxLines = 1,
+                    )
+                    Text(
+                        server.username,
+                        fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        color = colors.muted,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(colors.accent)
+                        .clickable(enabled = !isLoading) { onConnect(server.url, server.username) }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        "Connect",
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace, color = Color.Black,
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                FirmiumIconButton(
+                    onClick = { onRemove(server.url, server.username) },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    FirmiumIcon(Icons.Default.Close, contentDescription = "Remove", tint = colors.muted, modifier = Modifier.size(14.dp))
+                }
+            }
+        }
+        Text(
+            "or add a new server",
+            fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+            color = colors.muted, letterSpacing = 0.5.sp,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }

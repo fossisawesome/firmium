@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 
 private const val CHANNEL_ID = "firmium_now_playing"
 const val NOTIFICATION_ID = 1
+private const val ACTION_TOGGLE_FAVORITE = "com.fossisawesome.firmium.TOGGLE_FAVORITE"
 
 // MediaSession + persistent media notification. Ported from NowPlayingPlugin.kt with Tauri removed.
 // The PlayerViewModel drives this directly instead of JS calling tauri commands.
@@ -49,6 +50,7 @@ class NowPlayingController(private val context: Context) {
         fun onSkipToQueueItem(index: Long) {}
         fun onSetShuffleMode(enabled: Boolean) {}
         fun onSetRepeatMode(repeatMode: String) {}
+        fun onToggleFavorite() {}
     }
 
     var listener: Listener? = null
@@ -124,6 +126,9 @@ class NowPlayingController(private val context: Context) {
                         else -> "none"
                     })
                 }
+                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
+                    if (action == ACTION_TOGGLE_FAVORITE) listener?.onToggleFavorite()
+                }
             })
             // Advertise the browse/voice play actions on an idle state so Android Auto can start
             // playback from cold (no track loaded yet); buildNotification() overwrites this once
@@ -175,7 +180,11 @@ class NowPlayingController(private val context: Context) {
             .apply { if (art != null) putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art) }
             .build()
 
-    private fun buildNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long): Notification {
+    private var _isFavorited = false
+
+    fun setFavorited(fav: Boolean) { _isFavorited = fav }
+
+    private fun buildNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long, isFavorited: Boolean = _isFavorited): Notification {
         val session = ensureMediaSession()
         val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
 
@@ -197,6 +206,13 @@ class NowPlayingController(private val context: Context) {
                     PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE or
                     PlaybackStateCompat.ACTION_SET_REPEAT_MODE or
                     PlaybackStateCompat.ACTION_SEEK_TO,
+                )
+                .addCustomAction(
+                    PlaybackStateCompat.CustomAction.Builder(
+                        ACTION_TOGGLE_FAVORITE,
+                        if (isFavorited) "Unfavorite" else "Favorite",
+                        if (isFavorited) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off,
+                    ).build()
                 )
                 .build()
         )

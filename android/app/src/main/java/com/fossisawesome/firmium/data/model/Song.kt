@@ -27,6 +27,7 @@ data class Song(
     val replayGainTrackPeak: Double?,
     val replayGainAlbumPeak: Double?,
     val bpm: Int?,
+    val userRating: Int? = null,
 ) {
     // Builds a "FLAC · 96 kHz · 24-bit · 1411 kbps" style summary, omitting missing parts.
     fun formatTrackInfo(): String {

@@ -146,6 +146,13 @@ class PlaybackController(
                 if (enabled != _state.value.shuffleEnabled) toggleShuffle()
             }
             override fun onSetRepeatMode(repeatMode: String) { setRepeatMode(repeatMode) }
+            override fun onToggleFavorite() {
+                val track = _state.value.currentTrack ?: return
+                val newRating = if ((track.userRating ?: 0) > 0) 0 else 5
+                scope.launch { api.setRating(track.id, newRating) }
+                updateTrackRating(track.id, newRating)
+                nowPlaying.setFavorited(newRating > 0)
+            }
         }
     }
 
@@ -255,6 +262,12 @@ class PlaybackController(
     }
 
     fun setSeekingFlag(seeking: Boolean) { _state.update { it.copy(isSeeking = seeking) } }
+
+    fun updateTrackRating(songId: String, rating: Int) {
+        _state.update { s ->
+            s.copy(queue = s.queue.map { if (it.id == songId) it.copy(userRating = if (rating == 0) null else rating) else it })
+        }
+    }
 
     // ── Settings ───────────────────────────────────────────────────────────────
 
@@ -441,6 +454,7 @@ class PlaybackController(
         val track = _state.value.currentTrack ?: return
         sessionPlayedIds.add(track.id)
         val coverArt = track.coverArt
+        nowPlaying.setFavorited((track.userRating ?: 0) > 0)
         nowPlaying.update(
             title = track.title,
             artist = track.displayArtist ?: track.artist,

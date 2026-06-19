@@ -203,6 +203,7 @@ fn scan(app: &AppHandle) -> Result<LocalLibraryCache, String> {
             suffix: Some(raw_track.suffix.clone()),
             content_type: Some(content_type_for(&raw_track.suffix).to_string()),
             track_info: format_track_info(&track_info_json),
+            user_rating: None,
         };
 
         songs_by_album.entry(album_id).or_default().push(song.clone());
