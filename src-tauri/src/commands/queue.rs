@@ -197,6 +197,7 @@ pub fn init_playback_settings(
     crossfade_duration: f32,
     gapless_enabled: bool,
     replay_gain_enabled: bool,
+    auto_continue: bool,
 ) -> Result<(), String> {
     let mut inner = state.inner.lock();
     inner.volume = volume.clamp(0.0, 1.0);
@@ -204,6 +205,14 @@ pub fn init_playback_settings(
     inner.crossfade_duration = crossfade_duration.clamp(1.0, 12.0);
     inner.gapless_enabled = gapless_enabled;
     inner.replay_gain_enabled = replay_gain_enabled;
+    inner.auto_continue = auto_continue;
+    Ok(())
+}
+
+/// Toggles Smart Radio auto-continue (seed more tracks when the queue ends).
+#[tauri::command]
+pub fn set_auto_continue(state: State<'_, Arc<QueueState>>, enabled: bool) -> Result<(), String> {
+    state.inner.lock().auto_continue = enabled;
     Ok(())
 }
 

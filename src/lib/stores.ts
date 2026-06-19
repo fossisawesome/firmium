@@ -53,7 +53,7 @@ export const isOpenSubsonic = derived(openSubsonicExtensions, $ext => $ext !== n
 export const hasSonicSimilarity = derived(openSubsonicExtensions, $ext => $ext?.includes('sonicSimilarity') ?? false)
 
 // ── View routing ──────────────────────────────────────────────────────────────
-export type ViewType = 'albums' | 'artists' | 'search' | 'playlists' | 'settings' | 'home'
+export type ViewType = 'albums' | 'artists' | 'search' | 'playlists' | 'settings' | 'home' | 'mix'
   | 'album' | 'artist' | 'playlist'
 
 export interface ActiveView {
@@ -141,6 +141,18 @@ export const gaplessEnabled = writable(SafeStorage.getItem('firmium_gapless') !=
 
 export const replayGainEnabled = writable(SafeStorage.getItem('firmium_replaygain') !== 'false')
 
+// Smart Radio — when the queue ends, seed and append more tracks instead of
+// stopping. Off by default. The Rust side reads this via init_playback_settings
+// and emits 'queue-exhausted' so radio.ts can run the seeding cascade.
+export const autoContinueEnabled = writable(SafeStorage.getItem('firmium_autocontinue') === 'true')
+
+export function setAutoContinueEnabled(v: unknown): void {
+  const val = Boolean(v)
+  autoContinueEnabled.set(val)
+  SafeStorage.setItem('firmium_autocontinue', val ? 'true' : 'false')
+  tauriInvoke('set_auto_continue', { enabled: val }).catch(() => {})
+}
+
 export function setReplayGainEnabled(v: unknown): void {
   const val = Boolean(v)
   replayGainEnabled.set(val)
@@ -212,6 +224,10 @@ export function setVisualizerMode(mode: VisualizerMode): void {
   visualizerMode.set(mode)
   SafeStorage.setItem('firmium_visualizer_mode', mode)
 }
+
+// ── Audio stats ───────────────────────────────────────────────────────────────
+// Expandable now-playing panel showing format, BPM, and ReplayGain details.
+export const audioStatsOpen = writable(false)
 
 // ── Lyrics ────────────────────────────────────────────────────────────────────
 export const lyricsOpen = writable(false)

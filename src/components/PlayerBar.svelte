@@ -5,16 +5,16 @@
     volume, repeatOne, repeatAll,
     lyricsOpen, setVolume,
     hasSonicSimilarity, similarTracksOpen, similarTracksTrackId, similarTracksResults, similarTracksStatus,
-    visualizerOpen,
+    visualizerOpen, audioStatsOpen,
   } from '../lib/stores'
-  import { tauriInvoke } from '../lib/tauri'
+  import { tauriInvoke, tauriFetch } from '../lib/tauri'
   import { fetchAndShowLyrics } from '../lib/playback'
-  import { formatDuration } from '../lib/utils'
-  import { Api, loadImage } from '../lib/api'
+  import { formatDuration, SafeStorage } from '../lib/utils'
+  import { Api, Keyring, loadImage } from '../lib/api'
   import { togglePlay, prevTrack, nextTrack, cycleRepeat } from '../lib/playerControls'
   import {
     IconPlay, IconPause, IconLoading, IconPrev, IconNext,
-    IconRepeat, IconLyrics, IconVolume, IconMusic, IconHexagon, IconWaveform
+    IconRepeat, IconLyrics, IconVolume, IconMusic, IconHexagon, IconWaveform, IconInfo
   } from '../lib/icons'
 
   const playIcon = $derived(
@@ -50,6 +50,26 @@
     return typeof first === 'string' ? first : undefined
   }
 
+  async function fetchLastfmSimilarTracks(artist: string, title: string, apiKey: string): Promise<import('../lib/types/tauri-commands').SimilarMatch[]> {
+    const url = `https://ws.audioscrobbler.com/2.0/?method=track.getSimilar&artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(title)}&api_key=${encodeURIComponent(apiKey)}&limit=15&format=json`
+    const res = await tauriFetch(url)
+    const data = await res.json()
+    const tracks: { name: string; artist: { name: string }; match: string }[] = data?.similartracks?.track ?? []
+    if (tracks.length === 0) return []
+    const results: import('../lib/types/tauri-commands').SimilarMatch[] = []
+    for (const t of tracks.slice(0, 10)) {
+      try {
+        const found = await Api.search(`${t.artist.name} ${t.name}`)
+        const match = found.songs.find(s =>
+          s.title.toLowerCase() === t.name.toLowerCase() &&
+          (s.artist ?? '').toLowerCase() === t.artist.name.toLowerCase()
+        )
+        if (match) results.push({ song: match, similarity: parseFloat(t.match) })
+      } catch { /* skip unresolvable tracks */ }
+    }
+    return results
+  }
+
   async function toggleSimilarTracks() {
     const nowOpen = !get(similarTracksOpen)
     similarTracksOpen.set(nowOpen)
@@ -61,11 +81,34 @@
     similarTracksStatus.set('Loading similar tracks…')
     similarTracksResults.set([])
     try {
-      const results = get(hasSonicSimilarity)
-        ? await Api.getSonicSimilarTracks(track.id)
-        : await Api.getSimilarTracksFallback(track.id, track.artistId, firstGenre(track), 10)
-      if (get(similarTracksTrackId) !== track.id) return
-      similarTracksResults.set(results)
+      const stale = () => get(similarTracksTrackId) !== track.id
+
+      // 1. sonicSimilarity (server extension)
+      if (get(hasSonicSimilarity)) {
+        try {
+          const sonic = await Api.getSonicSimilarTracks(track.id)
+          if (stale()) return
+          if (sonic.length > 0) { similarTracksResults.set(sonic); similarTracksStatus.set(''); return }
+        } catch { /* fall through */ }
+      }
+
+      // 2. Last.fm track.getSimilar
+      const lastfmEnabled = SafeStorage.getItem('firmium_lastfm') === 'true'
+      if (lastfmEnabled && track.artist && track.title) {
+        const apiKey = lastfmEnabled ? ((await Keyring.load('lastfm_api_key').catch(() => '')) as string) || '' : ''
+        if (apiKey) {
+          try {
+            const lfm = await fetchLastfmSimilarTracks(track.artist, track.title, apiKey)
+            if (stale()) return
+            if (lfm.length > 0) { similarTracksResults.set(lfm); similarTracksStatus.set(''); return }
+          } catch { /* fall through */ }
+        }
+      }
+
+      // 3. Genre/artist fallback
+      const fallback = await Api.getSimilarTracksFallback(track.id, track.artistId, firstGenre(track), 10)
+      if (stale()) return
+      similarTracksResults.set(fallback)
       similarTracksStatus.set('')
     } catch (e) {
       if (get(similarTracksTrackId) === track.id) {
@@ -172,6 +215,9 @@
     </button>
     <button class="ctrl-btn secondary-ctrl" class:active={$visualizerOpen} onclick={() => visualizerOpen.update(v => !v)} title="Visualizer" aria-label={$visualizerOpen ? 'Hide visualizer' : 'Show visualizer'}>
       <span class="icon" style="width:16px;height:16px">{@html IconWaveform}</span>
+    </button>
+    <button class="ctrl-btn secondary-ctrl" class:active={$audioStatsOpen} onclick={() => audioStatsOpen.update(v => !v)} title="Audio Stats" aria-label={$audioStatsOpen ? 'Hide audio stats' : 'Show audio stats'}>
+      <span class="icon" style="width:16px;height:16px">{@html IconInfo}</span>
     </button>
   </div>
 </div>

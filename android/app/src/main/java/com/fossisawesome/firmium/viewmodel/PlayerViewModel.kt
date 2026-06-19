@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.audio.PlaybackController
 import com.fossisawesome.firmium.audio.PlayerState
+import com.fossisawesome.firmium.data.RadioSeeder
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.model.Song
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val controller: PlaybackController = getApplication<FirmiumApplication>().playback
     private val api: ApiClient = getApplication<FirmiumApplication>().api
+    private val radioSeeder = RadioSeeder(api)
 
     val state: StateFlow<PlayerState> get() = controller.state
 
@@ -51,6 +53,25 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     // ── Transport (delegate to controller) ───────────────────────────────────────
 
     fun playAt(songs: List<Song>, startIndex: Int) = controller.playAt(songs, startIndex)
+
+    // Start Radio: seed from an item and play immediately.
+    fun startRadio(seed: Song) {
+        viewModelScope.launch {
+            val seeded = radioSeeder.seedFrom(seed)
+            val tracks = listOf(seed) + seeded
+            if (tracks.isNotEmpty()) controller.playAt(tracks, 0)
+        }
+    }
+
+    // Mood Mix: build a shuffled energy-band queue and play it. onResult reports the
+    // number of tracks so the UI can surface an empty-result message.
+    fun playMoodMix(energy: RadioSeeder.Energy, genre: String?, onResult: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val tracks = radioSeeder.buildMoodMix(energy, genre)
+            if (tracks.isNotEmpty()) controller.playAt(tracks, 0)
+            onResult(tracks.size)
+        }
+    }
     fun skipToIndex(index: Int) = controller.skipToIndex(index)
     fun pause() = controller.pause()
     fun resume() = controller.resume()

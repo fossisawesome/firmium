@@ -16,6 +16,9 @@ pub struct QueueStateInner {
     pub crossfade_duration: f32,
     pub gapless_enabled: bool,
     pub replay_gain_enabled: bool,
+    // Smart Radio: when the queue is exhausted, ask the frontend to seed and
+    // append more tracks instead of stopping.
+    pub auto_continue: bool,
     pub volume: f32,
     // Per-track progress flags — reset on each new track
     pub crossfade_started: bool,
@@ -43,6 +46,7 @@ impl QueueState {
                 crossfade_duration: 5.0,
                 gapless_enabled: true,
                 replay_gain_enabled: true,
+                auto_continue: false,
                 volume: 0.8,
                 crossfade_started: false,
                 preload_started: false,

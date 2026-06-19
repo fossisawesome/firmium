@@ -1,6 +1,7 @@
 package com.fossisawesome.firmium.audio
 
 import android.content.Context
+import android.media.AudioManager
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -31,6 +32,11 @@ class AudioPlayer(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val sessions = ConcurrentHashMap<String, AudioSession>()
 
+    /** Manages the system Equalizer/BassBoost effects per audio session. */
+    val equalizer = EqualizerController()
+
+    private val audioManager by lazy { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
     private val audioAttrs = AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -40,6 +46,14 @@ class AudioPlayer(private val context: Context) {
         ExoPlayer.Builder(context)
             .setAudioAttributes(audioAttrs, true)
             .build()
+
+    /** Assign a known audio session id and attach EQ effects so they're live before playback. */
+    private fun setupEq(player: ExoPlayer): Int {
+        val sessionId = audioManager.generateAudioSessionId()
+        player.setAudioSessionId(sessionId)
+        equalizer.attach(sessionId)
+        return sessionId
+    }
 
     private fun gainFactor(gainDb: Float?): Float =
         if (gainDb != null) (10.0.pow(gainDb / 20.0)).toFloat().coerceIn(0.01f, 4.0f)
@@ -72,6 +86,7 @@ class AudioPlayer(private val context: Context) {
                     // causing repeat/next to not fire when the app isn't in the foreground.
                     Player.STATE_ENDED -> scope.launch {
                         if (sessions.remove(playerId) != null) {
+                            equalizer.detach(session.audioSessionId)
                             session.player.release()
                             listener?.onPlaybackFinished(playerId)
                         }
@@ -103,6 +118,7 @@ class AudioPlayer(private val context: Context) {
     private fun releaseSession(playerId: String) {
         sessions.remove(playerId)?.let { s ->
             s.fadeJob?.cancel()
+            equalizer.detach(s.audioSessionId)
             s.player.stop()
             s.player.release()
         }
@@ -113,9 +129,10 @@ class AudioPlayer(private val context: Context) {
     fun play(streamUrl: String, trackId: String, replayGainDb: Float? = null): String {
         val playerId = UUID.randomUUID().toString()
         val player = buildPlayer()
+        val sessionId = setupEq(player)
         val gain = gainFactor(replayGainDb)
         player.volume = gain
-        val session = AudioSession(player, trackId, 1.0f, gain)
+        val session = AudioSession(player, trackId, 1.0f, gain, audioSessionId = sessionId)
         sessions[playerId] = session
         attachListeners(playerId, session)
         player.setMediaItem(MediaItem.fromUri(streamUrl))
@@ -215,6 +232,7 @@ class AudioPlayer(private val context: Context) {
         sessions.keys.toList().forEach { releaseSession(it) }
         val playerId = UUID.randomUUID().toString()
         val player = buildPlayer()
+        val sessionId = setupEq(player)
         val gainFactors = tracks.map { gainFactor(it.replayGainDb) }
         val idx = startIndex.coerceIn(0, (tracks.size - 1).coerceAtLeast(0))
         val initialGain = gainFactors.getOrElse(idx) { 1.0f }
@@ -228,6 +246,7 @@ class AudioPlayer(private val context: Context) {
             queueTrackIds = tracks.map { it.trackId },
             queueReplayGainFactors = gainFactors,
             currentQueueIndex = idx,
+            audioSessionId = sessionId,
         )
         sessions[playerId] = session
         attachListeners(playerId, session)
@@ -269,9 +288,10 @@ class AudioPlayer(private val context: Context) {
     ): String {
         val newPlayerId = UUID.randomUUID().toString()
         val newPlayer = buildPlayer()
+        val sessionId = setupEq(newPlayer)
         val gain = gainFactor(replayGainDb)
         newPlayer.volume = 0f
-        val newSession = AudioSession(newPlayer, trackId, targetVolume, gain)
+        val newSession = AudioSession(newPlayer, trackId, targetVolume, gain, audioSessionId = sessionId)
         sessions[newPlayerId] = newSession
         attachListeners(newPlayerId, newSession)
         newPlayer.setMediaItem(MediaItem.fromUri(streamUrl))
@@ -310,4 +330,5 @@ private data class AudioSession(
     val queueTrackIds: List<String>? = null,
     val queueReplayGainFactors: List<Float>? = null,
     var currentQueueIndex: Int = 0,
+    val audioSessionId: Int = 0,
 )

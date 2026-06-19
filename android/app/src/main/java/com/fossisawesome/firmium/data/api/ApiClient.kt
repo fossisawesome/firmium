@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
@@ -334,6 +335,96 @@ class ApiClient(private val auth: AuthManager) {
         return results.shuffled().take(count)
     }
 
+    // ── Library song enumeration (Radio / Mood Mix seeding) ──────────────────────
+
+    // Songs of a given genre via getSongsByGenre, for genre + BPM filtering in-app.
+    suspend fun getSongsByGenre(genre: String, count: Int = 100): List<Song> {
+        val data = fetch("getSongsByGenre", mapOf("genre" to genre, "count" to count.coerceIn(1, 500).toString()))
+        return data.getAsJsonObject("songsByGenre")?.getAsJsonArray("song")
+            ?.map { parseSong(it.asJsonObject) } ?: emptyList()
+    }
+
+    // Random sample of library songs via getRandomSongs (optionally genre-scoped).
+    suspend fun getRandomSongs(count: Int = 100, genre: String? = null): List<Song> {
+        val params = mutableMapOf("size" to count.coerceIn(1, 500).toString())
+        if (!genre.isNullOrBlank()) params["genre"] = genre
+        val data = fetch("getRandomSongs", params)
+        return data.getAsJsonObject("randomSongs")?.getAsJsonArray("song")
+            ?.map { parseSong(it.asJsonObject) } ?: emptyList()
+    }
+
+    // Names of similar artists from getArtistInfo2 (similarArtist[]), for the
+    // artist-page "You might also like" section.
+    suspend fun getSimilarArtists(artistId: String, count: Int = 20): List<String> {
+        return try {
+            val data = fetch("getArtistInfo2", mapOf("id" to artistId, "count" to count.toString()))
+            data.getAsJsonObject("artistInfo2")?.getAsJsonArray("similarArtist")
+                ?.mapNotNull { it.asJsonObject.get("name")?.asString } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // Genre names with at least one song, for the Mood Mix genre filter.
+    suspend fun getGenres(): List<String> {
+        val data = fetch("getGenres")
+        return data.getAsJsonObject("genres")?.getAsJsonArray("genre")
+            ?.mapNotNull { it.asJsonObject.get("value")?.asString }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+    }
+
+    // Similar-artist names from Last.fm directly (artist.getSimilar), used as the
+    // artist-recommendations fallback when the server returns none.
+    suspend fun getLastfmSimilarArtists(artistName: String, apiKey: String): List<String> {
+        if (apiKey.isBlank()) return emptyList()
+        return try {
+            val url = "https://ws.audioscrobbler.com/2.0/?method=artist.getsimilar" +
+                "&artist=${java.net.URLEncoder.encode(artistName, "UTF-8")}" +
+                "&api_key=${java.net.URLEncoder.encode(apiKey, "UTF-8")}&format=json&limit=40"
+            withContext(Dispatchers.IO) {
+                val resp = http.newCall(Request.Builder().url(url).build()).execute()
+                val body = resp.body?.string() ?: return@withContext emptyList()
+                JsonParser.parseString(body).asJsonObject
+                    .getAsJsonObject("similarartists")?.getAsJsonArray("artist")
+                    ?.mapNotNull { it.asJsonObject.get("name")?.asString } ?: emptyList()
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // ── ListenBrainz ─────────────────────────────────────────────────────────────
+
+    // Submits a single "listen" to ListenBrainz on track completion. Fire-and-forget;
+    // no-op when the token is blank. Plain HTTP POST, no extra dependencies.
+    suspend fun submitListenBrainz(token: String, song: Song) {
+        if (token.isBlank()) return
+        try {
+            val trackMeta = JsonObject().apply {
+                addProperty("artist_name", song.displayArtist ?: song.artist)
+                addProperty("track_name", song.title)
+                if (song.album.isNotBlank()) addProperty("release_name", song.album)
+            }
+            val listen = JsonObject().apply {
+                addProperty("listened_at", System.currentTimeMillis() / 1000)
+                add("track_metadata", trackMeta)
+            }
+            val payload = JsonObject().apply {
+                addProperty("listen_type", "single")
+                add("payload", com.google.gson.JsonArray().apply { add(listen) })
+            }
+            withContext(Dispatchers.IO) {
+                val body = okhttp3.RequestBody.create(
+                    "application/json; charset=utf-8".toMediaTypeOrNull(),
+                    payload.toString(),
+                )
+                val request = Request.Builder()
+                    .url("https://api.listenbrainz.org/1/submit-listens")
+                    .header("Authorization", "Token $token")
+                    .post(body)
+                    .build()
+                http.newCall(request).execute().close()
+            }
+        } catch (_: Exception) { /* listen submission is non-fatal */ }
+    }
+
     // ── Lyrics ─────────────────────────────────────────────────────────────────
 
     data class LyricsResult(val lines: List<LyricLine>, val synced: Boolean)
@@ -483,6 +574,8 @@ class ApiClient(private val auth: AuthManager) {
             suffix = obj.get("suffix")?.asString,
             replayGainTrack = replayGain?.get("trackGain")?.asDouble,
             replayGainAlbum = replayGain?.get("albumGain")?.asDouble,
+            replayGainTrackPeak = replayGain?.get("trackPeak")?.asDouble,
+            replayGainAlbumPeak = replayGain?.get("albumPeak")?.asDouble,
             bpm = obj.get("bpm")?.asInt,
         )
     }

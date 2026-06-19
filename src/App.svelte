@@ -7,7 +7,9 @@
     openSubsonicExtensions, showAccountModal, bumpDataSourceVersion,
     listenToQueueState, recentlyPlayedSongs,
     crossfadeEnabled, crossfadeDuration, gaplessEnabled, volume, replayGainEnabled,
+    autoContinueEnabled,
   } from './lib/stores'
+  import { startAutoContinue } from './lib/radio'
   import { SafeStorage } from './lib/utils'
   import { Keyring, Api } from './lib/api'
   import type { RemotePlayQueue } from './lib/types/tauri-commands'
@@ -26,6 +28,7 @@
   import LyricsPanel from './components/LyricsPanel.svelte'
   import SimilarTracksPanel from './components/SimilarTracksPanel.svelte'
   import VisualizerPanel from './components/VisualizerPanel.svelte'
+  import AudioStatsPanel from './components/AudioStatsPanel.svelte'
   import PlaylistMenu from './components/PlaylistMenu.svelte'
   import AlbumList from './views/AlbumList.svelte'
   import AlbumDetail from './views/AlbumDetail.svelte'
@@ -36,6 +39,7 @@
   import PlaylistDetail from './views/PlaylistDetail.svelte'
   import Settings from './views/Settings.svelte'
   import HomeView from './views/HomeView.svelte'
+  import MixView from './views/MixView.svelte'
 
   let setupError = $state('')
   let showOnboarding = $state(false)
@@ -128,9 +132,11 @@
       crossfadeDuration: get(crossfadeDuration),
       gaplessEnabled: get(gaplessEnabled),
       replayGainEnabled: get(replayGainEnabled),
+      autoContinue: get(autoContinueEnabled),
     }).catch(() => {})
 
     const unlistenQueue = listenToQueueState()
+    const stopAutoContinue = startAutoContinue()
     document.addEventListener('contextmenu', e => e.preventDefault())
 
     // Block devtools shortcuts.
@@ -271,6 +277,8 @@
       <ArtistList />
     {:else if $activeView.type === 'artist'}
       <ArtistDetail id={$activeView.id!} />
+    {:else if $activeView.type === 'mix'}
+      <MixView />
     {:else if $activeView.type === 'search'}
       <SearchView />
     {:else if $activeView.type === 'playlists'}
@@ -285,6 +293,7 @@
 <LyricsPanel />
 <SimilarTracksPanel />
 <VisualizerPanel />
+<AudioStatsPanel />
 <PlayerBar />
 <PlaylistMenu />
 {#if $showAccountModal}

@@ -1,10 +1,11 @@
 <script lang="ts">
   import { get } from 'svelte/store'
-  import { playlistMenuState, hidePlaylistMenu, switchToCreate } from '../lib/playlistMenu'
+  import { playlistMenuState, hidePlaylistMenu, switchToList, switchToCreate } from '../lib/playlistMenu'
   import { playlists, serverPlaylists, mergePlaylists } from '../lib/stores'
   import { Api } from '../lib/api'
-  import { IconCloud } from '../lib/icons'
+  import { IconCloud, IconWaveform, IconList } from '../lib/icons'
   import { dataSource } from '../lib/dataSource'
+  import { startRadio } from '../lib/radio'
   import type { Song } from '../lib/types/tauri-commands'
 
   const unified = $derived(mergePlaylists($playlists, $serverPlaylists))
@@ -46,8 +47,34 @@
     if (!$playlistMenuState.visible) return
     const target = e.target as HTMLElement
     if (popupEl && popupEl.contains(target)) return
-    if (target.closest('.track-add-btn') || target.closest('.album-add-btn')) return
+    if (target.closest('.track-add-btn') || target.closest('.album-add-btn') || target.closest('.artist-add-btn')) return
     hidePlaylistMenu()
+  }
+
+  // Resolves a representative seed track for the pending item, then starts a
+  // radio queue from it (shared seeding cascade in radio.ts).
+  async function startRadioFromPending() {
+    const pending = $playlistMenuState.pending
+    hidePlaylistMenu()
+    if (!pending) return
+    try {
+      let seed: Song | undefined
+      if (pending.type === 'tracks') {
+        seed = pending.tracks[0]
+      } else if (pending.type === 'album') {
+        const { tracks } = await $dataSource.getAlbumTracks(pending.albumId)
+        seed = tracks[0]
+      } else if (pending.type === 'artist') {
+        const { albums } = await $dataSource.getArtistDetails(pending.artistId)
+        if (albums[0]) {
+          const { tracks } = await $dataSource.getAlbumTracks(albums[0].id)
+          seed = tracks[0]
+        }
+      }
+      if (seed) await startRadio(seed)
+    } catch (err) {
+      console.error('Start Radio failed:', err)
+    }
   }
 
   // Adds tracks to a local playlist and syncs new track IDs to server if the playlist is linked.
@@ -166,6 +193,25 @@
     <div class="pl-popup-actions">
       <button class="pl-popup-btn pl-popup-cancel" onclick={hidePlaylistMenu}>Cancel</button>
       <button class="pl-popup-btn pl-popup-confirm" onclick={confirmCreate}>Create</button>
+    </div>
+  {:else if $playlistMenuState.mode === 'actions'}
+    <div
+      class="pl-popup-item"
+      role="button"
+      tabindex="0"
+      onclick={startRadioFromPending}
+      onkeydown={e => handleItemKeydown(e, startRadioFromPending)}
+    >
+      <span class="pl-popup-name"><span class="icon" aria-hidden="true" style="width:15px;height:15px;margin-right:8px;vertical-align:-2px;display:inline-flex">{@html IconWaveform}</span>Start Radio</span>
+    </div>
+    <div
+      class="pl-popup-item"
+      role="button"
+      tabindex="0"
+      onclick={switchToList}
+      onkeydown={e => handleItemKeydown(e, switchToList)}
+    >
+      <span class="pl-popup-name"><span class="icon" aria-hidden="true" style="width:15px;height:15px;margin-right:8px;vertical-align:-2px;display:inline-flex">{@html IconList}</span>Add to playlist</span>
     </div>
   {:else}
     <div class="pl-popup-header">Add to playlist</div>

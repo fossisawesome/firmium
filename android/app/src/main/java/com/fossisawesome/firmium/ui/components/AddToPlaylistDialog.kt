@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ fun AddToPlaylistDialog(
     onAddTo: (PlaylistListItem) -> Unit,
     onCreateAndAdd: (name: String) -> Unit,
     onDismiss: () -> Unit,
+    onStartRadio: (() -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     var showCreate by remember { mutableStateOf(false) }
@@ -88,6 +90,22 @@ fun AddToPlaylistDialog(
                 modifier = Modifier.heightIn(max = 480.dp),
                 contentPadding = PaddingValues(bottom = 32.dp),
             ) {
+                if (onStartRadio != null) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { onStartRadio(); onDismiss() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            FirmiumIcon(Icons.Default.Radio, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(32.dp))
+                            Spacer(Modifier.width(16.dp))
+                            Text("Start Radio", fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                                color = colors.accent)
+                        }
+                        FirmiumDivider()
+                    }
+                }
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { showCreate = true }

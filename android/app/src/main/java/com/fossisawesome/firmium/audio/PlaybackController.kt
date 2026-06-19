@@ -1,11 +1,16 @@
 package com.fossisawesome.firmium.audio
 
+import com.fossisawesome.firmium.data.RadioSeeder
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.eq.EqProfile
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
+import com.fossisawesome.firmium.data.storage.SecureStorage
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -46,9 +51,18 @@ class PlaybackController(
     private val localLibrary: LocalLibraryRepository,
     private val prefs: AppPreferences,
     private val playlists: PlaylistRepository,
+    private val secureStorage: SecureStorage,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    private val radioSeeder = RadioSeeder(api)
+    // Tracks played this session, excluded from auto-continue seeding.
+    private val sessionPlayedIds = mutableSetOf<String>()
+    private var autoContinueEnabled = false
+    private var listenbrainzEnabled = false
+    // Guards against overlapping auto-continue seeding passes.
+    private var autoContinueBusy = false
 
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
@@ -75,9 +89,16 @@ class PlaybackController(
         scope.launch {
             prefs.replayGainEnabled.collect { rg -> _state.update { it.copy(replayGainEnabled = rg) } }
         }
+        scope.launch { prefs.autoContinueEnabled.collect { autoContinueEnabled = it } }
+        scope.launch { prefs.listenbrainzEnabled.collect { listenbrainzEnabled = it } }
         scope.launch {
             combine(prefs.visualizerEnabled, prefs.visualizerType) { en, ty -> en to ty }
                 .collect { (en, ty) -> _state.update { it.copy(visualizerEnabled = en, visualizerType = ty) } }
+        }
+        scope.launch {
+            combine(prefs.eqEnabled, prefs.eqMode, prefs.eqActiveProfile, prefs.eqProfilesJson) { enabled, mode, active, json ->
+                buildEqConfig(enabled, mode, active, json)
+            }.collect { cfg -> audioPlayer.equalizer.setConfig(cfg) }
         }
 
         audioPlayer.listener = object : AudioPlayer.Listener {
@@ -101,6 +122,7 @@ class PlaybackController(
                 if (playerId != currentPlayerId) return
                 stopPositionTracking()
                 scope.launch { scrobbleCurrent(true) }
+                scope.launch { submitListenBrainzCurrent() }
                 scope.launch { reportPlaybackCurrent("stopped", (_state.value.trackDuration * 1000).toLong()) }
                 onTrackEnded()
             }
@@ -350,6 +372,7 @@ class PlaybackController(
         val nextSong = s.queue.getOrNull(nextIdx) ?: return
         scope.launch {
             scrobbleCurrent(true)
+            submitListenBrainzCurrent()
             val newPid = audioPlayer.crossfadeTo(
                 oldPlayerId = pid,
                 streamUrl = streamUrlFor(nextSong),
@@ -386,12 +409,37 @@ class PlaybackController(
                 // Keep the media session and notification alive so OS media controls
                 // (lock screen, headset buttons) still function and can restart playback.
                 nowPlaying.updatePlaybackState(false)
+                // Smart Radio: seed more tracks from the last song and keep playing.
+                if (autoContinueEnabled && !autoContinueBusy) s.currentTrack?.let { autoContinueFrom(it) }
             }
         }
     }
 
+    // Seeds a fresh batch from the last-played track and appends it to the queue,
+    // excluding tracks already heard this session.
+    private fun autoContinueFrom(seed: Song) {
+        autoContinueBusy = true
+        scope.launch {
+            try {
+                val seeded = radioSeeder.seedFrom(seed, sessionPlayedIds)
+                if (seeded.isEmpty()) return@launch
+                val existing = _state.value.queue
+                playAt(existing + seeded, existing.size)
+            } catch (_: Exception) { /* auto-continue is best-effort */ }
+            finally { autoContinueBusy = false }
+        }
+    }
+
+    private suspend fun submitListenBrainzCurrent() {
+        if (!listenbrainzEnabled) return
+        val song = _state.value.currentTrack ?: return
+        val token = secureStorage.get("listenbrainz", "token") ?: return
+        api.submitListenBrainz(token, song)
+    }
+
     private fun updateNowPlayingNotification() {
         val track = _state.value.currentTrack ?: return
+        sessionPlayedIds.add(track.id)
         val coverArt = track.coverArt
         nowPlaying.update(
             title = track.title,
@@ -452,5 +500,17 @@ class PlaybackController(
     private fun stopPositionTracking() {
         positionJob?.cancel()
         positionJob = null
+    }
+
+    private val gson = Gson()
+
+    /** Resolve the active EQ profile from prefs into the controller config. */
+    private fun buildEqConfig(enabled: Boolean, mode: String, active: String?, json: String?): EqualizerController.Config {
+        val profiles: List<EqProfile> = json?.let {
+            runCatching { gson.fromJson<List<EqProfile>>(it, object : TypeToken<List<EqProfile>>() {}.type) }.getOrNull()
+        }.orEmpty()
+        val profile = profiles.firstOrNull { it.name == active } ?: profiles.firstOrNull()
+        val bands = profile?.bands?.map { EqualizerController.Band(it.freq, it.gain, it.q) }.orEmpty()
+        return EqualizerController.Config(enabled = enabled, mode = profile?.mode ?: mode, bands = bands)
     }
 }

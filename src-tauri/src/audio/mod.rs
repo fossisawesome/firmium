@@ -10,6 +10,7 @@
 //! gracefully instead of failing playback.
 
 mod decoder;
+pub mod eq;
 mod output;
 mod session;
 mod streaming_reader;
@@ -27,6 +28,7 @@ use uuid::Uuid;
 use crate::visualizer::VisualizerState;
 use crate::{AudioDevice, PlaybackState};
 
+use eq::{EqBand, EqShared};
 use decoder::DecoderHandle;
 use output::OutputStream;
 use session::{PlayerId, ResampleState, SeekReply, SeekRequest, Session, SessionMap};
@@ -60,6 +62,8 @@ pub struct AudioPlayer {
     /// "off" | "relaxed" | "strict" — controls whether the output stream is reopened
     /// to match each track's native sample rate. "off" skips reopening entirely.
     bit_perfect_mode: parking_lot::Mutex<String>,
+    /// Live-updatable equalizer band config shared with every decode feeder.
+    eq: Arc<EqShared>,
 }
 
 impl AudioPlayer {
@@ -76,6 +80,10 @@ impl AudioPlayer {
         let visualizer = Arc::new(VisualizerState::new());
         crate::visualizer::spawn_analysis_task(app_handle.clone(), Arc::clone(&visualizer));
 
+        let eq = Arc::new(EqShared::new(
+            crate::commands::equalizer::resolve_runtime(&app_handle),
+        ));
+
         Ok(AudioPlayer {
             sessions,
             output: RwLock::new(OutputHandle { device, stream }),
@@ -84,7 +92,17 @@ impl AudioPlayer {
             crossfade_in_progress: AtomicBool::new(false),
             visualizer,
             bit_perfect_mode: parking_lot::Mutex::new("relaxed".to_string()),
+            eq,
         })
+    }
+
+    /// Replace the active EQ bands and enable flag (live, affects running tracks).
+    pub fn set_eq_runtime(&self, enabled: bool, bands: Vec<EqBand>) {
+        self.eq.set(enabled, bands);
+    }
+
+    fn bit_perfect_is_strict(&self) -> bool {
+        *self.bit_perfect_mode.lock() == "strict"
     }
 
     /// Enable or disable the audio visualizer analysis task.
@@ -123,12 +141,41 @@ impl AudioPlayer {
         Ok(true)
     }
 
-    /// Get available audio output devices.
+    /// Get available audio output devices (real cpal enumeration). Output
+    /// routing still uses the system default; the list lets the EQ UI assign a
+    /// profile per physical device.
+    #[allow(deprecated)] // cpal 0.17 deprecates name() in favor of description()/id(); name() is sufficient here
     pub fn list_devices() -> Vec<AudioDevice> {
-        vec![AudioDevice {
-            name: "Default Output".to_string(),
-            default: true,
-        }]
+        use cpal::traits::{DeviceTrait, HostTrait};
+        let host = cpal::default_host();
+        let default_name = host
+            .default_output_device()
+            .and_then(|d| d.name().ok());
+
+        let mut devices: Vec<AudioDevice> = host
+            .output_devices()
+            .map(|iter| {
+                iter.filter_map(|d| d.name().ok())
+                    .map(|name| {
+                        let default = Some(&name) == default_name.as_ref();
+                        AudioDevice { name, default }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if devices.is_empty() {
+            devices.push(AudioDevice { name: "Default Output".to_string(), default: true });
+        }
+        devices
+    }
+
+    /// Name of the current default output device (used to resolve which device's
+    /// EQ profile is audibly active).
+    #[allow(deprecated)]
+    pub fn default_output_name() -> Option<String> {
+        use cpal::traits::{DeviceTrait, HostTrait};
+        cpal::default_host().default_output_device().and_then(|d| d.name().ok())
     }
 
     /// Start streaming and playing a track from a URL.
@@ -189,7 +236,7 @@ impl AudioPlayer {
                     *session.cancel.lock() = Arc::clone(&cancel);
                     *session.seek_tx.lock() = Some(seek_tx);
 
-                    session::spawn_decode_feeder(Arc::clone(&session), decoder, true, gain_factor, Arc::clone(&player.visualizer), cancel, seek_rx);
+                    session::spawn_decode_feeder(Arc::clone(&session), decoder, true, gain_factor, Arc::clone(&player.visualizer), Arc::clone(&player.eq), player.bit_perfect_is_strict(), cancel, seek_rx);
 
                     session.loading.store(false, Ordering::Relaxed);
 
@@ -423,7 +470,7 @@ impl AudioPlayer {
         *session.seek_tx.lock() = Some(seek_tx);
 
         // Seek-rebuild feeders don't reapply fade-in or ReplayGain (matches prior behavior).
-        session::spawn_decode_feeder(Arc::clone(&session), decoder, false, 1.0, Arc::clone(&self.visualizer), cancel, seek_rx);
+        session::spawn_decode_feeder(Arc::clone(&session), decoder, false, 1.0, Arc::clone(&self.visualizer), Arc::clone(&self.eq), self.bit_perfect_is_strict(), cancel, seek_rx);
 
         Self::apply_seek_position(&session, position);
         Ok(())

@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 use super::decoder::DecoderHandle;
+use super::eq::{self, EqChain, EqShared};
 use crate::visualizer::{self, VisualizerState};
 
 /// Unique identifier for each playback session.
@@ -123,6 +124,8 @@ pub fn spawn_decode_feeder(
     apply_fade_in: bool,
     replay_gain_factor: f32,
     visualizer: Arc<VisualizerState>,
+    eq: Arc<EqShared>,
+    bit_perfect_strict: bool,
     cancel: Arc<AtomicBool>,
     seek_rx: Receiver<SeekRequest>,
 ) {
@@ -130,6 +133,11 @@ pub fn spawn_decode_feeder(
     tauri::async_runtime::spawn_blocking(move || {
         let channels = decoder.channels.max(1) as usize;
         let sample_rate = decoder.sample_rate;
+
+        // EQ chain is rebuilt lazily whenever the shared config generation changes.
+        // Strict bit-perfect mode bypasses EQ entirely to keep the signal untouched.
+        let mut eq_chain: Option<EqChain> = None;
+        let mut eq_gen: u64 = 0;
         let fade_total = if apply_fade_in {
             (sample_rate as usize * channels * 25 / 1000).max(channels)
         } else {
@@ -183,6 +191,22 @@ pub fn spawn_decode_feeder(
                     if rg != 1.0 {
                         for s in &mut samples {
                             *s *= rg;
+                        }
+                    }
+
+                    if !bit_perfect_strict {
+                        let gen = eq.generation();
+                        if gen != eq_gen {
+                            eq_gen = gen;
+                            let cfg = eq.snapshot();
+                            eq_chain = if cfg.enabled && !eq::bands_are_flat(&cfg.bands) {
+                                EqChain::new(&cfg.bands, sample_rate, channels)
+                            } else {
+                                None
+                            };
+                        }
+                        if let Some(chain) = eq_chain.as_mut() {
+                            chain.process_interleaved(&mut samples);
                         }
                     }
 

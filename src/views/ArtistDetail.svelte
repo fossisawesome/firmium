@@ -1,16 +1,17 @@
 <script lang="ts">
   import { IconPlay, IconLoading, IconShuffle } from '../lib/icons'
   import LoadingState from '../components/LoadingState.svelte'
-  import { Keyring } from '../lib/api'
+  import { Keyring, Api } from '../lib/api'
   import { dataSource } from '../lib/dataSource'
-  import { dataSourceVersion } from '../lib/stores'
+  import { dataSourceVersion, navToArtist, isAuthed } from '../lib/stores'
+  import { showPlaylistMenu } from '../lib/playlistMenu'
   import { tauriInvoke } from '../lib/tauri'
   import { pooledMap, SafeStorage, createAbortController } from '../lib/utils'
   import { PLAY_ALL_CONCURRENCY } from '../lib/api'
   import { tauriFetch } from '../lib/tauri'
   import VirtualList from '../lib/VirtualList.svelte'
   import AlbumRow from '../components/AlbumRow.svelte'
-  import type { Album } from '../lib/types/tauri-commands'
+  import type { Album, Artist } from '../lib/types/tauri-commands'
 
   const ALBUM_ROW_HEIGHT = 60
 
@@ -32,6 +33,43 @@
     } catch { return null }
   }
 
+  // Fallback similar-artist names from Last.fm directly (artist.getSimilar),
+  // used when the server's getArtistInfo2 returns no similar artists.
+  async function fetchLastfmSimilar(artistName: string, apiKey: string, signal?: AbortSignal | null): Promise<string[]> {
+    try {
+      const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getsimilar&artist=${encodeURIComponent(artistName)}&api_key=${encodeURIComponent(apiKey)}&format=json&limit=40`
+      const res = await tauriFetch(url, { signal: signal ?? undefined })
+      const data = await res.json()
+      const arr = data.similarartists?.artist ?? []
+      return (Array.isArray(arr) ? arr : [arr]).map((a: { name?: string }) => a?.name ?? '').filter(Boolean)
+    } catch { return [] }
+  }
+
+  // Resolves similar-artist names (server first, Last.fm fallback) and keeps only
+  // those the user actually has in their library, so every suggestion is playable.
+  async function resolveRecommendations(artistId: string, artistName: string, signal: AbortSignal): Promise<void> {
+    recommendations = []
+    if (!$isAuthed) return
+    try {
+      let names = await Api.getSimilarArtists(artistId).catch(() => [] as string[])
+      if (!names.length) {
+        const lastfmEnabled = SafeStorage.getItem('firmium_lastfm') === 'true'
+        const lastfmKey = lastfmEnabled ? ((await Keyring.load('lastfm_api_key').catch(() => '')) as string) || '' : ''
+        if (lastfmKey) names = await fetchLastfmSimilar(artistName, lastfmKey, signal)
+      }
+      if (signal.aborted || !names.length) return
+      const library: Artist[] = await Api.getArtists(signal).catch(() => [])
+      const byName = new Map(library.map(a => [a.name.toLowerCase(), a]))
+      const seen = new Set<string>([artistId])
+      const matched: Artist[] = []
+      for (const n of names) {
+        const hit = byName.get(n.toLowerCase())
+        if (hit && !seen.has(hit.id)) { seen.add(hit.id); matched.push(hit) }
+      }
+      if (!signal.aborted) recommendations = matched.slice(0, 12)
+    } catch { /* recommendations are best-effort */ }
+  }
+
 let { id }: { id: string } = $props()
 
   let name = $state('')
@@ -43,6 +81,7 @@ let { id }: { id: string } = $props()
   let wikiImage = $state<string | null>(null)
   let playingAll = $state(false)
   let shufflingAll = $state(false)
+  let recommendations = $state<Artist[]>([])
 
   $effect(() => {
     const source = $dataSource
@@ -80,6 +119,7 @@ let { id }: { id: string } = $props()
           bio = 'Biography not available.'
         }
         resolveBio()
+        resolveRecommendations(artistId, name, signal)
       } catch (e: any) {
         if (!signal.aborted) error = e.message
       } finally {
@@ -141,6 +181,12 @@ let { id }: { id: string } = $props()
       <button class="play-all-btn shuffle-all-btn" onclick={() => playAll(true)} disabled={playingAll || shufflingAll}>
         <span class="icon" class:icon-spin={shufflingAll} style="width:12px;height:12px;margin-right:6px">{@html shufflingAll ? IconLoading : IconShuffle}</span>{shufflingAll ? 'Loading Queue…' : 'Shuffle'}
       </button>
+      <button
+        class="play-all-btn artist-add-btn"
+        title="More options"
+        aria-label="More options"
+        onclick={e => { e.stopPropagation(); showPlaylistMenu(e.currentTarget, { type: 'artist', artistId: id, artistName: name }) }}
+      >+</button>
     </div>
   </div>
 </div>
@@ -157,4 +203,33 @@ let { id }: { id: string } = $props()
       </VirtualList>
     {/if}
   {/each}
+
+  {#if recommendations.length > 0}
+    <div class="release-group-title">You might also like</div>
+    <div class="reco-row">
+      {#each recommendations as artist (artist.id)}
+        <button class="reco-card" onclick={() => navToArtist(artist.id)} title={artist.name}>
+          <img class="reco-img" src={DEFAULT_AVATAR} alt={artist.name} />
+          <span class="reco-name">{artist.name}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
 </LoadingState>
+
+<style>
+  .reco-row { display: flex; flex-wrap: wrap; gap: 16px; padding: 8px 0 24px; }
+  .reco-card {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    width: 96px; background: none; border: none; cursor: pointer; color: var(--text);
+  }
+  .reco-img {
+    width: 72px; height: 72px; border-radius: 50%; object-fit: cover;
+    background: var(--surface2); border: 1px solid var(--border);
+  }
+  .reco-name {
+    font-size: 13px; text-align: center; line-height: 1.3;
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .reco-card:hover .reco-name { color: var(--accent); }
+</style>

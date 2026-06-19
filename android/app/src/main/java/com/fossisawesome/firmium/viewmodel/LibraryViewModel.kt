@@ -14,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // Lightweight artist entry derived from recent albums — id, display name, cover art.
@@ -54,6 +55,8 @@ data class ArtistDetailState(
     val detail: ArtistDetail? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
+    // Similar artists the user actually has in their library ("You might also like").
+    val recommendations: List<Artist> = emptyList(),
 )
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
@@ -61,6 +64,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val api: ApiClient = getApplication<FirmiumApplication>().api
     private val auth: AuthManager = getApplication<FirmiumApplication>().auth
     private val localLibrary: LocalLibraryRepository = getApplication<FirmiumApplication>().localLibrary
+    private val prefs = getApplication<FirmiumApplication>().prefs
+    private val secureStorage = getApplication<FirmiumApplication>().secureStorage
 
     private fun albumKey(a: Album) = "${a.name.trim().lowercase()}|${a.artist.trim().lowercase()}"
 
@@ -194,9 +199,34 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val detail = if (artistId.startsWith("local:")) localLibrary.getArtistDetail(artistId) else api.getArtistDetail(artistId)
                 _artistDetailState.value = ArtistDetailState(detail = detail)
+                resolveRecommendations(artistId, detail.artist.name)
             } catch (e: Exception) {
                 _artistDetailState.value = ArtistDetailState(error = e.message)
             }
+        }
+    }
+
+    // Resolves similar artists (server first, Last.fm fallback) cross-referenced
+    // against the library so every suggestion is playable. Best-effort, non-blocking.
+    private fun resolveRecommendations(artistId: String, artistName: String) {
+        if (!auth.isAuthenticated || artistId.startsWith("local:")) return
+        viewModelScope.launch {
+            try {
+                var names = api.getSimilarArtists(artistId)
+                if (names.isEmpty() && prefs.lastfmEnabled.first()) {
+                    val key = secureStorage.get("lastfm", "api_key") ?: ""
+                    names = api.getLastfmSimilarArtists(artistName, key)
+                }
+                if (names.isEmpty()) return@launch
+                val byName = api.getArtists().associateBy { it.name.lowercase() }
+                val seen = HashSet<String>().apply { add(artistId) }
+                val matched = names.mapNotNull { byName[it.lowercase()] }
+                    .filter { seen.add(it.id) }
+                    .take(12)
+                if (matched.isNotEmpty() && _artistDetailState.value.detail?.artist?.id == artistId) {
+                    _artistDetailState.value = _artistDetailState.value.copy(recommendations = matched)
+                }
+            } catch (_: Exception) { /* recommendations are best-effort */ }
         }
     }
 }

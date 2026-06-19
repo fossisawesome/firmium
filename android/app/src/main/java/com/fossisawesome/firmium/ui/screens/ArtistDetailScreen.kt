@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Album
+import com.fossisawesome.firmium.data.model.Artist
 import com.fossisawesome.firmium.data.model.Playlist
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
@@ -32,6 +33,9 @@ fun ArtistDetailScreen(
     onAddAlbum: (albumId: String) -> Unit,
     onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
     onBack: () -> Unit,
+    recommendations: List<Artist> = emptyList(),
+    onArtistClick: (String) -> Unit = {},
+    onStartRadio: (() -> Unit)? = null,
 ) {
     LaunchedEffect(artistId) { onLoad(artistId) }
 
@@ -118,6 +122,24 @@ fun ArtistDetailScreen(
                             }
                         }
 
+                        if (onStartRadio != null) {
+                            item(key = "start_radio") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onStartRadio() }
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text("Start Radio", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+                                    FirmiumIcon(Icons.Default.ChevronRight, contentDescription = null,
+                                        tint = colors.accent, modifier = Modifier.size(18.dp))
+                                }
+                                FirmiumDivider()
+                            }
+                        }
+
                         item(key = "sort_label") {
                             Text(
                                 "Sorted by type, then year",
@@ -151,6 +173,31 @@ fun ArtistDetailScreen(
                                     onDownloadClick = onDownloadAlbum?.invoke(album),
                                     showArtist = false,
                                 )
+                                FirmiumDivider()
+                            }
+                        }
+
+                        if (recommendations.isNotEmpty()) {
+                            item(key = "reco_header") {
+                                Text(
+                                    "YOU MIGHT ALSO LIKE · ${recommendations.size}",
+                                    fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                                    color = colors.muted, letterSpacing = 1.sp,
+                                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
+                                )
+                            }
+                            items(recommendations, key = { "reco_${it.id}" }) { rec ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clickable { onArtistClick(rec.id) }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(rec.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                                    FirmiumIcon(Icons.Default.ChevronRight, contentDescription = null,
+                                        tint = colors.muted, modifier = Modifier.size(18.dp))
+                                }
                                 FirmiumDivider()
                             }
                         }

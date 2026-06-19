@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Listener};
 
 use crate::audio::AudioPlayer;
+use crate::commands::listenbrainz::fire_listenbrainz_listen;
 use crate::commands::queue::{compute_next_idx, play_at, random_idx_excluding, schedule_save_play_queue, stream_url_for};
 use crate::commands::subsonic::{fire_report_playback, fire_scrobble};
 use crate::queue_state::{emit_queue_state, QueueState};
@@ -183,7 +184,7 @@ async fn handle_finished(
     audio_player: Arc<AudioPlayer>,
     payload: FinishedPayload,
 ) {
-    let (repeat_one, repeat_all, shuffle, queue_idx, queue_len, finished_track_id, cached_dur) = {
+    let (repeat_one, repeat_all, shuffle, queue_idx, queue_len, finished_song, cached_dur, auto_continue) = {
         let inner = queue_state.inner.lock();
         if inner.current_player_id.as_deref() != Some(payload.player_id.as_str()) {
             return; // stale event — a new track already started
@@ -194,16 +195,18 @@ async fn handle_finished(
             inner.shuffle_enabled,
             inner.queue_idx,
             inner.queue.len(),
-            inner.queue.get(inner.queue_idx as usize).map(|s| s.id.clone()),
+            inner.queue.get(inner.queue_idx as usize).cloned(),
             inner.cached_duration,
+            inner.auto_continue,
         )
     };
 
-    // Scrobble completion
-    if let Some(track_id) = finished_track_id {
+    // Scrobble completion (Subsonic + ListenBrainz)
+    if let Some(song) = finished_song.clone() {
         let dur_ms = (cached_dur.unwrap_or(0.0) * 1000.0) as i64;
-        fire_scrobble(app.clone(), Arc::clone(&app_state), track_id.clone(), true);
-        fire_report_playback(app.clone(), Arc::clone(&app_state), track_id, dur_ms, "stopped".into());
+        fire_scrobble(app.clone(), Arc::clone(&app_state), song.id.clone(), true);
+        fire_report_playback(app.clone(), Arc::clone(&app_state), song.id.clone(), dur_ms, "stopped".into());
+        fire_listenbrainz_listen(Arc::clone(&app_state), song);
     }
 
     // Determine next action
@@ -215,13 +218,21 @@ async fn handle_finished(
     } else if let Some(next_idx) = compute_next_idx(queue_idx, queue_len, repeat_all) {
         let _ = play_at(&app, &queue_state, &app_state, &audio_player, next_idx).await;
     } else {
-        // End of queue — stop
+        // End of queue
         {
             let mut inner = queue_state.inner.lock();
             inner.current_player_id = None;
             inner.queue_idx = -1;
         }
         let _ = app.emit("queue-state-changed", queue_state.inner.lock().snapshot());
+        // Smart Radio: ask the frontend to seed and append more tracks from the
+        // last-played song. The frontend owns the seeding cascade (shared with
+        // Mood Mix and Start Radio) and appends via set_queue.
+        if auto_continue {
+            if let Some(song) = finished_song {
+                let _ = app.emit("queue-exhausted", song);
+            }
+        }
     }
 }
 
@@ -234,22 +245,23 @@ async fn do_crossfade(
 ) {
     let CrossfadeContext { next_idx, old_player_id, fade_ms, volume } = ctx;
     // Extract next song, update queue_idx, reset per-track flags
-    let (song, outgoing_id, rg_enabled) = {
+    let (song, outgoing, rg_enabled) = {
         let mut inner = queue_state.inner.lock();
         let song = match inner.queue.get(next_idx).cloned() {
             Some(s) => s,
             None => return,
         };
-        let outgoing_id = inner.queue.get(inner.queue_idx as usize).map(|s| s.id.clone());
+        let outgoing = inner.queue.get(inner.queue_idx as usize).cloned();
         inner.queue_idx = next_idx as i32;
         inner.reset_track_progress();
-        (song, outgoing_id, inner.replay_gain_enabled)
+        (song, outgoing, inner.replay_gain_enabled)
     };
 
-    // Scrobble outgoing
-    if let Some(oid) = outgoing_id {
-        fire_scrobble(app.clone(), Arc::clone(&app_state), oid.clone(), true);
-        fire_report_playback(app.clone(), Arc::clone(&app_state), oid, 0, "stopped".into());
+    // Scrobble outgoing (Subsonic + ListenBrainz)
+    if let Some(outgoing) = outgoing {
+        fire_scrobble(app.clone(), Arc::clone(&app_state), outgoing.id.clone(), true);
+        fire_report_playback(app.clone(), Arc::clone(&app_state), outgoing.id.clone(), 0, "stopped".into());
+        fire_listenbrainz_listen(Arc::clone(&app_state), outgoing);
     }
 
     // Resolve URL — async, no lock held

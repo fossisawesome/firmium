@@ -2,13 +2,14 @@
   import { activeView, navToView, isAuthed, authServer, openAccountModal, type ViewType } from '../lib/stores'
   import {
     IconHome, IconDisc, IconMusic, IconSearch,
-    IconList, IconSettings, IconHexagon, IconLogo, IconUser
+    IconList, IconSettings, IconHexagon, IconLogo, IconUser, IconWaveform
   } from '../lib/icons'
 
   const NAV_ITEMS: { view: ViewType; label: string; icon: string }[] = [
     { view: 'home',      label: 'Home',      icon: IconHome },
     { view: 'albums',    label: 'Albums',    icon: IconDisc },
     { view: 'artists',   label: 'Artists',   icon: IconMusic },
+    { view: 'mix',       label: 'Mix',       icon: IconWaveform },
     { view: 'search',    label: 'Search',    icon: IconSearch },
     { view: 'playlists', label: 'Playlists', icon: IconList },
     { view: 'settings',  label: 'Settings',  icon: IconSettings },

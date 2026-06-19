@@ -93,6 +93,13 @@ pub fn run() {
             crossfade_to,
             set_visualizer_enabled,
             set_bit_perfect_mode,
+            // Equalizer
+            get_eq_state,
+            save_eq_profile,
+            delete_eq_profile,
+            set_eq_active_profile,
+            set_eq_bands,
+            set_eq_enabled,
             // Lyrics
             parse_lrc,
             fetch_lrclib_lyrics,
@@ -127,6 +134,9 @@ pub fn run() {
             get_sonic_similar_tracks,
             find_sonic_path,
             get_similar_tracks_fallback,
+            get_songs_by_genre,
+            get_random_songs,
+            get_similar_artists,
             get_song_lyrics,
             // Local library
             get_local_albums,
@@ -163,6 +173,7 @@ pub fn run() {
             set_crossfade_settings,
             set_gapless_enabled,
             set_replay_gain_enabled,
+            set_auto_continue,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

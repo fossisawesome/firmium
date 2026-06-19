@@ -20,6 +20,16 @@ export interface Artist {
   albumCount: number
 }
 
+// OpenSubsonic ReplayGain object, passed through raw from the server.
+export interface ReplayGain {
+  trackGain?: number
+  trackPeak?: number
+  albumGain?: number
+  albumPeak?: number
+  baseGain?: number
+  fallbackGain?: number
+}
+
 export interface Song {
   id: string
   title: string
@@ -30,7 +40,7 @@ export interface Song {
   duration: number
   trackNumber?: number
   coverArtId?: string
-  replayGain?: unknown
+  replayGain?: ReplayGain
   bpm?: number
   comment?: string
   genres?: unknown
@@ -61,6 +71,29 @@ export type PlaybackState = 'loading' | 'playing' | 'paused' | 'stopped'
 export interface AudioDevice {
   name: string
   default: boolean
+}
+
+// ── Equalizer ──────────────────────────────────────────────────────────────
+export type EqMode = 'graphic' | 'parametric'
+
+export interface EqBandSpec {
+  freq: number
+  gain: number
+  q?: number
+}
+
+export interface EqProfileInfo {
+  name: string
+  kind: EqMode
+  bands: EqBandSpec[]
+}
+
+export interface EqState {
+  enabled: boolean
+  profiles: EqProfileInfo[]
+  defaultDevice: string | null
+  activeProfile: string | null
+  deviceProfiles: Record<string, string>
 }
 
 export interface ThemeColors {

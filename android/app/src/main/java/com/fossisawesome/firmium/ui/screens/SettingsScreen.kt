@@ -1,5 +1,7 @@
 package com.fossisawesome.firmium.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,16 +29,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.audio.PlayerState
+import com.fossisawesome.firmium.data.eq.EqBand
+import com.fossisawesome.firmium.data.eq.EqProfile
+import com.fossisawesome.firmium.data.eq.TomlEqParser
+import com.fossisawesome.firmium.data.storage.AppPreferences
+import com.fossisawesome.firmium.data.storage.SecureStorage
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.ALL_THEMES
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 // Settings screen — category list → sub-panel drill-down, exact port of MobileSettings.svelte.
 @Composable
@@ -113,6 +127,7 @@ private data class Category(val id: String, val label: String, val icon: ImageVe
 private val CATEGORIES = listOf(
     Category("appearance", "Appearance", Icons.Default.Palette),
     Category("playback",   "Playback",   Icons.Default.PlayArrow),
+    Category("equalizer",  "Equalizer",  Icons.Default.GraphicEq),
     Category("downloads",  "Downloads",  Icons.Default.Download),
     Category("services",   "Services",   Icons.Default.Language),
     Category("account",    "Account",    Icons.Default.Person),
@@ -281,6 +296,7 @@ private fun FirmiumSettingsScreen(
                             onGaplessToggle = onGaplessToggle,
                             onReplayGainToggle = onReplayGainToggle,
                         )
+                        "equalizer" -> FirmiumEqualizerPanel()
                         "downloads" -> FirmiumDownloadsPanel(
                             downloadFormat = downloadFormat,
                             onDownloadFormatSelected = onDownloadFormatSelected,
@@ -570,6 +586,185 @@ private fun FirmiumPlaybackPanel(
     FirmiumSettingsRow("ReplayGain", "Normalize track loudness using server-provided gain values") {
         FirmiumSwitch(checked = playerState.replayGainEnabled, onCheckedChange = onReplayGainToggle)
     }
+
+    FirmiumAutoContinueRow()
+}
+
+// Self-contained Smart Radio toggle — reads/writes the auto-continue pref directly
+// so it doesn't need threading through the SettingsScreen signature.
+@Composable
+private fun FirmiumAutoContinueRow() {
+    val context = LocalContext.current
+    val prefs = remember { AppPreferences(context) }
+    val scope = rememberCoroutineScope()
+    val enabled by prefs.autoContinueEnabled.collectAsState(initial = false)
+    FirmiumSettingsRow("Continue playing after queue ends",
+        "Smart Radio adds similar tracks when the queue runs out") {
+        FirmiumSwitch(checked = enabled, onCheckedChange = { v -> scope.launch { prefs.setAutoContinueEnabled(v) } })
+    }
+}
+
+private val GRAPHIC_FREQS = listOf(31f, 62f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
+private val EQ_PROFILES_TYPE = object : TypeToken<List<EqProfile>>() {}.type
+
+private fun freqLabel(f: Float): String = if (f >= 1000f) "${(f / 1000f).toInt()}k" else "${f.toInt()}"
+
+@Composable
+private fun FirmiumEqualizerPanel() {
+    val colors = LocalFirmiumColors.current
+    val context = LocalContext.current
+    val prefs = remember { AppPreferences(context) }
+    val scope = rememberCoroutineScope()
+    val gson = remember { Gson() }
+
+    val enabled by prefs.eqEnabled.collectAsState(initial = false)
+    val activeName by prefs.eqActiveProfile.collectAsState(initial = null)
+    val profilesJson by prefs.eqProfilesJson.collectAsState(initial = null)
+
+    val profiles: List<EqProfile> = remember(profilesJson) {
+        profilesJson?.let { runCatching { gson.fromJson<List<EqProfile>>(it, EQ_PROFILES_TYPE) }.getOrNull() }.orEmpty()
+    }
+    val active = profiles.firstOrNull { it.name == activeName } ?: profiles.firstOrNull()
+
+    var newName by remember { mutableStateOf("") }
+
+    fun persist(updated: List<EqProfile>, activate: String?) {
+        scope.launch {
+            prefs.setEqProfilesJson(gson.toJson(updated))
+            if (activate != null) prefs.setEqActiveProfile(activate)
+        }
+    }
+
+    fun updateActiveBands(bands: List<EqBand>) {
+        val a = active ?: return
+        persist(profiles.map { if (it.name == a.name) it.copy(bands = bands) else it }, a.name)
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch(Dispatchers.IO) {
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull() ?: return@launch
+            val imported = TomlEqParser.parse(text)
+            if (imported.isEmpty()) return@launch
+            val merged = profiles.filter { p -> imported.none { it.name == p.name } } + imported
+            prefs.setEqProfilesJson(gson.toJson(merged))
+            prefs.setEqActiveProfile(imported.first().name)
+        }
+    }
+
+    FirmiumSettingsRow("Enable Equalizer", "Apply the active profile to playback") {
+        FirmiumSwitch(checked = enabled, onCheckedChange = { v -> scope.launch { prefs.setEqEnabled(v) } })
+    }
+
+    // Profile picker
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+        Text("Profiles", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        Spacer(Modifier.height(6.dp))
+        if (profiles.isEmpty()) {
+            Text("No saved profiles. Import a .toml or save one below.",
+                fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        } else {
+            profiles.forEach { p ->
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f).clickable { persist(profiles, p.name) }) {
+                        Text(
+                            (if (active?.name == p.name) "● " else "○ ") + "${p.name} (${p.mode})",
+                            fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                            color = if (active?.name == p.name) colors.text else colors.muted,
+                        )
+                    }
+                    FirmiumTextButton(onClick = {
+                        val remaining = profiles.filter { it.name != p.name }
+                        persist(remaining, remaining.firstOrNull()?.name)
+                    }) {
+                        Text("Delete", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                    }
+                }
+            }
+        }
+    }
+    FirmiumDivider()
+
+    FirmiumTextButton(
+        onClick = { importLauncher.launch(arrayOf("*/*")) },
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+    ) {
+        Text("Import profile (.toml)", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+    }
+    FirmiumDivider()
+
+    // Editor for the active profile
+    val a = active
+    if (a != null) {
+        if (a.mode == "graphic") {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                a.bands.forEachIndexed { i, band ->
+                    Text("${freqLabel(band.freq)} Hz: ${if (band.gain > 0) "+" else ""}${band.gain.toInt()} dB",
+                        fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                    FirmiumSlider(
+                        value = band.gain,
+                        onValueChange = { g ->
+                            updateActiveBands(a.bands.toMutableList().also { it[i] = band.copy(gain = g) })
+                        },
+                        valueRange = -12f..12f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                a.bands.forEachIndexed { i, band ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val numberKeyboard = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        FirmiumTextField(value = band.freq.toInt().toString(),
+                            onValueChange = { v -> v.toFloatOrNull()?.let { updateActiveBands(a.bands.toMutableList().also { l -> l[i] = band.copy(freq = it) }) } },
+                            label = "Hz", keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f))
+                        FirmiumTextField(value = band.gain.toString(),
+                            onValueChange = { v -> v.toFloatOrNull()?.let { updateActiveBands(a.bands.toMutableList().also { l -> l[i] = band.copy(gain = it) }) } },
+                            label = "dB", keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f))
+                        FirmiumTextField(value = (band.q ?: 1.0f).toString(),
+                            onValueChange = { v -> v.toFloatOrNull()?.let { updateActiveBands(a.bands.toMutableList().also { l -> l[i] = band.copy(q = it) }) } },
+                            label = "Q", keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f))
+                        FirmiumTextButton(onClick = { updateActiveBands(a.bands.filterIndexed { idx, _ -> idx != i }) }) {
+                            Text("×", fontSize = 16.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                        }
+                    }
+                }
+                FirmiumTextButton(onClick = { updateActiveBands(a.bands + EqBand(1000f, 0f, 1.0f)) }) {
+                    Text("Add band", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                }
+            }
+        }
+        FirmiumDivider()
+    }
+
+    // Save as a new profile (graphic or parametric)
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FirmiumTextField(value = newName, onValueChange = { newName = it }, label = "New profile name",
+            modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FirmiumTextButton(onClick = {
+                val name = newName.trim()
+                if (name.isEmpty()) return@FirmiumTextButton
+                val profile = EqProfile(name, "graphic", GRAPHIC_FREQS.map { EqBand(it, 0f) })
+                persist(profiles.filter { it.name != name } + profile, name)
+                newName = ""
+            }) { Text("Save Graphic", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+            FirmiumTextButton(onClick = {
+                val name = newName.trim()
+                if (name.isEmpty()) return@FirmiumTextButton
+                val profile = EqProfile(name, "parametric", listOf(EqBand(100f, 0f, 1f), EqBand(1000f, 0f, 1f), EqBand(8000f, 0f, 1f)))
+                persist(profiles.filter { it.name != name } + profile, name)
+                newName = ""
+            }) { Text("Save Parametric", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+        }
+    }
 }
 
 @Composable
@@ -620,6 +815,53 @@ private fun FirmiumServicesPanel(
                         contentAlignment = Alignment.Center) {
                         FirmiumIcon(
                             if (showSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        FirmiumDivider()
+    }
+
+    FirmiumListenBrainzSection()
+}
+
+// Self-contained ListenBrainz settings — token lives in SecureStorage; the Rust/Android
+// scrobbler treats an absent token as disabled, so toggling off removes it.
+@Composable
+private fun FirmiumListenBrainzSection() {
+    val context = LocalContext.current
+    val prefs = remember { AppPreferences(context) }
+    val secure = remember { SecureStorage(context) }
+    val scope = rememberCoroutineScope()
+    val colors = LocalFirmiumColors.current
+    val enabled by prefs.listenbrainzEnabled.collectAsState(initial = false)
+    var token by remember { mutableStateOf(secure.get("listenbrainz", "token") ?: "") }
+    var showToken by remember { mutableStateOf(false) }
+
+    FirmiumSettingsRow("ListenBrainz Scrobbling",
+        "Submit each completed track to ListenBrainz using your user token") {
+        FirmiumSwitch(checked = enabled, onCheckedChange = { v ->
+            scope.launch { prefs.setListenbrainzEnabled(v) }
+            if (!v) secure.delete("listenbrainz", "token")
+            else if (token.isNotBlank()) secure.save("listenbrainz", "token", token)
+        })
+    }
+    if (enabled) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FirmiumTextField(
+                value = token,
+                onValueChange = { token = it; secure.save("listenbrainz", "token", it) },
+                label = "ListenBrainz Token",
+                visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    Box(modifier = Modifier.size(36.dp).clip(CircleShape)
+                        .clickable { showToken = !showToken },
+                        contentAlignment = Alignment.Center) {
+                        FirmiumIcon(
+                            if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp))
                     }
                 },

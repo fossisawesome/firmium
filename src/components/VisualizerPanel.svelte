@@ -344,6 +344,12 @@ void main() { fragColor = vec4(pal(u_clock + v_i), 1.0); }
 
   function close() { visualizerOpen.set(false) }
 
+  const MODES = ['orb', 'bars', 'oscilloscope'] as const
+  function cycleMode() {
+    const i = MODES.indexOf(get(visualizerMode))
+    setVisualizerMode(MODES[(i + 1) % MODES.length])
+  }
+
   onMount(() => {
     const unlisten = listen<{ bass: number; bars: number[]; wave?: number[] }>('firmium:audio-analysis', e => {
       bass = e.payload.bass
@@ -418,6 +424,13 @@ void main() { fragColor = vec4(pal(u_clock + v_i), 1.0); }
   </div>
   <hr class="divider" style="margin: 0 20px;">
   <div class="visualizer-body">
-    <canvas bind:this={canvas}></canvas>
+    <canvas
+      bind:this={canvas}
+      role="button"
+      tabindex="0"
+      title="Tap to change visualizer"
+      onclick={cycleMode}
+      onkeydown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cycleMode() } }}
+    ></canvas>
   </div>
 </div>

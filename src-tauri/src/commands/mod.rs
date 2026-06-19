@@ -4,6 +4,7 @@ pub mod credentials;
 pub mod auth;
 pub mod app_info;
 pub mod playback;
+pub mod equalizer;
 pub mod lyrics;
 pub mod cover_cache;
 pub mod cover_colors;
@@ -11,6 +12,7 @@ pub mod queue;
 pub mod subsonic;
 pub mod local_library;
 pub mod downloads;
+pub mod listenbrainz;
 
 pub use themes::list_themes;
 pub use mappers::{map_albums, map_artists, map_songs};
@@ -24,6 +26,7 @@ pub use queue::{
     init_playback_settings, set_queue, set_queue_seamless, shuffle_and_play, play_queue_index,
     queue_next, queue_prev, toggle_play, seek_queue, set_queue_volume,
     set_repeat_mode, toggle_shuffle, set_crossfade_settings, set_gapless_enabled, set_replay_gain_enabled,
+    set_auto_continue,
 };
 pub use subsonic::{
     set_connection, validate_connection, get_open_subsonic_extensions, get_albums, get_artists, get_album_tracks,
@@ -32,6 +35,7 @@ pub use subsonic::{
     update_playlist, delete_playlist, scrobble, report_playback,
     save_play_queue, get_play_queue,
     get_sonic_similar_tracks, find_sonic_path, get_similar_tracks_fallback, get_song_lyrics,
+    get_songs_by_genre, get_random_songs, get_similar_artists,
 };
 pub use playback::{
     play_stream, preload_stream, pause_playback, resume_playback, stop_playback,
@@ -46,3 +50,7 @@ pub use local_library::{
     import_local_files, find_local_match, prewarm_local_library,
 };
 pub use downloads::{download_track, download_album};
+pub use equalizer::{
+    get_eq_state, save_eq_profile, delete_eq_profile, set_eq_active_profile,
+    set_eq_bands, set_eq_enabled,
+};

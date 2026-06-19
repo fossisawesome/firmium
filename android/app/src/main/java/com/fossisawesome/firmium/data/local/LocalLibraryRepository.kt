@@ -281,6 +281,8 @@ class LocalLibraryRepository(private val context: Context) {
                 suffix = raw.suffix,
                 replayGainTrack = null,
                 replayGainAlbum = null,
+                replayGainTrackPeak = null,
+                replayGainAlbumPeak = null,
                 bpm = null,
             )
             songsByAlbum.getOrPut(albumId) { mutableListOf() }.add(song)

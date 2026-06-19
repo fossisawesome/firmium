@@ -43,6 +43,12 @@
     "crossfade_to",
     "set_visualizer_enabled",
     "set_bit_perfect_mode",
+    "get_eq_state",
+    "save_eq_profile",
+    "delete_eq_profile",
+    "set_eq_active_profile",
+    "set_eq_bands",
+    "set_eq_enabled",
     "list_themes",
     "parse_lrc",
     "fetch_lrclib_lyrics",
@@ -75,6 +81,9 @@
     "get_sonic_similar_tracks",
     "find_sonic_path",
     "get_similar_tracks_fallback",
+    "get_songs_by_genre",
+    "get_random_songs",
+    "get_similar_artists",
     "get_song_lyrics",
     "get_local_albums",
     "get_local_artists",
@@ -107,6 +116,7 @@
     "toggle_shuffle",
     "set_crossfade_settings",
     "set_gapless_enabled",
-    "set_replay_gain_enabled"
+    "set_replay_gain_enabled",
+    "set_auto_continue"
   ]
 }

@@ -24,6 +24,8 @@ data class Song(
     val suffix: String?,
     val replayGainTrack: Double?,
     val replayGainAlbum: Double?,
+    val replayGainTrackPeak: Double?,
+    val replayGainAlbumPeak: Double?,
     val bpm: Int?,
 ) {
     // Builds a "FLAC · 96 kHz · 24-bit · 1411 kbps" style summary, omitting missing parts.

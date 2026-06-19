@@ -6,6 +6,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -71,6 +72,7 @@ fun FullScreenPlayer(
     onSimilarTracksOpen: (() -> Unit)? = null,
     onAddToPlaylist: (item: PlaylistListItem) -> Unit,
     onCreatePlaylistAndAdd: (name: String) -> Unit,
+    onStartRadio: (() -> Unit)? = null,
 ) {
     val track = state.currentTrack ?: return
     val colors = LocalFirmiumColors.current
@@ -313,6 +315,7 @@ fun FullScreenPlayer(
             onAddTo = { item -> onAddToPlaylist(item) },
             onCreateAndAdd = { name -> onCreatePlaylistAndAdd(name) },
             onDismiss = { showAddToPlaylist = false },
+            onStartRadio = onStartRadio,
         )
     }
 }
@@ -366,16 +369,22 @@ private fun PlayerControls(
             modifier = Modifier.basicMarquee(),
         )
         val trackInfo = track.formatTrackInfo()
+        var statsExpanded by remember { mutableStateOf(false) }
         if (trackInfo.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(
-                text = trackInfo,
+                text = trackInfo + "  ▾",
                 fontFamily = FontFamily.Monospace,
                 fontSize = if (compact) 10.sp else 11.sp,
                 color = colors.muted,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
+                modifier = Modifier.clickable { statsExpanded = !statsExpanded },
             )
+        }
+        if (statsExpanded) {
+            Spacer(Modifier.height(8.dp))
+            AudioStats(track = track, compact = compact)
         }
     }
 
@@ -498,6 +507,46 @@ private fun PlayerControls(
         )
         FirmiumIcon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null,
             tint = colors.muted, modifier = Modifier.size(16.dp))
+    }
+}
+
+// Expandable audio stats: BPM and ReplayGain track/album gain + peak (display only).
+@Composable
+private fun AudioStats(track: Song, compact: Boolean) {
+    val colors = LocalFirmiumColors.current
+    val size = if (compact) 10.sp else 11.sp
+
+    fun db(v: Double?): String = if (v == null) "—" else "%+.2f dB".format(v)
+    fun peak(v: Double?): String = if (v == null) "—" else "%.4f".format(v)
+
+    val rows = buildList {
+        track.bpm?.let { add("Tempo" to "$it BPM") }
+        if (track.replayGainTrack != null || track.replayGainTrackPeak != null) {
+            add("Track gain" to db(track.replayGainTrack))
+            add("Track peak" to peak(track.replayGainTrackPeak))
+        }
+        if (track.replayGainAlbum != null || track.replayGainAlbumPeak != null) {
+            add("Album gain" to db(track.replayGainAlbum))
+            add("Album peak" to peak(track.replayGainAlbumPeak))
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        if (rows.isEmpty()) {
+            Text("No extra stats provided by server", fontFamily = FontFamily.Monospace,
+                fontSize = size, color = colors.muted, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth())
+        } else {
+            rows.forEach { (label, value) ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(label, fontFamily = FontFamily.Monospace, fontSize = size, color = colors.muted)
+                    Text(value, fontFamily = FontFamily.Monospace, fontSize = size, color = colors.text)
+                }
+            }
+        }
     }
 }
 

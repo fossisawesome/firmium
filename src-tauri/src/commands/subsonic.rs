@@ -588,6 +588,43 @@ pub async fn get_similar_tracks_fallback(app: AppHandle, state: State<'_, Arc<Ap
     Ok(matches)
 }
 
+// ── Library song enumeration (Radio / Mood Mix seeding) ──────────────────────
+
+/// Returns songs of a given genre via `getSongsByGenre`, used by the Radio/Mix
+/// seeding fallback to filter the local library by genre + BPM in-app.
+#[tauri::command]
+pub async fn get_songs_by_genre(app: AppHandle, state: State<'_, Arc<AppState>>, genre: String, count: Option<i32>) -> Result<Vec<Song>, String> {
+    let count = count.unwrap_or(100).clamp(1, 500);
+    let body = subsonic_request(&app, &state, "getSongsByGenre", &[("genre", genre), ("count", count.to_string())], false).await?;
+    Ok(map_songs(array_field(&body, &["songsByGenre", "song"])))
+}
+
+/// Returns a random sample of library songs via `getRandomSongs` (optionally
+/// scoped to a genre), used by Mood Mix when no genre filter narrows the pool.
+#[tauri::command]
+pub async fn get_random_songs(app: AppHandle, state: State<'_, Arc<AppState>>, count: Option<i32>, genre: Option<String>) -> Result<Vec<Song>, String> {
+    let size = count.unwrap_or(100).clamp(1, 500);
+    let mut params = vec![("size", size.to_string())];
+    if let Some(genre) = genre {
+        params.push(("genre", genre));
+    }
+    let body = subsonic_request(&app, &state, "getRandomSongs", &params, false).await?;
+    Ok(map_songs(array_field(&body, &["randomSongs", "song"])))
+}
+
+/// Returns the names of similar artists from the server's `getArtistInfo2`
+/// (`similarArtist[]`), for the artist-page "You might also like" section. The
+/// frontend cross-references these against the user's library.
+#[tauri::command]
+pub async fn get_similar_artists(app: AppHandle, state: State<'_, Arc<AppState>>, id: String, count: Option<i32>) -> Result<Vec<String>, String> {
+    let count = count.unwrap_or(20).clamp(1, 100);
+    let body = subsonic_request(&app, &state, "getArtistInfo2", &[("id", id), ("count", count.to_string())], false).await?;
+    Ok(array_field(&body, &["artistInfo2", "similarArtist"])
+        .iter()
+        .filter_map(|a| a.get("name").and_then(|v| v.as_str()).map(str::to_string))
+        .collect())
+}
+
 // ── Lyrics ───────────────────────────────────────────────────────────────────
 
 /// Full lyrics lookup cascade: OpenSubsonic structured lyrics (synced

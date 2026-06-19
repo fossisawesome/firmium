@@ -117,6 +117,10 @@ export const Api = {
   getSimilarTracksFallback: async (songId: string, artistId: string | undefined, genre: string | undefined, count?: number): Promise<SimilarMatch[]> =>
     tauriInvoke('get_similar_tracks_fallback', { songId, artistId, genre, count }),
 
+  // Names of similar artists from the server's getArtistInfo2 (similarArtist[]).
+  getSimilarArtists: async (id: string, count?: number): Promise<string[]> =>
+    tauriInvoke('get_similar_artists', { id, count }),
+
   // ── Playlist API (OpenSubsonic) ───────────────────────────────────────────────
 
   // Returns all playlists visible to the current user from the server.

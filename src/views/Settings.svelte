@@ -3,11 +3,12 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, replayGainEnabled, setReplayGainEnabled, bitPerfectMode, setBitPerfectMode, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, replayGainEnabled, setReplayGainEnabled, autoContinueEnabled, setAutoContinueEnabled, bitPerfectMode, setBitPerfectMode, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
-  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload } from '../lib/icons'
+  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload, IconEqualizer } from '../lib/icons'
+  import EqualizerSettings from '../components/EqualizerSettings.svelte'
   import type { Theme } from '../lib/types/tauri-commands'
 
   interface Props {
@@ -22,7 +23,7 @@
     'firmium_server', 'firmium_user', 'firmium_save_pass',
     'firmium_auto_login', 'firmium_lrclib', 'firmium_theme',
     'firmium_decorations', 'firmium_crossfade', 'firmium_crossfade_duration',
-    'firmium_volume', 'firmium_gapless', 'firmium_lastfm',
+    'firmium_volume', 'firmium_gapless', 'firmium_autocontinue', 'firmium_lastfm', 'firmium_listenbrainz',
     'firmium_download_format', 'firmium_lyrics_word_fill', 'firmium_bit_perfect_mode',
     'firmium_replaygain',
   ]
@@ -33,6 +34,7 @@
   const CATEGORIES = [
     { id: 'appearance', label: 'Appearance', icon: IconPalette  },
     { id: 'playback',   label: 'Playback',   icon: IconPlay     },
+    { id: 'equalizer',  label: 'Equalizer',  icon: IconEqualizer },
     { id: 'downloads',  label: 'Downloads',  icon: IconDownload },
     { id: 'services',   label: 'Services',   icon: IconGlobe    },
     { id: 'account',    label: 'Account',    icon: IconUser     },
@@ -46,6 +48,8 @@
   let isLastfmEnabled = $state(SafeStorage.getItem('firmium_lastfm') === 'true')
   let lastfmKey = $state('')
   let lastfmSecret = $state('')
+  let isListenbrainzEnabled = $state(SafeStorage.getItem('firmium_listenbrainz') === 'true')
+  let listenbrainzToken = $state('')
   let currentTheme = $state(SafeStorage.getItem('firmium_theme') || 'firmium')
   let themeOpen = $state(false)
   let formatOpen = $state(false)
@@ -70,6 +74,7 @@
     tauriInvoke<string>('get_app_version').then(v => appVersion = `v${v}`).catch(() => appVersion = 'unavailable')
     Keyring.load('lastfm_api_key').then(k => { if (k) lastfmKey = k as string }).catch(() => {})
     Keyring.load('lastfm_secret').then(s => { if (s) lastfmSecret = s as string }).catch(() => {})
+    Keyring.load('listenbrainz_token').then(t => { if (t) listenbrainzToken = t as string }).catch(() => {})
   })
 
   const themeName = $derived(themes.find(t => t.id === currentTheme)?.name ?? currentTheme)
@@ -98,6 +103,18 @@
   }
   function handleLastfmKey(e: Event)    { lastfmKey = (e.target as HTMLInputElement).value;    Keyring.save('lastfm_api_key', (e.target as HTMLInputElement).value).catch(() => {}) }
   function handleLastfmSecret(e: Event) { lastfmSecret = (e.target as HTMLInputElement).value; Keyring.save('lastfm_secret',  (e.target as HTMLInputElement).value).catch(() => {}) }
+  // The Rust scrobbler reads the token straight from the keyring and treats an
+  // absent token as "disabled", so toggling off removes the stored token.
+  function handleListenbrainz(e: Event) {
+    isListenbrainzEnabled = (e.target as HTMLInputElement).checked
+    SafeStorage.setItem('firmium_listenbrainz', isListenbrainzEnabled ? 'true' : 'false')
+    if (!isListenbrainzEnabled) Keyring.remove('listenbrainz_token').catch(() => {})
+    else if (listenbrainzToken) Keyring.save('listenbrainz_token', listenbrainzToken).catch(() => {})
+  }
+  function handleListenbrainzToken(e: Event) {
+    listenbrainzToken = (e.target as HTMLInputElement).value
+    if (isListenbrainzEnabled) Keyring.save('listenbrainz_token', listenbrainzToken).catch(() => {})
+  }
 
   function handleCrossfadeToggle(e: Event) {
     const checked = (e.target as HTMLInputElement).checked
@@ -285,6 +302,17 @@
 
       <div class="settings-row">
         <div class="settings-info">
+          <div class="settings-title">Continue playing after queue ends</div>
+          <div class="settings-desc">Smart Radio keeps the music going by adding similar tracks when the queue runs out</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" checked={$autoContinueEnabled} onchange={(e) => setAutoContinueEnabled((e.target as HTMLInputElement).checked)} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
           <div class="settings-title">Bit-Perfect Audio</div>
           <div class="settings-desc">
             {#if $bitPerfectMode === 'off'}
@@ -306,6 +334,9 @@
           {/each}
         </div>
       </div>
+
+    {:else if activeCategory === 'equalizer'}
+      <EqualizerSettings />
 
     {:else if activeCategory === 'downloads'}
       <div class="sett-panel-title">Downloads</div>
@@ -369,6 +400,27 @@
             <div class="settings-desc">Shared secret for your API account</div>
           </div>
           <input class="settings-text-input" type="password" value={lastfmSecret} oninput={handleLastfmSecret} placeholder="Secret…" />
+        </div>
+      {/if}
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">ListenBrainz Scrobbling</div>
+          <div class="settings-desc">Submit each completed track to ListenBrainz using your user token</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" bind:checked={isListenbrainzEnabled} onchange={handleListenbrainz} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      {#if isListenbrainzEnabled}
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="settings-title">ListenBrainz Token</div>
+            <div class="settings-desc">From your ListenBrainz profile settings</div>
+          </div>
+          <input class="settings-text-input" type="password" value={listenbrainzToken} oninput={handleListenbrainzToken} placeholder="User token…" />
         </div>
       {/if}
 

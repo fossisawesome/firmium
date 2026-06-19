@@ -19,6 +19,9 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Volume control | ✅ | ✅ |
 | Bit-perfect audio mode — matches output rate to track's native sample rate (Off / Relaxed / Strict) | ✅ | ❌ |
 | Track format display (e.g. "FLAC · 96 kHz · 24-bit · 1411 kbps") | ✅ | ✅ |
+| Equalizer — graphic (10-band) and parametric modes, saveable profiles, per-device assignment | ✅ | ✅ |
+| Import an equalizer profile from a `.toml` file | ❌ | ✅ |
+| Audio stats panel — BPM and ReplayGain track/album gain and peak on the now-playing screen | ✅ | ✅ |
 
 ---
 
@@ -82,15 +85,26 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 ---
 
+## Smart Radio & Mixes
+
+| Feature | Desktop | Android |
+|---|:---:|:---:|
+| Continue playing after the queue ends — adds similar tracks automatically (toggle, off by default) | ✅ | ✅ |
+| Mix — generate a shuffled queue by energy level (Chill / Mid / High BPM) and optional genre | ✅ | ✅ |
+| Start Radio — build a queue seeded from any track, album, or artist and play it instantly | ✅ | ✅ |
+| "You might also like" on artist pages — similar artists you already have in your library | ✅ | ✅ |
+
+---
+
 ## Audio Visualizer
 
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | Visualizer modes: Orb, Bars | ✅ | ✅ |
-| Oscilloscope mode | ❌ | ✅ |
+| Oscilloscope mode | ✅ | ✅ |
 | Colors driven by the current track's cover art | ✅ | ✅ |
 | Toggle visualizer on/off | ✅ | ✅ |
-| Tap to cycle visualizer type | ❌ | ✅ |
+| Tap to cycle visualizer type | ✅ | ✅ |
 
 ---
 
@@ -164,6 +178,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Credentials stored in OS keyring — never saved as plaintext | ✅ | ✅ |
 | Auto-login on startup | ✅ | ✅ |
 | Scrobbling — reports plays to the server (Last.fm via Navidrome, etc.) | ✅ | ✅ |
+| ListenBrainz scrobbling — submits completed tracks to ListenBrainz with your user token | ✅ | ✅ |
 | Playback reporting — keeps server "Now Playing" status accurate | ✅ | ✅ |
 | Warning shown when connecting over plain HTTP to a non-local server | ✅ | ✅ |
 

@@ -80,6 +80,7 @@ private val bottomDests = listOf(
     NavDest("home", "Home", Icons.Default.Home),
     NavDest("music", "Music", Icons.Default.Album),
     NavDest("artists", "Artists", Icons.Default.People),
+    NavDest("mix", "Mix", Icons.Default.Radio),
     NavDest("playlists", "Playlists", Icons.AutoMirrored.Filled.PlaylistPlay),
 )
 
@@ -119,6 +120,12 @@ fun AppNavGraph(
     val lastfmEnabled by app.prefs.lastfmEnabled.collectAsStateWithLifecycle(initialValue = false)
     val autoLoginEnabled by app.prefs.autoLoginEnabled.collectAsStateWithLifecycle(initialValue = true)
     val downloadFormat by app.prefs.downloadFormat.collectAsStateWithLifecycle(initialValue = "original")
+
+    // Genre names for the Mood Mix filter (server only; empty in local-library mode).
+    var mixGenres by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(auth.isAuthenticated) {
+        mixGenres = if (auth.isAuthenticated) try { app.api.getGenres() } catch (_: Exception) { emptyList() } else emptyList()
+    }
 
     // Download callbacks — only offered when connected to a server (local-library tracks are
     // already on disk). Returned as suspend lambdas so DownloadButton can drive its own state.
@@ -266,6 +273,12 @@ fun AppNavGraph(
                         onRefresh = { libraryViewModel.loadHome() },
                     )
                 }
+                composable("mix") {
+                    MixScreen(
+                        genres = mixGenres,
+                        onStartMix = { energy, genre -> playerViewModel.playMoodMix(energy, genre) },
+                    )
+                }
                 composable("music") {
                     AlbumListScreen(
                         state = albumListState,
@@ -337,6 +350,16 @@ fun AppNavGraph(
                         onAddAlbum = { albumId -> pendingAddAlbumId = albumId },
                         onDownloadAlbum = onDownloadAlbum,
                         onBack = { navController.popBackStack() },
+                        recommendations = artistDetailState.recommendations,
+                        onArtistClick = { navController.navigate("artist/$it") },
+                        onStartRadio = artistDetailState.detail?.albums?.firstOrNull()?.let { firstAlbum ->
+                            {
+                                scope.launch {
+                                    val tracks = try { app.api.getAlbumDetail(firstAlbum.id).tracks } catch (_: Exception) { emptyList() }
+                                    tracks.firstOrNull()?.let { playerViewModel.startRadio(it) }
+                                }
+                            }
+                        },
                     )
                 }
                 composable("playlists") {
@@ -541,6 +564,7 @@ fun AppNavGraph(
             onCreatePlaylistAndAdd = { name ->
                 playerState.currentTrack?.let { playlistViewModel.createAndAdd(name, listOf(it)) }
             },
+            onStartRadio = { playerState.currentTrack?.let { playerViewModel.startRadio(it) } },
         )
     }
 
@@ -597,6 +621,7 @@ fun AppNavGraph(
                 pendingAddAlbumId = null; pendingAddAlbumTracks = null
             },
             onDismiss = { pendingAddAlbumId = null; pendingAddAlbumTracks = null },
+            onStartRadio = tracks.firstOrNull()?.let { seed -> { playerViewModel.startRadio(seed); pendingAddAlbumId = null; pendingAddAlbumTracks = null } },
         )
     }
 }
