@@ -41,6 +41,7 @@ fun MixScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .windowInsetsPadding(WindowInsets.statusBars)
             .padding(20.dp),
     ) {
         Text("Mix", fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.text)

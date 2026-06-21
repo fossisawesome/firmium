@@ -4,9 +4,9 @@
   import {
     isAuthed, setAuth, clearAuth, navToView,
     authServer, activeView, lyricsOpen, currentTrack,
-    openSubsonicExtensions, showAccountModal, bumpDataSourceVersion,
+    openSubsonicExtensions, showAccountModal, bumpDataSourceVersion, openRecap,
     listenToQueueState, recentlyPlayedSongs,
-    crossfadeEnabled, crossfadeDuration, gaplessEnabled, volume, replayGainEnabled,
+    crossfadeEnabled, crossfadeDuration, crossfadeCurve, gaplessEnabled, volume, replayGainEnabled,
     autoContinueEnabled,
   } from './lib/stores'
   import { startAutoContinue } from './lib/radio'
@@ -26,6 +26,7 @@
   import Sidebar from './components/Sidebar.svelte'
   import PlayerBar from './components/PlayerBar.svelte'
   import LyricsPanel from './components/LyricsPanel.svelte'
+  import RecapPanel from './components/RecapPanel.svelte'
   import SimilarTracksPanel from './components/SimilarTracksPanel.svelte'
   import VisualizerPanel from './components/VisualizerPanel.svelte'
   import AudioStatsPanel from './components/AudioStatsPanel.svelte'
@@ -130,6 +131,7 @@
       volume: get(volume),
       crossfadeEnabled: get(crossfadeEnabled),
       crossfadeDuration: get(crossfadeDuration),
+      crossfadeCurve: get(crossfadeCurve),
       gaplessEnabled: get(gaplessEnabled),
       replayGainEnabled: get(replayGainEnabled),
       autoContinue: get(autoContinueEnabled),
@@ -147,6 +149,14 @@
     }, { capture: true })
 
     tauriInvoke('prewarm_local_library').catch(() => {})
+
+    // Weekly Recap auto-show: surface once every 7 days on app open.
+    const RECAP_KEY = 'firmium_recap_last_shown'
+    const lastShown = Number(SafeStorage.getItem(RECAP_KEY) ?? 0)
+    if (Date.now() - lastShown > 7 * 86400 * 1000) {
+      SafeStorage.setItem(RECAP_KEY, String(Date.now()))
+      openRecap()
+    }
 
     const savedServer = SafeStorage.getItem('firmium_server')
     const savedUser = SafeStorage.getItem('firmium_user')
@@ -291,6 +301,7 @@
   </div>
 </div>
 <LyricsPanel />
+<RecapPanel />
 <SimilarTracksPanel />
 <VisualizerPanel />
 <AudioStatsPanel />

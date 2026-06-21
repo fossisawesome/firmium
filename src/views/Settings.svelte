@@ -3,11 +3,13 @@
   import { tauriInvoke } from '../lib/tauri'
   import { SafeStorage } from '../lib/utils'
   import { Keyring } from '../lib/api'
-  import { crossfadeEnabled, crossfadeDuration, setCrossfadeEnabled, setCrossfadeDuration, gaplessEnabled, setGaplessEnabled, replayGainEnabled, setReplayGainEnabled, autoContinueEnabled, setAutoContinueEnabled, bitPerfectMode, setBitPerfectMode, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled } from '../lib/stores'
+  import { crossfadeEnabled, crossfadeDuration, crossfadeCurve, setCrossfadeEnabled, setCrossfadeDuration, setCrossfadeCurve, gaplessEnabled, setGaplessEnabled, replayGainEnabled, setReplayGainEnabled, autoContinueEnabled, setAutoContinueEnabled, bitPerfectMode, setBitPerfectMode, clearAuth, navToView, isAuthed, authServer, openAccountModal, downloadFormat, setDownloadFormat, lyricsWordFillEnabled, setLyricsWordFillEnabled, openRecap } from '../lib/stores'
   import { clearAll } from '../lib/coverCache'
   import { clearAll as clearListCache } from '../lib/listCache'
   import { checkForUpdate, installUpdate } from '../lib/updater'
-  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload, IconEqualizer } from '../lib/icons'
+  import { getPlayHistorySummary, exportPlayHistory, formatDuration, type PlayHistorySummary } from '../lib/stats'
+  import { saveTextFile } from '../lib/exportFile'
+  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload, IconEqualizer, IconBarChart } from '../lib/icons'
   import EqualizerSettings from '../components/EqualizerSettings.svelte'
   import type { Theme } from '../lib/types/tauri-commands'
 
@@ -36,6 +38,7 @@
     { id: 'playback',   label: 'Playback',   icon: IconPlay     },
     { id: 'equalizer',  label: 'Equalizer',  icon: IconEqualizer },
     { id: 'downloads',  label: 'Downloads',  icon: IconDownload },
+    { id: 'stats',      label: 'Stats Export', icon: IconBarChart },
     { id: 'services',   label: 'Services',   icon: IconGlobe    },
     { id: 'account',    label: 'Account',    icon: IconUser     },
     { id: 'debug',      label: 'Debug',      icon: IconInfo     },
@@ -69,6 +72,30 @@
   let updateLabel = $state('Check for Updates')
   let updateDisabled = $state(false)
   let updateAvailable = $state<string | null>(null)
+
+  // ── Stats export ──────────────────────────────────────────────────────────
+  let statsSummary = $state<PlayHistorySummary | null>(null)
+  let statsError = $state('')
+  let exportLabel = $state('Export')
+
+  async function loadStatsSummary() {
+    try { statsSummary = await getPlayHistorySummary() }
+    catch (e) { statsError = String(e) }
+  }
+  // Load the summary the first time the Stats Export panel is opened.
+  $effect(() => { if (activeCategory === 'stats' && !statsSummary && !statsError) loadStatsSummary() })
+
+  async function exportStats(format: 'csv' | 'json') {
+    exportLabel = 'Exporting…'
+    try {
+      const contents = await exportPlayHistory(format)
+      await saveTextFile(`firmium-play-history.${format}`, contents, format)
+      exportLabel = 'Export'
+    } catch (e) {
+      statsError = String(e)
+      exportLabel = 'Export'
+    }
+  }
 
   onMount(async () => {
     tauriInvoke<string>('get_app_version').then(v => appVersion = `v${v}`).catch(() => appVersion = 'unavailable')
@@ -127,6 +154,7 @@
     if (mode === 'strict') setGaplessEnabled(false)
   }
   function handleCrossfadeDuration(e: Event) { setCrossfadeDuration(Number((e.target as HTMLInputElement).value)) }
+  function handleCrossfadeCurve(e: Event) { setCrossfadeCurve((e.target as HTMLSelectElement).value) }
   function handleGaplessToggle(e: Event) {
     const checked = (e.target as HTMLInputElement).checked
     setGaplessEnabled(checked)
@@ -276,6 +304,17 @@
             <span>{$crossfadeDuration}s</span>
           </div>
         </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="settings-title">Crossfade Curve</div>
+            <div class="settings-desc">Linear blends evenly; Logarithmic approximates an equal-power fade</div>
+          </div>
+          <select class="settings-select" value={$crossfadeCurve} onchange={handleCrossfadeCurve}>
+            <option value="linear">Linear</option>
+            <option value="logarithmic">Logarithmic</option>
+          </select>
+        </div>
       {/if}
 
       <div class="settings-row">
@@ -369,6 +408,43 @@
               >{fmt.name}</div>
             {/each}
           </div>
+        </div>
+      </div>
+
+    {:else if activeCategory === 'stats'}
+      <div class="sett-panel-title">Stats Export</div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Listening Summary</div>
+          <div class="settings-desc">
+            {#if statsError}
+              {statsError}
+            {:else if statsSummary}
+              {statsSummary.totalPlays} plays · {formatDuration(statsSummary.totalSeconds)} · {statsSummary.uniqueTracks} tracks · {statsSummary.uniqueArtists} artists
+            {:else}
+              Loading…
+            {/if}
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Firmium Recap</div>
+          <div class="settings-desc">A swipeable, shareable recap of your listening — top tracks, artists, genres and more</div>
+        </div>
+        <button class="debug-btn" onclick={openRecap}>View Recap</button>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="settings-title">Export Play History</div>
+          <div class="settings-desc">Save your full local play history to a file. CSV opens in spreadsheets; JSON keeps the raw structure.</div>
+        </div>
+        <div style="display:flex; gap:8px">
+          <button class="debug-btn" disabled={exportLabel !== 'Export'} onclick={() => exportStats('csv')}>{exportLabel === 'Export' ? 'CSV' : exportLabel}</button>
+          <button class="debug-btn" disabled={exportLabel !== 'Export'} onclick={() => exportStats('json')}>{exportLabel === 'Export' ? 'JSON' : exportLabel}</button>
         </div>
       </div>
 

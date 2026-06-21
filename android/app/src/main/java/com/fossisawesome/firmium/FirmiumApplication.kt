@@ -10,6 +10,8 @@ import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.audio.PlaybackController
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.db.FirmiumDatabase
+import com.fossisawesome.firmium.data.db.PlayHistoryRepository
 import com.fossisawesome.firmium.data.download.DownloadManager
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.storage.AppPreferences
@@ -32,11 +34,13 @@ class FirmiumApplication : Application() {
     val localLibrary by lazy { LocalLibraryRepository(this) }
     val downloadManager by lazy { DownloadManager(this, auth, localLibrary) }
     val playlists by lazy { PlaylistRepository(prefs, api) }
+    // Local play-history store (Room) — powers Stats Export and Firmium Recap.
+    val playHistory by lazy { PlayHistoryRepository(FirmiumDatabase.get(this).playDao()) }
     val audioPlayer by lazy { AudioPlayer(this) }
     val nowPlaying by lazy { NowPlayingController(this) }
     // App-scoped playback orchestration shared by the phone UI (PlayerViewModel) and Android Auto
     // (FirmiumMediaBrowserService), so the car can browse and play without an Activity present.
-    val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists, secureStorage) }
+    val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists, secureStorage, playHistory) }
     // Mirrors now-playing state to a paired Wear OS watch and applies its transport commands.
     val wearSync by lazy { WearStateSync(this) }
 

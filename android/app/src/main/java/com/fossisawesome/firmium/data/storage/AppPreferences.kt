@@ -21,6 +21,8 @@ class AppPreferences(context: Context) {
         val VOLUME = floatPreferencesKey("volume")
         val CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val CROSSFADE_DURATION = intPreferencesKey("crossfade_duration_ms")
+        // Crossfade ramp shape: "linear" or "logarithmic".
+        val CROSSFADE_CURVE = stringPreferencesKey("crossfade_curve")
         val GAPLESS_ENABLED = booleanPreferencesKey("gapless_enabled")
         val REPEAT_MODE = stringPreferencesKey("repeat_mode")
         val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
@@ -53,6 +55,8 @@ class AppPreferences(context: Context) {
         val EQ_ACTIVE_PROFILE = stringPreferencesKey("eq_active_profile")
         val EQ_PROFILES_JSON = stringPreferencesKey("eq_profiles_json")
         val SERVER_LIST_JSON = stringPreferencesKey("server_list_json")
+        // Firmium Recap weekly auto-show: unix millis of the last time it was surfaced.
+        val RECAP_LAST_SHOWN = longPreferencesKey("recap_last_shown")
     }
 
     val serverUrl: Flow<String?> = store.data.map { it[SERVER_URL] }
@@ -60,6 +64,7 @@ class AppPreferences(context: Context) {
     val volume: Flow<Float> = store.data.map { it[VOLUME] ?: 1f }
     val crossfadeEnabled: Flow<Boolean> = store.data.map { it[CROSSFADE_ENABLED] ?: false }
     val crossfadeDuration: Flow<Int> = store.data.map { it[CROSSFADE_DURATION] ?: 3000 }
+    val crossfadeCurve: Flow<String> = store.data.map { it[CROSSFADE_CURVE] ?: "linear" }
     val gaplessEnabled: Flow<Boolean> = store.data.map { it[GAPLESS_ENABLED] ?: true }
     val repeatMode: Flow<String> = store.data.map { it[REPEAT_MODE] ?: "none" }
     val shuffleEnabled: Flow<Boolean> = store.data.map { it[SHUFFLE_ENABLED] ?: false }
@@ -85,12 +90,14 @@ class AppPreferences(context: Context) {
     val eqActiveProfile: Flow<String?> = store.data.map { it[EQ_ACTIVE_PROFILE] }
     val eqProfilesJson: Flow<String?> = store.data.map { it[EQ_PROFILES_JSON] }
     val serverListJson: Flow<String?> = store.data.map { it[SERVER_LIST_JSON] }
+    val recapLastShown: Flow<Long> = store.data.map { it[RECAP_LAST_SHOWN] ?: 0L }
 
     suspend fun setServerUrl(url: String) = store.edit { it[SERVER_URL] = url }
     suspend fun setUsername(name: String) = store.edit { it[USERNAME] = name }
     suspend fun setVolume(v: Float) = store.edit { it[VOLUME] = v }
     suspend fun setCrossfadeEnabled(v: Boolean) = store.edit { it[CROSSFADE_ENABLED] = v }
     suspend fun setCrossfadeDuration(ms: Int) = store.edit { it[CROSSFADE_DURATION] = ms }
+    suspend fun setCrossfadeCurve(curve: String) = store.edit { it[CROSSFADE_CURVE] = curve }
     suspend fun setGaplessEnabled(v: Boolean) = store.edit { it[GAPLESS_ENABLED] = v }
     suspend fun setRepeatMode(mode: String) = store.edit { it[REPEAT_MODE] = mode }
     suspend fun setShuffleEnabled(v: Boolean) = store.edit { it[SHUFFLE_ENABLED] = v }
@@ -114,6 +121,7 @@ class AppPreferences(context: Context) {
     suspend fun setEqActiveProfile(name: String) = store.edit { it[EQ_ACTIVE_PROFILE] = name }
     suspend fun setEqProfilesJson(json: String) = store.edit { it[EQ_PROFILES_JSON] = json }
     suspend fun setServerListJson(json: String) = store.edit { it[SERVER_LIST_JSON] = json }
+    suspend fun setRecapLastShown(millis: Long) = store.edit { it[RECAP_LAST_SHOWN] = millis }
 
     suspend fun clear() = store.edit { it.clear() }
 }

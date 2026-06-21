@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
@@ -43,6 +44,8 @@ fun AlbumDetailScreen(
     onAddToPlaylist: (item: PlaylistListItem, songs: List<Song>) -> Unit,
     onCreatePlaylistAndAdd: (name: String, songs: List<Song>) -> Unit,
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
+    onDownloadAlbum: ((com.fossisawesome.firmium.data.model.Album) -> suspend () -> Result<Unit>)? = null,
+    onArtistClick: (String) -> Unit = {},
     onBack: () -> Unit,
 ) {
     LaunchedEffect(albumId) { onLoad(albumId) }
@@ -85,54 +88,78 @@ fun AlbumDetailScreen(
                     contentPadding = PaddingValues(bottom = 32.dp),
                 ) {
                     item {
-                        // Album header: art + info + Play All
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            CoverImage(
-                                url = coverUrlFor(album.coverArt),
-                                contentDescription = album.name,
-                                modifier = Modifier.size(220.dp).clip(RoundedCornerShape(12.dp))
-                                    .background(colors.surface2),
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Text(
-                                album.name, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace, color = colors.text,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(album.artist, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
-                            if (album.year != null) {
-                                val meta = listOfNotNull(
-                                    album.year.toString(),
-                                    album.releaseType.takeIf { it.isNotEmpty() && it != "Album" }
-                                ).joinToString(" · ")
-                                Text(meta, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                        // Album header: cover top-left, title/artist/count + action icons, then Play + Shuffle.
+                        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                CoverImage(
+                                    url = coverUrlFor(album.coverArt),
+                                    contentDescription = album.name,
+                                    modifier = Modifier.size(130.dp).clip(RoundedCornerShape(10.dp))
+                                        .background(colors.surface2),
+                                )
+                                Column(modifier = Modifier.weight(1f).heightIn(min = 130.dp), verticalArrangement = Arrangement.Center) {
+                                    Text(
+                                        album.name, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace, color = colors.text,
+                                        maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        album.artist, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                                        color = colors.accent,
+                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                        modifier = Modifier.clickable(enabled = album.artistId.isNotBlank()) {
+                                            onArtistClick(album.artistId)
+                                        },
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    val countLabel = "${album.tracks.size} " + if (album.tracks.size == 1) "song" else "songs"
+                                    val meta = listOfNotNull(
+                                        countLabel,
+                                        album.year?.toString(),
+                                    ).joinToString(" · ")
+                                    Text(meta, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                                    Spacer(Modifier.height(10.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (onDownloadAlbum != null) {
+                                            DownloadButton(
+                                                onDownload = onDownloadAlbum.invoke(album),
+                                                buttonSize = 36.dp, iconSize = 18.dp,
+                                                initiallyDownloaded = state.allDownloaded,
+                                            )
+                                        }
+                                        FirmiumIconButton(onClick = { pendingAllSongs = true }, modifier = Modifier.size(36.dp)) {
+                                            FirmiumIcon(Icons.Default.Add, contentDescription = "Add all to playlist",
+                                                tint = colors.muted, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
                             }
                             if (album.tracks.isNotEmpty()) {
                                 Spacer(Modifier.height(16.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Box(
-                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(2.dp))
+                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
                                             .background(colors.accent).clickable { onPlayAll(album.tracks, 0) }
                                             .padding(vertical = 12.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             FirmiumIcon(Icons.Default.PlayArrow, null, tint = colors.bg, modifier = Modifier.size(16.dp))
-                                            Text("Play All", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.bg, letterSpacing = 0.5.sp)
+                                            Text("Play", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.bg, letterSpacing = 0.5.sp)
                                         }
                                     }
                                     Box(
-                                        modifier = Modifier.clip(RoundedCornerShape(2.dp))
-                                            .border(1.dp, colors.border, RoundedCornerShape(2.dp))
-                                            .background(colors.surface2).clickable { pendingAllSongs = true }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
+                                            .border(1.dp, colors.border, RoundedCornerShape(999.dp))
+                                            .background(colors.surface2).clickable { onPlayAll(album.tracks.shuffled(), 0) }
+                                            .padding(vertical = 12.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        FirmiumIcon(Icons.Default.Add, contentDescription = "Add all to playlist", tint = colors.text, modifier = Modifier.size(16.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            FirmiumIcon(Icons.Default.Shuffle, null, tint = colors.text, modifier = Modifier.size(16.dp))
+                                            Text("Shuffle", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.text, letterSpacing = 0.5.sp)
+                                        }
                                     }
                                 }
                             }
@@ -182,6 +209,7 @@ fun AlbumDetailScreen(
                             onClick = { onPlayAll(displayTracks, index) },
                             onAddClick = { pendingSong = song },
                             onDownloadClick = onDownloadTrack?.invoke(song),
+                            isDownloaded = song.id in state.downloadedSongIds,
                         )
                         FirmiumDivider()
                     }
@@ -219,6 +247,7 @@ private fun AlbumTrackRow(
     onClick: () -> Unit,
     onAddClick: () -> Unit,
     onDownloadClick: (suspend () -> Result<Unit>)? = null,
+    isDownloaded: Boolean = false,
 ) {
     val colors = LocalFirmiumColors.current
     Row(
@@ -251,7 +280,8 @@ private fun AlbumTrackRow(
         }
         Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
         if (onDownloadClick != null) {
-            DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp)
+            DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp,
+                initiallyDownloaded = isDownloaded)
         }
         FirmiumIconButton(onClick = onAddClick, modifier = Modifier.size(32.dp)) {
             FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(16.dp))
@@ -267,6 +297,7 @@ fun TrackRow(
     isCurrentlyPlaying: Boolean,
     onClick: () -> Unit,
     onDownloadClick: (suspend () -> Result<Unit>)? = null,
+    isDownloaded: Boolean = false,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null,
     canMoveUp: Boolean = false,
@@ -301,7 +332,8 @@ fun TrackRow(
         Spacer(Modifier.width(8.dp))
         Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
         if (onDownloadClick != null) {
-            DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp)
+            DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp,
+                initiallyDownloaded = isDownloaded)
         }
         if (onMoveUp != null && onMoveDown != null) {
             FirmiumIconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(32.dp)) {

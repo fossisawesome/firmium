@@ -54,6 +54,7 @@ import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.screens.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private data class NavDest(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
@@ -130,7 +131,8 @@ fun AppNavGraph(
     // Download callbacks — only offered when connected to a server (local-library tracks are
     // already on disk). Returned as suspend lambdas so DownloadButton can drive its own state.
     val onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = if (auth.isAuthenticated) {
-        { song -> { app.downloadManager.downloadTrack(song, downloadFormat) } }
+        // In server mode allow re-downloading a track even if a local copy already exists.
+        { song -> { app.downloadManager.downloadTrack(song, downloadFormat, allowRedownload = true) } }
     } else null
     val onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = if (auth.isAuthenticated) {
         { album ->
@@ -155,9 +157,17 @@ fun AppNavGraph(
     // server-only playlists (not just locally-created ones).
     LaunchedEffect(Unit) { playlistViewModel.refreshServerPlaylists() }
 
+    // Weekly Recap auto-show: surface once every 7 days on app open.
+    LaunchedEffect(Unit) {
+        val last = app.prefs.recapLastShown.first()
+        if (System.currentTimeMillis() - last > 7L * 86400 * 1000) {
+            app.prefs.setRecapLastShown(System.currentTimeMillis())
+            navController.navigate("recap")
+        }
+    }
+
     var showFullPlayer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
-    var showLyrics by remember { mutableStateOf(false) }
     var showSimilarTracks by remember { mutableStateOf(false) }
     val similarTracksState by playerViewModel.similarTracksState.collectAsStateWithLifecycle()
 
@@ -170,7 +180,10 @@ fun AppNavGraph(
         pendingAddAlbumTracks = tracks
     }
 
-    val coverUrl: (String?) -> String? = { id -> id?.let { if (it.startsWith("file://")) it else auth.coverArtUrl(it, 300) } }
+    val coverUrl: (String?) -> String? = { id ->
+        if (!auth.isAuthenticated) null
+        else id?.let { if (it.startsWith("file://")) it else auth.coverArtUrl(it, 300) }
+    }
 
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     // Main tab routes — those that show the shared top bar and bottom nav.
@@ -320,7 +333,14 @@ fun AppNavGraph(
                         onCreatePlaylistAndAdd = { name, songs ->
                             playlistViewModel.createAndAdd(name, songs)
                         },
-                        onDownloadTrack = onDownloadTrack,
+                        // Wrap downloads so the album/track downloaded marks refresh on success.
+                        onDownloadTrack = onDownloadTrack?.let { base ->
+                            { song -> { base(song)().also { if (it.isSuccess) libraryViewModel.refreshAlbumDownloaded() } } }
+                        },
+                        onDownloadAlbum = onDownloadAlbum?.let { base ->
+                            { album -> { base(album)().also { if (it.isSuccess) libraryViewModel.refreshAlbumDownloaded() } } }
+                        },
+                        onArtistClick = { navController.navigate("artist/$it") },
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -344,11 +364,15 @@ fun AppNavGraph(
                         artistId = id,
                         state = artistDetailState,
                         coverUrlFor = coverUrl,
-                        playlists = playlistsState.playlists,
                         onLoad = { libraryViewModel.loadArtistDetail(it) },
                         onAlbumClick = { navController.navigate("album/$it") },
-                        onAddAlbum = { albumId -> pendingAddAlbumId = albumId },
-                        onDownloadAlbum = onDownloadAlbum,
+                        onPlayAlbum = { album ->
+                            scope.launch {
+                                val tracks = try { app.api.getAlbumDetail(album.id).tracks } catch (_: Exception) { emptyList() }
+                                if (tracks.isNotEmpty()) playerViewModel.playAt(tracks, 0)
+                            }
+                        },
+                        onPlaySongs = { songs, idx -> playerViewModel.playAt(songs, idx) },
                         onBack = { navController.popBackStack() },
                         recommendations = artistDetailState.recommendations,
                         onArtistClick = { navController.navigate("artist/$it") },
@@ -388,21 +412,27 @@ fun AppNavGraph(
                         val cached = serverTracksMap[serverId]
                         LaunchedEffect(serverId) { playlistViewModel.loadServerPlaylistTracks(serverId) }
                         if (server != null) {
+                            val serverTracks = cached?.tracks ?: emptyList()
+                            var dlIds by remember(serverId) { mutableStateOf(emptySet<String>()) }
+                            LaunchedEffect(serverTracks) { dlIds = app.localLibrary.downloadedIds(serverTracks) }
                             PlaylistDetailScreen(
                                 title = server.name,
-                                tracks = cached?.tracks ?: emptyList(),
+                                tracks = serverTracks,
                                 isServerOnly = true,
                                 serverLoading = cached == null,
                                 onPlayAll = { songs, idx -> playerViewModel.playAt(songs, idx) },
                                 onRemoveTrack = { _, index -> playlistViewModel.removeServerTrack(serverId, index) },
                                 onMoveTrack = { from, to -> playlistViewModel.moveServerTrack(serverId, from, to) },
                                 onDownloadTrack = onDownloadTrack,
+                                downloadedSongIds = dlIds,
                                 onBack = { navController.popBackStack() },
                             )
                         }
                     } else {
                         val playlist = playlistsState.playlists.find { it.id == id }
                         if (playlist != null) {
+                            var dlIds by remember(id) { mutableStateOf(emptySet<String>()) }
+                            LaunchedEffect(playlist.tracks) { dlIds = app.localLibrary.downloadedIds(playlist.tracks) }
                             PlaylistDetailScreen(
                                 title = playlist.name,
                                 tracks = playlist.tracks,
@@ -410,6 +440,7 @@ fun AppNavGraph(
                                 onRemoveTrack = { trackId, _ -> playlistViewModel.removeTrack(id, trackId) },
                                 onMoveTrack = { from, to -> playlistViewModel.moveTrack(id, from, to) },
                                 onDownloadTrack = onDownloadTrack,
+                                downloadedSongIds = dlIds,
                                 onBack = { navController.popBackStack() },
                             )
                         }
@@ -448,6 +479,7 @@ fun AppNavGraph(
                         downloadFormat = downloadFormat,
                         onCrossfadeToggle = { playerViewModel.setCrossfadeEnabled(it) },
                         onCrossfadeDurationChange = { playerViewModel.setCrossfadeDuration(it) },
+                        onCrossfadeCurveChange = { playerViewModel.setCrossfadeCurve(it) },
                         onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
                         onReplayGainToggle = { playerViewModel.setReplayGainEnabled(it) },
                         onThemeSelected = onThemeSelected,
@@ -483,6 +515,14 @@ fun AppNavGraph(
                             }
                         },
                         onLogout = { authViewModel.logout() },
+                        onViewRecap = { navController.navigate("recap") },
+                    )
+                }
+                composable("recap") {
+                    RecapScreen(
+                        repository = app.playHistory,
+                        coverUrlFor = coverUrl,
+                        onClose = { navController.popBackStack() },
                     )
                 }
             }
@@ -500,6 +540,13 @@ fun AppNavGraph(
                 onBarClick = { showFullPlayer = true },
                 onPlayPause = { playerViewModel.togglePlayPause() },
                 onNext = { playerViewModel.skipToNext() },
+                onShuffleToggle = { playerViewModel.toggleShuffle() },
+                onRepeatCycle = {
+                    // Cycle: none → all (repeat forever) → one (repeat once) → none
+                    playerViewModel.setRepeatMode(when (playerState.repeatMode) {
+                        "none" -> "all"; "all" -> "one"; else -> "none"
+                    })
+                },
             )
         }
 
@@ -531,6 +578,8 @@ fun AppNavGraph(
             coverUrl = coverUrl(playerState.currentTrack?.coverArt),
             audioSessionId = playerState.audioSessionId,
             playlistItems = playlistsState.items,
+            lyricsState = lyricsState,
+            wordFillEnabled = lyricsWordFillEnabled,
             onDismiss = { showFullPlayer = false },
             onPlayPause = { playerViewModel.togglePlayPause() },
             onNext = { playerViewModel.skipToNext() },
@@ -543,9 +592,9 @@ fun AppNavGraph(
             onSeekEnd = { playerViewModel.setSeekingFlag(false) },
             onVolumeChange = { playerViewModel.setVolume(it) },
             onRepeatCycle = {
-                // Cycle: none → one (repeat once) → all (repeat forever) → none
+                // Cycle: none → all (repeat forever) → one (repeat once) → none
                 playerViewModel.setRepeatMode(when (playerState.repeatMode) {
-                    "none" -> "one"; "one" -> "all"; else -> "none"
+                    "none" -> "all"; "all" -> "one"; else -> "none"
                 })
             },
             onShuffleToggle = { playerViewModel.toggleShuffle() },
@@ -554,10 +603,8 @@ fun AppNavGraph(
                 playerViewModel.fetchSimilarTracks()
                 showSimilarTracks = true
             },
-            onLyricsOpen = {
-                playerViewModel.openLyrics()
-                showLyrics = true
-            },
+            onLyricsOpen = { playerViewModel.openLyrics() },
+            onLyricsClose = { playerViewModel.closeLyrics() },
             onAddToPlaylist = { item ->
                 playerState.currentTrack?.let { playlistViewModel.addTracksTo(item, listOf(it)) }
             },
@@ -566,6 +613,24 @@ fun AppNavGraph(
             },
             onStartRadio = { playerState.currentTrack?.let { playerViewModel.startRadio(it) } },
             onRate = { songId, rating -> playerViewModel.setRating(songId, rating) },
+            onAddToQueue = { playerState.currentTrack?.let { playerViewModel.addToQueue(it) } },
+            onViewArtist = {
+                playerState.currentTrack?.artistId?.takeIf { it.isNotBlank() }?.let {
+                    showFullPlayer = false
+                    navController.navigate("artist/$it")
+                }
+            },
+            onEqualizer = {
+                showFullPlayer = false
+                navController.navigate("settings")
+            },
+            onDownloadTrack = if (auth.isAuthenticated) {
+                {
+                    playerState.currentTrack?.let { t ->
+                        scope.launch { app.downloadManager.downloadTrack(t, downloadFormat, allowRedownload = true) }
+                    }
+                }
+            } else null,
         )
     }
 
@@ -575,21 +640,6 @@ fun AppNavGraph(
             currentIndex = playerState.queueIndex,
             onDismiss = { showQueue = false },
             onPlayAt = { idx -> playerViewModel.skipToIndex(idx); showQueue = false },
-        )
-    }
-
-    if (showLyrics && playerState.currentTrack != null) {
-        LyricsSheet(
-            state = lyricsState,
-            trackTitle = playerState.currentTrack?.title ?: "",
-            coverUrl = coverUrl(playerState.currentTrack?.coverArt),
-            positionSeconds = playerState.currentPosition,
-            isPlaying = playerState.playbackState == "playing",
-            wordFillEnabled = lyricsWordFillEnabled,
-            onDismiss = {
-                showLyrics = false
-                playerViewModel.closeLyrics()
-            },
         )
     }
 

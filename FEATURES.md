@@ -11,16 +11,17 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | Crossfade between tracks with configurable overlap (1–12 s) | ✅ | ✅ |
+| Crossfade curve shape — linear or logarithmic (equal-power) fade | ✅ | ✅ |
 | Gapless playback — next track preloads silently, zero gap | ✅ | ✅ |
 | ReplayGain volume normalization (toggle on/off) | ✅ | ✅ |
 | Shuffle | ✅ | ✅ |
-| Repeat one / repeat all | ✅ | ✅ |
+| Repeat modes — tap to cycle off, repeat all (forever), then repeat once | ✅ | ✅ |
 | Seek bar | ✅ | ✅ |
 | Volume control | ✅ | ✅ |
 | Bit-perfect audio mode — matches output rate to track's native sample rate (Off / Relaxed / Strict) | ✅ | ❌ |
 | Track format display (e.g. "FLAC · 96 kHz · 24-bit · 1411 kbps") | ✅ | ✅ |
 | Equalizer — graphic (10-band) and parametric modes, saveable profiles, per-device assignment | ✅ | ✅ |
-| Import an equalizer profile from a `.toml` file | ❌ | ✅ |
+| Import equalizer profiles from `.toml` (desktop: read-only `eq-profiles/` drop folder; Android: file picker) | ✅ | ✅ |
 | Audio stats panel — BPM and ReplayGain track/album gain and peak on the now-playing screen | ✅ | ✅ |
 
 ---
@@ -76,6 +77,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Lyrics panel background tinted to the track's cover art color | ✅ | ✅ |
 | Multiple sources: server lyrics → LRCLIB fallback | ✅ | ✅ |
 | Toggle word-by-word animation on/off | ✅ | ✅ |
+| Lyrics shown in place of the cover art on the now-playing screen (tap art to show, X to close) | ❌ | ✅ |
 
 ---
 
@@ -116,10 +118,27 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | Download individual tracks or whole albums from your server | ✅ | ✅ |
+| Download your entire library at once, with progress, from Settings | ❌ | ✅ |
 | Choose download format (original file or a transcode target) | ✅ | ✅ |
 | Offline local library — plays downloaded music without a server connection | ✅ | ✅ |
+| Downloaded tracks marked in track lists; albums and playlists marked when every track is saved | ❌ | ✅ |
+| Re-download a track even when a local copy already exists (server mode) | ❌ | ✅ |
 | Drag-and-drop audio files or folders into the app to import them | ✅ | ❌ |
 | Automatically plays a local copy when available instead of streaming | ✅ | — |
+
+---
+
+## Stats & Recap
+
+| Feature | Desktop | Android |
+|---|:---:|:---:|
+| Local play history — every completed track recorded on-device, no server needed | ✅ | ✅ |
+| Firmium Recap — full-screen, swipeable cards of your listening (top tracks, artists, albums, genre, time of day, day of week, biggest discovery, streak) | ✅ | ✅ |
+| Recap time ranges — 7 days, 30 days, 3 months, 1 year, all time | ✅ | ✅ |
+| Custom Recap date range | ✅ | ❌ |
+| Weekly Recap that appears automatically once a week | ✅ | ✅ |
+| Save a Recap card as an image to share | ✅ | ✅ |
+| Export play history as CSV or JSON | ✅ | ✅ |
 
 ---
 
@@ -128,7 +147,8 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | 18+ built-in color themes | ✅ | ✅ |
-| Custom user themes via TOML files | ✅ | ❌ |
+| Custom user themes via TOML files | ✅ | ✅ |
+| Import custom themes from a `.toml` file (desktop: `themes/` drop folder; Android: file picker) | ✅ | ✅ |
 | Responsive sidebar (collapses to icons, then a bottom tab bar on narrow windows) | ✅ | — |
 
 **Built-in themes include:** Firmium, Gruvbox, Tokyo Night, Dracula, Catppuccin Mocha / Macchiato / Frappé / Latte, Monokai Classic, Monokai Pro, Adwaita, Adwaita Dark, ayu, ayu Light, GitHub Dark, Nordfox, Synthwave '84, Svalbard.
@@ -142,11 +162,13 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Browse your full library from the car display (Home, Albums, Artists, Playlists) | ✅ |
 | A–Z alphabet index for fast album browsing | ✅ |
 | Voice search | ✅ |
+| Search button on the car display | ✅ |
 | Steering wheel transport controls (play, pause, skip, seek) | ✅ |
 | Shuffle a whole playlist in one tap | ✅ |
+| Shuffle a whole album in one tap | ✅ |
 | "Up Next" queue visible on the car display | ✅ |
 | Notification tinted to the track's cover art color | ✅ |
-| Thumbs up/down favorite toggle on the car display | ✅ |
+| Shuffle and repeat toggles on the car display | ✅ |
 
 ---
 
@@ -164,7 +186,9 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 ## Android-Only Features
 
 - **Full-screen player** — portrait and landscape layouts with cover art, controls, and visualizer
-- **Lock screen and notification controls** — persistent playback notification with cover art
+- **Player "more" menu** — a grid sheet on the now-playing screen for volume, add to playlist, visualizer, track info, view artist, add to queue, equalizer, and download
+- **Long-press the cover art** — pops up the 1-5 star rating with an animation
+- **Lock screen and notification controls** — persistent playback notification with cover art, shuffle and repeat buttons
 
 ---
 

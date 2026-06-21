@@ -48,7 +48,12 @@ data class AlbumDetailState(
     val album: Album? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
-)
+    // Ids of tracks that have a local (downloaded) copy. Empty when nothing is downloaded.
+    val downloadedSongIds: Set<String> = emptySet(),
+) {
+    val allDownloaded: Boolean
+        get() = album != null && album.tracks.isNotEmpty() && downloadedSongIds.size >= album.tracks.size
+}
 
 // Artist detail with albums and bio.
 data class ArtistDetailState(
@@ -57,6 +62,8 @@ data class ArtistDetailState(
     val error: String? = null,
     // Similar artists the user actually has in their library ("You might also like").
     val recommendations: List<Artist> = emptyList(),
+    // Top songs for the artist (server only), shown in the "Songs" preview section.
+    val topSongs: List<com.fossisawesome.firmium.data.model.Song> = emptyList(),
 )
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
@@ -185,10 +192,21 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val album = if (albumId.startsWith("local:")) localLibrary.getAlbumDetail(albumId) else api.getAlbumDetail(albumId)
-                _albumDetailState.value = AlbumDetailState(album = album)
+                val downloaded = localLibrary.downloadedIds(album.tracks)
+                _albumDetailState.value = AlbumDetailState(album = album, downloadedSongIds = downloaded)
             } catch (e: Exception) {
                 _albumDetailState.value = AlbumDetailState(error = e.message)
             }
+        }
+    }
+
+    // Recomputes downloaded marks for the current album (e.g. after a track or album download).
+    fun refreshAlbumDownloaded() {
+        val album = _albumDetailState.value.album ?: return
+        viewModelScope.launch {
+            localLibrary.invalidate()
+            val downloaded = localLibrary.downloadedIds(album.tracks)
+            _albumDetailState.value = _albumDetailState.value.copy(downloadedSongIds = downloaded)
         }
     }
 
@@ -200,8 +218,20 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 val detail = if (artistId.startsWith("local:")) localLibrary.getArtistDetail(artistId) else api.getArtistDetail(artistId)
                 _artistDetailState.value = ArtistDetailState(detail = detail)
                 resolveRecommendations(artistId, detail.artist.name)
+                loadArtistTopSongs(artistId, detail.artist.name)
             } catch (e: Exception) {
                 _artistDetailState.value = ArtistDetailState(error = e.message)
+            }
+        }
+    }
+
+    // Loads the artist's top songs for the "Songs" preview (server only). Best-effort.
+    private fun loadArtistTopSongs(artistId: String, artistName: String) {
+        if (!auth.isAuthenticated || artistId.startsWith("local:")) return
+        viewModelScope.launch {
+            val songs = api.getTopSongs(artistName, 20)
+            if (songs.isNotEmpty() && _artistDetailState.value.detail?.artist?.id == artistId) {
+                _artistDetailState.value = _artistDetailState.value.copy(topSongs = songs)
             }
         }
     }

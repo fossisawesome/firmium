@@ -23,7 +23,7 @@ class AudioPlayer(private val context: Context) {
     // Callback interface replaces Tauri plugin event emitters.
     interface Listener {
         fun onStateChanged(playerId: String, state: String)
-        fun onTrackChanged(playerId: String, trackId: String, index: Int)
+        fun onTrackChanged(playerId: String, trackId: String, index: Int, previousTrackId: String?, wasNaturalCompletion: Boolean)
         fun onPlaybackFinished(playerId: String)
     }
 
@@ -104,12 +104,14 @@ class AudioPlayer(private val context: Context) {
                 val queueIds = session.queueTrackIds ?: return
                 val idx = session.player.currentMediaItemIndex
                 val newTrackId = queueIds.getOrNull(idx) ?: return
+                val previousTrackId = session.currentTrackId
+                val wasNaturalCompletion = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
                 session.currentTrackId = newTrackId
                 session.currentQueueIndex = idx
                 val newGain = session.queueReplayGainFactors?.getOrNull(idx) ?: 1.0f
                 session.replayGainFactor = newGain
                 session.player.volume = session.baseVolume * newGain
-                listener?.onTrackChanged(playerId, newTrackId, idx)
+                listener?.onTrackChanged(playerId, newTrackId, idx, previousTrackId, wasNaturalCompletion)
             }
         })
 
@@ -267,6 +269,15 @@ class AudioPlayer(private val context: Context) {
         sessions[playerId]?.player?.seekToPreviousMediaItem()
     }
 
+    // Appends a track to the end of the running queue without disturbing the current item or
+    // position. Keeps the session's parallel track-id / gain lists in sync for transitions.
+    fun appendToQueue(playerId: String, track: QueueTrack) {
+        val session = sessions[playerId] ?: return
+        session.player.addMediaItem(MediaItem.fromUri(track.streamUrl))
+        session.queueTrackIds = (session.queueTrackIds ?: emptyList()) + track.trackId
+        session.queueReplayGainFactors = (session.queueReplayGainFactors ?: emptyList()) + gainFactor(track.replayGainDb)
+    }
+
     fun skipToIndex(playerId: String, index: Int) {
         sessions[playerId]?.player?.seekTo(index, 0L)
     }
@@ -285,6 +296,7 @@ class AudioPlayer(private val context: Context) {
         fadeDurationMs: Long,
         targetVolume: Float,
         replayGainDb: Float? = null,
+        curve: String = "linear",
     ): String {
         val newPlayerId = UUID.randomUUID().toString()
         val newPlayer = buildPlayer()
@@ -299,13 +311,17 @@ class AudioPlayer(private val context: Context) {
         newPlayer.playWhenReady = true
 
         val steps = 25
+        val logarithmic = curve == "logarithmic"
+        // Map a 0.0–1.0 ramp position to a volume factor. Logarithmic approximates
+        // an equal-power (perceptual) fade; linear keeps the raw position.
+        fun curveGain(t: Float): Float = if (logarithmic) 10f.pow((t - 1f) * 2f) else t
         scope.launch {
             val stepMs = (fadeDurationMs / steps).coerceAtLeast(50)
             repeat(steps) { step ->
                 delay(stepMs)
                 val progress = (step + 1).toFloat() / steps
-                sessions[oldPlayerId]?.player?.volume = (targetVolume * (1f - progress)).coerceAtLeast(0f)
-                sessions[newPlayerId]?.player?.volume = targetVolume * progress * gain
+                sessions[oldPlayerId]?.player?.volume = (targetVolume * curveGain(1f - progress)).coerceAtLeast(0f)
+                sessions[newPlayerId]?.player?.volume = targetVolume * curveGain(progress) * gain
             }
             releaseSession(oldPlayerId)
         }
@@ -327,8 +343,8 @@ private data class AudioSession(
     var baseVolume: Float = 1.0f,
     var replayGainFactor: Float = 1.0f,
     var fadeJob: Job? = null,
-    val queueTrackIds: List<String>? = null,
-    val queueReplayGainFactors: List<Float>? = null,
+    var queueTrackIds: List<String>? = null,
+    var queueReplayGainFactors: List<Float>? = null,
     var currentQueueIndex: Int = 0,
     val audioSessionId: Int = 0,
 )

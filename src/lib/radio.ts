@@ -6,7 +6,7 @@ import { get } from 'svelte/store'
 import { listen } from '@tauri-apps/api/event'
 import { Api } from './api'
 import { tauriInvoke } from './tauri'
-import { hasSonicSimilarity, queue, currentTrack } from './stores'
+import { hasSonicSimilarity, currentTrack } from './stores'
 import type { Song } from './types/tauri-commands'
 
 const RADIO_BATCH = 10
@@ -110,10 +110,11 @@ export function startAutoContinue(): () => void {
     if (_radioBusy || !seed) return
     _radioBusy = true
     try {
-      const existing = get(queue)
       const seeded = await seedFrom(seed, sessionPlayedIds, RADIO_BATCH)
       if (!seeded.length) return
-      await tauriInvoke('set_queue', { songs: [...existing, ...seeded], startIdx: existing.length })
+      // Append atomically in Rust — avoids racing a queue-state-changed event
+      // against the TS queue mirror (which Rust already reset to idx -1 on exhaustion).
+      await tauriInvoke('append_and_play', { songs: seeded })
     } catch (e) {
       console.error('Auto-continue seeding failed:', e)
     } finally {

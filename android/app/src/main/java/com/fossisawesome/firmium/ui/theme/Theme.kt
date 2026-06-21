@@ -17,9 +17,13 @@ data class FirmiumTheme(
     val muted: Color,
     val accent: Color,
     val error: Color,
+    // True for user-imported themes (deletable, unlike built-ins).
+    val isImported: Boolean = false,
+    // Filename under filesDir/themes/ for imported themes; null for built-ins.
+    val sourceFile: String? = null,
 )
 
-private fun hex(s: String): Color {
+internal fun hex(s: String): Color {
     val v = s.trimStart('#')
     return Color(android.graphics.Color.parseColor("#$v"))
 }
@@ -95,7 +99,12 @@ fun FirmiumTheme(
     themeId: String = DEFAULT_THEME_ID,
     content: @Composable () -> Unit,
 ) {
-    val theme = remember(themeId) { themeById(themeId) }
+    // Resolve against built-ins plus any imported themes on disk so a saved
+    // imported theme id still applies after restart.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val theme = remember(themeId) {
+        allThemes(context).find { it.id == themeId } ?: ALL_THEMES.first()
+    }
     CompositionLocalProvider(
         LocalFirmiumColors provides remember(theme) { theme.toFirmiumColors() },
         LocalFirmiumIsDark provides theme.isDark,

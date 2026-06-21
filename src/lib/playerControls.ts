@@ -21,10 +21,11 @@ export function toggleShuffle(): void {
 export function cycleRepeat(): void {
   const $repeatOne = get(repeatOne)
   const $repeatAll = get(repeatAll)
+  // Cycle: off → repeat all (forever) → repeat one (once) → off
   if (!$repeatOne && !$repeatAll) {
-    tauriInvoke('set_repeat_mode', { repeatOne: true, repeatAll: false }).catch(console.error)
-  } else if ($repeatOne) {
     tauriInvoke('set_repeat_mode', { repeatOne: false, repeatAll: true }).catch(console.error)
+  } else if ($repeatAll) {
+    tauriInvoke('set_repeat_mode', { repeatOne: true, repeatAll: false }).catch(console.error)
   } else {
     tauriInvoke('set_repeat_mode', { repeatOne: false, repeatAll: false }).catch(console.error)
   }

@@ -87,6 +87,8 @@ export interface EqProfileInfo {
   name: string
   kind: EqMode
   bands: EqBandSpec[]
+  // True for read-only profiles loaded from the eq-profiles/ drop folder.
+  imported?: boolean
 }
 
 export interface EqState {
@@ -148,6 +150,7 @@ export interface QueueStatePayload {
   shuffleEnabled: boolean
   crossfadeEnabled: boolean
   crossfadeDuration: number
+  crossfadeCurve: string
   gaplessEnabled: boolean
   replayGainEnabled: boolean
   volume: number

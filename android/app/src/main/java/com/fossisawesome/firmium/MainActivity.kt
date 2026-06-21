@@ -38,6 +38,8 @@ class MainActivity : ComponentActivity() {
                 NowPlayingController.actionPrev(packageName) -> "prev"
                 NowPlayingController.actionPlayPause(packageName) -> "togglePlayPause"
                 NowPlayingController.actionNext(packageName) -> "next"
+                NowPlayingController.actionShuffle(packageName) -> "shuffle"
+                NowPlayingController.actionRepeat(packageName) -> "repeat"
                 NowPlayingController.actionDismiss(packageName) -> { app.nowPlaying.clear(); return }
                 else -> return
             }
@@ -91,6 +93,8 @@ class MainActivity : ComponentActivity() {
             addAction(NowPlayingController.actionPrev(packageName))
             addAction(NowPlayingController.actionPlayPause(packageName))
             addAction(NowPlayingController.actionNext(packageName))
+            addAction(NowPlayingController.actionShuffle(packageName))
+            addAction(NowPlayingController.actionRepeat(packageName))
             addAction(NowPlayingController.actionDismiss(packageName))
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -126,6 +130,12 @@ class MainActivity : ComponentActivity() {
                     // Auto-open login dialog when saved credentials couldn't be restored.
                     LaunchedEffect(authState.needsLogin) {
                         if (authState.needsLogin) showAccountDialog = true
+                    }
+
+                    // Mirror desktop firmium:session-expired behavior: show login dialog when
+                    // the server rejects credentials mid-session (error 40/41).
+                    LaunchedEffect(Unit) {
+                        app.api.sessionExpired.collect { showAccountDialog = true }
                     }
 
                     AppNavGraph(

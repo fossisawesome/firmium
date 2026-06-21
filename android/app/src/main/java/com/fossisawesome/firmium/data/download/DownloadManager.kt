@@ -6,12 +6,19 @@ import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Song
 import com.google.gson.JsonParser
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -33,11 +40,35 @@ class DownloadManager(
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    suspend fun downloadTrack(song: Song, format: String, albumArtist: String = song.artist): Result<Unit> =
+    // Application-scoped so a "download entire library" run survives navigating away from Settings.
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // Progress for the whole-library download, observed by the Settings screen.
+    data class DownloadAllProgress(
+        val running: Boolean = false,
+        val done: Int = 0,
+        val total: Int = 0,
+        val finished: Boolean = false,
+        val error: String? = null,
+    )
+
+    private val _downloadAll = MutableStateFlow(DownloadAllProgress())
+    val downloadAllState: StateFlow<DownloadAllProgress> = _downloadAll.asStateFlow()
+
+    // allowRedownload: when true (server mode) fetch the file again even if a local copy exists.
+    // invalidateAfter: when false (bulk download) skip the per-track library rescan; the caller
+    // invalidates once at the end to avoid an O(n^2) rescan of MediaStore.
+    suspend fun downloadTrack(
+        song: Song,
+        format: String,
+        albumArtist: String = song.artist,
+        allowRedownload: Boolean = false,
+        invalidateAfter: Boolean = true,
+    ): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                // Skip if this track is already in the local library — no need to re-download.
-                if (localLibrary.findLocalMatch(song.title, song.artist, song.album) != null) {
+                // Skip if this track is already in the local library — unless re-download was asked.
+                if (!allowRedownload && localLibrary.findLocalMatch(song.title, song.artist, song.album) != null) {
                     return@withContext Result.success(Unit)
                 }
 
@@ -66,7 +97,7 @@ class DownloadManager(
                         writeToFirmiumLibrary(relativeDir, fileName, mimeTypeFor(ext), input)
                     }
                 }
-                localLibrary.invalidate()
+                if (invalidateAfter) localLibrary.invalidate()
                 Result.success(Unit)
             } catch (e: Exception) {
                 Result.failure(e)
@@ -79,6 +110,35 @@ class DownloadManager(
             if (result.isFailure) return result
         }
         return Result.success(Unit)
+    }
+
+    // Downloads every server album/track into the local library. Runs on appScope so it keeps
+    // going while the user navigates away from Settings. Progress is published via downloadAllState.
+    fun startDownloadAll(api: ApiClient, format: String) {
+        if (_downloadAll.value.running) return
+        appScope.launch {
+            _downloadAll.value = DownloadAllProgress(running = true)
+            try {
+                // Gather every track across all albums first so the progress total is accurate.
+                val pending = mutableListOf<Pair<Song, String>>()  // track to albumArtist
+                for (album in api.getAlbums()) {
+                    val full = runCatching { api.getAlbumDetail(album.id) }.getOrNull() ?: continue
+                    for (track in full.tracks) pending.add(track to full.artist)
+                }
+                _downloadAll.value = DownloadAllProgress(running = true, total = pending.size)
+                var done = 0
+                for ((track, artist) in pending) {
+                    // Skip already-local tracks; don't rescan per track (invalidate once at the end).
+                    downloadTrack(track, format, artist, allowRedownload = false, invalidateAfter = false)
+                    done++
+                    _downloadAll.value = _downloadAll.value.copy(done = done)
+                }
+                localLibrary.invalidate()
+                _downloadAll.value = DownloadAllProgress(done = done, total = pending.size, finished = true)
+            } catch (e: Exception) {
+                _downloadAll.value = DownloadAllProgress(error = e.message ?: "Download failed")
+            }
+        }
     }
 
     private fun writeToFirmiumLibrary(relativeDir: String, fileName: String, mimeType: String, input: java.io.InputStream) {

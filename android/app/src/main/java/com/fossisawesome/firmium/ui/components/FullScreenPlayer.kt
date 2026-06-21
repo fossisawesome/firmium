@@ -1,12 +1,20 @@
 package com.fossisawesome.firmium.ui.components
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -15,8 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.automirrored.filled.VolumeDown
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -44,19 +50,22 @@ import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.audio.PlayerState
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.viewmodel.LyricsState
 import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-// Full-screen now-playing overlay — exact port of MobilePlayer.svelte.
-// Dynamic art gradient, monospace font, custom seek bar, swipe/tap gestures on art.
+// Full-screen now-playing overlay. Tap art for centered lyrics (X to exit), long-press art for the
+// star-rating popup, and the 3-dot button opens a grid "more" menu.
 @Composable
 fun FullScreenPlayer(
     state: PlayerState,
     coverUrl: String?,
     audioSessionId: Int = 0,
     playlistItems: List<PlaylistListItem>,
+    lyricsState: LyricsState,
+    wordFillEnabled: Boolean,
     onDismiss: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -69,11 +78,16 @@ fun FullScreenPlayer(
     onShuffleToggle: () -> Unit,
     onQueueOpen: () -> Unit,
     onLyricsOpen: () -> Unit,
+    onLyricsClose: () -> Unit,
     onSimilarTracksOpen: (() -> Unit)? = null,
     onAddToPlaylist: (item: PlaylistListItem) -> Unit,
     onCreatePlaylistAndAdd: (name: String) -> Unit,
     onStartRadio: (() -> Unit)? = null,
     onRate: ((songId: String, rating: Int) -> Unit)? = null,
+    onAddToQueue: () -> Unit,
+    onViewArtist: () -> Unit,
+    onEqualizer: () -> Unit,
+    onDownloadTrack: (() -> Unit)? = null,
 ) {
     val track = state.currentTrack ?: return
     val colors = LocalFirmiumColors.current
@@ -88,6 +102,17 @@ fun FullScreenPlayer(
     var vizType by remember(state.visualizerType) { mutableStateOf(VisualizerType.fromId(state.visualizerType)) }
     val cycleViz = { vizType = VisualizerType.entries[(vizType.ordinal + 1) % VisualizerType.entries.size] }
     var showAddToPlaylist by remember { mutableStateOf(false) }
+    var showMore by remember { mutableStateOf(false) }
+    // Lyrics replace the album art in the center; stars pop up over the art on long-press.
+    var showLyrics by remember { mutableStateOf(false) }
+    var showStars by remember { mutableStateOf(false) }
+    var statsExpanded by remember { mutableStateOf(false) }
+    // Reset overlays on track change.
+    LaunchedEffect(track.id) { showLyrics = false; showStars = false; statsExpanded = false }
+
+    val openLyrics = { showLyrics = true; onLyricsOpen() }
+    val closeLyrics = { showLyrics = false; onLyricsClose() }
+
     val screenWidth = configuration.screenWidthDp.dp
     // Used to animate the player fully offscreen before removing it from composition.
     val screenHeightDp = configuration.screenHeightDp.dp
@@ -127,7 +152,38 @@ fun FullScreenPlayer(
         }
     }
 
-    BackHandler { animateDismiss() }
+    // Back closes lyrics first, then dismisses the player.
+    BackHandler { if (showLyrics) closeLyrics() else animateDismiss() }
+
+    val artBlock: @Composable (Modifier) -> Unit = { artMod ->
+        ArtOrLyrics(
+            artModifier = artMod,
+            showLyrics = showLyrics,
+            onCloseLyrics = closeLyrics,
+            lyricsState = lyricsState,
+            positionSeconds = state.currentPosition,
+            isPlaying = state.playbackState == "playing",
+            wordFillEnabled = wordFillEnabled,
+            showOrb = showOrb,
+            onToggleOrb = { showOrb = !showOrb },
+            visualizerEnabled = state.visualizerEnabled,
+            vizType = vizType,
+            onCycleViz = cycleViz,
+            coverUrl = coverUrl,
+            track = track,
+            audioSessionId = audioSessionId,
+            orbPalette = orbPalette,
+            isPlayingArt = state.playbackState == "playing",
+            onTapArt = openLyrics,
+            onSwipeLeft = onNext,
+            onSwipeRight = onPrevious,
+            onLongPressArt = { if (onRate != null) showStars = true },
+            showStars = showStars,
+            onDismissStars = { showStars = false },
+            rating = track.userRating ?: 0,
+            onRate = onRate?.let { rate -> { r: Int -> rate(track.id, if (r == track.userRating) 0 else r) } },
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)
         .offset { IntOffset(0, dragOffsetY.value.roundToInt()) }) {
@@ -143,14 +199,12 @@ fun FullScreenPlayer(
         }
 
         if (isLandscape) {
-            // Landscape layout: art left, controls right — avoids the "tall stack" problem.
             Row(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.systemBars)
                     .padding(top = 36.dp),
             ) {
-                // Left column: album art centred vertically
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -158,36 +212,9 @@ fun FullScreenPlayer(
                         .padding(start = 20.dp, end = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box {
-                        ArtOrOrb(
-                            showOrb = showOrb,
-                            onToggle = { showOrb = !showOrb },
-                            visualizerEnabled = state.visualizerEnabled,
-                            vizType = vizType,
-                            onCycleType = cycleViz,
-                            coverUrl = coverUrl,
-                            albumDescription = track.album,
-                            audioSessionId = audioSessionId,
-                            palette = orbPalette,
-                            isPlaying = state.playbackState == "playing",
-                            onTap = onLyricsOpen,
-                            onSwipeLeft = onNext,
-                            onSwipeRight = onPrevious,
-                            modifier = Modifier
-                                .size(artSize)
-                                .scale(artScale)
-                                .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(16.dp)) else Modifier)
-                                .clip(RoundedCornerShape(16.dp)),
-                        )
-                        AddToPlaylistFab(
-                            onClick = { showAddToPlaylist = true },
-                            modifier = Modifier.align(Alignment.BottomEnd).offset(x = 14.dp, y = 14.dp),
-                        )
-                    }
+                    artBlock(Modifier.size(artSize).scale(artScale))
                 }
 
-                // Right column: track info + seek + controls + volume, scrollable.
-                // Capped so controls don't stretch absurdly wide on ultra-wide screens.
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -205,13 +232,14 @@ fun FullScreenPlayer(
                         onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
                         onQueueOpen = onQueueOpen,
                         onSimilarTracksOpen = onSimilarTracksOpen,
-                        onVolumeChange = onVolumeChange, compact = true,
-                        onRate = onRate,
+                        onMoreOpen = { showMore = true },
+                        statsExpanded = statsExpanded,
+                        onToggleStats = { statsExpanded = !statsExpanded },
+                        compact = true,
                     )
                 }
             }
         } else {
-            // Portrait layout: standard vertical stack.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -222,34 +250,7 @@ fun FullScreenPlayer(
             ) {
                 Spacer(Modifier.height(40.dp))
 
-                // Album art or orb — tap the toggle icon to switch modes.
-                Box {
-                    ArtOrOrb(
-                        showOrb = showOrb,
-                        onToggle = { showOrb = !showOrb },
-                        visualizerEnabled = state.visualizerEnabled,
-                        vizType = vizType,
-                        onCycleType = cycleViz,
-                        coverUrl = coverUrl,
-                        albumDescription = track.album,
-                        audioSessionId = audioSessionId,
-                        palette = orbPalette,
-                        isPlaying = state.playbackState == "playing",
-                        onTap = onLyricsOpen,
-                        onSwipeLeft = onNext,
-                        onSwipeRight = onPrevious,
-                        modifier = Modifier
-                            .size(artSize)
-                            .scale(artScale)
-                            .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp)) else Modifier)
-                            .clip(RoundedCornerShape(20.dp)),
-                    )
-                    // + sits just off the lower-right corner of the art (not on the image).
-                    AddToPlaylistFab(
-                        onClick = { showAddToPlaylist = true },
-                        modifier = Modifier.align(Alignment.BottomEnd).offset(x = 14.dp, y = 14.dp),
-                    )
-                }
+                artBlock(Modifier.size(artSize).scale(artScale))
 
                 Spacer(Modifier.height(32.dp))
 
@@ -260,8 +261,10 @@ fun FullScreenPlayer(
                     onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
                     onQueueOpen = onQueueOpen,
                     onSimilarTracksOpen = onSimilarTracksOpen,
-                    onVolumeChange = onVolumeChange, compact = false,
-                    onRate = onRate,
+                    onMoreOpen = { showMore = true },
+                    statsExpanded = statsExpanded,
+                    onToggleStats = { statsExpanded = !statsExpanded },
+                    compact = false,
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -269,7 +272,6 @@ fun FullScreenPlayer(
         }
 
         // Drag handle drawn last so it sits above the scrollable content in z-order.
-        // This ensures its pointerInput wins over the scroll gesture when swiping down from the top.
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -321,10 +323,24 @@ fun FullScreenPlayer(
             onStartRadio = onStartRadio,
         )
     }
+
+    if (showMore) {
+        PlayerMoreSheet(
+            volume = state.volume,
+            onVolumeChange = onVolumeChange,
+            onAddToPlaylist = { showAddToPlaylist = true },
+            onViewArtist = onViewArtist,
+            onAddToQueue = onAddToQueue,
+            onTrackInfo = { statsExpanded = true },
+            onEqualizer = onEqualizer,
+            onDownload = { onDownloadTrack?.invoke() },
+            onToggleVisualizer = if (state.visualizerEnabled) ({ showOrb = !showOrb }) else null,
+            onDismiss = { showMore = false },
+        )
+    }
 }
 
 // Shared controls section used by both portrait and landscape layouts.
-// compact=true tightens vertical spacing for landscape where height is limited.
 @Composable
 private fun PlayerControls(
     track: Song,
@@ -340,14 +356,15 @@ private fun PlayerControls(
     onRepeatCycle: () -> Unit,
     onQueueOpen: () -> Unit,
     onSimilarTracksOpen: (() -> Unit)? = null,
-    onVolumeChange: (Float) -> Unit,
+    onMoreOpen: () -> Unit,
+    statsExpanded: Boolean,
+    onToggleStats: () -> Unit,
     compact: Boolean,
-    onRate: ((songId: String, rating: Int) -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     val gap: Dp = if (compact) 12.dp else 28.dp
 
-    // Track info — title (20sp bold) + artist (14sp muted).
+    // Track info — title + artist.
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -373,20 +390,7 @@ private fun PlayerControls(
             modifier = Modifier.basicMarquee(),
         )
 
-        // Star rating row
-        if (onRate != null) {
-            Spacer(Modifier.height(8.dp))
-            StarRating(
-                rating = track.userRating ?: 0,
-                onRate = { rating -> onRate(track.id, if (rating == track.userRating) 0 else rating) },
-                starSize = if (compact) 18.dp else 22.dp,
-                accentColor = colors.accent,
-                mutedColor = colors.muted,
-            )
-        }
-
         val trackInfo = track.formatTrackInfo()
-        var statsExpanded by remember { mutableStateOf(false) }
         if (trackInfo.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(
@@ -396,7 +400,7 @@ private fun PlayerControls(
                 color = colors.muted,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
-                modifier = Modifier.clickable { statsExpanded = !statsExpanded },
+                modifier = Modifier.clickable { onToggleStats() },
             )
         }
         if (statsExpanded) {
@@ -407,7 +411,7 @@ private fun PlayerControls(
 
     Spacer(Modifier.height(gap))
 
-    // Seek bar + elapsed/total time labels.
+    // Seek bar + elapsed/total time labels + 3-dot "more" button.
     FirmiumSeekBar(
         progress = progress,
         onSeekStart = onSeekStart,
@@ -417,9 +421,14 @@ private fun PlayerControls(
         fillColor = colors.accent,
     )
     Spacer(Modifier.height(6.dp))
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(formatSeconds(state.currentPosition), fontSize = 11.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+        Spacer(Modifier.weight(1f))
         Text(formatSeconds(state.trackDuration), fontSize = 11.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+        FirmiumIconButton(onClick = onMoreOpen, modifier = Modifier.size(32.dp)) {
+            FirmiumIcon(Icons.Default.MoreVert, contentDescription = "More",
+                tint = colors.muted, modifier = Modifier.size(20.dp))
+        }
     }
 
     Spacer(Modifier.height(gap))
@@ -505,26 +514,7 @@ private fun PlayerControls(
         }
     }
 
-    Spacer(Modifier.height(if (compact) 16.dp else 32.dp))
-
-    // Volume slider.
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        FirmiumIcon(Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null,
-            tint = colors.muted, modifier = Modifier.size(16.dp))
-        FirmiumSlider(
-            value = state.volume,
-            onValueChange = onVolumeChange,
-            modifier = Modifier.weight(1f),
-            trackColor = colors.surface2,
-            fillColor = colors.accent,
-        )
-        FirmiumIcon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null,
-            tint = colors.muted, modifier = Modifier.size(16.dp))
-    }
+    Spacer(Modifier.height(if (compact) 16.dp else 24.dp))
 }
 
 // Expandable audio stats: BPM and ReplayGain track/album gain + peak (display only).
@@ -567,8 +557,123 @@ private fun AudioStats(track: Song, compact: Boolean) {
     }
 }
 
+// Center area of the player: either the album art (with orb/visualizer toggle and a long-press
+// star popup) or, when toggled, the lyrics in place of the art with an X to return.
+@Composable
+private fun ArtOrLyrics(
+    artModifier: Modifier,
+    showLyrics: Boolean,
+    onCloseLyrics: () -> Unit,
+    lyricsState: LyricsState,
+    positionSeconds: Double,
+    isPlaying: Boolean,
+    wordFillEnabled: Boolean,
+    showOrb: Boolean,
+    onToggleOrb: () -> Unit,
+    visualizerEnabled: Boolean,
+    vizType: VisualizerType,
+    onCycleViz: () -> Unit,
+    coverUrl: String?,
+    track: Song,
+    audioSessionId: Int,
+    orbPalette: OrbPalette,
+    isPlayingArt: Boolean,
+    onTapArt: () -> Unit,
+    onSwipeLeft: () -> Unit,
+    onSwipeRight: () -> Unit,
+    onLongPressArt: () -> Unit,
+    showStars: Boolean,
+    onDismissStars: () -> Unit,
+    rating: Int,
+    onRate: ((Int) -> Unit)?,
+) {
+    val colors = LocalFirmiumColors.current
+    Box(modifier = artModifier.clip(RoundedCornerShape(20.dp))) {
+        if (showLyrics) {
+            LyricsLines(
+                state = lyricsState,
+                positionSeconds = positionSeconds,
+                isPlaying = isPlaying,
+                wordFillEnabled = wordFillEnabled,
+                modifier = Modifier.fillMaxSize(),
+                activeFontSize = 18.sp,
+                inactiveFontSize = 13.sp,
+            )
+            // X to leave lyrics and return to the album art.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(colors.surface2)
+                    .clickable { onCloseLyrics() },
+                contentAlignment = Alignment.Center,
+            ) {
+                FirmiumIcon(Icons.Default.Close, contentDescription = "Close lyrics",
+                    tint = colors.text, modifier = Modifier.size(18.dp))
+            }
+        } else {
+            ArtOrOrb(
+                showOrb = showOrb,
+                onToggle = onToggleOrb,
+                visualizerEnabled = visualizerEnabled,
+                vizType = vizType,
+                onCycleType = onCycleViz,
+                coverUrl = coverUrl,
+                albumDescription = track.album,
+                audioSessionId = audioSessionId,
+                palette = orbPalette,
+                isPlaying = isPlayingArt,
+                onTap = onTapArt,
+                onSwipeLeft = onSwipeLeft,
+                onSwipeRight = onSwipeRight,
+                onLongPress = onLongPressArt,
+                modifier = Modifier.fillMaxSize()
+                    .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp)) else Modifier),
+            )
+
+            // Star-rating popup, animated in over the art on long-press.
+            if (onRate != null) {
+                AnimatedVisibility(
+                    visible = showStars,
+                    enter = scaleIn(initialScale = 0.7f) + fadeIn(),
+                    exit = scaleOut(targetScale = 0.7f) + fadeOut(),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(colors.surface2.copy(alpha = 0.95f))
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        StarRating(
+                            rating = rating,
+                            onRate = { r -> onRate(r); onDismissStars() },
+                            starSize = 26.dp,
+                            accentColor = colors.accent,
+                            mutedColor = colors.muted,
+                        )
+                    }
+                }
+                // Tap anywhere over the art (outside the stars) dismisses the popup.
+                if (showStars) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onDismissStars,
+                            ),
+                    )
+                }
+            }
+        }
+    }
+}
+
 // Switches between album art and the NCS orb visualizer.
-// The toggle icon sits in the top-right corner of the art box.
 @Composable
 private fun ArtOrOrb(
     showOrb: Boolean,
@@ -584,6 +689,7 @@ private fun ArtOrOrb(
     onTap: () -> Unit,
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
+    onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // The visualizer is only available when enabled in Settings.
@@ -621,6 +727,7 @@ private fun ArtOrOrb(
                 onTap = onTap,
                 onSwipeLeft = onSwipeLeft,
                 onSwipeRight = onSwipeRight,
+                onLongPress = onLongPress,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -643,7 +750,7 @@ private fun ArtOrOrb(
     }
 }
 
-// Art box with tap-to-lyrics and horizontal swipe for prev/next.
+// Art box with tap-to-lyrics, long-press-for-stars, and horizontal swipe for prev/next.
 @Composable
 private fun ArtWithGestures(
     coverUrl: String?,
@@ -651,33 +758,27 @@ private fun ArtWithGestures(
     onTap: () -> Unit,
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
+    onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown()
-                val startX = down.position.x
-                val startY = down.position.y
-                var moved = false
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull() ?: break
-                    val totalDx = change.position.x - startX
-                    val totalDy = change.position.y - startY
-                    if (abs(totalDx) > 8f || abs(totalDy) > 8f) moved = true
-                    if (!change.pressed) {
-                        val threshold = 40.dp.toPx()
-                        if (!moved) onTap()
-                        else if (abs(totalDx) > threshold && abs(totalDx) > abs(totalDy) * 1.5f) {
-                            if (totalDx < 0) onSwipeLeft() else onSwipeRight()
-                        }
-                        break
-                    }
-                    change.consume()
-                }
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onTap() }, onLongPress = { onLongPress() })
             }
-        },
+            .pointerInput(Unit) {
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { total = 0f },
+                    onDragEnd = {
+                        val threshold = 40.dp.toPx()
+                        if (abs(total) > threshold) {
+                            if (total < 0) onSwipeLeft() else onSwipeRight()
+                        }
+                    },
+                    onHorizontalDrag = { _, amount -> total += amount },
+                )
+            },
     ) {
         CoverImage(url = coverUrl, contentDescription = albumDescription, modifier = Modifier.fillMaxSize())
     }
@@ -713,30 +814,6 @@ private fun FirmiumCircleButton(
     )
 }
 
-// Accent "+" button anchored to the lower-right corner of the album art.
-@Composable
-private fun AddToPlaylistFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = LocalFirmiumColors.current
-    Box(
-        modifier = modifier
-            .size(40.dp)
-            .shadow(elevation = 8.dp, shape = CircleShape)
-            .clip(CircleShape)
-            .background(colors.accent)
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    awaitFirstDown()
-                    val up = waitForUpOrCancellation()
-                    if (up != null) onClick()
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist",
-            tint = colors.bg, modifier = Modifier.size(24.dp))
-    }
-}
-
 // 1–5 star rating row. Tapping the current rating clears it (via caller logic).
 @Composable
 private fun StarRating(
@@ -747,7 +824,7 @@ private fun StarRating(
     mutedColor: Color,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (i in 1..5) {

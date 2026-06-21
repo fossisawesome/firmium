@@ -33,6 +33,10 @@ pub struct ResampleState {
     pub current: Vec<f32>,
     pub next: Vec<f32>,
     pub initialized: bool,
+    /// Set once the ring buffer can no longer supply a fresh frame, so the
+    /// resampler stops manufacturing copies of the last frame and reports the
+    /// session as drained (silence) instead of a sustained DC sample.
+    pub drained: bool,
 }
 
 /// Sent to a running decode-feeder task to request a native seek.

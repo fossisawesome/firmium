@@ -23,6 +23,8 @@ object MediaTree {
     fun musicLetterId(bucket: String) = "music_letter:$bucket"
     // Special playable that shuffles a whole playlist.
     fun playlistShuffleId(playlistId: String) = "shuffle|playlist|$playlistId"
+    // Special playable that shuffles a whole album.
+    fun albumShuffleId(albumId: String) = "shuffle|album|$albumId"
 
     fun albumTrackId(albumId: String, songId: String) = "track|album|$albumId|$songId"
     fun playlistTrackId(playlistId: String, songId: String) = "track|playlist|$playlistId|$songId"
@@ -35,6 +37,7 @@ object MediaTree {
         mediaId == PLAYLISTS -> MediaNode.Playlists
         mediaId.startsWith("music_letter:") -> MediaNode.MusicLetter(mediaId.removePrefix("music_letter:"))
         mediaId.startsWith("shuffle|playlist|") -> MediaNode.PlaylistShuffle(mediaId.removePrefix("shuffle|playlist|"))
+        mediaId.startsWith("shuffle|album|") -> MediaNode.AlbumShuffle(mediaId.removePrefix("shuffle|album|"))
         mediaId.startsWith("track|album|") -> {
             val body = mediaId.removePrefix("track|album|")
             MediaNode.AlbumTrack(body.substringBeforeLast('|'), body.substringAfterLast('|'))
@@ -58,6 +61,7 @@ sealed interface MediaNode {
     object Playlists : MediaNode
     data class MusicLetter(val bucket: String) : MediaNode
     data class PlaylistShuffle(val playlistId: String) : MediaNode
+    data class AlbumShuffle(val albumId: String) : MediaNode
     data class Album(val albumId: String) : MediaNode
     data class Artist(val artistId: String) : MediaNode
     data class Playlist(val playlistId: String) : MediaNode

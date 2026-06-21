@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.RatingCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
@@ -30,7 +31,6 @@ import kotlinx.coroutines.withContext
 
 private const val CHANNEL_ID = "firmium_now_playing"
 const val NOTIFICATION_ID = 1
-private const val ACTION_TOGGLE_FAVORITE = "com.fossisawesome.firmium.TOGGLE_FAVORITE"
 
 // MediaSession + persistent media notification. Ported from NowPlayingPlugin.kt with Tauri removed.
 // The PlayerViewModel drives this directly instead of JS calling tauri commands.
@@ -72,6 +72,13 @@ class NowPlayingController(private val context: Context) {
     private val actionPlayPause = "${context.packageName}.ACTION_PLAY_PAUSE"
     private val actionNext = "${context.packageName}.ACTION_NEXT"
     private val actionDismiss = "${context.packageName}.ACTION_DISMISS"
+    private val actionShuffle = "${context.packageName}.ACTION_SHUFFLE"
+    private val actionRepeat = "${context.packageName}.ACTION_REPEAT"
+
+    // Current shuffle/repeat state, kept so the notification buttons can render the right icon and
+    // toggle to the next value. Updated via setShuffleMode/setRepeatMode (driven by PlaybackController).
+    private var shuffleEnabled = false
+    private var repeatMode = "none"
 
     // Called from MainActivity's BroadcastReceiver to forward notification button taps.
     fun handleAction(action: String) {
@@ -83,6 +90,11 @@ class NowPlayingController(private val context: Context) {
                 if (state == PlaybackStateCompat.STATE_PLAYING) listener?.onPause()
                 else listener?.onPlay()
             }
+            "shuffle" -> listener?.onSetShuffleMode(!shuffleEnabled)
+            // Cycle: none → all (forever) → one (once) → none.
+            "repeat" -> listener?.onSetRepeatMode(when (repeatMode) {
+                "none" -> "all"; "all" -> "one"; else -> "none"
+            })
         }
     }
 
@@ -126,9 +138,8 @@ class NowPlayingController(private val context: Context) {
                         else -> "none"
                     })
                 }
-                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
-                    if (action == ACTION_TOGGLE_FAVORITE) listener?.onToggleFavorite()
-                }
+                override fun onSetRating(rating: RatingCompat?) { listener?.onToggleFavorite() }
+                override fun onSetRating(rating: RatingCompat?, extras: android.os.Bundle?) { listener?.onToggleFavorite() }
             })
             // Advertise the browse/voice play actions on an idle state so Android Auto can start
             // playback from cold (no track loaded yet); buildNotification() overwrites this once
@@ -144,7 +155,8 @@ class NowPlayingController(private val context: Context) {
                         PlaybackStateCompat.ACTION_PREPARE_FROM_MEDIA_ID or
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                         PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                        PlaybackStateCompat.ACTION_SEEK_TO
+                        PlaybackStateCompat.ACTION_SEEK_TO or
+                        PlaybackStateCompat.ACTION_SET_RATING
                     )
                     .build()
             )
@@ -171,20 +183,22 @@ class NowPlayingController(private val context: Context) {
         )
     }
 
+    // Current userRating (0 = no rating, >0 = thumbs up). Kept so updateRating() can refresh
+    // metadata without a full track update.
+    private var currentUserRating: Int = 0
+
     // Builds a MediaMetadataCompat with common fields; art is optional.
     private fun buildMetadata(title: String, artist: String, album: String, art: Bitmap? = null): MediaMetadataCompat =
         MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
+            .putRating(MediaMetadataCompat.METADATA_KEY_RATING, RatingCompat.newThumbRating(false))
+            .putRating(MediaMetadataCompat.METADATA_KEY_USER_RATING, RatingCompat.newThumbRating(currentUserRating > 0))
             .apply { if (art != null) putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art) }
             .build()
 
-    private var _isFavorited = false
-
-    fun setFavorited(fav: Boolean) { _isFavorited = fav }
-
-    private fun buildNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long, isFavorited: Boolean = _isFavorited): Notification {
+    private fun buildNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long): Notification {
         val session = ensureMediaSession()
         val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
 
@@ -205,17 +219,16 @@ class NowPlayingController(private val context: Context) {
                     PlaybackStateCompat.ACTION_SKIP_TO_QUEUE_ITEM or
                     PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE or
                     PlaybackStateCompat.ACTION_SET_REPEAT_MODE or
-                    PlaybackStateCompat.ACTION_SEEK_TO,
-                )
-                .addCustomAction(
-                    PlaybackStateCompat.CustomAction.Builder(
-                        ACTION_TOGGLE_FAVORITE,
-                        if (isFavorited) "Unfavorite" else "Favorite",
-                        if (isFavorited) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off,
-                    ).build()
+                    PlaybackStateCompat.ACTION_SEEK_TO or
+                    PlaybackStateCompat.ACTION_SET_RATING,
                 )
                 .build()
         )
+
+        // Shuffle/repeat icons reflect current state; titles spell out the state for accessibility.
+        val repeatIcon = if (repeatMode == "one") R.drawable.ic_notif_repeat_one else R.drawable.ic_notif_repeat
+        val repeatTitle = "Repeat: " + when (repeatMode) { "all" -> "all"; "one" -> "one"; else -> "off" }
+        val shuffleTitle = if (shuffleEnabled) "Shuffle: on" else "Shuffle: off"
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_firmium)
@@ -224,13 +237,16 @@ class NowPlayingController(private val context: Context) {
             .setLargeIcon(art)
             .setContentIntent(openAppIntent())
             .setDeleteIntent(pendingBroadcast(actionDismiss))
+            .addAction(R.drawable.ic_notif_shuffle, shuffleTitle, pendingBroadcast(actionShuffle))
             .addAction(android.R.drawable.ic_media_previous, "Previous", pendingBroadcast(actionPrev))
             .addAction(playPauseIcon, if (isPlaying) "Pause" else "Play", pendingBroadcast(actionPlayPause))
             .addAction(android.R.drawable.ic_media_next, "Next", pendingBroadcast(actionNext))
+            .addAction(repeatIcon, repeatTitle, pendingBroadcast(actionRepeat))
             .setStyle(
                 MediaStyle()
                     .setMediaSession(session.sessionToken)
-                    .setShowActionsInCompactView(0, 1, 2)
+                    // Compact view shows prev / play-pause / next; shuffle + repeat in expanded view.
+                    .setShowActionsInCompactView(1, 2, 3)
             )
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
@@ -239,7 +255,7 @@ class NowPlayingController(private val context: Context) {
             .build()
     }
 
-    fun update(title: String, artist: String, album: String, coverUrl: String?, isPlaying: Boolean) {
+    fun update(title: String, artist: String, album: String, coverUrl: String?, isPlaying: Boolean, userRating: Int? = null) {
         ensureChannel()
         val session = ensureMediaSession()
         // Reset cached position so a pause right after a track starts reads 0, not the
@@ -247,6 +263,7 @@ class NowPlayingController(private val context: Context) {
         lastPositionMs = 0L
         lastDurationMs = 0L
         accentColor = null
+        currentUserRating = userRating ?: 0
 
         // Update metadata immediately (no art yet) so the session reflects the new track at once.
         session.setMetadata(buildMetadata(title, artist, album))
@@ -324,6 +341,18 @@ class NowPlayingController(private val context: Context) {
         }
     }
 
+    // Updates the thumbs-up state in metadata after the user rates the current track.
+    fun updateRating(userRating: Int) {
+        currentUserRating = userRating
+        val session = mediaSession ?: return
+        val meta = session.controller?.metadata ?: return
+        session.setMetadata(
+            MediaMetadataCompat.Builder(meta)
+                .putRating(MediaMetadataCompat.METADATA_KEY_USER_RATING, RatingCompat.newThumbRating(userRating > 0))
+                .build()
+        )
+    }
+
     // Lightweight update called every 250ms during playback to drive the notification seekbar.
     fun updatePosition(positionMs: Long, durationMs: Long, isPlaying: Boolean) {
         val session = mediaSession ?: return
@@ -380,17 +409,35 @@ class NowPlayingController(private val context: Context) {
     }
 
     fun setShuffleMode(enabled: Boolean) {
+        shuffleEnabled = enabled
         mediaSession?.setShuffleMode(
             if (enabled) PlaybackStateCompat.SHUFFLE_MODE_ALL else PlaybackStateCompat.SHUFFLE_MODE_NONE
         )
+        rebuildNotification()
     }
 
     fun setRepeatMode(mode: String) {
+        repeatMode = mode
         mediaSession?.setRepeatMode(when (mode) {
             "one" -> PlaybackStateCompat.REPEAT_MODE_ONE
             "all" -> PlaybackStateCompat.REPEAT_MODE_ALL
             else -> PlaybackStateCompat.REPEAT_MODE_NONE
         })
+        rebuildNotification()
+    }
+
+    // Re-emits the notification with current metadata so a shuffle/repeat toggle updates the
+    // button icons immediately. No-op until a track has been published.
+    private fun rebuildNotification() {
+        val session = mediaSession ?: return
+        val meta = session.controller?.metadata ?: return
+        val title = meta.getString(MediaMetadataCompat.METADATA_KEY_TITLE) ?: return
+        val artist = meta.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: ""
+        val art = meta.getBitmap(MediaMetadataCompat.METADATA_KEY_ART)
+        val isPlaying = session.controller?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
+        val notification = buildNotification(title, artist, isPlaying, art, lastPositionMs, lastDurationMs)
+        NowPlayingService.pendingNotification = notification
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
     }
 
     fun clear() {
@@ -401,6 +448,7 @@ class NowPlayingController(private val context: Context) {
         lastPositionMs = 0L
         lastDurationMs = 0L
         accentColor = null
+        currentUserRating = 0
         mediaSession?.setQueue(null)
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
         context.stopService(Intent(context, NowPlayingService::class.java))
@@ -414,5 +462,7 @@ class NowPlayingController(private val context: Context) {
         fun actionPlayPause(pkg: String) = "$pkg.ACTION_PLAY_PAUSE"
         fun actionNext(pkg: String) = "$pkg.ACTION_NEXT"
         fun actionDismiss(pkg: String) = "$pkg.ACTION_DISMISS"
+        fun actionShuffle(pkg: String) = "$pkg.ACTION_SHUFFLE"
+        fun actionRepeat(pkg: String) = "$pkg.ACTION_REPEAT"
     }
 }

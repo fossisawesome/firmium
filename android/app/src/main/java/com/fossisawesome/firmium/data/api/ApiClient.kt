@@ -9,6 +9,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -42,6 +45,11 @@ class ApiClient(private val auth: AuthManager) {
     var openSubsonicExtensions: Set<String> = emptySet()
         private set
 
+    // Emits whenever the server rejects credentials (error 40/41). Mirrors the
+    // firmium:session-expired Tauri event on desktop — collectors show the login dialog.
+    private val _sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val sessionExpired: SharedFlow<Unit> = _sessionExpired.asSharedFlow()
+
     fun hasExtension(name: String): Boolean = openSubsonicExtensions.contains(name)
 
     private suspend fun fetch(action: String, params: Map<String, String> = emptyMap()): JsonObject =
@@ -66,7 +74,7 @@ class ApiClient(private val auth: AuthManager) {
             if (data.get("status")?.asString != "ok") {
                 val code = data.getAsJsonObject("error")?.get("code")?.asInt
                 val msg = data.getAsJsonObject("error")?.get("message")?.asString
-                if (code == 40 || code == 41) throw SessionExpiredException()
+                if (code == 40 || code == 41) { _sessionExpired.tryEmit(Unit); throw SessionExpiredException() }
                 error("Subsonic error $code: $msg")
             }
             data
@@ -350,6 +358,15 @@ class ApiClient(private val auth: AuthManager) {
         val data = fetch("getSongsByGenre", mapOf("genre" to genre, "count" to count.coerceIn(1, 500).toString()))
         return data.getAsJsonObject("songsByGenre")?.getAsJsonArray("song")
             ?.map { parseSong(it.asJsonObject) } ?: emptyList()
+    }
+
+    // Top songs for an artist (by name) via getTopSongs — used for the artist page "Songs" section.
+    suspend fun getTopSongs(artistName: String, count: Int = 20): List<Song> {
+        return try {
+            val data = fetch("getTopSongs", mapOf("artist" to artistName, "count" to count.coerceIn(1, 50).toString()))
+            data.getAsJsonObject("topSongs")?.getAsJsonArray("song")
+                ?.map { parseSong(it.asJsonObject) } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
     }
 
     // Random sample of library songs via getRandomSongs (optionally genre-scoped).

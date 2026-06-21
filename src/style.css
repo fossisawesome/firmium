@@ -1525,6 +1525,18 @@ input[type="range"].volume-slider {
   text-align: right;
 }
 
+.settings-select {
+  flex-shrink: 0;
+  align-self: center;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .bp-mode-selector {
   display: flex;
   flex-shrink: 0;

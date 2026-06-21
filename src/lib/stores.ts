@@ -140,6 +140,10 @@ export const crossfadeEnabled = writable(SafeStorage.getItem('firmium_crossfade'
 export const crossfadeDuration = writable(
   Math.max(1, Math.min(12, Number(SafeStorage.getItem('firmium_crossfade_duration') ?? 5)))
 )
+// Shape of the crossfade volume ramp: 'linear' or 'logarithmic'.
+export const crossfadeCurve = writable(
+  SafeStorage.getItem('firmium_crossfade_curve') === 'logarithmic' ? 'logarithmic' : 'linear'
+)
 // Shuffle playback mode.
 export const shuffleEnabled = writable(false)
 
@@ -172,6 +176,13 @@ export function setCrossfadeDuration(v: number): void {
   crossfadeDuration.set(val)
   SafeStorage.setItem('firmium_crossfade_duration', String(val))
   tauriInvoke('set_crossfade_settings', { enabled: get(crossfadeEnabled), durationSecs: val }).catch(() => {})
+}
+
+export function setCrossfadeCurve(v: unknown): void {
+  const val = v === 'logarithmic' ? 'logarithmic' : 'linear'
+  crossfadeCurve.set(val)
+  SafeStorage.setItem('firmium_crossfade_curve', val)
+  tauriInvoke('set_crossfade_curve', { curve: val }).catch(() => {})
 }
 
 // Gapless playback — pre-buffers the next track so there's no pause between songs.
@@ -218,6 +229,7 @@ export function listenToQueueState(): () => void {
     shuffleEnabled.set(payload.shuffleEnabled)
     crossfadeEnabled.set(payload.crossfadeEnabled)
     crossfadeDuration.set(payload.crossfadeDuration)
+    crossfadeCurve.set(payload.crossfadeCurve)
     gaplessEnabled.set(payload.gaplessEnabled)
     replayGainEnabled.set(payload.replayGainEnabled)
     if (payload.volume !== get(volume)) {
@@ -267,6 +279,12 @@ export function setVisualizerMode(mode: VisualizerMode): void {
 // ── Audio stats ───────────────────────────────────────────────────────────────
 // Expandable now-playing panel showing format, BPM, and ReplayGain details.
 export const audioStatsOpen = writable(false)
+
+// ── Recap ─────────────────────────────────────────────────────────────────────
+// Full-screen Firmium Recap overlay. No sidebar entry — opened from the Stats
+// Export settings page and the weekly auto-show (see App.svelte).
+export const recapOpen = writable(false)
+export function openRecap(): void { recapOpen.set(true) }
 
 // ── Lyrics ────────────────────────────────────────────────────────────────────
 export const lyricsOpen = writable(false)

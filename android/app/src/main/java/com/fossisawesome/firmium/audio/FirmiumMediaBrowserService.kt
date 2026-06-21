@@ -48,6 +48,7 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
     override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot {
         val extras = Bundle().apply {
             putBoolean(CONTENT_STYLE_SUPPORTED, true)
+            putBoolean(SEARCH_SUPPORTED, true)
             putInt(CONTENT_STYLE_BROWSABLE_HINT, CONTENT_STYLE_GRID)
             putInt(CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_LIST)
         }
@@ -91,9 +92,17 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
                 .map { browsableAlbum(it) }.toMutableList()
             MediaNode.Artists -> artists().map { browsableArtist(it) }.toMutableList()
             MediaNode.Playlists -> playlistChildren()
-            is MediaNode.Album -> albumDetail(node.albumId).tracks
-                .map { playable(MediaTree.albumTrackId(node.albumId, it.id), it.title, it.displayArtist ?: it.artist, coverUri(it.coverArt)) }
-                .toMutableList()
+            is MediaNode.Album -> {
+                val tracks = albumDetail(node.albumId).tracks
+                val items = mutableListOf<MediaItem>()
+                if (tracks.isNotEmpty()) {
+                    items.add(playable(MediaTree.albumShuffleId(node.albumId), "Shuffle", "Shuffle this album", null))
+                }
+                tracks.forEach {
+                    items.add(playable(MediaTree.albumTrackId(node.albumId, it.id), it.title, it.displayArtist ?: it.artist, coverUri(it.coverArt)))
+                }
+                items
+            }
             is MediaNode.Artist -> artistDetail(node.artistId).albums.map { browsableAlbum(it) }.toMutableList()
             is MediaNode.Playlist -> playlistTrackItems(node.playlistId)
             else -> mutableListOf()
@@ -207,6 +216,7 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
 
     private companion object {
         const val CONTENT_STYLE_SUPPORTED = "android.media.browse.CONTENT_STYLE_SUPPORTED"
+        const val SEARCH_SUPPORTED = "android.media.browse.SEARCH_SUPPORTED"
         const val CONTENT_STYLE_BROWSABLE_HINT = "android.media.browse.CONTENT_STYLE_BROWSABLE_HINT"
         const val CONTENT_STYLE_PLAYABLE_HINT = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT"
         const val CONTENT_STYLE_LIST = 1

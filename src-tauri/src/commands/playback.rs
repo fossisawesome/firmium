@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Manager, State};
 
 use crate::audio::AudioPlayer;
+use crate::queue_state::QueueState;
 use crate::{AudioDevice, PlaybackState};
 
 // ============================================================================
@@ -32,6 +33,54 @@ pub fn preload_stream<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, stream
 #[tauri::command]
 pub fn set_visualizer_enabled<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, enabled: bool) -> Result<(), String> {
     get_player(&app_handle)?.set_visualizer_enabled(enabled);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_visualizer_mode<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, mode: String) -> Result<(), String> {
+    get_player(&app_handle)?.set_visualizer_mode(&mode);
+    Ok(())
+}
+
+/// One palette colour as sent by the frontend (0..255 per channel).
+#[derive(serde::Deserialize)]
+pub struct RgbInput {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl RgbInput {
+    fn norm(&self) -> [f32; 3] {
+        [self.r as f32 / 255.0, self.g as f32 / 255.0, self.b as f32 / 255.0]
+    }
+}
+
+#[tauri::command]
+pub fn set_visualizer_palette<R: tauri::Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    primary: RgbInput,
+    secondary: RgbInput,
+    tertiary: RgbInput,
+) -> Result<(), String> {
+    get_player(&app_handle)?.set_visualizer_palette([primary.norm(), secondary.norm(), tertiary.norm()]);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn start_visualizer_renderer<R: tauri::Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    get_player(&app_handle)?.start_visualizer_renderer(channel, width, height);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_visualizer_renderer<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>) -> Result<(), String> {
+    get_player(&app_handle)?.stop_visualizer_renderer();
     Ok(())
 }
 
@@ -102,6 +151,7 @@ pub fn set_bit_perfect_mode<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, 
 #[tauri::command]
 pub fn crossfade_to<R: tauri::Runtime>(
     app_handle: tauri::AppHandle<R>,
+    queue_state: State<'_, Arc<QueueState>>,
     old_player_id: &str,
     stream_url: &str,
     track_id: &str,
@@ -110,5 +160,6 @@ pub fn crossfade_to<R: tauri::Runtime>(
     replay_gain_db: Option<f32>,
 ) -> Result<String, String> {
     let player = get_player(&app_handle)?;
-    AudioPlayer::crossfade_to(&player, old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db)
+    let curve = queue_state.inner.lock().crossfade_curve.clone();
+    AudioPlayer::crossfade_to(&player, old_player_id, stream_url, track_id.to_string(), fade_duration_ms, target_volume, replay_gain_db, &curve)
 }

@@ -3,6 +3,7 @@ package com.fossisawesome.firmium.audio
 import com.fossisawesome.firmium.data.RadioSeeder
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.db.PlayHistoryRepository
 import com.fossisawesome.firmium.data.eq.EqProfile
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Song
@@ -27,6 +28,7 @@ data class PlayerState(
     val shuffleEnabled: Boolean = false,
     val crossfadeEnabled: Boolean = false,
     val crossfadeDurationMs: Int = 3000,
+    val crossfadeCurve: String = "linear",
     val gaplessEnabled: Boolean = true,
     val replayGainEnabled: Boolean = true,
     val isSeeking: Boolean = false,
@@ -52,6 +54,7 @@ class PlaybackController(
     private val prefs: AppPreferences,
     private val playlists: PlaylistRepository,
     private val secureStorage: SecureStorage,
+    private val playHistory: PlayHistoryRepository,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -87,6 +90,9 @@ class PlaybackController(
             prefs.gaplessEnabled.collect { gap -> _state.update { it.copy(gaplessEnabled = gap) } }
         }
         scope.launch {
+            prefs.crossfadeCurve.collect { curve -> _state.update { it.copy(crossfadeCurve = curve) } }
+        }
+        scope.launch {
             prefs.replayGainEnabled.collect { rg -> _state.update { it.copy(replayGainEnabled = rg) } }
         }
         scope.launch { prefs.autoContinueEnabled.collect { autoContinueEnabled = it } }
@@ -110,8 +116,27 @@ class PlaybackController(
                 nowPlaying.updatePlaybackState(state == "playing")
             }
 
-            override fun onTrackChanged(playerId: String, trackId: String, index: Int) {
+            override fun onTrackChanged(playerId: String, trackId: String, index: Int, previousTrackId: String?, wasNaturalCompletion: Boolean) {
                 if (playerId != currentPlayerId) return
+                // Submit scrobble for the track that just finished playing naturally.
+                // onPlaybackFinished only fires at STATE_ENDED (full queue end), so mid-queue
+                // natural completions must be handled here.
+                if (wasNaturalCompletion && previousTrackId != null) {
+                    // Capture state synchronously before _state.update changes the index.
+                    // scope.launch is queued on Main, so it runs after _state.update below —
+                    // reading state inside the coroutine would see the new track, not the old one.
+                    val finishedSong = _state.value.currentTrack
+                    val finishedDuration = finishedSong?.duration ?: _state.value.trackDuration.toInt()
+                    scope.launch {
+                        api.scrobble(previousTrackId, true)
+                        if (listenbrainzEnabled && finishedSong != null) {
+                            val token = secureStorage.get("listenbrainz", "token")
+                            if (token != null) api.submitListenBrainz(token, finishedSong)
+                        }
+                        api.reportPlayback(previousTrackId, finishedDuration * 1000L, "stopped")
+                    }
+                    recordPlayCurrent(finishedDuration)
+                }
                 _state.update { it.copy(queueIndex = index) }
                 updateNowPlayingNotification()
                 scope.launch { scrobbleCurrent(false) }
@@ -123,6 +148,7 @@ class PlaybackController(
                 stopPositionTracking()
                 scope.launch { scrobbleCurrent(true) }
                 scope.launch { submitListenBrainzCurrent() }
+                recordPlayCurrent(_state.value.trackDuration.toInt())
                 scope.launch { reportPlaybackCurrent("stopped", (_state.value.trackDuration * 1000).toLong()) }
                 onTrackEnded()
             }
@@ -151,7 +177,7 @@ class PlaybackController(
                 val newRating = if ((track.userRating ?: 0) > 0) 0 else 5
                 scope.launch { api.setRating(track.id, newRating) }
                 updateTrackRating(track.id, newRating)
-                nowPlaying.setFavorited(newRating > 0)
+                nowPlaying.updateRating(newRating)
             }
         }
     }
@@ -175,25 +201,27 @@ class PlaybackController(
 
     fun playAt(songs: List<Song>, startIndex: Int) {
         scope.launch {
-            val rgEnabled = _state.value.replayGainEnabled
-            val tracks = songs.map { song ->
-                QueueTrack(
-                    streamUrl = streamUrlFor(song),
-                    trackId = song.id,
-                    replayGainDb = if (rgEnabled) (song.replayGainTrack ?: song.replayGainAlbum)?.toFloat() else null,
-                )
-            }
-            val playerId = audioPlayer.setQueue(tracks, startIndex, _state.value.volume)
-            currentPlayerId = playerId
-            val actualIndex = startIndex.coerceIn(0, (songs.size - 1).coerceAtLeast(0))
-            _state.update { it.copy(
-                queue = songs, queueIndex = actualIndex,
-                playbackState = "loading", currentPosition = 0.0,
-                audioSessionId = audioPlayer.getAudioSessionId(playerId),
-            ) }
-            updateNowPlayingNotification()
-            scrobbleCurrent(false)
-            reportPlaybackCurrent("starting", 0L)
+            try {
+                val rgEnabled = _state.value.replayGainEnabled
+                val tracks = songs.map { song ->
+                    QueueTrack(
+                        streamUrl = streamUrlFor(song),
+                        trackId = song.id,
+                        replayGainDb = if (rgEnabled) (song.replayGainTrack ?: song.replayGainAlbum)?.toFloat() else null,
+                    )
+                }
+                val playerId = audioPlayer.setQueue(tracks, startIndex, _state.value.volume)
+                currentPlayerId = playerId
+                val actualIndex = startIndex.coerceIn(0, (songs.size - 1).coerceAtLeast(0))
+                _state.update { it.copy(
+                    queue = songs, queueIndex = actualIndex,
+                    playbackState = "loading", currentPosition = 0.0,
+                    audioSessionId = audioPlayer.getAudioSessionId(playerId),
+                ) }
+                updateNowPlayingNotification()
+                scrobbleCurrent(false)
+                reportPlaybackCurrent("starting", 0L)
+            } catch (_: Exception) { /* credentials unavailable or stream setup failed */ }
         }
     }
 
@@ -203,6 +231,31 @@ class PlaybackController(
         audioPlayer.skipToIndex(pid, index)
         _state.update { it.copy(queueIndex = index, currentPosition = 0.0) }
         updateNowPlayingNotification()
+    }
+
+    // Appends a track to the end of the current queue without interrupting playback. If nothing
+    // is playing, starts a fresh queue with just this track.
+    fun addToQueue(song: Song) {
+        val pid = currentPlayerId
+        if (pid == null || _state.value.queue.isEmpty()) {
+            playAt(listOf(song), 0)
+            return
+        }
+        scope.launch {
+            try {
+                val rgEnabled = _state.value.replayGainEnabled
+                audioPlayer.appendToQueue(pid, QueueTrack(
+                    streamUrl = streamUrlFor(song),
+                    trackId = song.id,
+                    replayGainDb = if (rgEnabled) (song.replayGainTrack ?: song.replayGainAlbum)?.toFloat() else null,
+                ))
+                _state.update { it.copy(queue = it.queue + song) }
+                nowPlaying.setQueue(_state.value.queue.map {
+                    NowPlayingController.QueueEntry(it.id, it.title, it.displayArtist ?: it.artist,
+                        it.coverArt?.let { c -> if (c.startsWith("file://")) c else auth.coverArtUrl(c, 512) })
+                })
+            } catch (_: Exception) { /* stream setup failed */ }
+        }
     }
 
     // ── Transport controls ─────────────────────────────────────────────────────
@@ -294,6 +347,12 @@ class PlaybackController(
         scope.launch { prefs.setCrossfadeDuration(ms) }
     }
 
+    fun setCrossfadeCurve(curve: String) {
+        val normalized = if (curve == "logarithmic") "logarithmic" else "linear"
+        _state.update { it.copy(crossfadeCurve = normalized) }
+        scope.launch { prefs.setCrossfadeCurve(normalized) }
+    }
+
     fun setGaplessEnabled(enabled: Boolean) {
         _state.update { it.copy(gaplessEnabled = enabled) }
         scope.launch { prefs.setGaplessEnabled(enabled) }
@@ -334,6 +393,13 @@ class PlaybackController(
                 is MediaNode.Playlist -> { val t = playlistTracks(node.playlistId); if (t.isNotEmpty()) playAt(t, 0) }
                 is MediaNode.PlaylistShuffle -> {
                     val t = playlistTracks(node.playlistId)
+                    if (t.isNotEmpty()) {
+                        if (!_state.value.shuffleEnabled) toggleShuffle()
+                        playAt(t.shuffled(), 0)
+                    }
+                }
+                is MediaNode.AlbumShuffle -> {
+                    val t = albumTracks(node.albumId)
                     if (t.isNotEmpty()) {
                         if (!_state.value.shuffleEnabled) toggleShuffle()
                         playAt(t.shuffled(), 0)
@@ -386,6 +452,7 @@ class PlaybackController(
         scope.launch {
             scrobbleCurrent(true)
             submitListenBrainzCurrent()
+            recordPlayCurrent(_state.value.currentTrack?.duration ?: 0)
             val newPid = audioPlayer.crossfadeTo(
                 oldPlayerId = pid,
                 streamUrl = streamUrlFor(nextSong),
@@ -393,6 +460,7 @@ class PlaybackController(
                 fadeDurationMs = s.crossfadeDurationMs.toLong(),
                 targetVolume = s.volume,
                 replayGainDb = if (s.replayGainEnabled) (nextSong.replayGainTrack ?: nextSong.replayGainAlbum)?.toFloat() else null,
+                curve = s.crossfadeCurve,
             )
             currentPlayerId = newPid
             _state.update { it.copy(
@@ -454,13 +522,13 @@ class PlaybackController(
         val track = _state.value.currentTrack ?: return
         sessionPlayedIds.add(track.id)
         val coverArt = track.coverArt
-        nowPlaying.setFavorited((track.userRating ?: 0) > 0)
         nowPlaying.update(
             title = track.title,
             artist = track.displayArtist ?: track.artist,
             album = track.album,
             coverUrl = coverArt?.let { if (it.startsWith("file://")) it else auth.coverArtUrl(it, 512) },
             isPlaying = _state.value.playbackState == "playing",
+            userRating = track.userRating,
         )
         // Publish the queue + shuffle/repeat to the session so Android Auto shows them.
         val s = _state.value
@@ -479,6 +547,13 @@ class PlaybackController(
     private suspend fun scrobbleCurrent(submission: Boolean) {
         val trackId = _state.value.currentTrack?.id ?: return
         api.scrobble(trackId, submission)
+    }
+
+    // Writes a local play-history row for the current track. Fire-and-forget on the
+    // Room IO executor (suspend insert) so a DB error never blocks playback.
+    private fun recordPlayCurrent(durationPlayedSecs: Int) {
+        val song = _state.value.currentTrack ?: return
+        scope.launch { try { playHistory.record(song, durationPlayedSecs) } catch (_: Exception) {} }
     }
 
     private suspend fun reportPlaybackCurrent(state: String, positionMs: Long? = null) {

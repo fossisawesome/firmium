@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { IconWaveform, IconPlay, IconLoading } from '../lib/icons'
+  import { IconWaveform, IconPlay, IconLoading, IconChevronDown } from '../lib/icons'
   import { Api, type Genre } from '../lib/api'
   import { tauriInvoke } from '../lib/tauri'
   import { buildMoodMix, type Energy } from '../lib/radio'
@@ -17,6 +17,7 @@
   let genres = $state<Genre[]>([])
   let building = $state(false)
   let message = $state('')
+  let genreOpen = $state(false)
 
   const abortCtrl = createAbortController()
 
@@ -46,6 +47,8 @@
   }
 </script>
 
+<svelte:document onclick={() => { genreOpen = false }} />
+
 <div class="mix-view">
   <header class="mix-header">
     <span class="mix-icon" aria-hidden="true">{@html IconWaveform}</span>
@@ -74,12 +77,39 @@
 
   <section class="mix-section">
     <h2>Genre <span class="optional">(optional)</span></h2>
-    <select class="genre-select" bind:value={genre}>
-      <option value="">Any genre</option>
-      {#each genres as g}
-        <option value={g.name}>{g.name}</option>
-      {/each}
-    </select>
+    <div
+      class="genre-selector"
+      class:open={genreOpen}
+      role="button"
+      tabindex="0"
+      onclick={e => { e.stopPropagation(); genreOpen = !genreOpen }}
+      onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && (genreOpen = !genreOpen) }}
+    >
+      <div class="genre-selector-value">{genre || 'Any genre'}</div>
+      <span class="genre-selector-arrow icon" style="width:14px;height:14px">{@html IconChevronDown}</span>
+      <div class="genre-selector-dropdown">
+        <div
+          class="genre-option"
+          class:selected={genre === ''}
+          role="option"
+          tabindex="0"
+          aria-selected={genre === ''}
+          onclick={e => { e.stopPropagation(); genre = ''; genreOpen = false }}
+          onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && (genre = '', genreOpen = false) }}
+        >Any genre</div>
+        {#each genres as g}
+          <div
+            class="genre-option"
+            class:selected={genre === g.name}
+            role="option"
+            tabindex="0"
+            aria-selected={genre === g.name}
+            onclick={e => { e.stopPropagation(); genre = g.name; genreOpen = false }}
+            onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && (genre = g.name, genreOpen = false) }}
+          >{g.name}</div>
+        {/each}
+      </div>
+    </div>
   </section>
 
   <button class="start-btn" onclick={startMix} disabled={building}>
@@ -102,20 +132,39 @@
   .energy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
   .energy-card {
     display: flex; flex-direction: column; gap: 4px; padding: 16px;
-    border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 4px; background: var(--surface);
     cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s;
   }
   .energy-card:hover { border-color: var(--accent_dim); }
   .energy-card.active { border-color: var(--accent); background: var(--surface2); }
   .energy-label { font-size: 16px; font-weight: 600; }
   .energy-desc { font-size: 13px; color: var(--muted); }
-  .genre-select {
-    width: 100%; padding: 10px 12px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px;
+  .genre-selector {
+    position: relative; width: 280px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 12px; font-family: var(--font); font-size: 13px;
+    border-radius: 2px; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    user-select: none; transition: border-color var(--timing);
   }
+  .genre-selector:hover, .genre-selector.open { border-color: var(--accent); }
+  .genre-selector-arrow { color: var(--muted); transition: transform var(--timing); }
+  .genre-selector.open .genre-selector-arrow { transform: rotate(180deg); }
+  .genre-selector-dropdown {
+    display: none; position: absolute; top: calc(100% + 4px); left: -1px; right: -1px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 2px;
+    z-index: 100; overflow-y: auto; max-height: 240px;
+  }
+  .genre-selector.open .genre-selector-dropdown { display: block; }
+  .genre-option {
+    padding: 9px 12px; font-family: var(--font); font-size: 13px;
+    color: var(--text); cursor: pointer; transition: background var(--timing);
+  }
+  .genre-option:hover { background: var(--surface2); }
+  .genre-option.selected { color: var(--accent); }
   .start-btn {
     display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px;
-    border: none; border-radius: 999px; background: var(--accent); color: #fff;
+    border: none; border-radius: 4px; background: var(--accent); color: #fff;
     font-size: 15px; font-weight: 600; cursor: pointer;
   }
   .start-btn:disabled { opacity: 0.6; cursor: default; }

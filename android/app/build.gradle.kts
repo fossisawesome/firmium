@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -109,6 +110,11 @@ dependencies {
 
     // DataStore for non-sensitive preferences (server URL, settings)
     implementation("androidx.datastore:datastore-preferences:1.2.1")
+
+    // Room: local play-history store
+    implementation("androidx.room:room-runtime:2.7.1")
+    implementation("androidx.room:room-ktx:2.7.1")
+    ksp("androidx.room:room-compiler:2.7.1")
 
     // Adaptive layout: WindowSizeClass + FoldingFeature for foldable / large screen support
     implementation("androidx.window:window:1.3.0")

@@ -1,23 +1,39 @@
 package com.fossisawesome.firmium.ui.screens
 
+import android.content.Intent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Artist
-import com.fossisawesome.firmium.data.model.Playlist
+import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.ArtistDetailState
@@ -27,11 +43,10 @@ fun ArtistDetailScreen(
     artistId: String,
     state: ArtistDetailState,
     coverUrlFor: (String?) -> String?,
-    playlists: List<Playlist>,
     onLoad: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
-    onAddAlbum: (albumId: String) -> Unit,
-    onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
+    onPlayAlbum: (com.fossisawesome.firmium.data.model.Album) -> Unit,
+    onPlaySongs: (List<Song>, Int) -> Unit,
     onBack: () -> Unit,
     recommendations: List<Artist> = emptyList(),
     onArtistClick: (String) -> Unit = {},
@@ -40,179 +55,278 @@ fun ArtistDetailScreen(
     LaunchedEffect(artistId) { onLoad(artistId) }
 
     val colors = LocalFirmiumColors.current
+    val context = LocalContext.current
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        FirmiumDetailHeader(title = state.detail?.artist?.name ?: "", onBack = onBack)
-
-        when {
-            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                FirmiumSpinner(color = colors.accent, modifier = Modifier.size(24.dp))
+    when {
+        state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            FirmiumSpinner(color = colors.accent, modifier = Modifier.size(24.dp))
+        }
+        state.error != null -> Column(
+            Modifier.fillMaxSize().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(state.error, color = colors.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            FirmiumTextButton(onClick = { onLoad(artistId) }) {
+                Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
             }
-            state.error != null -> Column(
-                Modifier.fillMaxSize().padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(state.error, color = colors.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-                FirmiumTextButton(onClick = { onLoad(artistId) }) {
-                    Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
-                }
-            }
-            state.detail != null -> {
-                val detail = state.detail
-                var showBio by remember { mutableStateOf(false) }
+        }
+        state.detail != null -> {
+            val detail = state.detail
+            var showBio by remember { mutableStateOf(false) }
 
-                // Artist image: server-provided URL first; fallback to most recent album cover.
-                val artistImageUrl = detail.imageUrl?.takeIf {
-                    it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f")
-                } ?: coverUrlFor(
-                    detail.albums.maxByOrNull { it.year ?: 0 }?.coverArt
-                        ?: detail.albums.firstOrNull()?.coverArt
-                )
+            val artistImageUrl = detail.imageUrl?.takeIf {
+                it.isNotBlank() && !it.contains("2a96cbd8b46e442fc41c2b86b821562f")
+            } ?: coverUrlFor(
+                detail.albums.maxByOrNull { it.year ?: 0 }?.coverArt
+                    ?: detail.albums.firstOrNull()?.coverArt
+            )
 
-                // Sort albums into sections by type.
-                val grouped = detail.albums
-                    .sortedWith(compareBy({ it.effectiveType().releaseTypeSortOrder() }, { -(it.year ?: 0) }))
-                    .groupBy { it.effectiveType() }
+            // Split into "Albums" (full-lengths + special types) and "Singles & EPs".
+            val sorted = detail.albums.sortedByDescending { it.year ?: 0 }
+            val albumsGroup = sorted.filter { it.effectiveType() !in setOf("Single", "EP") }
+            val singlesEps = sorted.filter { it.effectiveType() in setOf("Single", "EP") }
 
-                // Box lets the BiographySheet overlay the list rather than being squashed to 0dp.
-                Box(modifier = Modifier.fillMaxSize()) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 32.dp),
-                    ) {
-                        // Artist image header.
-                        if (artistImageUrl != null) {
-                            item {
-                                CoverImage(
-                                    url = artistImageUrl,
-                                    contentDescription = detail.artist.name,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(220.dp),
-                                )
-                            }
-                        }
-
-                        // Biography button — opens a full bottom sheet with the untruncated bio.
-                        if (detail.bio != null) {
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { showBio = true }
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text(
-                                        "View Biography",
-                                        fontSize = 13.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = colors.accent,
-                                    )
-                                    FirmiumIcon(
-                                        Icons.Default.ChevronRight,
-                                        contentDescription = null,
-                                        tint = colors.accent,
-                                        modifier = Modifier.size(18.dp),
-                                    )
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 32.dp),
+                ) {
+                    // Header: artist image with overlaid controls + large name.
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().height(320.dp)) {
+                            CoverImage(
+                                url = artistImageUrl,
+                                contentDescription = detail.artist.name,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            // Bottom gradient so the name stays legible over bright art.
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Brush.verticalGradient(
+                                        0.5f to Color.Transparent, 1f to colors.bg)),
+                            )
+                            // Top controls.
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .windowInsetsPadding(WindowInsets.statusBars)
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                OverlayIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
+                                Spacer(Modifier.weight(1f))
+                                OverlayIconButton(Icons.Default.Share, "Share") {
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, detail.artist.name)
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "Share artist"))
                                 }
-                                FirmiumDivider()
                             }
-                        }
-
-                        if (onStartRadio != null) {
-                            item(key = "start_radio") {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onStartRadio() }
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text("Start Radio", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
-                                    FirmiumIcon(Icons.Default.ChevronRight, contentDescription = null,
-                                        tint = colors.accent, modifier = Modifier.size(18.dp))
-                                }
-                                FirmiumDivider()
-                            }
-                        }
-
-                        item(key = "sort_label") {
                             Text(
-                                "Sorted by type, then year",
-                                fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                                color = colors.muted,
-                                modifier = Modifier.padding(start = 16.dp, top = 12.dp),
+                                detail.artist.name,
+                                fontSize = 32.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                                color = colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
                             )
                         }
+                    }
 
-                        grouped.forEach { (type, albums) ->
-                            val sectionLabel = when (type) {
-                                "Single" -> "Singles"
-                                "EP" -> "EPs"
-                                "Album" -> "Albums"
-                                else -> type
-                            }
-                            item(key = "header_$type") {
-                                Text(
-                                    "${sectionLabel.uppercase()} · ${albums.size}",
-                                    fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                                    color = colors.muted, letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp),
-                                )
-                            }
-                            items(albums, key = { it.id }) { album ->
-                                AlbumRow(
-                                    album = album,
-                                    coverUrl = coverUrlFor(album.coverArt),
-                                    onAlbumClick = onAlbumClick,
-                                    onAddClick = { onAddAlbum(album.id) },
-                                    onDownloadClick = onDownloadAlbum?.invoke(album),
-                                    showArtist = false,
-                                )
-                                FirmiumDivider()
-                            }
-                        }
-
-                        if (recommendations.isNotEmpty()) {
-                            item(key = "reco_header") {
-                                Text(
-                                    "YOU MIGHT ALSO LIKE · ${recommendations.size}",
-                                    fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                                    color = colors.muted, letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
-                                )
-                            }
-                            items(recommendations, key = { "reco_${it.id}" }) { rec ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clickable { onArtistClick(rec.id) }
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text(rec.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
-                                    FirmiumIcon(Icons.Default.ChevronRight, contentDescription = null,
-                                        tint = colors.muted, modifier = Modifier.size(18.dp))
+                    // Shuffle + Radio buttons.
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
+                                    .background(colors.accent)
+                                    .clickable(enabled = state.topSongs.isNotEmpty()) {
+                                        onPlaySongs(state.topSongs.shuffled(), 0)
+                                    }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FirmiumIcon(Icons.Default.Shuffle, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                    Text("Shuffle", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace, color = Color.Black)
                                 }
-                                FirmiumDivider()
+                            }
+                            if (onStartRadio != null) {
+                                Box(
+                                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
+                                        .background(colors.surface2)
+                                        .clickable { onStartRadio() }
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        FirmiumIcon(Icons.Default.Radio, null, tint = colors.text, modifier = Modifier.size(18.dp))
+                                        Text("Radio", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace, color = colors.text)
+                                    }
+                                }
                             }
                         }
                     }
 
-                    if (showBio && detail.bio != null) {
-                        BiographySheet(
-                            bio = detail.bio,
-                            artistName = detail.artist.name,
-                            onDismiss = { showBio = false },
-                        )
+                    // Songs preview.
+                    if (state.topSongs.isNotEmpty()) {
+                        item {
+                            SectionHeader("Songs", onArrow = { onPlaySongs(state.topSongs, 0) })
+                        }
+                        itemsIndexed(state.topSongs.take(5)) { index, song ->
+                            ArtistSongRow(
+                                song = song,
+                                coverUrl = coverUrlFor(song.coverArt),
+                                onClick = { onPlaySongs(state.topSongs, index) },
+                            )
+                        }
                     }
+
+                    // Albums carousel.
+                    if (albumsGroup.isNotEmpty()) {
+                        item { SectionHeader("Albums") }
+                        item {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(albumsGroup, key = { it.id }) { album ->
+                                    AlbumCard(
+                                        album = album,
+                                        coverUrl = coverUrlFor(album.coverArt),
+                                        onClick = onAlbumClick,
+                                        onPlay = onPlayAlbum,
+                                        modifier = Modifier.width(150.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Singles & EPs carousel.
+                    if (singlesEps.isNotEmpty()) {
+                        item { SectionHeader("Singles & EPs") }
+                        item {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(singlesEps, key = { it.id }) { album ->
+                                    AlbumCard(
+                                        album = album,
+                                        coverUrl = coverUrlFor(album.coverArt),
+                                        onClick = onAlbumClick,
+                                        onPlay = onPlayAlbum,
+                                        modifier = Modifier.width(150.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Biography button.
+                    if (detail.bio != null) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { showBio = true }
+                                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("View Biography", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+                                FirmiumIcon(Icons.Default.ChevronRight, null, tint = colors.accent, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+
+                    // Recommendations.
+                    if (recommendations.isNotEmpty()) {
+                        item {
+                            Text(
+                                "YOU MIGHT ALSO LIKE · ${recommendations.size}",
+                                fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                                color = colors.muted, letterSpacing = 1.sp,
+                                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp),
+                            )
+                        }
+                        items(recommendations, key = { "reco_${it.id}" }) { rec ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable { onArtistClick(rec.id) }
+                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(rec.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                                FirmiumIcon(Icons.Default.ChevronRight, null, tint = colors.muted, modifier = Modifier.size(18.dp))
+                            }
+                            FirmiumDivider()
+                        }
+                    }
+                }
+
+                if (showBio && detail.bio != null) {
+                    BiographySheet(
+                        bio = detail.bio,
+                        artistName = detail.artist.name,
+                        onDismiss = { showBio = false },
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String, onArrow: (() -> Unit)? = null) {
+    val colors = LocalFirmiumColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+            color = colors.text, modifier = Modifier.weight(1f))
+        if (onArrow != null) {
+            FirmiumIconButton(onClick = onArrow, modifier = Modifier.size(36.dp)) {
+                FirmiumIcon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "See all",
+                    tint = colors.accent, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistSongRow(song: Song, coverUrl: String?, onClick: () -> Unit) {
+    val colors = LocalFirmiumColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CoverImage(url = coverUrl, contentDescription = null,
+            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(song.title, fontFamily = FontFamily.Monospace, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(song.displayArtist ?: song.artist, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun OverlayIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        FirmiumIcon(icon, contentDescription = desc, tint = Color.White, modifier = Modifier.size(20.dp))
     }
 }
 

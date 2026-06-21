@@ -23,7 +23,10 @@
 
   const trackInfo = $derived($currentTrack?.trackInfo ?? '')
 
-  const posDisplay = $derived(formatDuration($currentPosition))
+  // While scrubbing (drag or keyboard), the slider drives the displayed time and
+  // thumb position; null means "follow live playback position".
+  let scrubPos = $state<number | null>(null)
+  const posDisplay = $derived(formatDuration(scrubPos ?? $currentPosition))
   const effectiveDuration = $derived($trackDuration || $currentTrack?.duration || 0)
   const durDisplay = $derived(formatDuration(effectiveDuration))
   const seekMax = $derived(effectiveDuration || 100)
@@ -124,9 +127,16 @@
   }
 
   function startSeek() { isSeeking.set(true) }
+  // Fires on drag-move and on keyboard arrow keys; keeps the thumb and time label
+  // tracking the in-progress seek without committing it yet.
+  function onScrub(e: Event) {
+    isSeeking.set(true)
+    scrubPos = Number((e.target as HTMLInputElement).value)
+  }
   async function endSeek(e: Event) {
     const target = Number((e.target as HTMLInputElement).value)
     currentPosition.set(target)
+    scrubPos = null
     try { await tauriInvoke('seek_queue', { position: target }) } catch (err) { console.error('Seek failed:', err) }
     // Keep ignoring position updates briefly: a stale "playback-position" event
     // (reflecting the pre-seek position) may already be in flight from Rust.
@@ -178,11 +188,11 @@
       min="0"
       max={seekMax}
       step="0.1"
-      value={seekValue}
+      value={scrubPos ?? seekValue}
       onmousedown={startSeek}
-      onmouseup={endSeek}
       ontouchstart={startSeek}
-      ontouchend={endSeek}
+      oninput={onScrub}
+      onchange={endSeek}
     />
     <span class="time right">{durDisplay}</span>
   </div>

@@ -6,6 +6,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,11 +32,15 @@ fun FirmiumSlider(
     val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
     val thumbDiameter = 14.dp
     val thumbRadius = thumbDiameter / 2
+    // rememberUpdatedState lets the running pointerInput coroutine always call the
+    // latest lambda without restarting the coroutine on every recomposition.
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+    val currentOnValueChangeFinished by rememberUpdatedState(onValueChangeFinished)
 
     BoxWithConstraints(
         modifier = modifier
             .height(48.dp)
-            .pointerInput(valueRange) {
+            .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     val w = size.width.toFloat()
@@ -42,15 +48,15 @@ fun FirmiumSlider(
                         val f = (x / w).coerceIn(0f, 1f)
                         return valueRange.start + f * (valueRange.endInclusive - valueRange.start)
                     }
-                    onValueChange(posToValue(down.position.x))
+                    currentOnValueChange(posToValue(down.position.x))
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
                         if (!change.pressed) {
-                            onValueChangeFinished?.invoke()
+                            currentOnValueChangeFinished?.invoke()
                             break
                         }
-                        onValueChange(posToValue(change.position.x))
+                        currentOnValueChange(posToValue(change.position.x))
                         change.consume()
                     }
                 }

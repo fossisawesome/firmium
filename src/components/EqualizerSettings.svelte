@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { tauriInvoke } from '../lib/tauri'
-  import { IconChevronDown } from '../lib/icons'
+  import { IconChevronDown, IconLock } from '../lib/icons'
   import type { AudioDevice, EqState, EqMode, EqBandSpec } from '../lib/types/tauri-commands'
 
   // Fixed 10-band ISO graphic set — must match commands/equalizer.rs band ordering
@@ -25,6 +25,8 @@
   let saveDebounce: ReturnType<typeof setTimeout> | undefined
 
   const activeProfileName = $derived(deviceProfiles[selectedDevice] ?? '')
+  // Imported profiles are read-only — editing/renaming/deleting is disabled for them.
+  const activeProfileImported = $derived(profiles.find(p => p.name === activeProfileName)?.imported === true)
 
   function graphicDefaults(): EqBandSpec[] {
     return GRAPHIC_FREQS.map(freq => ({ freq, gain: 0 }))
@@ -86,16 +88,11 @@
 
   // Persist band edits to the currently active profile (live-applies in the backend).
   function persistBands() {
-    if (!activeProfileName) return
+    if (!activeProfileName || activeProfileImported) return
     clearTimeout(saveDebounce)
     saveDebounce = setTimeout(() => {
       tauriInvoke('set_eq_bands', { profile: activeProfileName, bands: $state.snapshot(bands) }).catch(e => console.error(e))
     }, 120)
-  }
-
-  function setGraphicGain(i: number, gain: number) {
-    bands[i] = { ...bands[i], gain }
-    persistBands()
   }
 
   function setParamField(i: number, field: 'freq' | 'gain' | 'q', value: number) {
@@ -119,8 +116,8 @@
     bands = next === 'graphic'
       ? graphicDefaults()
       : [{ freq: 100, gain: 0, q: 1.0 }, { freq: 1000, gain: 0, q: 1.0 }, { freq: 8000, gain: 0, q: 1.0 }]
-    // Re-save the active profile with its new shape, if one is selected.
-    if (activeProfileName) {
+    // Re-save the active profile with its new shape, if one is selected (not imported).
+    if (activeProfileName && !activeProfileImported) {
       try {
         await tauriInvoke('save_eq_profile', { name: activeProfileName, kind: mode, bands: $state.snapshot(bands) })
         profiles = profiles.map(p => p.name === activeProfileName ? { ...p, kind: mode, bands: $state.snapshot(bands) } : p)
@@ -140,7 +137,7 @@
   }
 
   async function deleteActive() {
-    if (!activeProfileName) return
+    if (!activeProfileName || activeProfileImported) return
     try {
       await tauriInvoke('delete_eq_profile', { name: activeProfileName })
       await load()
@@ -196,7 +193,10 @@
     <div class="theme-selector" class:open={profileOpen} role="button" tabindex="0"
       onclick={e => { e.stopPropagation(); profileOpen = !profileOpen }}
       onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && (profileOpen = !profileOpen) }}>
-      <div class="theme-selector-value">{activeProfileName || 'None'}</div>
+      <div class="theme-selector-value">
+        {activeProfileName || 'None'}
+        {#if activeProfileImported}<span class="eq-lock icon" title="Imported (read-only)">{@html IconLock}</span>{/if}
+      </div>
       <span class="theme-selector-arrow icon" style="width:14px;height:14px">{@html IconChevronDown}</span>
       <div class="theme-selector-dropdown">
         {#if profiles.length === 0}
@@ -206,12 +206,13 @@
           <div class="theme-option" class:selected={activeProfileName === p.name} role="option" tabindex="0" aria-selected={activeProfileName === p.name}
             onclick={e => { e.stopPropagation(); selectProfile(p.name) }}
             onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && selectProfile(p.name) }}>
-            {p.name}
+            <span>{p.name}</span>
+            {#if p.imported}<span class="eq-lock icon" title="Imported (read-only)">{@html IconLock}</span>{/if}
           </div>
         {/each}
       </div>
     </div>
-    <button class="debug-btn debug-btn--danger" disabled={!activeProfileName} onclick={deleteActive}>Delete</button>
+    <button class="debug-btn debug-btn--danger" disabled={!activeProfileName || activeProfileImported} onclick={deleteActive}>Delete</button>
   </div>
 </div>
 
@@ -224,18 +225,27 @@
   </div>
   <div class="bp-mode-selector">
     {#each [['graphic', 'Graphic'], ['parametric', 'Parametric']] as [id, label]}
-      <button class="bp-mode-btn" class:bp-mode-btn--active={mode === id} onclick={() => changeMode(id as EqMode)}>{label}</button>
+      <button class="bp-mode-btn" class:bp-mode-btn--active={mode === id} disabled={activeProfileImported} onclick={() => changeMode(id as EqMode)}>{label}</button>
     {/each}
   </div>
 </div>
+
+{#if activeProfileImported}
+  <div class="settings-row">
+    <div class="settings-desc eq-imported-note">
+      <span class="eq-lock icon">{@html IconLock}</span>
+      This profile was imported from <code>eq-profiles/</code> and is read-only. Edit the <code>.toml</code> file to change it, or save a copy under a new name below.
+    </div>
+  </div>
+{/if}
 
 {#if mode === 'graphic'}
   <div class="eq-graphic">
     {#each bands as band, i (band.freq)}
       <div class="eq-band">
         <span class="eq-band-gain">{band.gain > 0 ? '+' : ''}{band.gain.toFixed(0)}</span>
-        <input class="eq-slider" type="range" min={-GAIN_RANGE} max={GAIN_RANGE} step="1"
-          value={band.gain} oninput={e => setGraphicGain(i, Number((e.target as HTMLInputElement).value))} />
+        <input class="eq-slider" type="range" min={-GAIN_RANGE} max={GAIN_RANGE} step="1" disabled={activeProfileImported}
+          bind:value={bands[i].gain} oninput={persistBands} />
         <span class="eq-band-freq">{freqLabel(band.freq)}</span>
       </div>
     {/each}
@@ -247,16 +257,16 @@
     </div>
     {#each bands as band, i (i)}
       <div class="eq-param-row">
-        <input type="number" min="20" max="20000" step="1" value={band.freq}
+        <input type="number" min="20" max="20000" step="1" value={band.freq} disabled={activeProfileImported}
           oninput={e => setParamField(i, 'freq', Number((e.target as HTMLInputElement).value))} />
-        <input type="number" min={-GAIN_RANGE} max={GAIN_RANGE} step="0.5" value={band.gain}
+        <input type="number" min={-GAIN_RANGE} max={GAIN_RANGE} step="0.5" value={band.gain} disabled={activeProfileImported}
           oninput={e => setParamField(i, 'gain', Number((e.target as HTMLInputElement).value))} />
-        <input type="number" min="0.1" max="10" step="0.1" value={band.q ?? 1.0}
+        <input type="number" min="0.1" max="10" step="0.1" value={band.q ?? 1.0} disabled={activeProfileImported}
           oninput={e => setParamField(i, 'q', Number((e.target as HTMLInputElement).value))} />
-        <button class="debug-btn debug-btn--danger" onclick={() => removeParamBand(i)}>Remove</button>
+        <button class="debug-btn debug-btn--danger" disabled={activeProfileImported} onclick={() => removeParamBand(i)}>Remove</button>
       </div>
     {/each}
-    <button class="debug-btn" onclick={addParamBand}>Add band</button>
+    <button class="debug-btn" disabled={activeProfileImported} onclick={addParamBand}>Add band</button>
   </div>
 {/if}
 
@@ -273,6 +283,10 @@
 
 <style>
   .eq-profile-controls { display: flex; gap: 8px; align-items: center; }
+  .eq-lock { display: inline-flex; width: 13px; height: 13px; color: var(--muted); margin-left: 6px; vertical-align: middle; }
+  .theme-option { display: flex; align-items: center; justify-content: space-between; }
+  .eq-imported-note { display: flex; align-items: center; gap: 8px; line-height: 1.4; }
+  .eq-imported-note .eq-lock { margin-left: 0; flex-shrink: 0; }
   .eq-graphic {
     display: flex; justify-content: space-between; gap: 4px;
     padding: 16px 4px; margin-top: 4px;

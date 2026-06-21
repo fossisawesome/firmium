@@ -7,8 +7,9 @@ use tauri::{AppHandle, Emitter, Listener};
 
 use crate::audio::AudioPlayer;
 use crate::commands::listenbrainz::fire_listenbrainz_listen;
-use crate::commands::queue::{compute_next_idx, play_at, random_idx_excluding, schedule_save_play_queue, stream_url_for};
+use crate::commands::queue::{compute_next_idx, has_shuffle_next, next_shuffle_idx, play_at, schedule_save_play_queue, stream_url_for};
 use crate::commands::subsonic::{fire_report_playback, fire_scrobble};
+use crate::db::fire_record_play;
 use crate::queue_state::{emit_queue_state, QueueState};
 use crate::state::AppState;
 
@@ -76,6 +77,41 @@ pub fn start(
     }
 }
 
+fn should_start_crossfade(
+    position: f64,
+    duration: f64,
+    crossfade_secs: f32,
+    crossfade_enabled: bool,
+    crossfade_started: bool,
+    repeat_one: bool,
+    has_next: bool,
+) -> bool {
+    !crossfade_started
+        && crossfade_enabled
+        && !repeat_one
+        && has_next
+        && duration > 0.0
+        && position >= duration - crossfade_secs as f64
+}
+
+fn should_start_preload(
+    position: f64,
+    duration: f64,
+    preload_started: bool,
+    gapless_enabled: bool,
+    crossfade_enabled: bool,
+    repeat_one: bool,
+    has_next: bool,
+) -> bool {
+    !preload_started
+        && gapless_enabled
+        && !crossfade_enabled
+        && !repeat_one
+        && has_next
+        && duration > 0.0
+        && position >= (duration - 30.0).max(0.0)
+}
+
 fn handle_position(
     app: &AppHandle,
     queue_state: &Arc<QueueState>,
@@ -99,6 +135,7 @@ fn handle_position(
         volume,
         cached_duration,
         last_save_pos,
+        shuffle_played,
     ) = {
         let mut inner = queue_state.inner.lock();
         if inner.current_player_id.as_deref() != Some(payload.player_id.as_str()) {
@@ -123,6 +160,7 @@ fn handle_position(
             inner.volume,
             inner.cached_duration,
             inner.last_queue_save_position,
+            inner.shuffle_played.clone(),
         )
     }; // lock released
 
@@ -135,17 +173,29 @@ fn handle_position(
         schedule_save_play_queue(app, app_state, queue_state, current_player_id.clone(), audio_player);
     }
 
-    // Crossfade trigger
-    if !crossfade_started && crossfade_enabled && !repeat_one && dur > 0.0
-        && position >= dur - crossfade_secs as f64
-    {
-        let next_idx = if shuffle && queue_len > 1 {
-            Some(random_idx_excluding(queue_len, queue_idx as usize))
-        } else {
-            compute_next_idx(queue_idx, queue_len, repeat_all)
+    // Crossfade trigger. Gate on whether a next track exists without consuming
+    // the shuffle pass; the actual index is picked once, below.
+    let cf_has_next = if shuffle && queue_len > 1 {
+        has_shuffle_next(queue_len, queue_idx as usize, &shuffle_played, repeat_all)
+    } else {
+        compute_next_idx(queue_idx, queue_len, repeat_all).is_some()
+    };
+    if should_start_crossfade(position, dur, crossfade_secs, crossfade_enabled, crossfade_started, repeat_one, cf_has_next) {
+        // Pick (and consume, for shuffle) the next index, marking crossfade_started
+        // under the same lock so do_crossfade uses exactly this index.
+        let next_idx = {
+            let mut inner = queue_state.inner.lock();
+            let idx = if shuffle && queue_len > 1 {
+                next_shuffle_idx(queue_len, queue_idx as usize, &mut inner.shuffle_played, repeat_all)
+            } else {
+                compute_next_idx(queue_idx, queue_len, repeat_all)
+            };
+            if idx.is_some() {
+                inner.crossfade_started = true;
+            }
+            idx
         };
         if let Some(next_idx) = next_idx {
-            queue_state.inner.lock().crossfade_started = true;
             let qs = Arc::clone(queue_state);
             let as_ = Arc::clone(app_state);
             let ap = Arc::clone(audio_player);
@@ -158,22 +208,18 @@ fn handle_position(
         }
     }
 
-    // Gapless preload trigger (30s before end, crossfade off)
-    if !preload_started && gapless_enabled && !crossfade_enabled && !repeat_one && dur > 0.0 {
-        let preload_at = (dur - 30.0).max(0.0);
-        if position >= preload_at {
-            let next_idx = compute_next_idx(queue_idx, queue_len, repeat_all);
-            if let Some(next_idx) = next_idx {
-                queue_state.inner.lock().preload_started = true;
-                let qs = Arc::clone(queue_state);
-                let as_ = Arc::clone(app_state);
-                let ap = Arc::clone(audio_player);
-                let app2 = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    do_gapless_preload(app2, qs, as_, ap, next_idx).await;
-                });
-            }
-        }
+    // Gapless preload trigger
+    let preload_next_idx = compute_next_idx(queue_idx, queue_len, repeat_all);
+    if should_start_preload(position, dur, preload_started, gapless_enabled, crossfade_enabled, repeat_one, preload_next_idx.is_some()) {
+        let next_idx = preload_next_idx.unwrap();
+        queue_state.inner.lock().preload_started = true;
+        let qs = Arc::clone(queue_state);
+        let as_ = Arc::clone(app_state);
+        let ap = Arc::clone(audio_player);
+        let app2 = app.clone();
+        tauri::async_runtime::spawn(async move {
+            do_gapless_preload(app2, qs, as_, ap, next_idx).await;
+        });
     }
 }
 
@@ -201,21 +247,29 @@ async fn handle_finished(
         )
     };
 
-    // Scrobble completion (Subsonic + ListenBrainz)
+    // Scrobble completion (Subsonic + ListenBrainz + local play history)
     if let Some(song) = finished_song.clone() {
         let dur_ms = (cached_dur.unwrap_or(0.0) * 1000.0) as i64;
         fire_scrobble(app.clone(), Arc::clone(&app_state), song.id.clone(), true);
         fire_report_playback(app.clone(), Arc::clone(&app_state), song.id.clone(), dur_ms, "stopped".into());
+        fire_record_play(&app, &song, dur_ms / 1000);
         fire_listenbrainz_listen(Arc::clone(&app_state), song);
     }
 
     // Determine next action
     if repeat_one {
         let _ = play_at(&app, &queue_state, &app_state, &audio_player, queue_idx as usize).await;
-    } else if shuffle && queue_len > 1 {
-        let next = random_idx_excluding(queue_len, queue_idx as usize);
-        let _ = play_at(&app, &queue_state, &app_state, &audio_player, next).await;
-    } else if let Some(next_idx) = compute_next_idx(queue_idx, queue_len, repeat_all) {
+        return;
+    }
+
+    let next_idx = if shuffle && queue_len > 1 {
+        let mut inner = queue_state.inner.lock();
+        next_shuffle_idx(queue_len, queue_idx as usize, &mut inner.shuffle_played, repeat_all)
+    } else {
+        compute_next_idx(queue_idx, queue_len, repeat_all)
+    };
+
+    if let Some(next_idx) = next_idx {
         let _ = play_at(&app, &queue_state, &app_state, &audio_player, next_idx).await;
     } else {
         // End of queue
@@ -245,7 +299,7 @@ async fn do_crossfade(
 ) {
     let CrossfadeContext { next_idx, old_player_id, fade_ms, volume } = ctx;
     // Extract next song, update queue_idx, reset per-track flags
-    let (song, outgoing, rg_enabled) = {
+    let (song, outgoing, rg_enabled, curve) = {
         let mut inner = queue_state.inner.lock();
         let song = match inner.queue.get(next_idx).cloned() {
             Some(s) => s,
@@ -254,13 +308,14 @@ async fn do_crossfade(
         let outgoing = inner.queue.get(inner.queue_idx as usize).cloned();
         inner.queue_idx = next_idx as i32;
         inner.reset_track_progress();
-        (song, outgoing, inner.replay_gain_enabled)
+        (song, outgoing, inner.replay_gain_enabled, inner.crossfade_curve.clone())
     };
 
-    // Scrobble outgoing (Subsonic + ListenBrainz)
+    // Scrobble outgoing (Subsonic + ListenBrainz + local play history)
     if let Some(outgoing) = outgoing {
         fire_scrobble(app.clone(), Arc::clone(&app_state), outgoing.id.clone(), true);
         fire_report_playback(app.clone(), Arc::clone(&app_state), outgoing.id.clone(), 0, "stopped".into());
+        fire_record_play(&app, &outgoing, outgoing.duration as i64);
         fire_listenbrainz_listen(Arc::clone(&app_state), outgoing);
     }
 
@@ -272,7 +327,7 @@ async fn do_crossfade(
 
     // Do crossfade — no lock held
     let rg = if rg_enabled { crate::commands::queue::replay_gain_db_pub(&song) } else { None };
-    let new_pid = match AudioPlayer::crossfade_to(&audio_player, &old_player_id, &stream_url, song.id.clone(), fade_ms, volume, rg) {
+    let new_pid = match AudioPlayer::crossfade_to(&audio_player, &old_player_id, &stream_url, song.id.clone(), fade_ms, volume, rg, &curve) {
         Ok(pid) => pid,
         Err(e) => { eprintln!("Crossfade failed: {e}"); return; }
     };
@@ -313,5 +368,90 @@ async fn do_gapless_preload(
             inner.preloaded_track_id = Some(song.id);
         }
         Err(e) => eprintln!("Gapless preload failed: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_start_crossfade, should_start_preload};
+
+    // ── should_start_crossfade ────────────────────────────────────────────────
+
+    #[test]
+    fn crossfade_triggers_when_all_conditions_met() {
+        assert!(should_start_crossfade(57.0, 60.0, 5.0, true, false, false, true));
+    }
+
+    #[test]
+    fn crossfade_false_when_already_started() {
+        assert!(!should_start_crossfade(57.0, 60.0, 5.0, true, true, false, true));
+    }
+
+    #[test]
+    fn crossfade_false_when_disabled() {
+        assert!(!should_start_crossfade(57.0, 60.0, 5.0, false, false, false, true));
+    }
+
+    #[test]
+    fn crossfade_false_when_too_early() {
+        assert!(!should_start_crossfade(50.0, 60.0, 5.0, true, false, false, true));
+    }
+
+    #[test]
+    fn crossfade_false_when_repeat_one() {
+        assert!(!should_start_crossfade(57.0, 60.0, 5.0, true, false, true, true));
+    }
+
+    #[test]
+    fn crossfade_false_when_no_next() {
+        assert!(!should_start_crossfade(57.0, 60.0, 5.0, true, false, false, false));
+    }
+
+    #[test]
+    fn crossfade_false_when_duration_zero() {
+        assert!(!should_start_crossfade(0.0, 0.0, 5.0, true, false, false, true));
+    }
+
+    // ── should_start_preload ──────────────────────────────────────────────────
+
+    #[test]
+    fn preload_triggers_when_all_conditions_met() {
+        assert!(should_start_preload(35.0, 60.0, false, true, false, false, true));
+    }
+
+    #[test]
+    fn preload_false_when_already_started() {
+        assert!(!should_start_preload(35.0, 60.0, true, true, false, false, true));
+    }
+
+    #[test]
+    fn preload_false_when_gapless_disabled() {
+        assert!(!should_start_preload(35.0, 60.0, false, false, false, false, true));
+    }
+
+    #[test]
+    fn preload_false_when_crossfade_enabled() {
+        assert!(!should_start_preload(35.0, 60.0, false, true, true, false, true));
+    }
+
+    #[test]
+    fn preload_false_when_repeat_one() {
+        assert!(!should_start_preload(35.0, 60.0, false, true, false, true, true));
+    }
+
+    #[test]
+    fn preload_false_when_no_next() {
+        assert!(!should_start_preload(35.0, 60.0, false, true, false, false, false));
+    }
+
+    #[test]
+    fn preload_false_when_too_early() {
+        assert!(!should_start_preload(25.0, 60.0, false, true, false, false, true));
+    }
+
+    #[test]
+    fn preload_short_track_threshold_clamps_to_zero() {
+        // duration=20 → threshold = (20-30).max(0) = 0 → triggers at position=0
+        assert!(should_start_preload(0.0, 20.0, false, true, false, false, true));
     }
 }

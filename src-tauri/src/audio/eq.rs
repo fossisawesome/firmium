@@ -191,3 +191,148 @@ impl EqShared {
         self.config.lock().clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f32::consts::PI;
+
+    fn peaking(freq: f32, gain_db: f32) -> EqBand {
+        EqBand { kind: BandKind::Peaking, freq, gain_db, q: 0.707 }
+    }
+
+    // ── bands_are_flat ────────────────────────────────────────────────────────
+
+    #[test]
+    fn bands_are_flat_all_zero() {
+        let bands = vec![peaking(200.0, 0.0), peaking(1000.0, 0.0)];
+        assert!(bands_are_flat(&bands));
+    }
+
+    #[test]
+    fn bands_are_flat_nonzero() {
+        let bands = vec![peaking(200.0, 0.0), peaking(1000.0, 3.0)];
+        assert!(!bands_are_flat(&bands));
+    }
+
+    // ── EqChain::new ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn eq_chain_new_empty_bands_returns_none() {
+        assert!(EqChain::new(&[], 44100, 2).is_none());
+    }
+
+    #[test]
+    fn eq_chain_new_zero_channels_returns_none() {
+        assert!(EqChain::new(&[peaking(1000.0, 6.0)], 44100, 0).is_none());
+    }
+
+    // ── Biquad::identity passthrough ──────────────────────────────────────────
+
+    #[test]
+    fn biquad_identity_passthrough() {
+        let mut b = Biquad::identity();
+        for &x in &[-1.0f32, 0.0, 0.5, 1.0, 0.123] {
+            assert!((b.process(x) - x).abs() < f32::EPSILON, "identity failed for {x}");
+        }
+    }
+
+    // ── Flat-gain peaking band (0 dB) is identity-equivalent ─────────────────
+
+    #[test]
+    fn peaking_0db_passthrough() {
+        let mut chain = EqChain::new(&[peaking(1000.0, 0.0)], 44100, 1).unwrap();
+        let original = vec![0.5f32, -0.3, 0.8, -1.0, 0.1, 0.0, -0.5, 0.25];
+        let mut samples = original.clone();
+        chain.process_interleaved(&mut samples);
+        for (got, want) in samples.iter().zip(original.iter()) {
+            assert!((got - want).abs() < 1e-6, "0 dB peaking: got {got}, want {want}");
+        }
+    }
+
+    // ── Degenerate frequencies → identity ────────────────────────────────────
+
+    #[test]
+    fn degenerate_freq_zero_is_identity() {
+        let band = EqBand { kind: BandKind::Peaking, freq: 0.0, gain_db: 12.0, q: 0.707 };
+        let mut b = Biquad::from_band(&band, 44100.0);
+        let x = 0.7f32;
+        assert!((b.process(x) - x).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn degenerate_freq_nyquist_is_identity() {
+        let band = EqBand { kind: BandKind::Peaking, freq: 22050.0, gain_db: 12.0, q: 0.707 };
+        let mut b = Biquad::from_band(&band, 44100.0);
+        let x = -0.3f32;
+        assert!((b.process(x) - x).abs() < f32::EPSILON);
+    }
+
+    // ── EqChain::process_interleaved stereo silence ───────────────────────────
+
+    #[test]
+    fn process_interleaved_stereo_silence_stays_silent() {
+        let mut chain = EqChain::new(&[peaking(1000.0, 6.0)], 44100, 2).unwrap();
+        let mut samples = vec![0.0f32; 64];
+        chain.process_interleaved(&mut samples);
+        for s in &samples {
+            assert_eq!(*s, 0.0);
+        }
+    }
+
+    // ── EqShared ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn eq_shared_set_bumps_generation() {
+        let shared = EqShared::new(EqRuntimeConfig::default());
+        let gen_before = shared.generation();
+        shared.set(true, vec![peaking(1000.0, 6.0)]);
+        assert_eq!(shared.generation(), gen_before + 1);
+    }
+
+    #[test]
+    fn eq_shared_snapshot_reflects_new_config() {
+        let shared = EqShared::new(EqRuntimeConfig::default());
+        shared.set(true, vec![peaking(500.0, 3.0)]);
+        let snap = shared.snapshot();
+        assert!(snap.enabled);
+        assert_eq!(snap.bands.len(), 1);
+        assert!((snap.bands[0].freq - 500.0).abs() < 0.001);
+        assert!((snap.bands[0].gain_db - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn eq_shared_concurrent_no_deadlock() {
+        use std::sync::Arc;
+        use std::thread;
+        let shared = Arc::new(EqShared::new(EqRuntimeConfig::default()));
+        let s2 = Arc::clone(&shared);
+        let writer = thread::spawn(move || {
+            for _ in 0..200 {
+                s2.set(true, vec![peaking(1000.0, 1.0)]);
+            }
+        });
+        for _ in 0..200 {
+            let _ = shared.snapshot();
+            let _ = shared.generation();
+        }
+        writer.join().unwrap();
+    }
+
+    // ── +6 dB peaking at 1 kHz boosts 1 kHz sine ─────────────────────────────
+
+    #[test]
+    fn peaking_6db_at_1khz_boosts_sine() {
+        let band = peaking(1000.0, 6.0);
+        let mut chain = EqChain::new(&[band], 44100, 1).unwrap();
+        let sr = 44100.0f32;
+        let n = 4096usize;
+        let mut samples: Vec<f32> = (0..n)
+            .map(|i| (2.0 * PI * 1000.0 * i as f32 / sr).sin())
+            .collect();
+        chain.process_interleaved(&mut samples);
+        // Measure peak in last quarter (filter has long settled)
+        let peak = samples[n * 3 / 4..].iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+        assert!(peak > 1.0, "expected peak > 1.0 for +6 dB peaking, got {peak}");
+    }
+}

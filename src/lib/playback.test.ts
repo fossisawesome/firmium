@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { get } from 'svelte/store'
 import {
-  queue, queueIdx, audioBridge, crossfadeEnabled, crossfadeDuration,
-  gaplessEnabled, repeatOne, repeatAll, trackDuration, currentPosition,
+  queue, queueIdx, audioBridge, trackDuration, currentPosition, isSeeking,
+  lyricsOpen, lyricsSynced, lyricsLines,
 } from './stores'
-import type { Song } from './types/tauri-commands'
+import type { Song, LyricLine } from './types/tauri-commands'
 
 vi.mock('./tauri', () => ({
   tauriInvoke: vi.fn().mockResolvedValue(undefined),
@@ -21,17 +21,14 @@ vi.mock('./localApi', () => ({
   findLocalMatch: vi.fn().mockResolvedValue(null),
 }))
 
-const flushPromises = async () => { for (let i = 0; i < 10; i++) await Promise.resolve() }
-
-const { wireBridgeEvents, startPositionTracking, stopPositionTracking } = await import('./playback')
+const { wireBridgeEvents, startPositionTracking, stopPositionTracking, activeLyricIdx } = await import('./playback')
 
 const song = (id: string): Song => ({ id, title: id, artist: '', album: '', albumId: '', artistId: '', duration: 0 } as unknown as Song)
 
-// Minimal AudioBridge stub: records position-event handlers and crossfade/preload calls.
+// Minimal AudioBridge stub: records position-event handlers.
 function makeBridge() {
   const handlers: Record<string, ((data: unknown) => void)[]> = {}
   return {
-    preloadedTrackId: null as string | null,
     on: vi.fn((event: string, cb: (data: unknown) => void) => {
       ;(handlers[event] ??= []).push(cb)
     }),
@@ -39,10 +36,6 @@ function makeBridge() {
       handlers[event] = (handlers[event] ?? []).filter(h => h !== cb)
     }),
     emit: (event: string, data: unknown) => handlers[event]?.forEach(h => h(data)),
-    startCrossfadeIn: vi.fn().mockResolvedValue(undefined),
-    preload: vi.fn().mockResolvedValue(undefined),
-    setVolume: vi.fn().mockResolvedValue(undefined),
-    play: vi.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -50,92 +43,67 @@ beforeEach(() => {
   stopPositionTracking()
   queue.set([song('a'), song('b')])
   queueIdx.set(0)
-  crossfadeEnabled.set(false)
-  gaplessEnabled.set(false)
-  repeatOne.set(false)
-  repeatAll.set(false)
-  crossfadeDuration.set(5)
   trackDuration.set(null)
   currentPosition.set(0)
+  isSeeking.set(false)
+  lyricsOpen.set(false)
+  lyricsSynced.set(false)
+  lyricsLines.set([])
+  activeLyricIdx.set(-1)
 })
 
-describe('position tracking — crossfade trigger', () => {
-  it('starts crossfade when within crossfadeDuration of the track end', async () => {
-    crossfadeEnabled.set(true)
+describe('position tracking — store mirroring', () => {
+  it('mirrors position and duration into the UI stores', () => {
     const bridge = makeBridge()
     audioBridge.set(bridge as never)
     wireBridgeEvents(bridge as never)
     startPositionTracking()
 
-    // 100s track, 5s crossfade window — not yet at the trigger point.
-    bridge.emit('position', { position: 90, duration: 100 })
-    expect(bridge.startCrossfadeIn).not.toHaveBeenCalled()
-
-    // Now within the last 5 seconds — should trigger exactly once.
-    bridge.emit('position', { position: 96, duration: 100 })
-    await flushPromises()
-    expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(1)
-
-    // Further updates must not re-trigger.
-    bridge.emit('position', { position: 98, duration: 100 })
-    await flushPromises()
-    expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('position tracking — gapless preload trigger', () => {
-  it('preloads the next track 30s before the end when gapless is enabled', async () => {
-    gaplessEnabled.set(true)
-    const bridge = makeBridge()
-    audioBridge.set(bridge as never)
-    wireBridgeEvents(bridge as never)
-    startPositionTracking()
-
-    // 100s track — preload window starts at 70s.
-    bridge.emit('position', { position: 60, duration: 100 })
-    await Promise.resolve()
-    expect(bridge.preload).not.toHaveBeenCalled()
-
-    bridge.emit('position', { position: 71, duration: 100 })
-    await flushPromises()
-    expect(bridge.preload).toHaveBeenCalledTimes(1)
-
-    bridge.emit('position', { position: 80, duration: 100 })
-    await flushPromises()
-    expect(bridge.preload).toHaveBeenCalledTimes(1)
+    bridge.emit('position', { position: 42, duration: 100 })
+    expect(get(currentPosition)).toBe(42)
+    expect(get(trackDuration)).toBe(100)
   })
 
-  it('does not preload when gapless is disabled', async () => {
-    gaplessEnabled.set(false)
+  it('does not overwrite position while seeking', () => {
     const bridge = makeBridge()
     audioBridge.set(bridge as never)
     wireBridgeEvents(bridge as never)
     startPositionTracking()
 
-    bridge.emit('position', { position: 71, duration: 100 })
-    await flushPromises()
-    expect(bridge.preload).not.toHaveBeenCalled()
+    isSeeking.set(true)
+    bridge.emit('position', { position: 42, duration: 100 })
+    expect(get(currentPosition)).toBe(0)
+  })
+
+  it('advances the active synced-lyric index when lyrics are open', () => {
+    const lines: LyricLine[] = [
+      { start: 0, value: 'one' },
+      { start: 5000, value: 'two' },
+      { start: 10000, value: 'three' },
+    ] as unknown as LyricLine[]
+    lyricsLines.set(lines)
+    lyricsSynced.set(true)
+    lyricsOpen.set(true)
+
+    const bridge = makeBridge()
+    audioBridge.set(bridge as never)
+    wireBridgeEvents(bridge as never)
+    startPositionTracking()
+
+    bridge.emit('position', { position: 6, duration: 100 })
+    expect(get(activeLyricIdx)).toBe(1)
   })
 })
 
 describe('startPositionTracking / stopPositionTracking', () => {
-  it('resets per-track flags so a new track can re-trigger crossfade and preload', async () => {
-    crossfadeEnabled.set(true)
+  it('detaches the handler so stale events no longer update stores', () => {
     const bridge = makeBridge()
     audioBridge.set(bridge as never)
     wireBridgeEvents(bridge as never)
-
     startPositionTracking()
-    bridge.emit('position', { position: 96, duration: 100 })
-    await flushPromises()
-    expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(1)
-
-    // Simulate moving to a new track: queue index advances, tracking restarts, flags reset.
-    queueIdx.set(0)
     stopPositionTracking()
-    startPositionTracking()
-    bridge.emit('position', { position: 96, duration: 100 })
-    await flushPromises()
-    expect(bridge.startCrossfadeIn).toHaveBeenCalledTimes(2)
+
+    bridge.emit('position', { position: 42, duration: 100 })
+    expect(get(currentPosition)).toBe(0)
   })
 })

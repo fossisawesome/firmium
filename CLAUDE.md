@@ -132,7 +132,7 @@ Desktop (Tauri/Rust/Svelte) and Android (Kotlin/Compose) implement same features
 ## Build & Run
 
 ### Prerequisites
-- Rust 1.70+ (for MSRV)
+- Rust 1.87+ (for MSRV; raised by `wgpu` 29, used by the GPU visualizer renderer)
 - Node.js 18+ (for npm)
 - On Linux: `libssl-dev`, `libxdo-dev`, `libxcb-render0-dev`, `libxcb-shape0-dev`, `libxcb-xfixes0-dev`, `libsecret-1-dev` for Tauri + keyring
 - On Windows: no extra system dependencies (rustls handles TLS, Windows Credential Manager built-in)

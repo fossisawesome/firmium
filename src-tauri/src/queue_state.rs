@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::commands::mappers::Song;
 use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter};
@@ -12,8 +14,14 @@ pub struct QueueStateInner {
     pub repeat_one: bool,
     pub repeat_all: bool,
     pub shuffle_enabled: bool,
+    // Indices played in the current shuffle pass — so each track plays once
+    // before any repeats. Cleared whenever the queue identity or shuffle state
+    // changes. Not part of the serialized snapshot.
+    pub shuffle_played: HashSet<usize>,
     pub crossfade_enabled: bool,
     pub crossfade_duration: f32,
+    // "linear" or "logarithmic" — shape of the crossfade volume ramp.
+    pub crossfade_curve: String,
     pub gapless_enabled: bool,
     pub replay_gain_enabled: bool,
     // Smart Radio: when the queue is exhausted, ask the frontend to seed and
@@ -42,8 +50,10 @@ impl QueueState {
                 repeat_one: false,
                 repeat_all: false,
                 shuffle_enabled: false,
+                shuffle_played: HashSet::new(),
                 crossfade_enabled: false,
                 crossfade_duration: 5.0,
+                crossfade_curve: "linear".to_string(),
                 gapless_enabled: true,
                 replay_gain_enabled: true,
                 auto_continue: false,
@@ -71,6 +81,7 @@ pub struct QueueStateSnapshot {
     pub shuffle_enabled: bool,
     pub crossfade_enabled: bool,
     pub crossfade_duration: f32,
+    pub crossfade_curve: String,
     pub gapless_enabled: bool,
     pub replay_gain_enabled: bool,
     pub volume: f32,
@@ -88,6 +99,7 @@ impl QueueStateInner {
             shuffle_enabled: self.shuffle_enabled,
             crossfade_enabled: self.crossfade_enabled,
             crossfade_duration: self.crossfade_duration,
+            crossfade_curve: self.crossfade_curve.clone(),
             gapless_enabled: self.gapless_enabled,
             replay_gain_enabled: self.replay_gain_enabled,
             volume: self.volume,

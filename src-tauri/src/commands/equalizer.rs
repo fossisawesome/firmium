@@ -56,12 +56,24 @@ pub struct EqFile {
 
 // ── DTOs returned to the frontend ───────────────────────────────────────────
 
+/// Single-profile TOML format used for files dropped into the import dir.
+#[derive(serde::Deserialize)]
+struct ImportedProfileFile {
+    name: String,
+    #[serde(rename = "type")]
+    kind: String,
+    bands: Vec<BandSpec>,
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileInfo {
     pub name: String,
     pub kind: String,
     pub bands: Vec<BandSpec>,
+    /// True for read-only profiles loaded from the import drop folder.
+    #[serde(default)]
+    pub imported: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -96,6 +108,29 @@ fn write_file<R: tauri::Runtime>(app: &tauri::AppHandle<R>, file: &EqFile) -> Re
     }
     let content = toml::to_string_pretty(file).map_err(|e| format!("Failed to serialize eq.toml: {e}"))?;
     std::fs::write(&path, content).map_err(|e| format!("Failed to write eq.toml: {e}"))
+}
+
+/// Drop folder for read-only imported profiles (`app_config_dir/eq-profiles/`).
+fn eq_profiles_import_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("eq-profiles"))
+}
+
+/// Read every `.toml` from the import dir as a single-profile file, skipping
+/// invalid files silently. Creates the dir if it doesn't exist yet.
+fn load_imported_profiles<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Vec<ProfileInfo> {
+    let Some(dir) = eq_profiles_import_dir(app) else { return vec![] };
+    let _ = std::fs::create_dir_all(&dir);
+    let Ok(entries) = std::fs::read_dir(&dir) else { return vec![] };
+    let mut result = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") { continue }
+        let Ok(content) = std::fs::read_to_string(&path) else { continue };
+        let Ok(p) = toml::from_str::<ImportedProfileFile>(&content) else { continue };
+        if p.name.trim().is_empty() { continue }
+        result.push(ProfileInfo { name: p.name, kind: p.kind, bands: p.bands, imported: true });
+    }
+    result
 }
 
 // ── Band conversion ─────────────────────────────────────────────────────────
@@ -170,8 +205,13 @@ pub fn get_eq_state<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>) -> EqSta
     let mut profiles: Vec<ProfileInfo> = file
         .profiles
         .into_iter()
-        .map(|(name, p)| ProfileInfo { name, kind: p.kind, bands: p.bands })
+        .map(|(name, p)| ProfileInfo { name, kind: p.kind, bands: p.bands, imported: false })
         .collect();
+    // Merge imported profiles; saved profiles win on name collision (mirrors themes).
+    let saved_names: std::collections::HashSet<String> = profiles.iter().map(|p| p.name.clone()).collect();
+    for p in load_imported_profiles(&app_handle) {
+        if !saved_names.contains(&p.name) { profiles.push(p); }
+    }
     profiles.sort_by_key(|a| a.name.to_lowercase());
 
     EqState { enabled: file.settings.enabled, profiles, default_device, active_profile, device_profiles }
@@ -187,6 +227,9 @@ pub fn save_eq_profile<R: tauri::Runtime>(
     if name.trim().is_empty() {
         return Err("Profile name cannot be empty".to_string());
     }
+    if load_imported_profiles(&app_handle).iter().any(|p| p.name == name) {
+        return Err("Imported profiles are read-only".to_string());
+    }
     let mut file = read_file(&app_handle);
     file.profiles.insert(name, Profile { kind, bands });
     write_file(&app_handle, &file)?;
@@ -196,6 +239,9 @@ pub fn save_eq_profile<R: tauri::Runtime>(
 
 #[tauri::command]
 pub fn delete_eq_profile<R: tauri::Runtime>(app_handle: tauri::AppHandle<R>, name: String) -> Result<(), String> {
+    if load_imported_profiles(&app_handle).iter().any(|p| p.name == name) {
+        return Err("Imported profiles are read-only".to_string());
+    }
     let mut file = read_file(&app_handle);
     file.profiles.remove(&name);
     // Drop device assignments that pointed at the deleted profile.

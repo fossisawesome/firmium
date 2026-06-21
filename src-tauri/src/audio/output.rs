@@ -84,9 +84,18 @@ fn pop_native_frame(ring: &mut VecDeque<f32>, channels: u16) -> Option<Vec<f32>>
 /// output rate, `step == 1.0` and this is an exact passthrough (no
 /// resampling, fully bit-perfect).
 fn pop_resampled_frame(ring: &mut VecDeque<f32>, state: &mut ResampleState, channels: u16, step: f64) -> Option<Vec<f32>> {
+    // Once drained and the ring is empty, the session has no more audio — report
+    // silence rather than repeating the last frame forever.
+    if state.drained && ring.is_empty() {
+        return None;
+    }
+
     if !state.initialized {
         state.current = pop_native_frame(ring, channels)?;
-        state.next = pop_native_frame(ring, channels).unwrap_or_else(|| state.current.clone());
+        state.next = pop_native_frame(ring, channels).unwrap_or_else(|| {
+            state.drained = true;
+            state.current.clone()
+        });
         state.pos = 0.0;
         state.initialized = true;
     }
@@ -101,7 +110,13 @@ fn pop_resampled_frame(ring: &mut VecDeque<f32>, state: &mut ResampleState, chan
     state.pos += step;
     while state.pos >= 1.0 {
         state.current = std::mem::take(&mut state.next);
-        state.next = pop_native_frame(ring, channels).unwrap_or_else(|| state.current.clone());
+        state.next = match pop_native_frame(ring, channels) {
+            Some(f) => f,
+            None => {
+                state.drained = true;
+                state.current.clone()
+            }
+        };
         state.pos -= 1.0;
     }
 

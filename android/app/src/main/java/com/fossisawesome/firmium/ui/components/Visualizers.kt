@@ -77,7 +77,7 @@ fun rememberVisualizerData(audioSessionId: Int, isPlaying: Boolean): VisualizerD
         val viz = try {
             Visualizer(audioSessionId).apply {
                 // Largest capture size for the best frequency/time resolution.
-                captureSize = (Visualizer.getCaptureSizeRange()[0] + Visualizer.getCaptureSizeRange()[1]) / 2
+                captureSize = Visualizer.getCaptureSizeRange()[1]
                 setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(v: Visualizer, wave: ByteArray, sr: Int) {
                         val wf = FloatArray(wave.size)

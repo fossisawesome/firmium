@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
-use rand::seq::SliceRandom;
+use rand::seq::{IndexedRandom, SliceRandom};
 use tauri::{AppHandle, State};
 
 use crate::audio::AudioPlayer;
@@ -137,6 +138,11 @@ pub(crate) async fn play_at(
     if let Some(ref old) = old_player_id {
         let _ = audio_player.stop(old);
     }
+    // A preloaded session exists but wasn't for this track (e.g. gapless preloaded
+    // the sequential next while shuffle jumped elsewhere) — drop it so it doesn't leak.
+    if let Some(ref pre) = preloaded_id {
+        let _ = audio_player.stop(pre);
+    }
 
     // 4. Resolve stream URL — async, no lock
     let stream_url = stream_url_for(&song, app, app_state).await?;
@@ -173,19 +179,154 @@ pub(crate) fn compute_next_idx(queue_idx: i32, queue_len: usize, repeat_all: boo
     }
 }
 
-/// Picks a random queue index excluding `current_idx`.
-pub(crate) fn random_idx_excluding(queue_len: usize, current_idx: usize) -> usize {
-    if queue_len <= 1 { return 0; }
-    let mut candidates: Vec<usize> = (0..queue_len).filter(|&i| i != current_idx).collect();
-    candidates.shuffle(&mut rand::rng());
-    candidates[0]
+/// Whether a shuffle pass has any track left to play after `current_idx`
+/// (an unplayed index, or any other index when repeat-all will reshuffle).
+/// Non-mutating — used to gate the crossfade trigger without consuming the pass.
+pub(crate) fn has_shuffle_next(
+    queue_len: usize,
+    current_idx: usize,
+    played: &HashSet<usize>,
+    repeat_all: bool,
+) -> bool {
+    if queue_len == 0 { return false; }
+    if repeat_all { return queue_len > 1; }
+    (0..queue_len).any(|i| i != current_idx && !played.contains(&i))
+}
+
+/// Picks the next shuffle index, marking `current_idx` played so each track
+/// plays once per pass. Returns None when the pass is exhausted and repeat-all
+/// is off. With repeat-all on, clears the pass and starts a fresh one (never
+/// immediately repeating the current track when others exist).
+pub(crate) fn next_shuffle_idx(
+    queue_len: usize,
+    current_idx: usize,
+    played: &mut HashSet<usize>,
+    repeat_all: bool,
+) -> Option<usize> {
+    if queue_len == 0 { return None; }
+    played.insert(current_idx);
+
+    let unplayed: Vec<usize> = (0..queue_len).filter(|i| !played.contains(i)).collect();
+    if let Some(&pick) = unplayed.choose(&mut rand::rng()) {
+        return Some(pick);
+    }
+
+    // Pass exhausted.
+    if !repeat_all {
+        return None;
+    }
+    played.clear();
+    played.insert(current_idx);
+    let candidates: Vec<usize> = (0..queue_len).filter(|&i| i != current_idx).collect();
+    candidates.choose(&mut rand::rng()).copied().or(Some(current_idx))
 }
 
 fn fisher_yates(songs: &mut [Song]) {
     songs.shuffle(&mut rand::rng());
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{compute_next_idx, has_shuffle_next, next_shuffle_idx};
+    use std::collections::HashSet;
+
+    // ── compute_next_idx ─────────────────────────────────────────────────────
+
+    #[test]
+    fn next_idx_last_track_repeat_all_wraps_to_zero() {
+        assert_eq!(compute_next_idx(4, 5, true), Some(0));
+    }
+
+    #[test]
+    fn next_idx_last_track_no_repeat_returns_none() {
+        assert_eq!(compute_next_idx(4, 5, false), None);
+    }
+
+    #[test]
+    fn next_idx_mid_queue_returns_next() {
+        assert_eq!(compute_next_idx(2, 5, false), Some(3));
+    }
+
+    #[test]
+    fn next_idx_empty_queue_returns_none() {
+        assert_eq!(compute_next_idx(0, 0, true), None);
+    }
+
+    #[test]
+    fn next_idx_single_track_repeat_all_wraps_to_zero() {
+        assert_eq!(compute_next_idx(0, 1, true), Some(0));
+    }
+
+    // ── next_shuffle_idx ──────────────────────────────────────────────────────
+
+    #[test]
+    fn shuffle_plays_each_track_once_then_ends() {
+        for _ in 0..200 {
+            let mut played = HashSet::new();
+            let mut cur = 0usize;
+            let mut seen = vec![cur];
+            for _ in 0..3 {
+                let n = next_shuffle_idx(4, cur, &mut played, false)
+                    .expect("pass not yet exhausted");
+                assert!(!seen.contains(&n), "shuffle repeated {n} before exhausting the pass");
+                seen.push(n);
+                cur = n;
+            }
+            assert_eq!(seen.len(), 4, "every track should play exactly once");
+            // Pass now exhausted, no repeat-all → ends.
+            assert_eq!(next_shuffle_idx(4, cur, &mut played, false), None);
+        }
+    }
+
+    #[test]
+    fn shuffle_repeat_all_reshuffles_without_immediate_repeat() {
+        for _ in 0..200 {
+            let mut played: HashSet<usize> = (0..4).collect();
+            let n = next_shuffle_idx(4, 2, &mut played, true);
+            assert!(n.is_some(), "repeat-all should start a fresh pass");
+            assert_ne!(n, Some(2), "must not immediately repeat the current track");
+        }
+    }
+
+    #[test]
+    fn shuffle_single_track_no_repeat_ends() {
+        let mut played = HashSet::new();
+        assert_eq!(next_shuffle_idx(1, 0, &mut played, false), None);
+    }
+
+    #[test]
+    fn shuffle_single_track_repeat_all_replays() {
+        let mut played = HashSet::new();
+        assert_eq!(next_shuffle_idx(1, 0, &mut played, true), Some(0));
+    }
+
+    // ── has_shuffle_next ──────────────────────────────────────────────────────
+
+    #[test]
+    fn has_shuffle_next_true_when_unplayed_remain() {
+        let played: HashSet<usize> = [0].into_iter().collect();
+        assert!(has_shuffle_next(4, 0, &played, false));
+    }
+
+    #[test]
+    fn has_shuffle_next_false_when_pass_exhausted() {
+        let played: HashSet<usize> = (0..4).collect();
+        assert!(!has_shuffle_next(4, 2, &played, false));
+    }
+
+    #[test]
+    fn has_shuffle_next_true_when_exhausted_but_repeat_all() {
+        let played: HashSet<usize> = (0..4).collect();
+        assert!(has_shuffle_next(4, 2, &played, true));
+    }
+}
+
 // ── Tauri commands ────────────────────────────────────────────────────────────
+
+/// Clamp an arbitrary curve string to the two supported values.
+pub(crate) fn normalize_crossfade_curve(curve: &str) -> String {
+    if curve == "logarithmic" { "logarithmic".to_string() } else { "linear".to_string() }
+}
 
 /// Restores persisted playback settings from localStorage on startup.
 /// Does not emit queue-state-changed — startup avoids the event race.
@@ -195,6 +336,7 @@ pub fn init_playback_settings(
     volume: f32,
     crossfade_enabled: bool,
     crossfade_duration: f32,
+    crossfade_curve: String,
     gapless_enabled: bool,
     replay_gain_enabled: bool,
     auto_continue: bool,
@@ -203,6 +345,7 @@ pub fn init_playback_settings(
     inner.volume = volume.clamp(0.0, 1.0);
     inner.crossfade_enabled = crossfade_enabled;
     inner.crossfade_duration = crossfade_duration.clamp(1.0, 12.0);
+    inner.crossfade_curve = normalize_crossfade_curve(&crossfade_curve);
     inner.gapless_enabled = gapless_enabled;
     inner.replay_gain_enabled = replay_gain_enabled;
     inner.auto_continue = auto_continue;
@@ -247,7 +390,12 @@ pub fn set_repeat_mode(
 
 #[tauri::command]
 pub fn toggle_shuffle(app: AppHandle, state: State<'_, Arc<QueueState>>) -> Result<(), String> {
-    { state.inner.lock().shuffle_enabled ^= true; }
+    {
+        let mut inner = state.inner.lock();
+        inner.shuffle_enabled ^= true;
+        // Start a fresh shuffle pass on every toggle.
+        inner.shuffle_played.clear();
+    }
     emit_queue_state(&app, &state);
     Ok(())
 }
@@ -264,6 +412,17 @@ pub fn set_crossfade_settings(
         inner.crossfade_enabled = enabled;
         inner.crossfade_duration = duration_secs.clamp(1.0, 12.0);
     }
+    emit_queue_state(&app, &state);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_crossfade_curve(
+    app: AppHandle,
+    state: State<'_, Arc<QueueState>>,
+    curve: String,
+) -> Result<(), String> {
+    { state.inner.lock().crossfade_curve = normalize_crossfade_curve(&curve); }
     emit_queue_state(&app, &state);
     Ok(())
 }
@@ -293,7 +452,29 @@ pub async fn set_queue(
         let mut inner = queue_state.inner.lock();
         inner.queue = songs;
         inner.shuffle_enabled = false;
+        inner.shuffle_played.clear();
     }
+    play_at(&app, &queue_state, &app_state, &audio_player, start_idx).await
+}
+
+/// Append songs to the end of the current queue and start playing the first
+/// appended track. Computes the insertion point under the lock so it can't race
+/// a `queue-state-changed` event (used by Smart Radio auto-continue).
+#[tauri::command]
+pub async fn append_and_play(
+    app: AppHandle,
+    queue_state: State<'_, Arc<QueueState>>,
+    app_state: State<'_, Arc<AppState>>,
+    audio_player: State<'_, Arc<AudioPlayer>>,
+    songs: Vec<Song>,
+) -> Result<(), String> {
+    if songs.is_empty() { return Ok(()); }
+    let start_idx = {
+        let mut inner = queue_state.inner.lock();
+        let start = inner.queue.len();
+        inner.queue.extend(songs);
+        start
+    };
     play_at(&app, &queue_state, &app_state, &audio_player, start_idx).await
 }
 
@@ -318,6 +499,7 @@ pub async fn set_queue_seamless(
     {
         let mut inner = queue_state.inner.lock();
         inner.queue = songs;
+        inner.shuffle_played.clear();
     }
 
     if let Some(mid) = match_idx {
@@ -348,6 +530,7 @@ pub async fn shuffle_and_play(
         let mut inner = queue_state.inner.lock();
         inner.queue = shuffled;
         inner.shuffle_enabled = true;
+        inner.shuffle_played.clear();
     }
     play_at(&app, &queue_state, &app_state, &audio_player, 0).await
 }
@@ -378,7 +561,11 @@ pub async fn queue_next(
     };
 
     let next_idx = if shuffle && queue_len > 1 {
-        random_idx_excluding(queue_len, queue_idx as usize)
+        let mut inner = queue_state.inner.lock();
+        match next_shuffle_idx(queue_len, queue_idx as usize, &mut inner.shuffle_played, repeat_all) {
+            Some(idx) => idx,
+            None => return Ok(()),
+        }
     } else if let Some(idx) = compute_next_idx(queue_idx, queue_len, repeat_all) {
         idx
     } else {

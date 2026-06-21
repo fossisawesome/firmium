@@ -3,8 +3,8 @@
 //! `process_chunk` is called inline from the decode-feeder for every decoded
 //! chunk of interleaved samples. It downmixes to mono and pushes samples into
 //! a shared ring buffer. A background task periodically reads that buffer,
-//! runs an FFT, applies per-bar smoothing, and emits `firmium:audio-analysis`
-//! events ({ bass, bars }) for the frontend to render via WebGL.
+//! runs an FFT, applies per-bar smoothing, and stores the latest `bass`/`bars`/
+//! `wave` results. The GPU renderer (`visualizer_gpu`) reads those in-process.
 //!
 //! The analysis task idles (no FFT work) whenever `enabled` is false, so
 //! there's no overhead when the visualizer panel is closed.
@@ -17,7 +17,6 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use rustfft::num_complex::Complex32;
 use rustfft::FftPlanner;
-use tauri::{AppHandle, Emitter};
 
 const BUFFER_CAPACITY: usize = 8192;
 const FFT_SIZE: usize = 2048;
@@ -32,6 +31,10 @@ pub struct VisualizerState {
     buffer: Mutex<VecDeque<f32>>,
     smooth_bars: Mutex<Vec<f32>>,
     smooth_bass: Mutex<f32>,
+    // Latest analysis results, read in-process by the GPU renderer.
+    last_bass: Mutex<f32>,
+    last_bars: Mutex<Vec<f32>>,
+    last_wave: Mutex<Vec<f32>>,
 }
 
 impl VisualizerState {
@@ -42,6 +45,9 @@ impl VisualizerState {
             buffer: Mutex::new(VecDeque::with_capacity(BUFFER_CAPACITY)),
             smooth_bars: Mutex::new(vec![0.0; BAR_COUNT]),
             smooth_bass: Mutex::new(0.0),
+            last_bass: Mutex::new(0.0),
+            last_bars: Mutex::new(vec![0.0; BAR_COUNT]),
+            last_wave: Mutex::new(vec![0.0; WAVE_POINTS]),
         }
     }
 
@@ -51,7 +57,20 @@ impl VisualizerState {
             self.buffer.lock().clear();
             *self.smooth_bars.lock() = vec![0.0; BAR_COUNT];
             *self.smooth_bass.lock() = 0.0;
+            *self.last_bass.lock() = 0.0;
+            *self.last_bars.lock() = vec![0.0; BAR_COUNT];
+            *self.last_wave.lock() = vec![0.0; WAVE_POINTS];
         }
+    }
+
+    /// Snapshot of the most recent analysis (bass, 32 bars, 128 wave points)
+    /// for the GPU renderer to draw.
+    pub fn snapshot(&self) -> (f32, Vec<f32>, Vec<f32>) {
+        (
+            *self.last_bass.lock(),
+            self.last_bars.lock().clone(),
+            self.last_wave.lock().clone(),
+        )
     }
 
     fn push_sample(&self, sample: f32, sample_rate: u32) {
@@ -75,7 +94,7 @@ pub fn process_chunk(samples: &[f32], channels: u16, sample_rate: u32, state: &V
     }
 }
 
-pub fn spawn_analysis_task(app_handle: AppHandle, state: Arc<VisualizerState>) {
+pub fn spawn_analysis_task(state: Arc<VisualizerState>) {
     tauri::async_runtime::spawn(async move {
         let mut planner = FftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(FFT_SIZE);
@@ -138,11 +157,9 @@ pub fn spawn_analysis_task(app_handle: AppHandle, state: Arc<VisualizerState>) {
                 .map(|i| samples[FFT_SIZE - 1 - i * step].clamp(-1.0, 1.0))
                 .collect();
 
-            let _ = app_handle.emit("firmium:audio-analysis", serde_json::json!({
-                "bass": bass_out,
-                "bars": bars_out,
-                "wave": wave_out,
-            }));
+            *state.last_bass.lock() = bass_out;
+            *state.last_bars.lock() = bars_out;
+            *state.last_wave.lock() = wave_out;
         }
     });
 }

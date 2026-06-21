@@ -73,6 +73,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     fun skipToIndex(index: Int) = controller.skipToIndex(index)
+    fun addToQueue(song: Song) = controller.addToQueue(song)
     fun pause() = controller.pause()
     fun resume() = controller.resume()
     fun togglePlayPause() = controller.togglePlayPause()
@@ -88,6 +89,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleShuffle() = controller.toggleShuffle()
     fun setCrossfadeEnabled(enabled: Boolean) = controller.setCrossfadeEnabled(enabled)
     fun setCrossfadeDuration(ms: Int) = controller.setCrossfadeDuration(ms)
+    fun setCrossfadeCurve(curve: String) = controller.setCrossfadeCurve(curve)
     fun setGaplessEnabled(enabled: Boolean) = controller.setGaplessEnabled(enabled)
     fun setReplayGainEnabled(enabled: Boolean) = controller.setReplayGainEnabled(enabled)
     fun setVisualizerEnabled(enabled: Boolean) = controller.setVisualizerEnabled(enabled)

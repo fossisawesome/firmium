@@ -27,17 +27,19 @@ Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) mu
 
 ## Features
 
-| Feature | Desktop | Android |
-| --- | :---: | :---: |
-| Native audio engine (no Electron/Chromium audio stack) | Rodio | ExoPlayer |
-| Crossfade between tracks with configurable overlap | ✅ | ✅ |
-| Credentials stored in OS keyring / Keystore — never plaintext on disk | ✅ | ✅ |
-| Lock screen controls & persistent playback notification | — | ✅ |
-| Synced and unsynced lyrics | ✅ | ✅ |
-| 18 built-in color themes + custom user themes | ✅ | ✅ |
-| Cover art caching | ✅ | ✅ |
-| Per-device volume control | ✅ | ✅ |
-| Full OpenSubsonic API support (scrobbling, search, playlists, more) | ✅ | ✅ |
+- **Gapless & crossfade playback** — next track preloads silently; configurable 1–12 s crossfade
+- **Equalizer** — 10-band graphic and parametric modes, saveable profiles, per-device assignment
+- **Synced lyrics** — LRC line highlighting, word-by-word karaoke animation, LRCLIB fallback
+- **Smart radio & mixes** — Start Radio from any track/album/artist; generate queues by BPM/genre; auto-continues after queue ends
+- **Audio visualizer** — Orb, Bars, and Oscilloscope modes, colors pulled from cover art
+- **Offline library** — download tracks or full albums, plays local copy automatically when available
+- **Cross-device queue sync** — resume exactly where you left off on any device
+- **ReplayGain normalization** and bit-perfect audio mode (desktop)
+- **18+ color themes** including Gruvbox, Tokyo Night, Dracula, Catppuccin, and more — plus custom TOML themes (desktop)
+- **Listening stats & Recap** — local play history with swipeable Recap cards (top tracks, artists, genres, streaks) across custom date ranges; export as CSV or JSON
+- **Android Auto & Wear OS** — full library browsing, voice search, and transport controls in the car and on your wrist
+- **Credentials in OS keyring** — never stored as plaintext; supports multiple saved servers
+- **Scrobbling** — Last.fm (via server) and ListenBrainz
 
 ## Gallery
 

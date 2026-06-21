@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,9 +26,11 @@ fun PlaylistDetailScreen(
     onRemoveTrack: (trackId: String, index: Int) -> Unit,
     onMoveTrack: (from: Int, to: Int) -> Unit,
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
+    downloadedSongIds: Set<String> = emptySet(),
     onBack: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
+    val allDownloaded = tracks.isNotEmpty() && downloadedSongIds.size >= tracks.size
 
     Column(modifier = Modifier.fillMaxSize()) {
         FirmiumDetailHeader(
@@ -35,12 +38,19 @@ fun PlaylistDetailScreen(
             onBack = onBack,
             action = if (tracks.isNotEmpty()) {
                 {
-                    FirmiumIconButton(
-                        onClick = { onPlayAll(tracks, 0) },
-                        modifier = Modifier.size(44.dp),
-                    ) {
-                        FirmiumIcon(Icons.Default.PlayArrow, contentDescription = "Play all",
-                            tint = colors.accent)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (allDownloaded) {
+                            FirmiumIcon(Icons.Default.DownloadDone, contentDescription = "Downloaded",
+                                tint = colors.accent, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        FirmiumIconButton(
+                            onClick = { onPlayAll(tracks, 0) },
+                            modifier = Modifier.size(44.dp),
+                        ) {
+                            FirmiumIcon(Icons.Default.PlayArrow, contentDescription = "Play all",
+                                tint = colors.accent)
+                        }
                     }
                 }
             } else null,
@@ -66,6 +76,7 @@ fun PlaylistDetailScreen(
                         isCurrentlyPlaying = false,
                         onClick = { onPlayAll(tracks, index) },
                         onDownloadClick = onDownloadTrack?.invoke(song),
+                        isDownloaded = song.id in downloadedSongIds,
                         onMoveUp = { onMoveTrack(index, index - 1) },
                         onMoveDown = { onMoveTrack(index, index + 1) },
                         canMoveUp = index > 0,

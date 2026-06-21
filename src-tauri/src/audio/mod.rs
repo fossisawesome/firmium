@@ -26,6 +26,7 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::visualizer::VisualizerState;
+use crate::visualizer_gpu::GpuControl;
 use crate::{AudioDevice, PlaybackState};
 
 use eq::{EqBand, EqShared};
@@ -59,6 +60,8 @@ pub struct AudioPlayer {
     crossfade_in_progress: AtomicBool,
     /// Shared state for the audio visualizer (sample ring buffer + analysis toggle).
     pub(crate) visualizer: Arc<VisualizerState>,
+    /// Control surface for the GPU visualizer renderer (mode, palette, frame channel).
+    pub(crate) gpu: Arc<GpuControl>,
     /// "off" | "relaxed" | "strict" — controls whether the output stream is reopened
     /// to match each track's native sample rate. "off" skips reopening entirely.
     bit_perfect_mode: parking_lot::Mutex<String>,
@@ -78,7 +81,8 @@ impl AudioPlayer {
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
         let visualizer = Arc::new(VisualizerState::new());
-        crate::visualizer::spawn_analysis_task(app_handle.clone(), Arc::clone(&visualizer));
+        crate::visualizer::spawn_analysis_task(Arc::clone(&visualizer));
+        let gpu = Arc::new(GpuControl::new());
 
         let eq = Arc::new(EqShared::new(
             crate::commands::equalizer::resolve_runtime(&app_handle),
@@ -91,6 +95,7 @@ impl AudioPlayer {
             app_handle,
             crossfade_in_progress: AtomicBool::new(false),
             visualizer,
+            gpu,
             bit_perfect_mode: parking_lot::Mutex::new("relaxed".to_string()),
             eq,
         })
@@ -108,6 +113,26 @@ impl AudioPlayer {
     /// Enable or disable the audio visualizer analysis task.
     pub fn set_visualizer_enabled(&self, enabled: bool) {
         self.visualizer.set_enabled(enabled);
+    }
+
+    /// Switch the GPU renderer mode ("orb" | "bars" | "oscilloscope").
+    pub fn set_visualizer_mode(&self, mode: &str) {
+        self.gpu.set_mode(mode);
+    }
+
+    /// Update the renderer palette (three RGB triples, 0..1).
+    pub fn set_visualizer_palette(&self, palette: [[f32; 3]; 3]) {
+        self.gpu.set_palette(palette);
+    }
+
+    /// Start streaming visualizer frames to `channel` at `width`x`height`.
+    pub fn start_visualizer_renderer(&self, channel: tauri::ipc::Channel<tauri::ipc::InvokeResponseBody>, width: u32, height: u32) {
+        crate::visualizer_gpu::start(Arc::clone(&self.gpu), Arc::clone(&self.visualizer), channel, width, height);
+    }
+
+    /// Pause the GPU renderer and drop the frame channel.
+    pub fn stop_visualizer_renderer(&self) {
+        self.gpu.stop();
     }
 
     pub fn set_bit_perfect_mode(&self, mode: String) {
@@ -494,8 +519,16 @@ impl AudioPlayer {
         fade_duration_ms: u64,
         target_volume: f32,
         replay_gain_db: Option<f32>,
+        curve: &str,
     ) -> Result<PlayerId, String> {
         self_arc.crossfade_in_progress.store(true, Ordering::Relaxed);
+
+        // Map a 0.0–1.0 ramp position to a volume factor. Logarithmic approximates
+        // equal-power (perceptual) fades; linear keeps the raw position.
+        fn curve_gain(t: f32, logarithmic: bool) -> f32 {
+            if logarithmic { 10f32.powf((t - 1.0) * 2.0) } else { t }
+        }
+        let logarithmic = curve == "logarithmic";
 
         let new_player_id = Self::start_session(self_arc, stream_url, track_id, false, replay_gain_db)?;
 
@@ -519,11 +552,11 @@ impl AudioPlayer {
                 let sessions = player.sessions.read();
                 if old_exists {
                     if let Some(session) = sessions.get(&old_id) {
-                        *session.volume.lock() = (target_volume * (1.0 - progress)).max(0.0);
+                        *session.volume.lock() = (target_volume * curve_gain(1.0 - progress, logarithmic)).max(0.0);
                     }
                 }
                 if let Some(session) = sessions.get(&new_id) {
-                    *session.volume.lock() = target_volume * progress;
+                    *session.volume.lock() = target_volume * curve_gain(progress, logarithmic);
                 }
             }
 

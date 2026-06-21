@@ -83,6 +83,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -110,7 +111,7 @@ jobs:
             patchelf
 
       - name: Install npm dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build frontend
         run: npm run build
@@ -132,11 +133,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4

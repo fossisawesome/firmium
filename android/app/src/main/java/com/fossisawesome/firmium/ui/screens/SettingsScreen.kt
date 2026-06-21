@@ -1,7 +1,10 @@
 package com.fossisawesome.firmium.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -37,19 +40,28 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.audio.PlayerState
+import com.fossisawesome.firmium.data.db.PlayHistorySummary
 import com.fossisawesome.firmium.data.eq.EqBand
 import com.fossisawesome.firmium.data.eq.EqProfile
 import com.fossisawesome.firmium.data.eq.TomlEqParser
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.SecureStorage
+import com.fossisawesome.firmium.ui.ShareUtils
 import com.fossisawesome.firmium.ui.components.*
-import com.fossisawesome.firmium.ui.theme.ALL_THEMES
+import android.widget.Toast
+import com.fossisawesome.firmium.ui.theme.DEFAULT_THEME_ID
+import com.fossisawesome.firmium.ui.theme.FirmiumTheme
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.allThemes
+import com.fossisawesome.firmium.ui.theme.deleteImportedTheme
+import com.fossisawesome.firmium.ui.theme.importThemeFromUri
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // Settings screen — category list → sub-panel drill-down, exact port of MobileSettings.svelte.
 @Composable
@@ -68,6 +80,7 @@ fun SettingsScreen(
     downloadFormat: String,
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
+    onCrossfadeCurveChange: (String) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
@@ -84,6 +97,7 @@ fun SettingsScreen(
     onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
     onLogout: () -> Unit,
+    onViewRecap: () -> Unit,
 ) {
     FirmiumSettingsScreen(
         playerState = playerState,
@@ -100,6 +114,7 @@ fun SettingsScreen(
         downloadFormat = downloadFormat,
         onCrossfadeToggle = onCrossfadeToggle,
         onCrossfadeDurationChange = onCrossfadeDurationChange,
+        onCrossfadeCurveChange = onCrossfadeCurveChange,
         onGaplessToggle = onGaplessToggle,
         onReplayGainToggle = onReplayGainToggle,
         onThemeSelected = onThemeSelected,
@@ -116,6 +131,7 @@ fun SettingsScreen(
         onClearCache = onClearCache,
         onResetSettings = onResetSettings,
         onLogout = onLogout,
+        onViewRecap = onViewRecap,
     )
 }
 
@@ -129,6 +145,7 @@ private val CATEGORIES = listOf(
     Category("playback",   "Playback",   Icons.Default.PlayArrow),
     Category("equalizer",  "Equalizer",  Icons.Default.GraphicEq),
     Category("downloads",  "Downloads",  Icons.Default.Download),
+    Category("stats",      "Stats Export", Icons.Default.BarChart),
     Category("services",   "Services",   Icons.Default.Language),
     Category("account",    "Account",    Icons.Default.Person),
     Category("about",      "About",      Icons.Default.Info),
@@ -160,6 +177,7 @@ private fun FirmiumSettingsScreen(
     downloadFormat: String,
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
+    onCrossfadeCurveChange: (String) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
@@ -176,6 +194,7 @@ private fun FirmiumSettingsScreen(
     onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
     onLogout: () -> Unit,
+    onViewRecap: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     val border = colors.border
@@ -293,6 +312,7 @@ private fun FirmiumSettingsScreen(
                             playerState = playerState,
                             onCrossfadeToggle = onCrossfadeToggle,
                             onCrossfadeDurationChange = onCrossfadeDurationChange,
+                            onCrossfadeCurveChange = onCrossfadeCurveChange,
                             onGaplessToggle = onGaplessToggle,
                             onReplayGainToggle = onReplayGainToggle,
                         )
@@ -301,6 +321,7 @@ private fun FirmiumSettingsScreen(
                             downloadFormat = downloadFormat,
                             onDownloadFormatSelected = onDownloadFormatSelected,
                         )
+                        "stats" -> FirmiumStatsPanel(onViewRecap = onViewRecap)
                         "services" -> FirmiumServicesPanel(
                             lrclibEnabled = lrclibEnabled,
                             lyricsWordFillEnabled = lyricsWordFillEnabled,
@@ -372,12 +393,63 @@ private fun FirmiumAppearancePanel(
     onVisualizerToggle: (Boolean) -> Unit,
     onVisualizerTypeSelected: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     val colors = LocalFirmiumColors.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) onVisualizerToggle(true) }
+
+    val handleVisualizerToggle = { enabled: Boolean ->
+        if (!enabled) {
+            onVisualizerToggle(false)
+        } else {
+            val already = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            if (already) onVisualizerToggle(true)
+            else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+    // Bumped after import/delete to recompute the theme list from disk.
+    var themesRefresh by remember { mutableIntStateOf(0) }
+    val themes = remember(themesRefresh) { allThemes(context) }
+
+    val themeImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { importThemeFromUri(context, uri) }
+            val msg = result.fold(
+                onSuccess = { "Theme imported" },
+                onFailure = { it.message ?: "Import failed" },
+            )
+            themesRefresh++
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Color Theme", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
             color = colors.muted, modifier = Modifier.padding(bottom = 4.dp))
-        ThemeDropdown(currentThemeId = currentThemeId, onThemeSelected = onThemeSelected)
+        ThemeDropdown(
+            currentThemeId = currentThemeId,
+            themes = themes,
+            onThemeSelected = onThemeSelected,
+            onDeleteImported = { theme ->
+                theme.sourceFile?.let { deleteImportedTheme(context, it) }
+                if (currentThemeId == theme.id) onThemeSelected(DEFAULT_THEME_ID)
+                themesRefresh++
+                Toast.makeText(context, "Theme deleted", Toast.LENGTH_SHORT).show()
+            },
+        )
+        FirmiumTextButton(onClick = { themeImportLauncher.launch("*/*") }) {
+            Text("Import theme", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+        }
+        Text("Import a .toml theme file. The same format works on desktop and Android.",
+            fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
 
         Text("Visualizer", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
             color = colors.muted, modifier = Modifier.padding(top = 8.dp))
@@ -389,7 +461,7 @@ private fun FirmiumAppearancePanel(
                     fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
             }
             Spacer(Modifier.width(12.dp))
-            FirmiumSwitch(checked = visualizerEnabled, onCheckedChange = onVisualizerToggle)
+            FirmiumSwitch(checked = visualizerEnabled, onCheckedChange = handleVisualizerToggle)
         }
         if (visualizerEnabled) {
             VisualizerDropdown(visualizerType = visualizerType, onTypeSelected = onVisualizerTypeSelected)
@@ -462,6 +534,10 @@ private fun FirmiumDownloadsPanel(
     onDownloadFormatSelected: (String) -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
+    val context = LocalContext.current
+    val app = context.applicationContext as FirmiumApplication
+    val progress by app.downloadManager.downloadAllState.collectAsState()
+
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Download Format", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
@@ -471,7 +547,104 @@ private fun FirmiumDownloadsPanel(
             fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
         )
         FormatDropdown(downloadFormat = downloadFormat, onFormatSelected = onDownloadFormatSelected)
+
+        // Whole-library download — only meaningful when connected to a server.
+        if (app.auth.isAuthenticated) {
+            Spacer(Modifier.height(8.dp))
+            Text("Offline Library", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                color = colors.muted)
+            Text(
+                "Download every album and track from the server to this device for offline playback.",
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+            )
+            val statusText = when {
+                progress.running && progress.total > 0 -> "Downloading ${progress.done}/${progress.total}…"
+                progress.running -> "Preparing…"
+                progress.error != null -> "Failed: ${progress.error}"
+                progress.finished -> "Library downloaded (${progress.done} tracks)"
+                else -> null
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (progress.running) colors.surface2 else colors.accent)
+                    .clickable(enabled = !progress.running) {
+                        app.downloadManager.startDownloadAll(app.api, downloadFormat)
+                    }
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (progress.running) "Downloading…" else "Download entire library",
+                    fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                    color = if (progress.running) colors.muted else Color.Black,
+                )
+            }
+            if (statusText != null) {
+                Text(statusText, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    color = if (progress.error != null) colors.error else colors.muted)
+            }
+        }
     }
+}
+
+// Self-contained Stats Export panel — reads the local play-history repository directly
+// (FirmiumApplication.playHistory) and shares exports via the system share sheet.
+@Composable
+private fun FirmiumStatsPanel(onViewRecap: () -> Unit) {
+    val colors = LocalFirmiumColors.current
+    val context = LocalContext.current
+    val app = context.applicationContext as FirmiumApplication
+    val scope = rememberCoroutineScope()
+
+    var summary by remember { mutableStateOf<PlayHistorySummary?>(null) }
+    LaunchedEffect(Unit) { summary = runCatching { app.playHistory.summary() }.getOrNull() }
+
+    val summaryText = summary?.let { s ->
+        val h = s.totalSeconds / 3600
+        val m = (s.totalSeconds % 3600) / 60
+        val dur = if (h > 0) "${h}h ${m}m" else "${m}m"
+        "${s.totalPlays} plays · $dur · ${s.uniqueTracks} tracks · ${s.uniqueArtists} artists"
+    } ?: "Loading…"
+
+    FirmiumSettingsRow("Listening Summary", summaryText) {}
+
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onViewRecap() }.padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Firmium Recap", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+            Spacer(Modifier.height(2.dp))
+            Text("A swipeable, shareable recap of your listening", fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, color = colors.muted)
+        }
+        Text("View", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+    }
+    FirmiumDivider()
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Text("Export Play History", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+        Spacer(Modifier.height(2.dp))
+        Text("Share your full local play history as a file", fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace, color = colors.muted)
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FirmiumTextButton(onClick = {
+                scope.launch {
+                    val csv = app.playHistory.exportCsv()
+                    ShareUtils.shareText(context, "firmium-play-history.csv", csv, "text/csv")
+                }
+            }) { Text("Export CSV", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+            FirmiumTextButton(onClick = {
+                scope.launch {
+                    val json = app.playHistory.exportJson()
+                    ShareUtils.shareText(context, "firmium-play-history.json", json, "application/json")
+                }
+            }) { Text("Export JSON", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+        }
+    }
+    FirmiumDivider()
 }
 
 @Composable
@@ -534,11 +707,74 @@ private fun FormatDropdown(downloadFormat: String, onFormatSelected: (String) ->
     }
 }
 
+private val CURVE_OPTIONS = listOf("linear" to "Linear", "logarithmic" to "Logarithmic")
+
+@Composable
+private fun CurveDropdown(curve: String, onCurveSelected: (String) -> Unit) {
+    val colors = LocalFirmiumColors.current
+    val current = CURVE_OPTIONS.find { it.first == curve } ?: CURVE_OPTIONS.first()
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(6.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(current.second, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                color = colors.text, modifier = Modifier.weight(1f))
+            FirmiumIcon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp),
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .background(colors.surface),
+            ) {
+                CURVE_OPTIONS.forEachIndexed { i, (id, label) ->
+                    if (i > 0) FirmiumDivider(color = colors.border)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onCurveSelected(id); expanded = false }
+                            .background(if (id == curve) colors.surface2.copy(alpha = 0.5f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            label, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            color = if (id == curve) colors.accent else colors.text,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (id == curve) {
+                            FirmiumIcon(Icons.Default.Check, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun FirmiumPlaybackPanel(
     playerState: PlayerState,
     onCrossfadeToggle: (Boolean) -> Unit,
     onCrossfadeDurationChange: (Int) -> Unit,
+    onCrossfadeCurveChange: (String) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
 ) {
@@ -575,6 +811,16 @@ private fun FirmiumPlaybackPanel(
                 valueRange = 1000f..12000f,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+        FirmiumDivider()
+
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            Text("Crossfade Curve", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Spacer(Modifier.height(2.dp))
+            Text("Linear blends evenly; Logarithmic approximates an equal-power fade",
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Spacer(Modifier.height(8.dp))
+            CurveDropdown(curve = playerState.crossfadeCurve, onCurveSelected = onCrossfadeCurveChange)
         }
         FirmiumDivider()
     }
@@ -943,9 +1189,14 @@ private fun FirmiumAboutPanel(
 // Dropdown selector matching the desktop version — shows current theme in a bordered row,
 // expands to an inline scrollable list when tapped. Closes after selection.
 @Composable
-private fun ThemeDropdown(currentThemeId: String, onThemeSelected: (String) -> Unit) {
+private fun ThemeDropdown(
+    currentThemeId: String,
+    themes: List<FirmiumTheme>,
+    onThemeSelected: (String) -> Unit,
+    onDeleteImported: (FirmiumTheme) -> Unit,
+) {
     val colors = LocalFirmiumColors.current
-    val currentTheme = ALL_THEMES.find { it.id == currentThemeId } ?: ALL_THEMES.first()
+    val currentTheme = themes.find { it.id == currentThemeId } ?: themes.first()
     var expanded by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -984,7 +1235,7 @@ private fun ThemeDropdown(currentThemeId: String, onThemeSelected: (String) -> U
                     .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
                     .background(colors.surface),
             ) {
-                ALL_THEMES.forEachIndexed { i, theme ->
+                themes.forEachIndexed { i, theme ->
                     if (i > 0) FirmiumDivider(color = colors.border)
                     Row(
                         modifier = Modifier
@@ -1009,6 +1260,16 @@ private fun ThemeDropdown(currentThemeId: String, onThemeSelected: (String) -> U
                         if (theme.id == currentThemeId) {
                             FirmiumIcon(Icons.Default.Check, contentDescription = null,
                                 tint = colors.accent, modifier = Modifier.size(14.dp))
+                        }
+                        // Imported themes can be removed; built-ins cannot.
+                        if (theme.isImported && theme.sourceFile != null) {
+                            FirmiumIcon(
+                                Icons.Default.Delete, contentDescription = "Delete theme",
+                                tint = colors.muted,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { onDeleteImported(theme) },
+                            )
                         }
                     }
                 }

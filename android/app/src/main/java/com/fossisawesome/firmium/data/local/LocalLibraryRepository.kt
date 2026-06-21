@@ -100,6 +100,24 @@ class LocalLibraryRepository(private val context: Context) {
         }
     }
 
+    // True if this song has a local copy (already downloaded). `local:` songs are always local.
+    suspend fun isDownloaded(song: Song): Boolean =
+        song.id.startsWith("local:") || findLocalMatch(song.title, song.artist, song.album) != null
+
+    // Of the given songs, returns the set of ids that have a local copy. Scans once, then matches
+    // in memory — used to mark per-track and whole-album/playlist downloaded state in the UI.
+    suspend fun downloadedIds(songs: List<Song>): Set<String> {
+        if (songs.isEmpty()) return emptySet()
+        val locals = ensureScanned().allSongs
+        return songs.filter { song ->
+            song.id.startsWith("local:") || locals.any { local ->
+                local.title.equals(song.title, ignoreCase = true) &&
+                (local.album.equals(song.album, ignoreCase = true) ||
+                 local.artist.equals(song.artist, ignoreCase = true))
+            }
+        }.map { it.id }.toSet()
+    }
+
     // Resolves a `local:<hash>` song id to its MediaStore content URI, for ExoPlayer.
     suspend fun getTrackUri(songId: String): Uri? = ensureScanned().trackUris[songId]
 

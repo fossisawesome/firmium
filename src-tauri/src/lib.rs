@@ -21,6 +21,7 @@ pub struct AudioDevice {
 mod audio;
 use audio::AudioPlayer;
 mod visualizer;
+mod visualizer_gpu;
 mod commands;
 use commands::*;
 mod state;
@@ -28,6 +29,8 @@ use state::AppState;
 mod queue_state;
 use queue_state::QueueState;
 mod queue_manager;
+mod db;
+use db::PlayHistory;
 
 // ============================================================================
 // APPLICATION ENTRY POINT
@@ -38,7 +41,8 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init());
 
     builder
         .setup(move |_app| {
@@ -54,6 +58,13 @@ pub fn run() {
                 Arc::clone(&app_state),
                 Arc::clone(&audio_player),
             );
+
+            // Local play-history store. A failure here (e.g. unwritable data dir)
+            // must not crash the app, so log and skip — stats features no-op without it.
+            match PlayHistory::new(_app.handle()) {
+                Ok(history) => { _app.manage(history); }
+                Err(e) => eprintln!("Play history DB init failed: {e}"),
+            }
 
             _app.manage(audio_player);
             _app.manage(app_state);
@@ -92,6 +103,10 @@ pub fn run() {
             list_audio_devices,
             crossfade_to,
             set_visualizer_enabled,
+            set_visualizer_mode,
+            set_visualizer_palette,
+            start_visualizer_renderer,
+            stop_visualizer_renderer,
             set_bit_perfect_mode,
             // Equalizer
             get_eq_state,
@@ -158,10 +173,17 @@ pub fn run() {
             // Downloads
             download_track,
             download_album,
+            // Play history stats
+            get_recap_stats,
+            get_play_history_summary,
+            export_play_history,
+            save_text_file,
+            save_binary_file,
             // Queue management
             init_playback_settings,
             set_queue,
             set_queue_seamless,
+            append_and_play,
             shuffle_and_play,
             play_queue_index,
             queue_next,
@@ -172,6 +194,7 @@ pub fn run() {
             set_repeat_mode,
             toggle_shuffle,
             set_crossfade_settings,
+            set_crossfade_curve,
             set_gapless_enabled,
             set_replay_gain_enabled,
             set_auto_continue,

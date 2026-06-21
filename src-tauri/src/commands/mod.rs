@@ -13,6 +13,7 @@ pub mod subsonic;
 pub mod local_library;
 pub mod downloads;
 pub mod listenbrainz;
+pub mod stats;
 
 pub use themes::list_themes;
 pub use mappers::{map_albums, map_artists, map_songs};
@@ -23,9 +24,9 @@ pub use lyrics::{parse_lrc, fetch_lrclib_lyrics};
 pub use cover_cache::{get_cover_art, clear_cover_cache};
 pub use cover_colors::{extract_cover_colors, extract_cover_colors_from_path};
 pub use queue::{
-    init_playback_settings, set_queue, set_queue_seamless, shuffle_and_play, play_queue_index,
+    init_playback_settings, set_queue, set_queue_seamless, append_and_play, shuffle_and_play, play_queue_index,
     queue_next, queue_prev, toggle_play, seek_queue, set_queue_volume,
-    set_repeat_mode, toggle_shuffle, set_crossfade_settings, set_gapless_enabled, set_replay_gain_enabled,
+    set_repeat_mode, toggle_shuffle, set_crossfade_settings, set_crossfade_curve, set_gapless_enabled, set_replay_gain_enabled,
     set_auto_continue,
 };
 pub use subsonic::{
@@ -41,7 +42,8 @@ pub use playback::{
     play_stream, preload_stream, pause_playback, resume_playback, stop_playback,
     set_volume, get_volume, get_playback_state, is_playback_finished, get_track_duration,
     get_current_position, seek_position, list_audio_devices, crossfade_to,
-    set_visualizer_enabled, set_bit_perfect_mode,
+    set_visualizer_enabled, set_visualizer_mode, set_visualizer_palette,
+    start_visualizer_renderer, stop_visualizer_renderer, set_bit_perfect_mode,
 };
 pub use local_library::{
     get_local_albums, get_local_artists, get_local_album_tracks, get_local_album_track_keys, get_local_artist_details,
@@ -50,6 +52,7 @@ pub use local_library::{
     import_local_files, find_local_match, prewarm_local_library,
 };
 pub use downloads::{download_track, download_album};
+pub use stats::{get_recap_stats, get_play_history_summary, export_play_history, save_text_file, save_binary_file};
 pub use equalizer::{
     get_eq_state, save_eq_profile, delete_eq_profile, set_eq_active_profile,
     set_eq_bands, set_eq_enabled,
