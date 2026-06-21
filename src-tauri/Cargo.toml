@@ -21,7 +21,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # rustls added so Android builds don't need system OpenSSL; harmless on desktop.
 reqwest = { version = "0.13.4", features = ["json", "stream", "blocking", "rustls"] }
-symphonia = { version = "0.5.5", default-features = false, features = ["aac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
+symphonia = { version = "0.6.0", default-features = false, features = ["aac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
 cpal = "0.17.3"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time"] }
 uuid = { version = "1.23.3", features = ["v4", "serde"] }
