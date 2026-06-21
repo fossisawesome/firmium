@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
-    "@tauri-apps/cli": "^2.11.2",
+    "@tauri-apps/cli": "^2.11.3",
     "@tsconfig/svelte": "^5.0.8",
     "concurrently": "^10.0.3",
     "jsdom": "^29.1.1",
