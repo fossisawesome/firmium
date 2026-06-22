@@ -105,11 +105,14 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 | Feature | Desktop | Android |
 |---|:---:|:---:|
-| Visualizer modes: Orb, Bars | ✅ | ✅ |
-| Oscilloscope mode | ✅ | ✅ |
-| Colors driven by the current track's cover art | ✅ | ✅ |
+| GPU-accelerated visualizer — Bars, Lines, and Scope modes | ✅ | ✅ |
+| Bars mode — frequency spectrum bars with peak hold indicators and per-bar flash on transients | ✅ | ❌ |
+| Lines mode — smooth filled waveform with configurable glow and mirror effect | ✅ | ❌ |
+| Scope (oscilloscope) mode — circular waveform ring with particle field driven by audio energy | ✅ | ❌ |
+| Post-processing effects: bloom glow, motion trails, echo/Milkdrop feedback, CRT film grain | ✅ | ❌ |
+| Beat-reactive bloom and pulse — effects intensify on bass hits | ✅ | ❌ |
 | Toggle visualizer on/off | ✅ | ✅ |
-| Tap to cycle visualizer type | ✅ | ✅ |
+| Switch visualizer mode from the panel header | ✅ | ✅ |
 
 ---
 
@@ -196,6 +199,9 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 - **In-app software updater** — check for and install new versions directly (Windows and Linux AppImage)
 - **Bit-perfect audio** — open the output stream at each track's exact native sample rate
+- **Window decorations toggle** — show or hide the native title bar and window borders from Settings
+- **Wipe cover-art cache** — clear cached cover art from Settings → Debug
+- **Reset preferences** — restore all settings to their defaults from Settings → Debug
 
 ---
 

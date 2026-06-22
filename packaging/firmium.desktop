@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Firmium
+GenericName=Music Player
+Comment=OpenSubsonic music streaming client
+Exec=firmium
+Icon=firmium
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;subsonic;navidrome;audio;player;streaming;
+StartupWMClass=firmium

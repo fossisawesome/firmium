@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Firmium
-Comment=Subsonic Desktop Music Streamer
-Exec=firmium-desktop
-Icon=multimedia-audio-player
-Terminal=false
-Categories=Audio;Music;Player;AudioVideo;

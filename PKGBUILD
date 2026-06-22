@@ -2,58 +2,33 @@
 pkgname=firmium-desktop-bin
 pkgver=6.6.0
 pkgrel=1
-pkgdesc="Lightning fast OpenSubsonic player in Tauri"
+pkgdesc="Lightning fast OpenSubsonic music player (native iced/Rust)"
 arch=('x86_64')
 url="https://github.com/fossisawesome/firmium"
 license=('GPL-3.0-only')
-depends=('webkit2gtk-4.1' 'alsa-lib' 'openssl')
+# cpal->alsa, rfd->gtk3, keyring->libsecret, winit->wayland/libxkbcommon,
+# wgpu->vulkan loader, iced text shaping->fontconfig.
+depends=('alsa-lib' 'gtk3' 'libsecret' 'libxkbcommon' 'wayland' 'vulkan-icd-loader' 'fontconfig')
+makedepends=('cargo')
 provides=('firmium-desktop')
 conflicts=('firmium-desktop-git')
 options=('!strip')
 
+# Built from the working tree (run `makepkg` from the repo root).
 source=()
 sha256sums=()
 
+build() {
+  cd "$startdir"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --release --locked
+}
+
 package() {
-  # Find Tauri's deb bundle directory (handles both Firmium_* and firmium-desktop_* naming)
-  local tauri_bundle_dir=$(find "${startdir}/src-tauri/target/release/bundle/deb" -maxdepth 1 -type d -name "*_${pkgver}_amd64" | head -n 1)
-
-  if [ -z "$tauri_bundle_dir" ] || [ ! -d "$tauri_bundle_dir" ]; then
-    error "Tauri Linux bundle directory not found. Ensure 'npm run tauri build' completed successfully."
-    return 1
-  fi
-
-  msg2 "Extracting application assets out of Tauri's build directory..."
-
-  # 1. Install compiled binary (handles both possible names Tauri might use)
-  local binary_path
-  if [ -f "${tauri_bundle_dir}/data/usr/bin/firmium-desktop" ]; then
-    binary_path="${tauri_bundle_dir}/data/usr/bin/firmium-desktop"
-  elif [ -f "${tauri_bundle_dir}/data/usr/bin/Firmium" ]; then
-    binary_path="${tauri_bundle_dir}/data/usr/bin/Firmium"
-  fi
-
-  if [ -z "$binary_path" ]; then
-    error "Compiled binary not found in bundle directory"
-    return 1
-  fi
-  install -Dm755 "$binary_path" "${pkgdir}/usr/bin/firmium-desktop"
-
-  # 2. Install desktop launcher entry (handles both possible names)
-  local desktop_file
-  for candidate in "firmium.desktop" "Firmium.desktop" "firmium-desktop.desktop"; do
-    if [ -f "${tauri_bundle_dir}/data/usr/share/applications/$candidate" ]; then
-      desktop_file="${tauri_bundle_dir}/data/usr/share/applications/$candidate"
-      break
-    fi
-  done
-
-  if [ -n "$desktop_file" ]; then
-    install -Dm644 "$desktop_file" "${pkgdir}/usr/share/applications/firmium.desktop"
-  fi
-
-  # 3. Pull all processed application graphics completely over
-  if [ -d "${tauri_bundle_dir}/data/usr/share/icons" ]; then
-    cp -r "${tauri_bundle_dir}/data/usr/share/icons" "${pkgdir}/usr/share/"
-  fi
+  cd "$startdir"
+  install -Dm755 "target/release/firmium" "${pkgdir}/usr/bin/firmium"
+  install -Dm644 "packaging/firmium.desktop" "${pkgdir}/usr/share/applications/firmium.desktop"
+  install -Dm644 "assets/app-icons/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/firmium.png"
+  install -Dm644 "assets/app-icons/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/firmium.png"
+  install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

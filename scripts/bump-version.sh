@@ -52,10 +52,8 @@ update_file() {
 }
 
 # Update main repo files
-update_file "$PROJECT_ROOT/package.json" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/CLAUDE.md" "$NEW_VERSION"
-update_file "$PROJECT_ROOT/src-tauri/tauri.conf.json" "$NEW_VERSION"
-update_file "$PROJECT_ROOT/src-tauri/Cargo.toml" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/Cargo.toml" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/PKGBUILD" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/firmium.spec" "$NEW_VERSION"
 

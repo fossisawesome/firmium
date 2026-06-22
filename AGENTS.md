@@ -1,20 +1,20 @@
 # Agents Guidelines
 
-Behavioral guidelines for autonomous and semi-autonomous task execution. Use when working on iterative debugging, research, testing, build configuration, and multi-step problem-solving in Firmium — across desktop stack (Tauri/Rust/Svelte/Vite, targeting Linux and Windows) and Android stack (Kotlin/Jetpack Compose).
+Behavioral guidelines for autonomous and semi-autonomous task execution. Use when working on iterative debugging, research, testing, build configuration, and multi-step problem-solving in Firmium — across the desktop stack (native iced/Rust, targeting Linux and Windows) and Android stack (Kotlin/Jetpack Compose).
 
 ## 1. Search & Verify First
 
 Don't speculate. Don't hide uncertainty. Use tools to ground claims.
 
 Before proposing solution:
-- Current state (crate versions, npm package versions, Gradle/Kotlin dependency versions, Tauri/rodio/Compose API behavior): check it (`Cargo.toml`, `package.json`, `android/app/build.gradle*`, docs).
-- Problem others have hit (Tauri IPC errors, rodio panics, keyring issues on Linux/Windows, Media3/ExoPlayer or Compose issues on Android): search for existing solutions.
+- Current state (crate versions, Gradle/Kotlin dependency versions, iced/cpal/symphonia/Compose API behavior): check it (`Cargo.toml`, `android/app/build.gradle*`, docs).
+- Problem others have hit (iced/wgpu render errors, cpal/symphonia panics, keyring issues on Linux/Windows, Media3/ExoPlayer or Compose issues on Android): search for existing solutions.
 - Uncertain about fact: verify, don't guess.
 
 Can't verify (tool fails, no results):
 - Say so explicitly. Don't pretend certainty.
 - Propose what you'd check if you could.
-- Ask user to run diagnostic or provide context (e.g. `npm run dev:app` console output, `RUST_BACKTRACE=1` trace).
+- Ask user to run diagnostic or provide context (e.g. `cargo run` console output, `RUST_BACKTRACE=1` trace).
 
 ## 2. Tool Chains Over Single Actions
 
@@ -40,17 +40,17 @@ Prevents chasing dead ends, makes reasoning auditable.
 Act without asking when path is clear. Pause when ambiguous.
 
 Proceed without asking:
-- Run `npm run dev:app`, `cargo check`, `cargo build`, `npm run android:debug`
-- Search for error messages or known issues (Tauri, Svelte 5, rodio, reqwest, Kotlin, Jetpack Compose, Media3/ExoPlayer)
-- Check docs for config options (`tauri.conf.json`, `capabilities/default.json`, `android/app/build.gradle*`)
+- Run `cargo run`, `cargo check`, `cargo build`, `./gradlew assembleDebug`
+- Search for error messages or known issues (iced, cpal, symphonia, reqwest, Kotlin, Jetpack Compose, Media3/ExoPlayer)
+- Check config (`Cargo.toml`, `android/app/build.gradle*`)
 - Diagnose system state (check audio devices, keyring availability, Android logcat)
-- Propose fixes based on clear patterns (Tauri command registration, Svelte store wiring, MD5 auth token format, Compose state hoisting, ViewModel wiring)
+- Propose fixes based on clear patterns (iced `Message`/`update` wiring, MD5 auth token format, Compose state hoisting, ViewModel wiring)
 
 Ask before acting:
-- Creating new files outside standard dirs (`src/`, `src-tauri/src/`, `src/lib/`, `src/views/`, `src/components/`, `android/app/src/main/java/com/fossisawesome/firmium/`)
-- Modifying config files with broad impact (`tauri.conf.json`, `capabilities/default.json`, updater signing keys, `android/app/build.gradle*`, `AndroidManifest.xml`)
+- Creating new files outside standard dirs (`src/`, `backend/`, `themes/`, `assets/`, `packaging/`, `android/app/src/main/java/com/fossisawesome/firmium/`)
+- Modifying config files with broad impact (`Cargo.toml`, `android/app/build.gradle*`, `AndroidManifest.xml`)
 - Deleting or overwriting anything
-- Changing packaging/release config (`npm run release`, makepkg, NSIS, Android Gradle assemble/release config)
+- Changing packaging/release config (`cargo build --release`, makepkg, NSIS, `PKGBUILD`, `firmium.spec`, Android Gradle assemble/release config)
 - Interpreting vague requirements ("make it faster," "improve it")
 
 Test: if user might reasonably disagree with choice, ask first.
@@ -97,9 +97,9 @@ Define "done." Loop until verified.
 
 For each task, state success criteria upfront:
 - "Fix crossfade glitch" → verify: `crossfade_to()` transitions between sessions with no audio dropout, tested in dev window
-- "Add new Tauri command" → verify: command registered in `generate_handler![]`, allowed in `capabilities/default.json`, callable from frontend via `tauriInvoke()`
+- "Add new UI action / backend call" → verify: `Message` variant handled in `App::update`, backend fn called via `Task::perform`, result message updates `App` state and re-renders
 - "Fix Subsonic auth issue" → verify: `generate_auth_params()` (desktop) / `AuthManager` (Android) produces correct MD5 token, login succeeds against real Navidrome instance
-- "Fix Android playback issue" → verify: `AudioPlayer`/`NowPlayingService` plays/pauses/seeks correctly, foreground notification stays in sync, tested via `npm run android:debug` + `adb logcat`
+- "Fix Android playback issue" → verify: `AudioPlayer`/`NowPlayingService` plays/pauses/seeks correctly, foreground notification stays in sync, tested via `./gradlew installDebug` + `adb logcat`
 
 Then loop:
 1. Make change
@@ -110,7 +110,7 @@ Strong criteria = operate independently. Vague criteria = constant back-and-fort
 
 ## 7. Keep Docs in Sync
 
-Change touches settings (`Settings.svelte`, `stores.ts`), themes (`themes/*.toml`, theme loading code), or build/packaging commands (`package.json` scripts, `PKGBUILD`, `firmium.spec`): update matching pages in `firmium-docs` repo in same change:
+Change touches settings (the settings view + state in `src/app.rs`), themes (`themes/*.toml`, `src/theme.rs`), or build/packaging commands (`Cargo.toml`, `PKGBUILD`, `firmium.spec`): update matching pages in `firmium-docs` repo in same change:
 
 - Settings: `src/content/settings.md` (what it does, layman's terms) and `src/content/settings-themes-internals.md` (storage keys, code references)
 - Themes: `src/content/custom-themes.md` (how to use/create themes) and `src/content/settings-themes-internals.md` (how themes loaded/applied internally)
@@ -119,8 +119,8 @@ Change touches settings (`Settings.svelte`, `stores.ts`), themes (`themes/*.toml
 
 ## When to Use These Guidelines
 
-- Iterative debugging (audio playback, Tauri IPC, keyring/SecureStorage credential issues, Compose UI state bugs)
-- Multi-step research (finding solutions to OpenSubsonic API quirks, rodio/Tauri bugs, Media3/ExoPlayer or Compose issues)
+- Iterative debugging (audio playback, iced rendering, keyring/SecureStorage credential issues, Compose UI state bugs)
+- Multi-step research (finding solutions to OpenSubsonic API quirks, iced/cpal bugs, Media3/ExoPlayer or Compose issues)
 - System diagnostics (checking machine info, audio devices, Android logcat)
 - Testing and verification workflows (manual playback testing per Testing section in CLAUDE.md, on desktop and Android)
 

@@ -1,53 +1,53 @@
 %define debug_package %{nil}
 
-# Disable auto-dependency detection — this is a pre-built binary repackage.
-%global __requires_exclude_from ^.*$
-%global __provides_exclude_from ^.*$
-AutoReqProv:    no
-
 Name:           firmium
 Version:        VERSION_PLACEHOLDER
 Release:        1%{?dist}
-Summary:        Cross-platform OpenSubsonic music streaming client
-License:        MIT
+Summary:        OpenSubsonic music streaming desktop client
+License:        GPL-3.0-only
 URL:            https://github.com/fossisawesome/firmium
 BuildArch:      x86_64
 
-# Downloads the pre-built Tauri RPM from GitHub Releases instead of recompiling.
-Source0:        https://github.com/fossisawesome/firmium/releases/download/vVERSION_PLACEHOLDER/RPM_FILENAME_PLACEHOLDER
+# Builds from source via cargo (the app is now a native iced/Rust binary; the
+# old prebuilt-Tauri-RPM repackage flow is retired).
+Source0:        %{url}/archive/vVERSION_PLACEHOLDER.tar.gz
 
-BuildRequires:  cpio
+BuildRequires:  cargo
+BuildRequires:  rust
+BuildRequires:  gcc
+BuildRequires:  alsa-lib-devel
+BuildRequires:  gtk3-devel
+BuildRequires:  libsecret-devel
 
-Requires:       webkit2gtk4.1
-Requires:       openssl-libs
+Requires:       alsa-lib
+Requires:       gtk3
 Requires:       libsecret
-Requires:       libxdo
+Requires:       vulkan-loader
+Requires:       fontconfig
+Requires:       hicolor-icon-theme
 
 %description
-Firmium is a cross-platform OpenSubsonic music streaming client built with
-Tauri 2. Supports low-latency audio playback, OS keyring credential storage,
-and OpenSubsonic server integration (e.g. Navidrome).
+Firmium is a low-latency OpenSubsonic music streaming client for the desktop,
+built as a native iced (Rust) application. Supports GPU-accelerated UI, OS
+keyring credential storage, and OpenSubsonic server integration (e.g. Navidrome).
 
 %prep
-# %prep always runs in %{_builddir}; extract there so we have a stable
-# absolute path to reference in %install.
-rpm2cpio %{SOURCE0} | cpio -idmv --no-absolute-filenames
+%setup -q -n firmium-VERSION_PLACEHOLDER
 
 %build
-# Pre-compiled binary — nothing to build.
+cargo build --release --locked
 
 %install
-# Reference %{_builddir} explicitly — don't rely on cwd being the same
-# as in %prep.
-cp -a %{_builddir}/usr %{buildroot}/
+install -Dm755 target/release/firmium %{buildroot}%{_bindir}/firmium
+install -Dm644 packaging/firmium.desktop %{buildroot}%{_datadir}/applications/firmium.desktop
+install -Dm644 assets/app-icons/128x128.png %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/firmium.png
+install -Dm644 assets/app-icons/32x32.png %{buildroot}%{_datadir}/icons/hicolor/32x32/apps/firmium.png
 
 %files
+%license LICENSE
 %{_bindir}/firmium
-%{_datadir}/applications/Firmium.desktop
-%{_datadir}/icons/hicolor/32x32/apps/firmium.png
-%{_datadir}/icons/hicolor/128x128/apps/firmium.png
-%{_datadir}/icons/hicolor/256x256@2/apps/firmium.png
-/usr/lib/Firmium/
+%{_datadir}/applications/firmium.desktop
+%{_datadir}/icons/hicolor/*/apps/firmium.png
 
 %changelog
 * CHANGELOG_DATE_PLACEHOLDER GitHub Actions <actions@github.com> - VERSION_PLACEHOLDER-1

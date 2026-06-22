@@ -5,9 +5,8 @@ Thanks for your interest in contributing! Firmium is an OpenSubsonic music strea
 ## Quick Start
 
 ### Prerequisites
-- Rust 1.70+ (install via [rustup](https://rustup.rs/))
-- Node.js 18+
-- On Linux: `libssl-dev`, `libxdo-dev`, `libxcb-render0-dev`, `libxcb-shape0-dev`, `libxcb-xfixes0-dev`, `libsecret-1-dev`
+- Rust 1.80+ (install via [rustup](https://rustup.rs/))
+- On Linux: ALSA (`libasound2`), `libssl`, `libsecret`, `libxkbcommon`, plus a Vulkan/OpenGL driver (for iced's `wgpu` renderer). Package names vary by distro — see `README.md`.
 - On Windows: no extra system dependencies needed
 
 ### Set Up Your Environment
@@ -17,69 +16,63 @@ Thanks for your interest in contributing! Firmium is an OpenSubsonic music strea
 git clone https://github.com/fossisawesome/firmium
 cd firmium
 
-# Install dependencies
-npm install
-
-# Start the dev server (builds Rust backend + serves frontend)
-npm run dev:app
+# Run the app (debug build)
+cargo run
 ```
 
-The app will open in a dev window. Log into a Subsonic/Navidrome server to test.
+The app opens in its own window. Log into a Subsonic/Navidrome server to test. There is no Node/npm/Vite — the desktop app is a single Rust crate.
 
 ## Project Structure
 
 ```
 firmium/
-├── src/                      # Svelte frontend (single-page app)
-│   ├── App.svelte           # Root component & routing
-│   ├── components/          # Reusable UI components
-│   ├── views/               # Full-page views (one per route)
-│   └── lib/                 # Logic modules (stores, API client, audio bridge)
-├── src-tauri/               # Rust backend & Tauri config
-│   ├── src/
-│   │   ├── lib.rs          # All Tauri commands (audio, auth, credentials)
-│   │   ├── audio.rs        # rodio playback engine
-│   │   └── main.rs         # Thin entry point
-│   └── tauri.conf.json     # App metadata & permissions
+├── src/                      # iced UI (Rust)
+│   ├── main.rs              # Entry point: mounts backend, runs iced::application
+│   ├── app.rs              # App state, Message enum, update(), view() — the whole UI
+│   ├── theme.rs            # TOML theme tokens → iced Theme
+│   ├── icons.rs            # Bundled SVG icon set
+│   ├── viz.rs              # Visualizer canvas
+│   └── config.rs           # config.toml (server, theme, volume, accounts)
+├── backend/                 # Rust backend (no UI)
+│   ├── init.rs             # Backend::new(): shared handles + queue_manager
+│   ├── events.rs           # EventBus + BackendEvent (backend → UI)
+│   ├── state.rs            # AppState (connection + reqwest client + bus)
+│   ├── audio/              # Playback engine (symphonia decode + cpal output)
+│   └── commands/           # OpenSubsonic client, queue, lyrics, covers, stats, …
 ├── android/                 # Native Kotlin/Compose Android app (separate)
-├── themes/                  # TOML theme files
+├── themes/                  # TOML theme files (embedded at compile time)
+├── assets/                  # Bundled font + app icons
+├── packaging/               # firmium.desktop, rpm spec
 ├── CLAUDE.md               # Detailed architecture & conventions
-├── agents.md               # Behavioral guidelines for AI-assisted work
-└── package.json            # npm scripts & dependencies
+├── AGENTS.md               # Behavioral guidelines for AI-assisted work
+└── Cargo.toml              # Single binary crate (iced + backend deps)
 ```
 
-**Key principle**: Desktop and Android are separate codebases. Desktop is Tauri (Rust + Svelte); Android is native Kotlin/Compose. They share the OpenSubsonic API contract but no code.
+**Key principle**: Desktop and Android are separate codebases. Desktop is native iced (Rust); Android is native Kotlin/Compose. They share the OpenSubsonic API contract but no code.
 
 ## Development Workflow
 
-### Desktop (Tauri + Svelte)
+### Desktop (iced)
 
-**Frontend Changes**
-- All Svelte, JavaScript, CSS changes in `src/` hot-reload instantly via Vite
-- Svelte stores in `src/lib/stores.ts` are the single source of truth for app state
-- No need to restart the dev server
+The UI and backend are one crate, one process — no IPC, no web layer.
 
-**Rust Backend Changes**
-- Changes to `src-tauri/src/*.rs` require a dev server restart
-- Run `npm run dev:app` again to rebuild Rust and restart the dev window
-- New Tauri commands must be:
-  1. Defined in `src-tauri/src/lib.rs` with `#[tauri::command]` macro
-  2. Registered in `tauri::generate_handler![]` in `lib.rs`
-  3. Added to `src-tauri/capabilities/default.json` for permission scoping
-  4. Called from frontend via `tauriInvoke()` in `src/lib/tauri.js`
+- The UI is a state struct (`App`), a `Message` enum, an `update()`, and a `view()`, all in `src/app.rs`. `App` is the single source of truth for app state.
+- To add a UI action: add a `Message` variant, emit it from a `view` method (`button(...).on_press(Message::Foo)`), handle it in `App::update` — usually by spawning a backend call with `iced::Task::perform`, whose result returns as another message.
+- Backend → UI events (playback/queue) arrive via the `EventBus` subscription as `Message::Backend(BackendEvent)`.
+- Any struct carried inside a `Message` must derive `Debug` + `Clone`.
 
 **Testing Playback**
-1. Start dev server: `npm run dev:app`
+1. `cargo run`
 2. Log into a real Navidrome or Subsonic instance
 3. Test playback, seeking, pause/resume, volume, cover art caching
-4. Check DevTools (F12) for console errors
+4. Watch the terminal for `eprintln!` errors / panics
 
 ### Android
 
 See [android/CLAUDE.md](android/CLAUDE.md) for Android-specific setup and conventions. Key commands:
 ```bash
-npm run android:build     # assembleRelease via Gradle
-npm run android:debug     # assembleDebug + install on device
+cd android && ./gradlew assembleRelease   # release APK
+cd android && ./gradlew installDebug      # debug build on device
 ```
 
 ## Code Style & Conventions
@@ -90,22 +83,22 @@ npm run android:debug     # assembleDebug + install on device
 - **Comments**: Only when the WHY is non-obvious (a workaround, a constraint, a subtle invariant)
 - **Semantic versioning**: Always bump versions correctly
 
-### Rust (src-tauri/src/)
-- Use `eprintln!()` for debugging (visible in dev server console)
+### Backend (backend/)
+- Use `eprintln!()` for debugging (visible in the `cargo run` terminal)
 - Thread-safe playback via `Arc`, `Mutex`, `RwLock` — don't bypass these
 - Sessions identified by UUID; query state via `AudioPlayer::get_state(session_id)`
-- Audio playback lives in `audio.rs`; keep it modular and testable
+- Audio playback lives in `backend/audio/`; keep it modular and testable
+- Async backend fns take owned `Arc<_>` handles (so the future is `'static`); sync fns take `&_`
 
-### Svelte/JavaScript (src/)
-- No TypeScript; type-check responses manually
-- Svelte stores in `src/lib/stores.js` — all mutable state goes here
-- Components subscribe reactively to stores
-- Playback orchestration in `src/lib/playback.ts`
-- API calls via `Api` class in `src/lib/api.ts`
+### UI (src/)
+- All mutable UI state on the `App` struct in `src/app.rs` — no global stores
+- `update` mutates `App` and returns a `Task`; `view` is a pure function of `App`, re-run after each message
+- API result types come from `backend/commands` (typed structs via `mappers.rs`)
+- Match the existing widget/style idiom in `app.rs` (helper fns like `tstyle`, `primary_button`, `icon_button`)
 
 ### Themes
-- TOML files in `themes/` directory
-- Loaded at runtime via `list_themes()` Tauri command
+- TOML files in `themes/` directory (built-ins embedded at compile time via `include_dir`)
+- Merged with user themes by `list_themes()` in `backend/commands/themes.rs`; parsed by `src/theme.rs`
 - If you add or modify theme loading, update `src/content/custom-themes.md` in `firmium-docs`
 
 ## Testing
@@ -119,7 +112,7 @@ Currently no automated test suite. Manual testing required:
 5. **Playlists**: create, add tracks, delete (if applicable)
 6. **Edge Cases**: network interruption, malformed responses, large libraries
 
-Run `npm run dev:app`, interact with the app, and check DevTools for errors.
+Run `cargo run`, interact with the app, and watch the terminal for errors.
 
 ## Documentation
 
@@ -142,7 +135,7 @@ Docs are built with Vite + Svelte (rendered via `src/lib/Markdown.svelte`) and d
 ### Making Your Change
 1. Write code following the conventions above
 2. Test thoroughly (see Testing section)
-3. Run a final check: `npm run dev:app` should start cleanly with no console errors
+3. Run a final check: `cargo build` should succeed and `cargo run` start cleanly with no panics
 4. Commit with a clear message: "Add X feature" or "Fix Y bug"
 5. If docs need updating, commit those changes together
 
@@ -162,41 +155,41 @@ Docs are built with Vite + Svelte (rendered via `src/lib/Markdown.svelte`) and d
 ## Getting Help
 
 - **Architecture questions**: Read docs first, then open a discussion
-- **AI-assisted work**: See [agents.md](agents.md) for behavioral guidelines when working with Claude Code
+- **AI-assisted work**: See [AGENTS.md](AGENTS.md) for behavioral guidelines when working with Claude Code
 - **Android-specific issues**: See [android/CLAUDE.md](android/CLAUDE.md)
 - **Bug reports**: Open an issue with reproduction steps and environment details
 - **Feature requests**: Open a discussion or issue describing the use case
 
 ## Common Tasks
 
-### Add a New Tauri Command
-1. Define the function in `src-tauri/src/lib.rs` with `#[tauri::command]`
-2. Add it to `tauri::generate_handler![]` in `lib.rs`
-3. Add it to `src-tauri/capabilities/default.json`
-4. Call it from frontend via `tauriInvoke()` in `src/lib/tauri.js`
+### Add a New UI Action / Backend Call
+1. Add a `Message` variant in `src/app.rs`
+2. Emit it from the relevant `view` method (`button(...).on_press(Message::Foo)`)
+3. Handle it in `App::update` — for a backend call, `Task::perform(commands::module::fn(...), Message::FooDone)`
+4. Handle the result message; update `App` state so `view` re-renders
 
 ### Add a New Settings Option
-1. Add the field to `src/views/Settings.svelte`
-2. Store the value in `src/lib/stores.js` (writable store)
-3. Persist to localStorage via `SafeStorage` in `src/lib/utils.js`
+1. Add the field to the `App` struct and a `Message` variant in `src/app.rs`
+2. Render the control in `settings_view`
+3. Persist it via `config.rs` (`Config` + `save_config`)
 4. Update `src/content/settings.md` in `firmium-docs`
 
 ### Add Audio Playback Feature
-1. Extend `audio.rs` (e.g., new method in `AudioPlayer`)
-2. Expose a Tauri command in `lib.rs`
-3. Wire it in `src/lib/audio-bridge.js` (AudioBridge class)
-4. Call it from `src/lib/playback.js` or a component
+1. Extend `backend/audio/` (e.g., new method in `AudioPlayer`)
+2. Add a wrapper in `backend/commands/playback.rs` or `queue.rs` if needed
+3. Call it from `App::update` via `Task::perform`
+4. React to any resulting `BackendEvent` in `handle_backend`
 
 ### Fix an Android-Only Issue
 1. See [android/CLAUDE.md](android/CLAUDE.md) for the Android architecture
 2. Native Android code is in `android/app/src/main/java/com/fossisawesome/firmium/`
-3. Run `npm run android:debug` to build and test on a device
+3. Run `cd android && ./gradlew installDebug` to build and test on a device
 4. Use `adb logcat` to debug
 
 ## Release Process
 
 Handled by maintainers:
-- Bump version in `package.json` and `src-tauri/tauri.conf.json`
+- Bump version with `scripts/bump-version.sh <ver>` (updates `Cargo.toml`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, Android `build.gradle.kts`, AUR folders)
 - Update `CHANGELOG.md` with user-facing changes
 - Tag release and push to GitHub
 - CI builds and publishes installer bundles (deb, rpm, Windows NSIS)

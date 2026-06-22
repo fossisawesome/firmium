@@ -6,13 +6,13 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Project Overview
 
-**Firmium** is an OpenSubsonic music streaming client. Desktop app (Linux + Windows) built with Tauri 2 (Rust backend + Svelte frontend), providing low-latency audio playback, OS-level credential storage, and integration with OpenSubsonic-compatible servers (e.g. Navidrome). Separate native Android app in `android/`, built with Kotlin + Jetpack Compose.
+**Firmium** is an OpenSubsonic music streaming client. The desktop app (Linux + Windows) is a native [iced](https://iced.rs) (Rust) application — a single binary, no web view and no JavaScript — providing low-latency audio playback, OS-level credential storage, and integration with OpenSubsonic-compatible servers (e.g. Navidrome). Separate native Android app in `android/`, built with Kotlin + Jetpack Compose.
 
 ### Tech Stack
 
 **Desktop (Linux, Windows)**
-- **Frontend**: Svelte 5 + TypeScript, bundled via Vite
-- **Backend**: Rust 2021 edition, Tauri 2.11+
+- **UI**: [iced](https://iced.rs) 0.14 (pure Rust; `canvas` for the visualizer, `svg` for icons, bundled font)
+- **Language**: Rust 2021 edition — UI and backend in one process, one crate
 - **Audio**: `symphonia` 0.5 (decoding) + `cpal` 0.17 (output device I/O), hand-rolled engine
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
 - **Credentials**: OS keyring via `keyring` crate (libsecret on Linux, Windows Credential Manager on Windows)
@@ -24,23 +24,27 @@ See [android/CLAUDE.md](android/CLAUDE.md) for Android tech stack and architectu
 
 ## Architecture
 
-### Rust Backend (src-tauri/src/)
+### Backend (backend/)
 
-Backend exposes Tauri commands invoked by frontend via `src/lib/audio-bridge.ts` and `src/lib/tauri.ts`. Key modules:
+The backend is plain Rust — no UI, no IPC. The iced UI calls these modules directly via `iced::Task::perform` (async fns) or inline (sync fns); the backend pushes playback/queue events back to the UI over an in-process event bus (`backend/events.rs`, a `tokio::sync::broadcast` channel). `src/main.rs` mounts every `backend/*.rs` module at the crate root via `#[path]` attributes, so backend code keeps using `crate::...` paths. Key modules:
 
-- **lib.rs**: Tauri app entry point. Defines `run()`, sets up app, registers all commands via `tauri::generate_handler![]`. Command implementations in `commands/`.
+- **init.rs**: `Backend::new()` builds the shared handles (event bus, `AudioPlayer`, `AppState`, `QueueState`, optional `PlayHistory`) and starts the `queue_manager` background task. Held by the iced `App` in `src/app.rs`.
 
-- **state.rs**: `AppState` — holds `ConnectionState` (server URL, username, password, detected `openSubsonicExtensions`) behind `parking_lot::RwLock`, plus shared async `reqwest::Client` used by `commands/subsonic.rs` and `commands/lyrics.rs`. Set via `set_connection`, called from `stores.ts`'s `setAuth`/`clearAuth`.
+- **events.rs**: `EventBus` (broadcast sender) and `BackendEvent` enum (`PlaybackStateChanged`, `PlaybackPosition`, `PlaybackFinished`, `QueueStateChanged`, `QueueExhausted`, `SessionExpired`). The UI subscribes via an `iced::Subscription` that bridges the broadcast channel into `Message::Backend(BackendEvent)`.
 
-- **commands/**: Command modules, re-exported via `commands/mod.rs`:
+- **state.rs**: `AppState` — holds `ConnectionState` (server URL, username, password, detected `openSubsonicExtensions`) behind `parking_lot::RwLock`, plus shared async `reqwest::Client` used by `commands/subsonic.rs` and `commands/lyrics.rs`, plus the `EventBus` handle. Set via `set_connection`.
+
+- **commands/**: Plain async/sync fns, re-exported via `commands/mod.rs`:
   - `themes.rs`: `list_themes()` — reads `.toml` theme files
   - `mappers.rs`: `map_albums()`, `map_artists()`, `map_songs()` — Rust-side mapping of raw Subsonic JSON to typed structs (including `infer_release_type()` and `format_track_info()` for `Song.trackInfo`)
   - `auth.rs`: `generate_auth_params()` — MD5 token hashing
   - `credentials.rs`: `save_password()`, `get_password()`, `delete_password()` — OS keyring
-  - `subsonic.rs`: `set_connection()`, `validate_connection()`, OpenSubsonic API — album/artist/search/genre reads, playlist CRUD, `scrobble()`, `get_song_lyrics()` (structured → legacy → LRCLIB cascade). Internal `subsonic_request()` builds authenticated requests, emits `firmium:session-expired` on HTTP 401 or OpenSubsonic error codes 40/41.
+  - `subsonic.rs`: `set_connection()`, `validate_connection()`, OpenSubsonic API — album/artist/search/genre reads, playlist CRUD, `scrobble()`, `save_play_queue()`/`get_play_queue()` (cross-device queue sync), `get_song_lyrics()` (structured → legacy → LRCLIB cascade), `get_sonic_similar_tracks()`. Internal `subsonic_request()` builds authenticated requests, emits `BackendEvent::SessionExpired` on the bus on HTTP 401 or OpenSubsonic error codes 40/41.
   - `lyrics.rs`: `parse_lrc()`, `fetch_lrclib_lyrics()` — LRC parsing and LRCLIB fallback used by `get_song_lyrics()`
-  - `cover_cache.rs`: `get_cover_art()`, `clear_cover_cache()` — disk-based cover art cache (200MB budget, mtime-based LRU eviction), served via Tauri's asset protocol
-  - `playback.rs`: `play_stream()`, `preload_stream()`, `pause_playback()`, `resume_playback()`, `stop_playback()`, `seek_position()`, `set_volume()`, `get_volume()`, `crossfade_to()`, `get_playback_state()`, `is_playback_finished()`, `get_track_duration()`, `get_current_position()`, `list_audio_devices()` — delegate to `AudioPlayer`
+  - `cover_cache.rs`: `get_cover_art()`, `clear_cover_cache()` — disk-based cover art cache (200MB budget, mtime-based LRU eviction); the UI loads cached files into an `iced::widget::image::Handle` cached in `App`
+  - `queue.rs` / `queue_manager.rs`: queue mutation (`set_queue`, `shuffle_and_play`, `play_queue_index`, …) and the background task that drains the bus for crossfade, gapless preload, track advance and scrobbling
+  - `playback.rs`: thin wrappers over `AudioPlayer` (`play_stream`, `preload_stream`, pause/resume/stop, `seek_position`, `set_volume`, `crossfade_to`, `list_audio_devices`, …)
+  - `downloads.rs`, `local_library.rs`, `equalizer.rs`, `stats.rs`, `cover_colors.rs`: offline downloads, `~/Music/Firmium` scan, EQ profiles, play-history aggregation (Recap / export), dominant-cover-color extraction
   - `app_info.rs`: `get_app_version()`
 
 - **audio/**: Desktop-only audio playback module (`symphonia` decode + `cpal` output). Core design:
@@ -50,66 +54,47 @@ Backend exposes Tauri commands invoked by frontend via `src/lib/audio-bridge.ts`
   - `output.rs`: cpal device negotiation (`find_compatible_config`, `open_with_config`/`open_default`) and realtime `mix_into` callback, which sums all active sessions' ring buffers (with per-session volume, channel adaptation, and linear-interpolation resampler that degenerates to passthrough when rates match).
   - `mod.rs`: `AudioPlayer` manages session lifecycle (loading → playing → paused/stopped), reopens output stream at each track's native sample rate via `reopen_stream_if_needed()` (deferred during crossfade). Thread-safe via `parking_lot::Mutex`/`RwLock`.
   - Session state: `PlaybackState` enum (Loading, Playing, Paused, Stopped)
-  - Sessions stored in `Arc<RwLock<HashMap>>` — playback events fire via Tauri `emit()` to frontend
+  - Sessions stored in `Arc<RwLock<HashMap>>` — playback events fire on the `EventBus` (broadcast) consumed by `queue_manager` and the UI subscription
   - Supports `preload_stream()` and `crossfade_to()` for gapless playback
 
-- **main.rs**: Thin entry point calling `lib::run()`. No commands defined here.
+### iced UI (src/)
 
-### Svelte Frontend (src/)
+The UI is one iced application. There are no components or routes in the web sense — the whole UI is a state struct, a message enum, an `update`, and a `view`.
 
-Single-page Svelte 5 app bundled by Vite. Hot reload works for all frontend changes during dev.
-
-- **App.svelte**: Root component. Handles auth check on mount, theme/decorations, view routing, global overlay components (LyricsPanel, PlaylistMenu).
-- **components/**: Shared UI components
-  - `PlayerBar.svelte` — persistent bottom player with controls, seek bar, volume
-  - `Sidebar.svelte` — navigation sidebar
-  - `LyricsPanel.svelte` — synced/unsynced lyrics overlay
-  - `PlaylistMenu.svelte` — context menu for adding tracks to playlists
-  - `Setup.svelte` — initial server login screen
-- **views/**: Full-page view components (one per route)
-  - `HomeView.svelte`, `AlbumList.svelte`, `AlbumDetail.svelte`, `ArtistList.svelte`, `ArtistDetail.svelte`
-  - `SearchView.svelte`, `PlaylistsView.svelte`, `PlaylistDetail.svelte`, `Settings.svelte`
-- **lib/**: Logic modules (no UI)
-  - `stores.ts` — all Svelte writable/derived stores (auth, queue, playback state, lyrics, playlists, etc.)
-  - `playback.ts` — `playAt()`, `crossfadeToNext()`, position tracking, lyrics sync, bridge event wiring
-  - `audio-bridge.ts` — `AudioBridge` class: wraps Tauri IPC calls for play/pause/seek/volume, status polling loop
-  - `api.ts` — `Api`: thin `invoke()` wrappers around `commands/subsonic.rs`/`lyrics.rs` (albums, artists, search, playlists, scrobble, lyrics); `OpenSubsonicRouter` (URL builder, used for cover art and streaming), `Keyring`
-  - `playerControls.ts` — shared player control logic
-  - `icons.ts` — SVG icon helpers
-  - `coverCache.ts` — thin wrapper around Rust disk-based cover art cache (`get_cover_art`/`clear_cover_cache`), converts cached file paths via `convertFileSrc()`
-  - `utils.ts` — `SafeStorage` (localStorage wrapper), misc helpers
-  - `tauri.ts` — thin `tauriInvoke()` wrapper
-  - `lazyLoad.ts` — IntersectionObserver-based lazy image loading
-  - `lyrics.ts` — lyrics fetch + parse logic
-  - `playlistMenu.ts` — playlist context menu state helpers
-- **style.css**: Light/dark mode support, responsive layout; includes mobile-specific styles
+- **main.rs**: Entry point. Mounts the `backend/*` modules at the crate root (`#[path]`), creates a tokio runtime, and runs `iced::application(...)` wiring `App::update`, `App::view`, `App::theme`, `App::subscription`, the bundled font, and window size.
+- **app.rs**: The bulk of the UI (~3k lines). `App` (all UI state), the `Message` enum, `update()` (handles every message, usually by spawning a backend call with `iced::Task::perform` whose result returns as another `Message`), and `view()`. Each screen is a method on `App` returning an `iced::Element` (`home_view`, `album_list_view`, `album_detail_view`, `artists_view`, `playlists_view`, `search_view`, `mix_view`, `recap_view`, `settings_view`), plus the persistent `player_bar`, the right-dock panels (visualizer/queue/lyrics/EQ/audio-stats/similar), and `stack`-based modal overlays (add-to-playlist, account switcher). Long lists (albums) use a windowed renderer that only builds the rows on screen.
+- **theme.rs**: parses a theme's TOML tokens into `iced::Color`s and builds the `iced::Theme`. Built-ins under `themes/` are embedded at compile time via `include_dir`.
+- **icons.rs**: the SVG icon set as raw string constants, recolored per theme through `svg::Style`.
+- **viz.rs**: the visualizer `canvas::Program` (bars / oscilloscope / orb), reading the latest FFT snapshot.
+- **config.rs**: `~/.config/<id>/config.toml` (server, last theme, volume, saved accounts). Passwords stay in the OS keyring, not here.
 
 ### Data Flow
 
 ```
-Svelte components / lib/api.ts / lib/playback.ts
-    ↓ (tauriInvoke)
-Rust Commands (commands/)
+src/app.rs  (App state, view, update)
+    │  user action → Message
+    ▼  Message::… handled in App::update
+iced::Task::perform(backend fn) ──► backend/commands/…
     ├─ OpenSubsonic API calls (subsonic.rs, async reqwest::Client in AppState)
     │    ├─ MD5 auth token generation (auth.rs)
     │    ├─ JSON → typed structs (mappers.rs)
-    │    └─ 401 / error 40/41 → emit("firmium:session-expired")
-    ├─ Cover art → disk cache (cover_cache.rs) → asset:// URL
+    │    └─ 401 / error 40/41 → EventBus.emit(SessionExpired)
+    ├─ Cover art → disk cache (cover_cache.rs) → iced image::Handle
     ├─ Lyrics cascade (subsonic.rs::get_song_lyrics → lyrics.rs)
-    └─ Audio playback (audio/, AudioBridge → tauriInvoke)
-         └─ StreamingReader (HTTP) → symphonia decode
-              └─ OS audio device (cpal)
-    ↓ (status polling every 750ms via AudioBridge)
-Svelte stores (playbackState, currentPosition, …) → reactive UI
+    └─ Audio playback (audio/)
+         └─ StreamingReader (HTTP) → symphonia decode → cpal
+    │  result future → Message    │  playback/queue events → EventBus (broadcast)
+    ▼                             ▼  Subscription → Message::Backend(BackendEvent)
+App::update mutates App state ──► App::view re-renders
 ```
 
 ### Android App
 
-Native Kotlin/Compose app in `android/`, independent of Tauri build, sharing OpenSubsonic API contract with desktop. See [android/CLAUDE.md](android/CLAUDE.md) for architecture, build commands, and conventions.
+Native Kotlin/Compose app in `android/`, independent of the desktop iced build, sharing OpenSubsonic API contract with desktop. See [android/CLAUDE.md](android/CLAUDE.md) for architecture, build commands, and conventions.
 
 ### Key Design Decisions
 
-1. **Credentials in Keyring, Not localStorage**: System keyring (libsecret on Linux) stores credentials securely. Plaintext passwords never leak to JS.
+1. **Credentials in Keyring, Not Config**: System keyring (libsecret on Linux) stores credentials securely. `config.toml` keeps only the server URL, username and saved-account list — plaintext passwords are never written to disk.
 
 2. **HTTP Streaming with Local Buffering**: `StreamingReader` keeps HTTP connection open during playback so Subsonic/Navidrome sees "Now Playing" status for full track duration, not just download moment.
 
@@ -121,7 +106,7 @@ Native Kotlin/Compose app in `android/`, independent of Tauri build, sharing Ope
 
 ### Known Cross-Platform Divergences
 
-Desktop (Tauri/Rust/Svelte) and Android (Kotlin/Compose) implement same features independently and have drifted. These are intentional or accepted differences — don't "fix" one to match other without checking with user first:
+Desktop (iced/Rust) and Android (Kotlin/Compose) implement same features independently and have drifted. These are intentional or accepted differences — don't "fix" one to match other without checking with user first:
 
 1. **Release type inference**: `commands/mappers.rs::infer_release_type()` (desktop) returns lowercase `"single"/"ep"/"album"` with title-text and songCount fallback heuristics. `ApiClient.kt::inferReleaseType()` (Android) returns Title Case `"Single"/"EP"/"Album"/"Compilation"/"Live"/"Remix"`, checks `isCompilation` first, no title/songCount fallback — `AlbumListScreen.kt::effectiveType()` does separate songCount-based reclassification on Android side.
 
@@ -132,88 +117,76 @@ Desktop (Tauri/Rust/Svelte) and Android (Kotlin/Compose) implement same features
 ## Build & Run
 
 ### Prerequisites
-- Rust 1.87+ (for MSRV; raised by `wgpu` 29, used by the GPU visualizer renderer)
-- Node.js 18+ (for npm)
-- On Linux: `libssl-dev`, `libxdo-dev`, `libxcb-render0-dev`, `libxcb-shape0-dev`, `libxcb-xfixes0-dev`, `libsecret-1-dev` for Tauri + keyring
+- Rust 1.80+ (`rustup default stable`)
+- On Linux: ALSA (`libasound2`), `libssl`, `libsecret` (keyring), `libxkbcommon`, plus a Vulkan/OpenGL driver for iced's `wgpu` renderer. Exact package names vary by distro — see `README.md` "System Dependencies".
 - On Windows: no extra system dependencies (rustls handles TLS, Windows Credential Manager built-in)
 
 ### Commands
 
 ```bash
-# Install dependencies
-npm install
+# Develop (debug build, recompiles on .rs changes)
+cargo run
 
-# Develop: Build Rust backend + serve frontend via Vite in Tauri dev window
-npm run dev:app
-# Rust recompiles on .rs changes; Svelte/CSS/JS changes hot-reload instantly via Vite.
+# Optimized release binary → target/release/firmium
+cargo build --release
 
-# Release build (Linux only)
-npm run release
-# Builds .deb + .rpm, then runs makepkg in src-tauri/target/release/bundle/arch/
-
-# Android (separate native app in android/)
-npm run android:build   # assembleRelease via Gradle
-npm run android:debug   # assembleDebug via Gradle
-npm run android:install # installDebug via adb
+# Android (separate native app in android/, built with Gradle)
+cd android && ./gradlew assembleRelease   # release APK
+cd android && ./gradlew assembleDebug     # debug APK
+cd android && ./gradlew installDebug      # install on connected device
 ```
+
+There is no Node, npm, or Vite — the desktop app is a single Rust crate.
 
 ### First-Time Setup
 
-1. Clone repo and `npm install` in root
-2. Ensure Rust installed: `rustup default stable`
-3. On Linux, install system dependencies (exact names vary by distro; Tauri docs list them)
-4. Run `npm run dev:app` to start dev window
-5. In-app: enter Subsonic/Navidrome server URL, username, and password
-6. Credentials saved to OS keyring; server address stored in localStorage
+1. Clone repo; ensure Rust is installed (`rustup default stable`)
+2. On Linux, install system dependencies (see `README.md`)
+3. Run `cargo run` to launch
+4. In-app: enter Subsonic/Navidrome server URL, username, and password
+5. Credentials saved to OS keyring; server URL + username stored in `config.toml`
 
 ## Development Notes
 
-### Modifying Rust Commands
-- Add new `#[tauri::command]` functions in `lib.rs`
-- Register in `tauri::generate_handler![]` macro inside `run()` in `lib.rs`
-- Update `capabilities/default.json` to add command to allowed list
-- Restart dev server: `npm run dev:app`
+### Adding a UI Action / Backend Call
+- Add a variant to the `Message` enum in `src/app.rs`, emit it from the relevant `view` method (e.g. `button(...).on_press(Message::Foo)`).
+- Handle it in `App::update`. For a backend call, return `Task::perform(commands::module::fn(self.backend.app_state.clone(), …), Message::FooDone)`; the result comes back as another message.
+- Async backend fns take owned `Arc<_>` handles (so the future is `'static`); sync fns take `&_`.
+- Any struct carried inside a `Message` must derive `Debug` + `Clone` (the enum derives both).
 
 ### Adding Audio Playback Features
 - Playback logic in `audio/`. New playback methods (e.g., equalizer) belong there — `mod.rs` for public `AudioPlayer` API, `session.rs` for per-track decode/state, `output.rs` for cpal mixing callback.
 - All changes must maintain thread-safety (Arc, Mutex, RwLock).
 - Sessions identified by UUID; use `AudioPlayer::get_state(session_id)` to query state.
-- Crossfade implemented in Rust: `AudioPlayer::crossfade_to()` in `audio/mod.rs` ramps volume between outgoing and incoming sessions. Frontend (`src/lib/playback.ts`) decides *when* to trigger and calls into Rust via `AudioBridge`; doesn't perform fade itself.
+- Crossfade implemented in Rust: `AudioPlayer::crossfade_to()` in `audio/mod.rs` ramps volume between outgoing and incoming sessions. The `queue_manager` task decides *when* to trigger (reacting to `PlaybackPosition` events on the bus); the engine performs the fade.
 
-### Frontend State Management
-- All mutable app state in Svelte stores (`src/lib/stores.ts`).
-- Components subscribe reactively — update store, UI updates automatically.
-- Playback orchestration (play, crossfade, position tracking, lyrics sync) in `src/lib/playback.ts`.
-- API calls use `Api` from `src/lib/api.ts`; frontend in TypeScript, response types in `src/lib/types/`.
+### UI State Management
+- All mutable app state lives on the `App` struct in `src/app.rs` — single source of truth, no stores.
+- `update` mutates `App` and returns a `Task`; `view` is a pure function of `App` state, re-run after every message.
+- Backend → UI events arrive via the `EventBus` subscription as `Message::Backend(BackendEvent)`.
 
-### Debugging Rust Backend
-- `eprintln!()` prints to dev server console
-- Use `RUST_BACKTRACE=1 npm run dev:app` for panic backtraces
-
-### Debugging Frontend
-- Dev window has DevTools: press F12 or `Ctrl+Shift+I`
-- Console logs visible in DevTools + Vite dev server terminal output
-- Network tab shows Subsonic API requests (Content-Security-Policy allows http://* for local servers)
-- Svelte component state inspectable via Svelte DevTools browser extension
+### Debugging
+- `eprintln!()` prints to the terminal running `cargo run`.
+- `RUST_BACKTRACE=1 cargo run` for panic backtraces.
+- iced renderer issues on Wayland: try `WAYLAND_DISPLAY= cargo run` (forces XWayland) or set `WGPU_BACKEND=gl`.
 
 ## Testing
 
 No automated tests. Manual testing workflow:
-1. Start dev server: `npm run dev:app`
+1. `cargo run`
 2. Log into local Subsonic/Navidrome instance
 3. Test playback, seeking, pause/resume, volume control
 4. Test cover art caching (should be cached on second view)
-5. Test search and artist bio fetches
+5. Test search and artist fetches
 
 ## Packaging & Distribution
 
-- `tauri.conf.json` defines build, bundles (deb, rpm, nsis), in-app updater config
-- `bundle.createUpdaterArtifacts: true` makes `tauri-action` (in `release.yml`) generate `.sig` files and `latest.json` manifest for each tagged release
-- In-app updater (`@tauri-apps/plugin-updater` + `src/lib/updater.ts`, surfaced under Settings > Debug > Software Update) only covers **nsis (Windows)** and **AppImage (Linux)** bundles — updater protocol can't self-update `.deb`/`.rpm` packages (no privilege escalation), so those users update via package manager / COPR. Current `bundle.targets` (`deb`, `rpm`, `nsis`) means in-app updater is effectively Windows-only today; adding `appimage` target would extend it to Linux AppImage users.
-- `plugins.updater.endpoints` in `tauri.conf.json` points at `https://github.com/fossisawesome/firmium/releases/latest/download/latest.json`; `plugins.updater.pubkey` must match public half of keypair whose private key is stored in `TAURI_SIGNING_PRIVATE_KEY`/`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` GitHub secrets used by `release.yml`. Rotate both together with `npm run tauri signer generate`.
-- Android: no in-app updater (native Kotlin app, not part of Tauri build) — updates via Play Store or manual APK install
-- Linux .desktop file for app launcher: `firmium.desktop` (bundled by Tauri)
-- Icon files in `src-tauri/icons/` (32x32, 128x128, 128x128@2x, icon.icns, icon.ico)
+- The desktop build is a single binary: `cargo build --release` → `target/release/firmium`.
+- `PKGBUILD` (Arch), `firmium.spec` / `packaging/firmium.spec` (rpm/COPR), and the `.deb` packaging install that binary plus `packaging/firmium.desktop` and the icons under `assets/app-icons/`.
+- `scripts/bump-version.sh <ver>` updates `Cargo.toml`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, the Android `build.gradle.kts`, and the AUR folders.
+- **In-app updater**: not yet ported to the native build. The old Tauri self-updater (signed AppImage / NSIS via `release.yml`) was removed with the web layer; `.deb`/`.rpm`/COPR/AUR users update through their package manager. A native updater is a future task coupled to a redesign of the release pipeline.
+- Android: no in-app updater (native Kotlin app) — updates via Play Store or manual APK install.
+- Linux `.desktop` launcher: `packaging/firmium.desktop`. App icons under `assets/app-icons/`.
 
 ## Documentation
 
@@ -222,20 +195,19 @@ No automated tests. Manual testing workflow:
 
 ## Key Files
 
-- `src-tauri/src/lib.rs` — All Tauri command definitions, app entry point
-- `src-tauri/src/main.rs` — Thin entry point calling `lib::run()`
-- `src-tauri/src/audio/` — Audio playback engine (symphonia + cpal)
-- `src/App.svelte` — Root component, auth bootstrap, view routing
-- `src/lib/stores.ts` — All Svelte stores (single source of truth for app state)
-- `src/lib/playback.ts` — Playback orchestration, position tracking, lyrics sync
-- `src/lib/audio-bridge.ts` — Tauri IPC bridge (`AudioBridge` class)
-- `src/lib/api.ts` — OpenSubsonic API client, URL builder, keyring, WikiApi
-- `src-tauri/tauri.conf.json` — App metadata, bundler config, updater settings
-- `src-tauri/capabilities/default.json` — Tauri permissions (security scoping)
-- `themes/` — TOML theme files
-- `vite.config.ts` — Vite + Svelte plugin config
-- `package.json` — npm scripts for build/dev
-- `android/` — Separate native Kotlin/Compose Android app (not part of Tauri build); see [android/CLAUDE.md](android/CLAUDE.md)
+- `src/main.rs` — Entry point: mounts backend modules, runs `iced::application(...)`
+- `src/app.rs` — `App` state, `Message` enum, `update()`, `view()` — the whole UI
+- `src/theme.rs`, `src/icons.rs`, `src/viz.rs`, `src/config.rs` — theming, icons, visualizer canvas, config persistence
+- `backend/init.rs` — `Backend::new()`: builds shared handles, starts `queue_manager`
+- `backend/events.rs` — `EventBus` + `BackendEvent` (backend → UI)
+- `backend/state.rs` — `AppState` (connection + reqwest client + bus)
+- `backend/audio/` — Audio playback engine (symphonia + cpal)
+- `backend/commands/` — OpenSubsonic client, queue, lyrics, covers, downloads, EQ, stats
+- `Cargo.toml` — single binary crate (iced + backend deps)
+- `themes/` — TOML theme files (embedded at compile time)
+- `assets/` — bundled font and app icons
+- `packaging/` — `firmium.desktop`, rpm spec
+- `android/` — Separate native Kotlin/Compose Android app; see [android/CLAUDE.md](android/CLAUDE.md)
 
 ## OpenSubsonic API Integration
 
@@ -243,8 +215,8 @@ See [API.md](API.md) for full reference of all Subsonic/OpenSubsonic/Navidrome e
 
 App targets OpenSubsonic REST API (v1.16.1). Legacy Subsonic servers tolerated but unsupported. Requests include:
 - `u` (username), `t` (MD5-hashed token), `s` (random salt), `v=1.16.1`, `c=firmium`, `f=json`
-- MD5 hashing done on Rust side; plaintext password sent to Rust, never leaves frontend
-- `openSubsonicExtensions` detected on every response, stored in `openSubsonicExtensions` Svelte store
+- MD5 hashing done on the Rust side; the plaintext password lives only in `AppState`/keyring
+- `openSubsonicExtensions` detected on every response, stored in `AppState`'s `ConnectionState`
 - OpenSubsonic fields used as primary: `displayArtist`, `releaseTypes[]`, `replayGain`, `bpm`, `genres[]`, `isCompilation`
 - Settings page shows server badge ("OpenSubsonic" or "Subsonic") based on detected capabilities
 
@@ -261,8 +233,9 @@ Common endpoints: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverArt`, 
 
 ## Performance Considerations
 
-- **Cover Art Caching**: Disk-based cache under app cache dir (`commands/cover_cache.rs`), up to 200MB budget; LRU (by mtime) eviction when budget exceeded. Persists across restarts; served via Tauri's asset protocol.
-- **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit, `src-tauri/src/commands/subsonic.rs`)
+- **Cover Art Caching**: Disk-based cache under app cache dir (`commands/cover_cache.rs`), up to 200MB budget; LRU (by mtime) eviction when budget exceeded. Persists across restarts; loaded into an `iced::widget::image::Handle` cached in `App` so covers survive restarts without re-downloading.
+- **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit, `backend/commands/subsonic.rs`)
+- **Long lists**: the album list uses a windowed renderer in `src/app.rs` (scroll offset + spacers) that only builds the rows currently on screen.
 - **Search**: Limited to 40 albums, 100 songs per query (`commands/subsonic.rs::search`)
 - **Playback Concurrency**: One audio stream per device active at a time; multiple devices can play different streams concurrently
 - **CPU**: Release build has `opt-level = 3` + LTO + `codegen-units = 1`; `strip = false` keeps debug symbols for crash reporting

@@ -21,7 +21,7 @@
 
 ---
 
-Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client built with Tauri 2, targeting **Linux desktop, Windows and Android**. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
+Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client targeting **Linux desktop, Windows and Android**. The desktop app is a native [iced](https://iced.rs) (Rust) application; Android is native Kotlin/Compose. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
 
 > **Note:** Firmium is a *client only* — you need a self-hosted OpenSubsonic-compatible server to use it. [Navidrome](https://www.navidrome.org/) is the most popular choice and is free and open source.
 
@@ -166,9 +166,8 @@ sudo dpkg -i ./firmium_*.deb
 
 ### Prerequisites
 
-- Rust 1.70 or later (`rustup default stable`)
-- Node.js 18 or later
-- System dependencies for your distribution (see [System Dependencies](#system-dependencies) above)
+- Rust 1.80 or later (`rustup default stable`)
+- System dependencies for your distribution (see [System Dependencies](#system-dependencies) above) — ALSA, GTK 3, libsecret, and a Vulkan/OpenGL driver
 
 ### Steps
 
@@ -177,24 +176,21 @@ sudo dpkg -i ./firmium_*.deb
 git clone https://github.com/fossisawesome/firmium.git
 cd firmium
 
-# Install Node dependencies
-npm install
-
-# Start the development build
-npm run dev:app
+# Run the app (debug build)
+cargo run
 ```
 
-For a release build:
+For an optimized release build:
 
 ```bash
-npm run release
+cargo build --release
 ```
 
-This produces `.deb` and `.rpm` packages under `src-tauri/target/release/bundle/`.
+This produces a single self-contained binary at `target/release/firmium`.
 
 ### Building for Android
 
-The Android app is a native Kotlin + Jetpack Compose app in the `android/` directory, built with Gradle independently of the desktop Tauri project.
+The Android app is a native Kotlin + Jetpack Compose app in the `android/` directory, built with Gradle independently of the desktop iced project.
 
 #### Additional Prerequisites
 
