@@ -1,6 +1,6 @@
 # Maintainer: fossisawesome <lx bax wp 73 AT moz mail DOT com>
 pkgname=firmium-desktop-bin
-pkgver=6.6.0
+pkgver=7.0.0
 pkgrel=1
 pkgdesc="Lightning fast OpenSubsonic music player (native iced/Rust)"
 arch=('x86_64')

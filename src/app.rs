@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use iced::widget::image::Handle as ImageHandle;
-use iced::widget::{button, column, container, row, scrollable, slider, stack, text, text_input, toggler};
-use iced::{Alignment, Background, Border, Color, ContentFit, Element, Length, Subscription, Task, Theme};
+use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, stack, text, text_input, toggler};
+use iced::{Alignment, Background, Border, Color, ContentFit, Element, Length, Shadow, Subscription, Task, Theme};
 
 use crate::commands::equalizer::{BandSpec, EqState};
 use crate::commands::lyrics::LyricsResult;
@@ -149,6 +149,7 @@ pub enum Message {
     PasswordInput(String),
     Connect,
     Connected(Result<(), String>),
+    ToggleSavePassword(bool),
 
     // ── Data ──────────────────────────────────────────────────────────────────
     AlbumsLoaded(Result<Vec<Album>, String>),
@@ -275,6 +276,7 @@ pub struct App {
     // ── Auth / onboarding ─────────────────────────────────────────────────────
     authed: bool,
     connecting: bool,
+    save_password: bool,
     server_input: String,
     username_input: String,
     password_input: String,
@@ -289,6 +291,7 @@ pub struct App {
     home_recent: Vec<Album>,
     home_newest: Vec<Album>,
     home_random: Vec<Album>,
+    home_recent_plays: Vec<crate::db::RecentPlay>,
     album_detail: Option<AlbumTracks>,
     album_detail_id: Option<String>,
     artists: Vec<Artist>,
@@ -430,6 +433,7 @@ impl App {
             tokens,
             authed: false,
             connecting,
+            save_password: true,
             server_input,
             username_input,
             password_input: String::new(),
@@ -441,6 +445,7 @@ impl App {
             home_recent: Vec::new(),
             home_newest: Vec::new(),
             home_random: Vec::new(),
+            home_recent_plays: Vec::new(),
             album_detail: None,
             album_detail_id: None,
             artists: Vec::new(),
@@ -618,12 +623,21 @@ impl App {
                         self.load_history_summary();
                         Task::none()
                     }
-                    View::Home if self.home_newest.is_empty() => Task::batch([
-                        Task::perform(crate::commands::subsonic::get_recent_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Recent, r)),
-                        Task::perform(crate::commands::subsonic::get_newest_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Newest, r)),
-                        Task::perform(crate::commands::subsonic::get_random_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Random, r)),
-                        Task::perform(crate::commands::subsonic::get_genres_list(state), Message::GenresLoaded),
-                    ]),
+                    View::Home => {
+                        if let Some(history) = &self.backend.history {
+                            self.home_recent_plays = history.recent_plays(15).unwrap_or_default();
+                        }
+                        if self.home_newest.is_empty() {
+                            Task::batch([
+                                Task::perform(crate::commands::subsonic::get_recent_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Recent, r)),
+                                Task::perform(crate::commands::subsonic::get_newest_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Newest, r)),
+                                Task::perform(crate::commands::subsonic::get_random_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Random, r)),
+                                Task::perform(crate::commands::subsonic::get_genres_list(state), Message::GenresLoaded),
+                            ])
+                        } else {
+                            Task::none()
+                        }
+                    }
                     _ => Task::none(),
                 }
             }
@@ -652,6 +666,10 @@ impl App {
                 self.password_input = s;
                 Task::none()
             }
+            Message::ToggleSavePassword(v) => {
+                self.save_password = v;
+                Task::none()
+            }
             Message::Connect => {
                 let server = self.server_input.trim().trim_end_matches('/').to_string();
                 let user = self.username_input.trim().to_string();
@@ -668,7 +686,9 @@ impl App {
                     Some(user.clone()),
                     Some(pass.clone()),
                 );
-                let _ = crate::commands::credentials::save_password(Some(&server), &user, &pass);
+                if self.save_password {
+                    let _ = crate::commands::credentials::save_password(Some(&server), &user, &pass);
+                }
                 Task::perform(
                     crate::commands::subsonic::validate_connection(self.backend.app_state.clone()),
                     Message::Connected,
@@ -680,6 +700,9 @@ impl App {
                 self.password_input.clear();
                 self.remember_current_account();
                 self.save_config();
+                if let Some(history) = &self.backend.history {
+                    self.home_recent_plays = history.recent_plays(15).unwrap_or_default();
+                }
                 let s = self.backend.app_state.clone();
                 Task::batch([
                     Task::perform(crate::commands::subsonic::get_albums(s.clone()), Message::AlbumsLoaded),
@@ -1030,6 +1053,16 @@ impl App {
             }
             Message::SetCrossfadeEnabled(on) => {
                 self.crossfade_enabled = on;
+                if on {
+                    if self.gapless_enabled {
+                        self.gapless_enabled = false;
+                        crate::commands::queue::set_gapless_enabled(&self.backend.bus, &self.backend.queue_state, false);
+                    }
+                    if self.bit_perfect_mode == "strict" {
+                        self.bit_perfect_mode = "relaxed".to_string();
+                        self.backend.audio_player.set_bit_perfect_mode("relaxed".to_string());
+                    }
+                }
                 crate::commands::queue::set_crossfade_settings(&self.backend.bus, &self.backend.queue_state, on, self.crossfade_duration);
                 Task::none()
             }
@@ -1040,6 +1073,10 @@ impl App {
             }
             Message::SetGapless(on) => {
                 self.gapless_enabled = on;
+                if on && self.crossfade_enabled {
+                    self.crossfade_enabled = false;
+                    crate::commands::queue::set_crossfade_settings(&self.backend.bus, &self.backend.queue_state, false, self.crossfade_duration);
+                }
                 crate::commands::queue::set_gapless_enabled(&self.backend.bus, &self.backend.queue_state, on);
                 Task::none()
             }
@@ -1587,6 +1624,7 @@ impl App {
         self.home_recent.clear();
         self.home_newest.clear();
         self.home_random.clear();
+        self.home_recent_plays.clear();
         self.album_detail = None;
         self.album_detail_id = None;
         self.artists.clear();
@@ -1771,34 +1809,56 @@ impl App {
 
     fn setup_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+
+        let save_pw_row = row![
+            checkbox(self.save_password)
+                .on_toggle(Message::ToggleSavePassword)
+                .style(move |_, status| {
+                    use iced::widget::checkbox::{Status, Style};
+                    let checked = matches!(status, Status::Active { is_checked: true } | Status::Hovered { is_checked: true });
+                    Style {
+                        background: Background::Color(if checked { t.accent } else { t.surface }),
+                        icon_color: t.bg,
+                        border: Border { color: if checked { t.accent } else { t.border }, width: 1.0, radius: 3.0.into() },
+                        text_color: None,
+                    }
+                }),
+            text("SAVE PASSWORD").size(11).style(tstyle(t.muted)),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center)
+        .width(Length::Fixed(320.0));
+
         let mut form = column![
-            icons::logo(48.0),
-            text("FIRMIUM").size(20).style(tstyle(t.accent)),
-            text("Connect to your OpenSubsonic server").size(13).style(tstyle(t.muted)),
+            text("Firmium").size(26).style(tstyle(t.accent)),
             text("SERVER URL").size(11).style(tstyle(t.muted)),
             text_input("https://music.example.com", &self.server_input)
                 .on_input(Message::ServerInput)
                 .padding(10)
-                .width(Length::Fixed(320.0)),
+                .width(Length::Fixed(320.0))
+                .style(text_input_style(t)),
             text("USERNAME").size(11).style(tstyle(t.muted)),
             text_input("username", &self.username_input)
                 .on_input(Message::UsernameInput)
                 .padding(10)
-                .width(Length::Fixed(320.0)),
+                .width(Length::Fixed(320.0))
+                .style(text_input_style(t)),
             text("PASSWORD").size(11).style(tstyle(t.muted)),
             text_input("password", &self.password_input)
                 .on_input(Message::PasswordInput)
                 .secure(true)
                 .padding(10)
-                .width(Length::Fixed(320.0)),
-            button(text(if self.connecting { "Connecting…" } else { "Connect" }).size(13))
+                .width(Length::Fixed(320.0))
+                .style(text_input_style(t)),
+            save_pw_row,
+            button(text("CONNECT").size(13))
                 .on_press(Message::Connect)
-                .padding(12)
+                .padding(14)
                 .width(Length::Fixed(320.0))
                 .style(primary_button(t)),
         ]
-        .spacing(14)
-        .align_x(Alignment::Center);
+        .spacing(12)
+        .align_x(Alignment::Start);
 
         if let Some(err) = &self.connect_error {
             form = form.push(text(err.clone()).size(12).style(tstyle(t.error)));
@@ -1809,36 +1869,30 @@ impl App {
             .padding(40)
             .style(move |_| container::Style {
                 background: Some(Background::Color(t.surface)),
-                border: Border {
-                    color: t.border,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
+                border: Border { color: t.border, width: 1.0, radius: 10.0.into() },
                 ..container::Style::default()
             });
 
-        container(card)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into()
+        let backdrop = container(text(""))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_| container::Style {
+                background: Some(Background::Color(Color { a: 0.6, ..Color::BLACK })),
+                ..container::Style::default()
+            });
+
+        stack![
+            backdrop,
+            container(card).center_x(Length::Fill).center_y(Length::Fill),
+        ]
+        .into()
     }
 
     fn shell(&self) -> Element<'_, Message> {
         let t = self.tokens;
 
-        let host = {
-            let conn = self.backend.app_state.connection.read();
-            conn.server.clone().unwrap_or_default()
-        };
-        let host = host
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .to_string();
-
         let brand = container(
             row![
-                icons::logo(20.0),
-                text(host).size(11).style(tstyle(t.muted)).width(Length::Fill),
                 icon_button(icons::USER, 16.0, t.muted, t, Message::ToggleAccountSwitcher),
             ]
             .spacing(10)
@@ -1853,8 +1907,6 @@ impl App {
             self.nav_button(icons::LIST, "Playlists", View::Playlists),
             self.nav_button(icons::SEARCH, "Search", View::Search),
             self.nav_button(icons::MUSIC, "Mix", View::Mix),
-            self.nav_button(icons::CLOUD, "Offline", View::Local),
-            self.nav_button(icons::BAR_CHART, "Recap", View::Recap),
             self.nav_button(icons::SETTINGS, "Settings", View::Settings),
         ]
         .spacing(4)
@@ -1902,10 +1954,16 @@ impl App {
     /// Modal listing saved accounts; tap to switch servers, or add a new one.
     fn account_switcher_overlay(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let (cur_server, cur_user) = {
+        let cur_server = {
             let conn = self.backend.app_state.connection.read();
-            (conn.server.clone(), conn.username.clone())
+            conn.server.clone().unwrap_or_default()
         };
+
+        let server_display = cur_server
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .trim_end_matches('/')
+            .to_string();
 
         let backdrop = button(container(text("")).width(Length::Fill).height(Length::Fill))
             .width(Length::Fill)
@@ -1916,70 +1974,36 @@ impl App {
                 ..button::Style::default()
             });
 
-        let header = row![
-            text("Accounts").size(16).style(tstyle(t.text)).width(Length::Fill),
-            icon_button(icons::CLOSE, 16.0, t.muted, t, Message::ToggleAccountSwitcher),
-        ]
-        .align_y(Alignment::Center);
-
-        let mut list = column![].spacing(2);
-        if self.accounts.is_empty() {
-            list = list.push(text("No saved accounts").size(12).style(tstyle(t.muted)));
-        }
-        for acct in &self.accounts {
-            let is_current = cur_server.as_deref() == Some(acct.server.as_str())
-                && cur_user.as_deref() == Some(acct.username.as_str());
-            let name_color = if is_current { t.accent } else { t.text };
-            let trailing: Element<'_, Message> = if is_current {
-                text("Active").size(11).style(tstyle(t.accent)).into()
-            } else {
-                icons::icon(icons::CHEVRON_RIGHT, 14.0, t.muted)
-            };
-            list = list.push(
-                button(
-                    row![
-                        icons::icon(icons::USER, 16.0, name_color),
-                        column![
-                            text(acct.username.clone()).size(13).style(tstyle(name_color)),
-                            text(acct.server.clone()).size(11).style(tstyle(t.muted)),
-                        ]
-                        .spacing(2)
-                        .width(Length::Fill),
-                        trailing,
-                    ]
-                    .spacing(10)
-                    .align_y(Alignment::Center),
-                )
-                .width(Length::Fill)
-                .padding(8)
-                .on_press(Message::SwitchAccount(acct.clone()))
-                .style(list_row_style(t)),
-            );
-        }
-
-        let add = button(
-            row![
-                icons::icon(icons::PLUS, 16.0, t.text),
-                text("Add account").size(13).style(tstyle(t.text)),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-        )
-        .width(Length::Fill)
-        .padding(8)
-        .on_press(Message::AddAccount)
-        .style(list_row_style(t));
+        let disconnect_btn = button(text("DISCONNECT").size(13))
+            .on_press(Message::Logout)
+            .padding(14)
+            .width(Length::Fixed(320.0))
+            .style(move |_, status| {
+                use iced::widget::button::Status;
+                let base = Color { r: 0.87, g: 0.26, b: 0.21, a: 1.0 };
+                let bg = match status {
+                    Status::Hovered | Status::Pressed => Color { r: 0.75, g: 0.18, b: 0.14, a: 1.0 },
+                    _ => base,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::BLACK,
+                    border: Border { radius: 4.0.into(), ..Border::default() },
+                    ..button::Style::default()
+                }
+            });
 
         let card = container(
             column![
-                header,
-                scrollable(list).height(Length::Fixed(240.0)),
-                add,
+                text("Connected").size(26).style(tstyle(t.accent)),
+                text(server_display).size(13).style(tstyle(t.muted)),
+                disconnect_btn,
             ]
-            .spacing(14),
+            .spacing(20)
+            .align_x(Alignment::Start),
         )
         .width(Length::Fixed(400.0))
-        .padding(20)
+        .padding(40)
         .style(move |_th| container::Style {
             background: Some(Background::Color(t.surface)),
             border: Border { radius: 10.0.into(), width: 1.0, color: t.border },
@@ -2075,7 +2099,8 @@ impl App {
                 .on_submit(Message::CreatePlaylistAndAdd)
                 .padding(8)
                 .size(13)
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .style(text_input_style(t)),
             button(icons::icon(icons::PLUS, 16.0, t.bg))
                 .padding(8)
                 .on_press(Message::CreatePlaylistAndAdd)
@@ -2116,7 +2141,7 @@ impl App {
                 subtitle,
                 create_row,
                 text("Your playlists").size(11).style(tstyle(t.muted)),
-                scrollable(list).height(Length::Fixed(260.0)),
+                scrollable(list).height(Length::Fixed(260.0)).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
             ]
             .spacing(14),
         )
@@ -2223,7 +2248,8 @@ impl App {
                 .on_input(Message::SearchInput)
                 .on_submit(Message::SubmitSearch)
                 .padding(10)
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .style(text_input_style(t)),
             button(text("Search").size(13))
                 .on_press(Message::SubmitSearch)
                 .padding(10)
@@ -2245,7 +2271,7 @@ impl App {
                     col = col.push(self.song_row(s));
                 }
             }
-            scrollable(col).height(Length::Fill).into()
+            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
         } else {
             text("Type a query and press Enter").size(12).style(tstyle(t.muted)).into()
         };
@@ -2562,7 +2588,7 @@ impl App {
         let sidebar = container(nav)
             .width(Length::Fixed(180.0))
             .height(Length::Fill)
-            .style(fill_bg(t.surface));
+            .style(fill_bg(t.bg));
 
         let sep = container(text(""))
             .width(Length::Fixed(1.0))
@@ -2578,7 +2604,9 @@ impl App {
             SettingsCategory::Account => self.settings_account(t),
             SettingsCategory::Debug => self.settings_debug(t),
         })
-        .height(Length::Fill);
+        .height(Length::Fill)
+        .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+        .style(thin_scroll_style(t));
 
         row![sidebar, sep, container(panel).padding([0, 4]).width(Length::Fill)]
             .height(Length::Fill)
@@ -2586,23 +2614,21 @@ impl App {
     }
 
     fn settings_appearance(&self, t: Tokens) -> Element<'_, Message> {
-        let mut theme_grid = column![].spacing(8);
-        for chunk in self.themes.chunks(4) {
-            let mut r = row![].spacing(8);
-            for entry in chunk {
-                r = r.push(self.theme_swatch(entry));
-            }
-            theme_grid = theme_grid.push(r);
-        }
+        let selected = self.themes.iter().find(|e| e.id == self.theme_id).cloned();
+        let theme_picker = pick_list(self.themes.clone(), selected, |entry: ThemeEntry| {
+            Message::SelectTheme(entry.id)
+        })
+        .width(Length::Fixed(200.0))
+        .into();
         column![
             sett_panel_title("Appearance", t),
-            sett_row("Theme", "Color scheme for the interface", t, theme_grid.into()),
             sett_row(
                 "Window Decorations",
-                "Show the native title bar and window borders",
+                "Show native title bar and borders",
                 t,
-                toggler(self.window_decorations).on_toggle(Message::SetDecorations).into(),
+                toggler(self.window_decorations).on_toggle(Message::SetDecorations).style(toggler_style(t)).into(),
             ),
+            sett_row("Theme", "Color scheme for the interface", t, theme_picker),
         ]
         .spacing(0)
         .into()
@@ -2639,7 +2665,8 @@ impl App {
                 row![
                     slider(1.0..=12.0, self.crossfade_duration, Message::SetCrossfadeDuration)
                         .step(1.0)
-                        .width(Length::Fixed(100.0)),
+                        .width(Length::Fixed(100.0))
+                        .style(slider_style(t)),
                     text(format!("{:.0}s", self.crossfade_duration)).size(12).style(tstyle(t.muted)),
                 ]
                 .spacing(10)
@@ -2652,15 +2679,15 @@ impl App {
         column![
             sett_panel_title("Playback", t),
             sett_row("Crossfade", "Smoothly blend between tracks", t,
-                toggler(self.crossfade_enabled).on_toggle(Message::SetCrossfadeEnabled).into()),
+                toggler(self.crossfade_enabled).on_toggle(Message::SetCrossfadeEnabled).style(toggler_style(t)).into()),
             crossfade_dur,
             sett_row("Gapless Playback", "Pre-buffer the next track for seamless transitions", t,
-                toggler(self.gapless_enabled).on_toggle(Message::SetGapless).into()),
+                toggler(self.gapless_enabled).on_toggle(Message::SetGapless).style(toggler_style(t)).into()),
             sett_row("ReplayGain", "Normalize track loudness using server-provided gain values", t,
-                toggler(self.replay_gain_enabled).on_toggle(Message::SetReplayGain).into()),
-            sett_row("Auto-continue (Smart Radio)", "Adds similar tracks when the queue runs out", t,
-                toggler(self.auto_continue).on_toggle(Message::SetAutoContinue).into()),
-            sett_row("Bit-Perfect Audio", "Match each track's native sample rate", t,
+                toggler(self.replay_gain_enabled).on_toggle(Message::SetReplayGain).style(toggler_style(t)).into()),
+            sett_row("Continue playing after queue ends", "Smart Radio keeps the music going by adding similar tracks when the queue runs out", t,
+                toggler(self.auto_continue).on_toggle(Message::SetAutoContinue).style(toggler_style(t)).into()),
+            sett_row("Bit-Perfect Audio", "Matches native sample rate; crossfade is disabled", t,
                 row![bp("Off", "off"), bp("Relaxed", "relaxed"), bp("Strict", "strict")].spacing(4).into()),
         ]
         .spacing(0)
@@ -2694,40 +2721,39 @@ impl App {
     }
 
     fn settings_downloads(&self, t: Tokens) -> Element<'_, Message> {
-        let formats = ["raw", "mp3", "flac", "wav", "opus"];
-        let format_labels = ["Original", "MP3", "FLAC", "WAV", "Opus"];
-        let mut fmt_btns = row![].spacing(4);
-        for (id, label) in formats.iter().zip(format_labels.iter()) {
-            let active = self.download_format == *id;
-            let id_owned = id.to_string();
-            fmt_btns = fmt_btns.push(
-                button(text(*label).size(12).style(tstyle(if active { t.bg } else { t.text })))
-                    .padding(8)
-                    .on_press(Message::SetDownloadFormat(id_owned))
-                    .style(move |_t, status| {
-                        let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
-                        button::Style {
-                            background: Some(Background::Color(if active {
-                                t.accent
-                            } else if h {
-                                t.surface
-                            } else {
-                                t.surface2
-                            })),
-                            text_color: if active { t.bg } else { t.text },
-                            border: Border { radius: 4.0.into(), ..Border::default() },
-                            ..button::Style::default()
-                        }
-                    }),
-            );
+        fn fmt_label(id: &str) -> &'static str {
+            match id {
+                "mp3" => "MP3",
+                "flac" => "FLAC",
+                "wav" => "WAV",
+                "opus" => "Opus",
+                _ => "Original",
+            }
         }
+        let selected = fmt_label(&self.download_format);
+        let fmt_picker = pick_list(
+            ["Original", "MP3", "FLAC", "WAV", "Opus"],
+            Some(selected),
+            |label: &'static str| {
+                let id = match label {
+                    "MP3" => "mp3",
+                    "FLAC" => "flac",
+                    "WAV" => "wav",
+                    "Opus" => "opus",
+                    _ => "raw",
+                };
+                Message::SetDownloadFormat(id.to_string())
+            },
+        )
+        .width(Length::Fixed(200.0))
+        .into();
         column![
             sett_panel_title("Downloads", t),
             sett_row(
                 "Download Format",
-                "Format used when downloading. \"Original\" saves exactly as stored on the server.",
+                "Format used when downloading tracks and albums. \"Original\" saves the file exactly as stored on the server.",
                 t,
-                fmt_btns.into(),
+                fmt_picker,
             ),
         ]
         .spacing(0)
@@ -2740,7 +2766,7 @@ impl App {
             "Last.fm Integration",
             "Fetch richer artist bio and photo using your own Last.fm API key",
             t,
-            toggler(self.lastfm_enabled).on_toggle(Message::SetLastfmEnabled).into(),
+            toggler(self.lastfm_enabled).on_toggle(Message::SetLastfmEnabled).style(toggler_style(t)).into(),
         ));
         if self.lastfm_enabled {
             col = col.push(sett_row(
@@ -2751,6 +2777,7 @@ impl App {
                     .on_input(Message::SetLastfmKey)
                     .padding([6, 10])
                     .width(Length::Fixed(220.0))
+                    .style(text_input_style(t))
                     .into(),
             ));
             col = col.push(sett_row(
@@ -2762,6 +2789,7 @@ impl App {
                     .secure(true)
                     .padding([6, 10])
                     .width(Length::Fixed(220.0))
+                    .style(text_input_style(t))
                     .into(),
             ));
         }
@@ -2769,7 +2797,7 @@ impl App {
             "ListenBrainz Scrobbling",
             "Submit each completed track to ListenBrainz using your user token",
             t,
-            toggler(self.listenbrainz_enabled).on_toggle(Message::SetListenbrainzEnabled).into(),
+            toggler(self.listenbrainz_enabled).on_toggle(Message::SetListenbrainzEnabled).style(toggler_style(t)).into(),
         ));
         if self.listenbrainz_enabled {
             col = col.push(sett_row(
@@ -2781,20 +2809,21 @@ impl App {
                     .secure(true)
                     .padding([6, 10])
                     .width(Length::Fixed(220.0))
+                    .style(text_input_style(t))
                     .into(),
             ));
         }
         col = col.push(sett_row(
             "External Lyrics (LRCLIB)",
-            "Fetch synced lyrics from lrclib.net when your server has none",
+            "Fetch synced lyrics from lrclib.net when your server has none. Sends song title and artist name.",
             t,
-            toggler(self.lrclib_enabled).on_toggle(Message::SetLrclibEnabled).into(),
+            toggler(self.lrclib_enabled).on_toggle(Message::SetLrclibEnabled).style(toggler_style(t)).into(),
         ));
         col = col.push(sett_row(
             "Word-by-Word Lyrics Animation",
-            "Karaoke-style fill across the active synced lyric line",
+            "Karaoke-style fill on the active lyric line, with per-word timing estimated from the line's timestamps. Disable for plain line-by-line highlighting.",
             t,
-            toggler(self.lyrics_word_fill).on_toggle(Message::SetLyricsWordFill).into(),
+            toggler(self.lyrics_word_fill).on_toggle(Message::SetLyricsWordFill).style(toggler_style(t)).into(),
         ));
         col.into()
     }
@@ -2919,36 +2948,6 @@ impl App {
         .into()
     }
 
-    fn theme_swatch(&self, entry: &ThemeEntry) -> Element<'_, Message> {
-        let t = self.tokens;
-        let active = entry.id == self.theme_id;
-        let acc = Tokens::from_entry(entry).accent;
-        let swatch = container(text(""))
-            .width(Length::Fixed(90.0))
-            .height(Length::Fixed(26.0))
-            .style(move |_| container::Style {
-                background: Some(Background::Color(acc)),
-                border: Border {
-                    color: if active { t.text } else { t.border },
-                    width: if active { 2.0 } else { 1.0 },
-                    radius: 4.0.into(),
-                },
-                ..container::Style::default()
-            });
-        button(
-            column![swatch, text(entry.name.clone()).size(10).style(tstyle(if active { t.accent } else { t.muted }))]
-                .spacing(4)
-                .align_x(Alignment::Center),
-        )
-        .padding(4)
-        .on_press(Message::SelectTheme(entry.id.clone()))
-        .style(|_t, _status| button::Style {
-            background: None,
-            ..button::Style::default()
-        })
-        .into()
-    }
-
     fn current_song_id(&self) -> Option<&str> {
         if self.queue_idx >= 0 {
             self.queue.get(self.queue_idx as usize).map(|s| s.id.as_str())
@@ -3055,7 +3054,7 @@ impl App {
             list = list.push(self.track_row(i, track, Message::PlayAlbumAt(i)));
         }
 
-        column![back, header, scrollable(list).height(Length::Fill)]
+        column![back, header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))]
             .spacing(16)
             .into()
     }
@@ -3230,7 +3229,7 @@ impl App {
         for artist in self.artists.iter().take(300) {
             list = list.push(self.artist_row(artist));
         }
-        column![header, scrollable(list).height(Length::Fill)].spacing(16).into()
+        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(16).into()
     }
 
     fn artist_row(&self, artist: &Artist) -> Element<'_, Message> {
@@ -3307,7 +3306,7 @@ impl App {
             );
         }
 
-        column![head, scrollable(list).height(Length::Fill)]
+        column![head, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))]
             .spacing(12)
             .into()
     }
@@ -3342,7 +3341,7 @@ impl App {
             text(name).size(24).style(tstyle(t.text)),
             text(format!("{} songs", self.genre_songs.len())).size(11).style(tstyle(t.muted)),
             play,
-            scrollable(list).height(Length::Fill),
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
         ]
         .spacing(12)
         .into()
@@ -3380,7 +3379,7 @@ impl App {
                     .style(list_row_style(t)),
             );
         }
-        column![header, scrollable(list).height(Length::Fill)].spacing(16).into()
+        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(16).into()
     }
 
     fn local_album_detail_view(&self) -> Element<'_, Message> {
@@ -3419,7 +3418,7 @@ impl App {
             list = list.push(self.track_row(i, track, Message::PlayLocalAlbumAt(i)));
         }
 
-        column![back_button(t), header, scrollable(list).height(Length::Fill)]
+        column![back_button(t), header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))]
             .spacing(16)
             .into()
     }
@@ -3431,7 +3430,7 @@ impl App {
         for v in &self.playlists {
             list = list.push(self.playlist_row(v));
         }
-        column![header, scrollable(list).height(Length::Fill)].spacing(16).into()
+        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(16).into()
     }
 
     fn playlist_row(&self, v: &serde_json::Value) -> Element<'_, Message> {
@@ -3496,7 +3495,7 @@ impl App {
                 play,
             ]
             .spacing(8),
-            scrollable(list).height(Length::Fill),
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
         ]
         .spacing(16)
         .into()
@@ -3579,7 +3578,7 @@ impl App {
                     }),
                 );
             }
-            scrollable(list).height(Length::Fill).into()
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
         };
 
         container(column![header, body].spacing(12))
@@ -3634,7 +3633,7 @@ impl App {
                         col = col.push(text(value).size(sz).style(tstyle(c)));
                     }
                 }
-                scrollable(col).height(Length::Fill).into()
+                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
             }
         };
 
@@ -3654,22 +3653,142 @@ impl App {
         };
         scrollable(
             column![
-                row![
-                    text(format!("Good {},", time_of_day())).size(22).style(tstyle(t.muted)),
-                    text(username).size(22).style(tstyle(t.text)).font(iced::Font {
+                column![
+                    text(format!("GOOD {},", time_of_day().to_uppercase()))
+                        .size(13)
+                        .style(tstyle(t.muted)),
+                    text(username).size(36).style(tstyle(t.accent)).font(iced::Font {
                         weight: iced::font::Weight::Bold,
                         ..iced::Font::MONOSPACE
                     }),
                 ]
-                .spacing(8),
-                self.home_section("RECENTLY ADDED", &self.home_recent),
-                self.home_section("NEWEST", &self.home_newest),
+                .spacing(4),
+                self.home_recent_songs_view(),
+                self.home_recent_artists(),
+                self.home_section("RECENTLY PLAYED ALBUMS", &self.home_recent),
                 self.home_section("RANDOM PICKS", &self.home_random),
                 self.home_genres(),
             ]
             .spacing(28),
         )
         .height(Length::Fill)
+        .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+        .style(thin_scroll_style(t))
+        .into()
+    }
+
+    fn home_recent_songs_view(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        if self.home_recent_plays.is_empty() {
+            return column![].into();
+        }
+        let mut cards = row![].spacing(12);
+        for play in self.home_recent_plays.iter().take(8) {
+            let artist = play.artist_name.clone().unwrap_or_default();
+            let card_content = column![
+                self.cover_image(play.cover_art_id.as_deref(), 130.0),
+                text(play.track_title.clone()).size(12).style(tstyle(t.text)).font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..iced::Font::MONOSPACE
+                }),
+                text(artist).size(11).style(tstyle(t.muted)),
+            ]
+            .spacing(6)
+            .width(Length::Fixed(130.0));
+
+            let card: Element<'_, Message> = if let Some(aid) = play.album_id.clone() {
+                button(card_content)
+                    .padding(4)
+                    .on_press(Message::Navigate(View::AlbumDetail(aid)))
+                    .style(move |_th, status| {
+                        let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                        button::Style {
+                            background: if h { Some(Background::Color(t.surface)) } else { None },
+                            text_color: t.text,
+                            border: Border { radius: 4.0.into(), ..Border::default() },
+                            ..button::Style::default()
+                        }
+                    })
+                    .into()
+            } else {
+                button(card_content)
+                    .padding(4)
+                    .style(move |_th, status| {
+                        let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                        button::Style {
+                            background: if h { Some(Background::Color(t.surface)) } else { None },
+                            text_color: t.text,
+                            border: Border { radius: 4.0.into(), ..Border::default() },
+                            ..button::Style::default()
+                        }
+                    })
+                    .into()
+            };
+            cards = cards.push(card);
+        }
+        column![
+            text("RECENTLY PLAYED").size(11).style(tstyle(t.muted)),
+            cards,
+        ]
+        .spacing(12)
+        .into()
+    }
+
+    fn home_recent_artists(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        let mut seen = std::collections::HashSet::new();
+        let artists: Vec<(String, String)> = self
+            .home_recent_plays
+            .iter()
+            .filter_map(|p| {
+                let id = p.artist_id.as_ref()?;
+                let name = p.artist_name.as_ref()?;
+                if seen.insert(id.clone()) {
+                    Some((id.clone(), name.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let body: Element<'_, Message> = if artists.is_empty() {
+            text("No recent artists found.")
+                .size(12)
+                .style(tstyle(t.muted))
+                .into()
+        } else {
+            let mut col = column![].spacing(2);
+            for (id, name) in artists {
+                let avatar = container(icons::icon(icons::USER, 18.0, t.muted))
+                    .center_x(Length::Fixed(36.0))
+                    .center_y(Length::Fixed(36.0))
+                    .style(move |_| container::Style {
+                        background: Some(Background::Color(t.surface2)),
+                        border: Border { radius: 18.0.into(), ..Border::default() },
+                        ..container::Style::default()
+                    });
+                col = col.push(
+                    button(
+                        row![
+                            avatar,
+                            text(name).size(13).style(tstyle(t.text)),
+                        ]
+                        .spacing(10)
+                        .align_y(Alignment::Center),
+                    )
+                    .padding([6, 8])
+                    .on_press(Message::Navigate(View::ArtistDetail(id)))
+                    .style(list_row_style(t)),
+                );
+            }
+            col.into()
+        };
+
+        column![
+            text("RECENTLY PLAYED ARTISTS").size(11).style(tstyle(t.muted)),
+            body,
+        ]
+        .spacing(10)
         .into()
     }
 
@@ -3699,8 +3818,7 @@ impl App {
         }
         column![
             text("GENRES").size(11).style(tstyle(t.muted)),
-            scrollable(chips)
-                .direction(scrollable::Direction::Horizontal(scrollable::Scrollbar::new())),
+            chips,
         ]
         .spacing(10)
         .into()
@@ -3712,13 +3830,12 @@ impl App {
             return column![].into();
         }
         let mut cards = row![].spacing(12);
-        for a in albums.iter().take(12) {
+        for a in albums.iter().take(8) {
             cards = cards.push(self.album_card(a));
         }
         column![
             text(title).size(11).style(tstyle(t.muted)),
-            scrollable(cards)
-                .direction(scrollable::Direction::Horizontal(scrollable::Scrollbar::new())),
+            cards,
         ]
         .spacing(12)
         .into()
@@ -3767,7 +3884,7 @@ impl App {
             for m in &self.similar_results {
                 col = col.push(self.song_row(&m.song));
             }
-            scrollable(col).height(Length::Fill).into()
+            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
         };
 
         container(column![header, body].spacing(12))
@@ -3813,7 +3930,7 @@ impl App {
                         col = col.push(stat_row("Track peak", format!("{v:.3}"), t));
                     }
                 }
-                scrollable(col).height(Length::Fill).into()
+                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
             }
         };
 
@@ -3897,7 +4014,7 @@ impl App {
                             col = col.push(
                                 row![
                                     text(fmt_freq(b.freq)).size(10).style(tstyle(t.muted)).width(Length::Fixed(46.0)),
-                                    slider(-12.0..=12.0, b.gain, move |g| Message::EqBandChanged(i, g)).step(0.5).width(Length::Fill),
+                                    slider(-12.0..=12.0, b.gain, move |g| Message::EqBandChanged(i, g)).step(0.5).width(Length::Fill).style(slider_style(t)),
                                     text(format!("{:+.1}", b.gain)).size(10).style(tstyle(t.muted)).width(Length::Fixed(40.0)),
                                 ]
                                 .spacing(8)
@@ -3916,7 +4033,8 @@ impl App {
                         .on_submit(Message::SaveEqProfile)
                         .padding(6)
                         .size(12)
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .style(text_input_style(t)),
                     button(text("Save").size(12).style(tstyle(t.bg)))
                         .padding(6)
                         .on_press(Message::SaveEqProfile)
@@ -3963,7 +4081,7 @@ impl App {
             }
         };
 
-        container(column![header, scrollable(body).height(Length::Fill)].spacing(12))
+        container(column![header, scrollable(body).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(12))
             .width(Length::Fixed(340.0))
             .height(Length::Fill)
             .padding(16)
@@ -3976,28 +4094,25 @@ impl App {
         let song = if self.queue_idx >= 0 { self.queue.get(self.queue_idx as usize) } else { None };
 
         let cover = self.cover_image(song.and_then(|s| s.cover_art_id.as_deref()), 44.0);
-        let info = column![
-            text(song.map(|s| s.title.clone()).unwrap_or_else(|| "—".to_string())).size(13).style(tstyle(t.text)),
-            text(song.map(|s| s.artist.clone()).unwrap_or_default()).size(11).style(tstyle(t.muted)),
-            text(song.and_then(|s| s.track_info.clone()).unwrap_or_default()).size(10).style(tstyle(t.muted)),
-        ]
-        .spacing(2)
-        .width(Length::Fixed(180.0));
+        let title = text(song.map(|s| s.title.clone()).unwrap_or_else(|| "No track selected".to_string()))
+            .size(13)
+            .style(tstyle(t.text))
+            .width(Length::Fill);
         let volume = row![
             icons::icon(icons::VOLUME, 16.0, t.muted),
-            slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01).width(Length::Fixed(55.0)),
+            slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01).width(Length::Fixed(55.0)).style(slider_style(t)),
         ]
         .spacing(6)
         .align_y(Alignment::Center);
-        let left = container(row![cover, info, volume].spacing(14).align_y(Alignment::Center))
-            .width(Length::Fixed(240.0));
+        let left = container(row![cover, title, volume].spacing(10).align_y(Alignment::Center))
+            .width(Length::Fixed(290.0));
 
         let dur = self.duration.unwrap_or(0.0).max(0.1) as f32;
         let pos = (self.position as f32).clamp(0.0, dur);
         let center = container(
             row![
                 text(fmt_time(self.position)).size(11).style(tstyle(t.muted)),
-                slider(0.0..=dur, pos, Message::SeekTo).step(0.5).width(Length::Fill),
+                slider(0.0..=dur, pos, Message::SeekTo).step(0.5).width(Length::Fill).style(slider_style(t)),
                 text(fmt_time(self.duration.unwrap_or(0.0))).size(11).style(tstyle(t.muted)),
             ]
             .spacing(10)
@@ -4007,40 +4122,36 @@ impl App {
 
         let playing = matches!(self.playback_state, PlaybackState::Playing);
         let pp_icon = if playing { icons::PAUSE } else { icons::PLAY };
-        let shuffle_color = if self.shuffle { t.accent } else { t.muted };
         let repeat_color = if self.repeat_one || self.repeat_all { t.accent } else { t.muted };
         let viz_color = if self.right_panel == Some(Panel::Visualizer) { t.accent } else { t.muted };
         let lyr_color = if self.right_panel == Some(Panel::Lyrics) { t.accent } else { t.muted };
         let q_color = if self.right_panel == Some(Panel::Queue) { t.accent } else { t.muted };
-        let as_color = if self.right_panel == Some(Panel::AudioStats) { t.accent } else { t.muted };
-        let sim_color = if self.right_panel == Some(Panel::Similar) { t.accent } else { t.muted };
 
         let controls = row![
             ctrl_button(icons::PREV, 15.0, t.text, t, Message::Prev),
             main_ctrl_button(pp_icon, 20.0, t, Message::TogglePlay),
             ctrl_button(icons::NEXT, 15.0, t.text, t, Message::Next),
-            ctrl_button(icons::SHUFFLE, 16.0, shuffle_color, t, Message::ToggleShuffle),
             ctrl_button(icons::REPEAT, 16.0, repeat_color, t, Message::CycleRepeat),
             ctrl_button(icons::LYRICS, 16.0, lyr_color, t, Message::TogglePanel(Panel::Lyrics)),
             ctrl_button(icons::QUEUE, 16.0, q_color, t, Message::TogglePanel(Panel::Queue)),
-            ctrl_button(icons::INFO, 16.0, as_color, t, Message::TogglePanel(Panel::AudioStats)),
-            ctrl_button(icons::PLAY_CIRCLE, 16.0, sim_color, t, Message::TogglePanel(Panel::Similar)),
             ctrl_button(icons::WAVEFORM, 16.0, viz_color, t, Message::TogglePanel(Panel::Visualizer)),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
         let right = container(controls).width(Length::Fixed(280.0));
 
-        container(row![left, center, right].spacing(12).align_y(Alignment::Center))
-            .width(Length::Fill)
-            .height(Length::Fixed(75.0))
-            .padding(iced::Padding { top: 0.0, right: 30.0, bottom: 0.0, left: 30.0 })
-            .style(move |_| container::Style {
-                background: Some(Background::Color(t.surface)),
-                border: Border { color: t.border, width: 1.0, ..Border::default() },
-                ..container::Style::default()
-            })
-            .into()
+        column![
+            container(text(""))
+                .width(Length::Fill)
+                .height(Length::Fixed(1.0))
+                .style(fill_bg(t.border)),
+            container(row![left, center, right].spacing(12).align_y(Alignment::Center))
+                .width(Length::Fill)
+                .height(Length::Fixed(60.0))
+                .padding(iced::Padding { top: 8.0, right: 30.0, bottom: 8.0, left: 30.0 })
+                .style(fill_bg(t.surface)),
+        ]
+        .into()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -4123,25 +4234,28 @@ fn sett_row<'a>(
         control,
     ]
     .spacing(16)
-    .align_y(Alignment::Start)
+    .align_y(Alignment::Center)
     .padding([15, 10])
     .into()
 }
 
-/// Bordered panel heading for a settings category content area.
+/// Settings category heading with a bottom separator line.
 fn sett_panel_title<'a>(title: impl Into<String>, t: Tokens) -> Element<'a, Message> {
-    container(
-        text(title.into()).size(16).style(tstyle(t.text)).font(iced::Font {
-            weight: iced::font::Weight::Bold,
-            ..iced::Font::MONOSPACE
-        }),
-    )
-    .padding(iced::Padding { top: 16.0, right: 10.0, bottom: 12.0, left: 10.0 })
-    .width(Length::Fill)
-    .style(move |_| container::Style {
-        border: Border { color: t.border, width: 1.0, ..Border::default() },
-        ..container::Style::default()
-    })
+    column![
+        container(
+            text(title.into()).size(16).style(tstyle(t.text)).font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..iced::Font::MONOSPACE
+            }),
+        )
+        .padding(iced::Padding { top: 16.0, right: 10.0, bottom: 12.0, left: 10.0 })
+        .width(Length::Fill),
+        container(text(""))
+            .height(Length::Fixed(1.0))
+            .width(Length::Fill)
+            .style(fill_bg(t.border)),
+    ]
+    .spacing(0)
     .into()
 }
 
@@ -4183,7 +4297,7 @@ fn back_button<'a>(t: Tokens) -> Element<'a, Message> {
 fn setting_toggle<'a>(label: &'a str, on: bool, on_toggle: fn(bool) -> Message, t: Tokens) -> Element<'a, Message> {
     row![
         text(label).size(13).style(tstyle(t.text)).width(Length::Fill),
-        toggler(on).on_toggle(on_toggle),
+        toggler(on).on_toggle(on_toggle).style(toggler_style(t)),
     ]
     .spacing(12)
     .align_y(Alignment::Center)
@@ -4244,6 +4358,94 @@ fn main_ctrl_button<'a>(src: &'static str, size: f32, t: Tokens, msg: Message) -
 /// height, used by the windowed album list.
 const ALBUM_ROW_H: f32 = 60.0;
 const VIEWPORT_H: f32 = 640.0;
+
+fn text_input_style(t: Tokens) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    move |_theme, status| {
+        let focused = matches!(status, text_input::Status::Focused { .. });
+        text_input::Style {
+            background: Background::Color(t.bg),
+            border: Border {
+                color: if focused { t.accent } else { t.border },
+                width: 1.0,
+                radius: 2.0.into(),
+            },
+            icon: t.muted,
+            placeholder: t.muted,
+            value: t.text,
+            selection: t.accent_dim,
+        }
+    }
+}
+
+fn slider_style(t: Tokens) -> impl Fn(&Theme, slider::Status) -> slider::Style {
+    move |_theme, _status| {
+        slider::Style {
+            rail: slider::Rail {
+                backgrounds: (
+                    Background::Color(t.accent),
+                    Background::Color(t.surface2),
+                ),
+                width: 4.0,
+                border: Border { radius: 10.0.into(), ..Border::default() },
+            },
+            handle: slider::Handle {
+                shape: slider::HandleShape::Circle { radius: 7.0 },
+                background: Background::Color(t.accent),
+                border_width: 0.0,
+                border_color: Color::TRANSPARENT,
+            },
+        }
+    }
+}
+
+fn thin_scrollbar() -> scrollable::Scrollbar {
+    scrollable::Scrollbar::new().width(4).scroller_width(3)
+}
+
+fn thin_scroll_style(t: Tokens) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
+    move |_, _| {
+        let rail = scrollable::Rail {
+            background: None,
+            border: Border::default(),
+            scroller: scrollable::Scroller {
+                background: Background::Color(Color { a: 0.35, ..t.muted }),
+                border: Border { radius: 3.0.into(), ..Border::default() },
+            },
+        };
+        scrollable::Style {
+            container: container::Style::default(),
+            vertical_rail: rail,
+            horizontal_rail: rail,
+            gap: None,
+            auto_scroll: scrollable::AutoScroll {
+                background: Background::Color(t.surface),
+                border: Border::default(),
+                shadow: Shadow::default(),
+                icon: t.muted,
+            },
+        }
+    }
+}
+
+fn toggler_style(t: Tokens) -> impl Fn(&Theme, toggler::Status) -> toggler::Style {
+    move |_theme, status| {
+        let on = matches!(
+            status,
+            toggler::Status::Active { is_toggled: true } | toggler::Status::Hovered { is_toggled: true }
+        );
+        toggler::Style {
+            background: if on { Background::Color(t.accent) } else { Background::Color(t.surface2) },
+            background_border_width: if on { 0.0 } else { 1.0 },
+            background_border_color: if on { t.accent } else { t.border },
+            foreground: if on { Background::Color(t.bg) } else { Background::Color(t.muted) },
+            foreground_border_width: 0.0,
+            foreground_border_color: Color::TRANSPARENT,
+            text_color: None,
+            border_radius: None,
+            padding_ratio: 0.15,
+        }
+    }
+}
 
 fn stat_row(label: &'static str, val: String, t: Tokens) -> Element<'static, Message> {
     row![

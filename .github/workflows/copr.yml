@@ -1,8 +1,7 @@
 name: Publish to COPR
 
 # Fires after the Release workflow completes successfully, ensuring all
-# build artifacts (including the RPM) are already uploaded before we try
-# to fetch them.
+# build artifacts are already uploaded before we try to fetch them.
 on:
   workflow_run:
     workflows: ["Release"]
@@ -24,14 +23,13 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
-    # Run in a Fedora container so rpmbuild uses the correct macros and
-    # doesn't inject Ubuntu-style xcb BuildRequires into the SRPM.
+    # Run in a Fedora container so rpmbuild uses the correct macros.
     container:
       image: fedora:42
 
     steps:
       - name: Install tools
-        run: dnf install -y rpm-build copr-cli gh git
+        run: dnf install -y rpm-build rpmdevtools copr-cli gh git curl
 
       # Containers run as root; mark all directories safe so git/gh work.
       - name: Fix git safe directory
@@ -55,22 +53,6 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
 
-      # Find the RPM asset name — Tauri uses productName in the filename,
-      # so we grep rather than hardcode to handle casing (e.g. Firmium vs firmium).
-      - name: Find RPM asset name
-        id: rpm
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          RPM=$(gh release view "$TAG" --json assets \
-            -q '.assets[].name' | grep -i '\.rpm$' | head -1)
-          if [ -z "$RPM" ]; then
-            echo "No RPM asset found in release $TAG" >&2
-            exit 1
-          fi
-          echo "filename=$RPM" >> $GITHUB_OUTPUT
-
       # COPR_LOGIN is the "Login" field from copr.fedorainfracloud.org/api,
       # which may differ from your username. COPR_API_TOKEN is the token there.
       - name: Configure copr-cli
@@ -86,23 +68,18 @@ jobs:
 
       - name: Build SRPM
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
           VERSION: ${{ steps.version.outputs.version }}
-          RPM_FILENAME: ${{ steps.rpm.outputs.filename }}
         run: |
-          mkdir -p ~/rpmbuild/{SPECS,SOURCES,SRPMS}
+          rpmdev-setuptree
           DATE=$(date "+%a %b %d %Y")
           sed \
             -e "s/VERSION_PLACEHOLDER/$VERSION/g" \
-            -e "s/RPM_FILENAME_PLACEHOLDER/$RPM_FILENAME/g" \
             -e "s/CHANGELOG_DATE_PLACEHOLDER/$DATE/g" \
             packaging/firmium.spec > ~/rpmbuild/SPECS/firmium.spec
-          # Download the pre-built RPM so rpmbuild can include it in the SRPM.
-          gh release download "$TAG" \
-            --pattern "$RPM_FILENAME" \
-            --dir ~/rpmbuild/SOURCES/
-          rpmbuild -bs --nodeps ~/rpmbuild/SPECS/firmium.spec
+          curl -fsSL "https://github.com/fossisawesome/firmium/archive/${TAG}.tar.gz" \
+            -o ~/rpmbuild/SOURCES/${TAG}.tar.gz
+          rpmbuild -bs ~/rpmbuild/SPECS/firmium.spec
 
       - name: Submit to COPR
         env:

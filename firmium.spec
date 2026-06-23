@@ -1,6 +1,6 @@
 Name:           firmium
-Version:        6.6.0
-Release:        1%{?dist}
+Version:        7.0.0
+Release:        1
 Summary:        OpenSubsonic music streaming desktop client
 
 License:        GPL-3.0-only

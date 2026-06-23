@@ -11,28 +11,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  web:
-    name: Web (check + test)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Svelte/TS check
-        run: npm run check
-
-      - name: Run tests
-        run: npm test
-
   rust:
     name: Rust (test + clippy)
     runs-on: ubuntu-latest
@@ -43,7 +21,15 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libasound2-dev libssl-dev libsecret-1-dev libxdo-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+          sudo apt-get install -y \
+            libasound2-dev \
+            libssl-dev \
+            libsecret-1-dev \
+            libxkbcommon-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -52,15 +38,11 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
       - name: Run tests
-        working-directory: src-tauri
         run: cargo test
 
       - name: Run clippy
-        working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
   android:

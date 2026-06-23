@@ -63,68 +63,165 @@ jobs:
             return data.id;
           result-encoding: string
 
-  build:
+  build-linux:
     needs: create-release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-22.04
-            args: "--bundles deb,rpm"
-          - platform: windows-latest
-            args: "--bundles nsis"
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
-      # Linux only: Tauri system dependencies + libsecret for keyring
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
+            libasound2-dev \
             libssl-dev \
-            libxdo-dev \
+            libsecret-1-dev \
+            libxkbcommon-dev \
+            libxcb1-dev \
             libxcb-render0-dev \
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
-            libsecret-1-dev \
-            libglib2.0-dev \
-            libasound2-dev \
-            patchelf
+            dpkg-dev \
+            rpm
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Set version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Build frontend
-        run: npm run build
+      - name: Build release binary
+        run: cargo build --release
 
-      - name: Build and upload artifacts
-        uses: tauri-apps/tauri-action@v0
+      - name: Package .deb
+        run: |
+          mkdir -p deb/DEBIAN \
+            deb/usr/bin \
+            deb/usr/share/applications \
+            deb/usr/share/icons/hicolor/128x128/apps \
+            deb/usr/share/icons/hicolor/32x32/apps
+          cp target/release/firmium deb/usr/bin/
+          cp packaging/firmium.desktop deb/usr/share/applications/
+          cp assets/app-icons/128x128.png deb/usr/share/icons/hicolor/128x128/apps/firmium.png
+          cp assets/app-icons/32x32.png deb/usr/share/icons/hicolor/32x32/apps/firmium.png
+          cat > deb/DEBIAN/control << EOF
+          Package: firmium
+          Version: ${{ env.VERSION }}
+          Architecture: amd64
+          Maintainer: fossisawesome
+          Depends: libasound2 | libasound2t64, libsecret-1-0, libxkbcommon0, libvulkan1
+          Description: OpenSubsonic music streaming desktop client
+           Firmium is a low-latency native iced/Rust music streaming client for Linux.
+          EOF
+          dpkg-deb --build deb firmium_${{ env.VERSION }}_amd64.deb
+
+      - name: Package .rpm
+        run: |
+          mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          cp target/release/firmium ~/rpmbuild/SOURCES/
+          cp packaging/firmium.desktop ~/rpmbuild/SOURCES/
+          cp assets/app-icons/128x128.png ~/rpmbuild/SOURCES/128x128.png
+          cp assets/app-icons/32x32.png ~/rpmbuild/SOURCES/32x32.png
+          cat > ~/rpmbuild/SPECS/firmium.spec << 'SPECEOF'
+          %define debug_package %{nil}
+          Name:      firmium
+          Version:   VERSIONTOKEN
+          Release:   1
+          Summary:   OpenSubsonic music streaming desktop client
+          License:   GPL-3.0-only
+          URL:       https://github.com/fossisawesome/firmium
+          BuildArch: x86_64
+          AutoReqProv: no
+          Requires:  alsa-lib, libsecret, libxkbcommon, vulkan-loader
+
+          %description
+          Firmium is a low-latency native iced/Rust music streaming client for Linux,
+          built on the iced GUI framework with symphonia decoding and cpal audio output.
+
+          %install
+          install -Dm755 %{_sourcedir}/firmium       %{buildroot}%{_bindir}/firmium
+          install -Dm644 %{_sourcedir}/firmium.desktop %{buildroot}%{_datadir}/applications/firmium.desktop
+          install -Dm644 %{_sourcedir}/128x128.png   %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/firmium.png
+          install -Dm644 %{_sourcedir}/32x32.png     %{buildroot}%{_datadir}/icons/hicolor/32x32/apps/firmium.png
+
+          %files
+          %{_bindir}/firmium
+          %{_datadir}/applications/firmium.desktop
+          %{_datadir}/icons/hicolor/*/apps/firmium.png
+          SPECEOF
+          sed -i "s/VERSIONTOKEN/${{ env.VERSION }}/" ~/rpmbuild/SPECS/firmium.spec
+          rpmbuild -bb ~/rpmbuild/SPECS/firmium.spec
+          RPM=$(ls ~/rpmbuild/RPMS/x86_64/firmium-*.rpm | head -1)
+          echo "RPM_FILE=$RPM" >> $GITHUB_ENV
+
+      - name: Upload Linux artifacts
+        uses: actions/github-script@v9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: ${{ matrix.args }}
+          script: |
+            const fs = require('fs')
+            const path = require('path')
+            const releaseId = ${{ needs.create-release.outputs.release_id }}
+            const files = [
+              `firmium_${{ env.VERSION }}_amd64.deb`,
+              process.env.RPM_FILE,
+            ]
+            for (const file of files) {
+              if (!file) continue
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                name: path.basename(file),
+                data: fs.readFileSync(file),
+              })
+            }
+
+  build-windows:
+    needs: create-release
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          $version = (Select-String '^version = ' Cargo.toml | Select-Object -First 1).Line.Split('"')[1]
+          makensis /DVERSION=$version packaging\firmium.nsi
+
+      - name: Upload Windows installer
+        uses: actions/github-script@v9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const fs = require('fs')
+            const files = fs.readdirSync('.').filter(f => f.startsWith('firmium-setup-') && f.endsWith('.exe'))
+            if (!files.length) throw new Error('No NSIS installer found')
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              name: files[0],
+              data: fs.readFileSync(files[0]),
+            })
 
   build-android:
     needs: create-release
@@ -198,7 +295,7 @@ jobs:
             })
 
   publish-release:
-    needs: [create-release, build, build-android]
+    needs: [create-release, build-linux, build-windows, build-android]
     runs-on: ubuntu-latest
     steps:
       - name: Publish release

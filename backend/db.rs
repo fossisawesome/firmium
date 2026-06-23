@@ -204,6 +204,30 @@ impl PlayHistory {
             _ => Ok(rows_to_csv(&rows)),
         }
     }
+
+    pub fn recent_plays(&self, limit: usize) -> Result<Vec<RecentPlay>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT track_id, track_title, artist_id, artist_name, album_id, album_name, cover_art_id
+                 FROM plays GROUP BY track_id ORDER BY MAX(timestamp) DESC LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([limit as i64], |r| {
+                Ok(RecentPlay {
+                    track_id: r.get(0)?,
+                    track_title: r.get(1)?,
+                    artist_id: r.get(2)?,
+                    artist_name: r.get(3)?,
+                    album_id: r.get(4)?,
+                    album_name: r.get(5)?,
+                    cover_art_id: r.get(6)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
 }
 
 fn query_top_tracks(conn: &Connection, from: i64, to: i64, limit: i64) -> Result<Vec<TrackStat>, String> {
@@ -446,6 +470,17 @@ fn csv_field(v: Option<&str>) -> String {
 }
 
 // ── Serializable result types (camelCase to match frontend) ──────────────────
+
+#[derive(Debug, Clone)]
+pub struct RecentPlay {
+    pub track_id: String,
+    pub track_title: String,
+    pub artist_id: Option<String>,
+    pub artist_name: Option<String>,
+    pub album_id: Option<String>,
+    pub album_name: Option<String>,
+    pub cover_art_id: Option<String>,
+}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]

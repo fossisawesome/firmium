@@ -1305,8 +1305,14 @@ impl<Message: Clone + Send + 'static> shader::Program<Message> for ShaderVisuali
         bounds: Rectangle,
     ) -> Self::Primitive {
         let mut cfg = self.config.clone();
-        // line_thickness is a pixel value; scale from the ratio stored in config.
-        cfg.line_thickness = self.config.line_thickness * bounds.height;
+        // Auto-compute bar sizing from canvas width when not set.
+        if cfg.bar_width <= 0.001 {
+            let bar_count = crate::visualizer::BAR_COUNT as f32;
+            let slot = bounds.width / bar_count;
+            cfg.bar_spacing = (slot * 0.12_f32).max(0.5);
+            cfg.bar_width = (slot - cfg.bar_spacing).max(1.0);
+            cfg.edge_spacing = cfg.bar_spacing * 0.5;
+        }
         match state {
             Some(s) => VisualizerPrimitive::new(s, self.mode, &cfg),
             None => VisualizerPrimitive::new(

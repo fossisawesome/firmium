@@ -6,7 +6,7 @@ use include_dir::{include_dir, Dir};
 static BUILTIN_THEMES: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/themes");
 
 /// Color variables for a theme, matching the design tokens used by the UI.
-#[derive(serde::Deserialize, serde::Serialize, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, PartialEq)]
 pub struct ThemeColors {
     pub bg: String,
     pub surface: String,
@@ -30,7 +30,7 @@ struct ThemeFile {
 }
 
 /// A resolved theme entry.
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize, Clone, PartialEq)]
 pub struct ThemeEntry {
     pub id: String,
     pub name: String,
@@ -101,4 +101,10 @@ pub fn list_themes() -> Vec<ThemeEntry> {
     });
 
     themes
+}
+
+impl std::fmt::Display for ThemeEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }

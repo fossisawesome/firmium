@@ -21,8 +21,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - language: javascript-typescript
-            build-mode: none
           - language: java-kotlin
             build-mode: manual
           - language: rust

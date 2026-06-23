@@ -1,3 +1,69 @@
+# v7.0.0
+
+## Desktop
+
+### Rewritten from Tauri/Svelte to native iced
+
+The desktop app is now a single pure-Rust binary built on [iced](https://iced.rs) 0.14. There is no WebView, no JavaScript, no npm, and no Node.js.
+
+- **UI framework**: iced 0.14 replaces the old Tauri/Svelte layer. The entire UI is implemented in `src/app.rs` as an `App` struct, `Message` enum, `update()`, and `view()` — single source of truth, no stores.
+- **Backend event bus**: new `backend/events.rs` (`EventBus`, `BackendEvent`) uses a `tokio::sync::broadcast` channel. Backend → UI events (`PlaybackStateChanged`, `PlaybackPosition`, `PlaybackFinished`, `QueueStateChanged`, `SessionExpired`) arrive via an `iced::Subscription` bridging the broadcast channel into `Message::Backend(BackendEvent)`.
+- **Backend init**: `backend/init.rs` (`Backend::new()`) builds shared handles and starts the `queue_manager` background task.
+- **Config**: `~/.config/firmium/config.toml` replaces `localStorage`. Server URL, username, theme, volume, and saved accounts persist across restarts.
+- **Font**: `LiberationMono` bundled at compile time; no system font required.
+- **No Tauri commands**: all backend calls are direct Rust function calls via `iced::Task::perform` — no IPC overhead.
+- **Codebase layout**: `src-tauri/` removed. Backend modules now live in `backend/`; iced UI in `src/`.
+
+### New features
+
+- **ListenBrainz scrobbling** (desktop) — Settings now exposes a ListenBrainz user token field. Completed tracks are submitted to ListenBrainz alongside the existing OpenSubsonic scrobble.
+
+- **Recently played tracks on home screen** — the home view now shows a "Recently Played" row of tracks derived from local play history (`backend/db.rs::PlayHistory::recent_plays`), visible immediately on login without a network call. `RecentPlay` struct added to `db.rs`.
+
+- **Save password checkbox** — the login form has a "SAVE PASSWORD" checkbox (checked by default). When unchecked, the password is used for the session but not written to the OS keyring.
+
+- **Crossfade / gapless mutual exclusion enforced in UI** — enabling crossfade now automatically disables gapless, and vice versa. Enabling crossfade while in strict bit-perfect mode downgrades bit-perfect to relaxed. `src/app.rs::Message::SetCrossfadeEnabled`, `Message::SetGapless`.
+
+- **Responsive visualizer bar sizing** — bar width and spacing are now auto-computed from the canvas width when `bar_width` is not explicitly set, so bars fill the panel correctly at any window size. `src/viz/shader.rs`.
+
+- **Theme and download format drop-downs** — themes and download format are now selected via `iced::widget::pick_list` instead of a list of buttons. `ThemeEntry` and `ThemeColors` derive `PartialEq` and `Display` (`backend/commands/themes.rs`).
+
+### Changed
+
+- **Login form redesign** — the setup view now shows a dark semi-transparent backdrop behind a rounded card. Form fields are left-aligned. The logo is replaced by a plain "Firmium" text heading.
+
+- **Account switcher simplified** — the overlay now shows the connected server hostname and a single "DISCONNECT" button. The previous multi-account list UI (add/switch/remove accounts) is removed.
+
+- **Sidebar** — the "Offline" and "Recap" navigation items are removed from the sidebar in this release.
+
+- **Styled widgets** — `text_input`, `slider`, `scrollable`, and `toggler` now use consistent theme-token-based styles (`text_input_style`, `slider_style`, `thin_scroll_style`, `toggler_style` helper fns in `src/app.rs`).
+
+### Build & packaging
+
+- **Windows NSIS installer rebuilt without Tauri** — `packaging/firmium.nsi` is a new standalone NSIS script that packages the native iced binary. Tauri's bundler is no longer involved.
+
+- **CI split into per-platform jobs** — `release.yml` now has separate `build-linux` and `build-windows` jobs (previously a matrix). Linux job packages `.deb` and `.rpm` directly via `dpkg-deb` and `rpmbuild`; Windows job builds the NSIS installer via `makensis`. The `npm-audit` and Svelte/TS check steps are removed from `ci.yml` and `audit.yml`.
+
+---
+
+## Android
+
+### New features
+
+- **Firmium Recap** — full-screen horizontally swipeable recap cards (top tracks, top artists, top albums, top genre, time-of-day breakdown, day-of-week breakdown, biggest discovery, listening streak). Available from the Recap nav item. `RecapScreen.kt`.
+
+- **Local play history via Room** — play events are now recorded to a SQLite database (`firmium_play_history.db`) using Room. Schema: `PlayEntity` with track ID, title, artist, album, cover art ID, genre, BPM, Unix timestamp, and duration played. `FirmiumDatabase.kt`, `PlayDao.kt`, `PlayEntity.kt`, `PlayHistoryRepository.kt`. The DAO mirrors the desktop's `rusqlite` aggregation queries (top tracks/artists/albums, by-hour, by-day-of-week, streak, biggest discovery).
+
+- **Notification shuffle and repeat icons** — the now-playing notification now shows dedicated vector drawables for shuffle, repeat-all, and repeat-one states. `ic_notif_shuffle.xml`, `ic_notif_repeat.xml`, `ic_notif_repeat_one.xml`.
+
+- **`AlbumCard` shared component** — a new `AlbumCard.kt` composable consolidates the album card rendering used across Home, Album List, and Artist Detail screens.
+
+- **Theme import from file** — users can import a `.toml` custom theme via the Android file picker. `ThemeImport.kt`.
+
+- **Share utilities** — `ShareUtils.kt` provides the logic to share Recap card images via the Android share sheet.
+
+---
+
 # v6.6.0
 
 ## Android
