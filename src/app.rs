@@ -154,6 +154,7 @@ pub enum Message {
     NavigateBack,
     Backend(BackendEvent),
     VisualizerTick,
+    #[expect(dead_code)]
     ShowToast(UserError),
     DismissToast(u64),
     ToastTick,

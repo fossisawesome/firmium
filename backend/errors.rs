@@ -17,6 +17,7 @@ pub enum UserError {
     /// Mid-session 401 / OpenSubsonic 40/41. The toast layer ignores this
     /// variant; the `SessionExpired` event already drives the UI.
     SessionExpired,
+    #[expect(dead_code)]
     NotFound,
     Server { code: u16 },
     Storage,
@@ -39,6 +40,7 @@ impl UserError {
 
     /// Last-resort classification for legacy `String` errors that no longer
     /// carry a typed source. Match only on stable, self-produced prefixes.
+    #[expect(dead_code)]
     pub fn classify(s: &str) -> UserError {
         let l = s.to_lowercase();
         if s == "SESSION_EXPIRED" {
