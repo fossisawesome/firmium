@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // ============================================================================
 // LOCAL LIBRARY
 // ============================================================================
@@ -354,12 +356,14 @@ pub async fn import_local_files(state: Arc<AppState>, paths: Vec<String>) -> Res
 
 pub fn get_local_albums(state: &AppState) -> Result<Vec<Album>, String> {
     ensure_scanned(state)?;
-    Ok(state.local_library.read().as_ref().unwrap().albums.clone())
+    let cache = state.local_library.read();
+    Ok(cache.as_ref().ok_or("Local library not loaded")?.albums.clone())
 }
 
 pub fn get_local_artists(state: &AppState) -> Result<Vec<Artist>, String> {
     ensure_scanned(state)?;
-    Ok(state.local_library.read().as_ref().unwrap().artists.clone())
+    let cache = state.local_library.read();
+    Ok(cache.as_ref().ok_or("Local library not loaded")?.artists.clone())
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -374,7 +378,7 @@ pub struct LocalAlbumTracks {
 pub fn get_local_album_tracks(state: &AppState, id: String) -> Result<LocalAlbumTracks, String> {
     ensure_scanned(state)?;
     let cache = state.local_library.read();
-    let cache = cache.as_ref().unwrap();
+    let cache = cache.as_ref().ok_or("Local library not loaded")?;
     let tracks = cache.songs_by_album.get(&id).cloned().unwrap_or_default();
     let (name, album_artist) = cache.album_meta.get(&id).cloned()
         .unwrap_or_else(|| ("Unknown Album".to_string(), "Unknown Artist".to_string()));
@@ -395,7 +399,7 @@ pub fn get_local_album_track_keys(state: &AppState, album_artist: String, album:
     ensure_scanned(state)?;
     let album_id = local_id(&format!("album:{}|{}", album_artist.to_lowercase(), album.to_lowercase()));
     let cache = state.local_library.read();
-    let cache = cache.as_ref().unwrap();
+    let cache = cache.as_ref().ok_or("Local library not loaded")?;
     Ok(cache.songs_by_album.get(&album_id)
         .map(|tracks| tracks.iter().map(|s| LocalTrackKey { track_number: s.track_number, title: s.title.clone() }).collect())
         .unwrap_or_default())
@@ -411,7 +415,7 @@ pub struct LocalArtistDetails {
 pub fn get_local_artist_details(state: &AppState, id: String) -> Result<LocalArtistDetails, String> {
     ensure_scanned(state)?;
     let cache = state.local_library.read();
-    let cache = cache.as_ref().unwrap();
+    let cache = cache.as_ref().ok_or("Local library not loaded")?;
     let albums = cache.albums_by_artist.get(&id).cloned().unwrap_or_default();
     let name = cache.artist_names.get(&id).cloned().unwrap_or_else(|| "Unknown Artist".to_string());
     Ok(LocalArtistDetails { name, albums })
@@ -421,7 +425,7 @@ pub fn get_local_artist_details(state: &AppState, id: String) -> Result<LocalArt
 pub fn get_local_track_path(state: &AppState, id: &str) -> Result<String, String> {
     ensure_scanned(state)?;
     let cache = state.local_library.read();
-    cache.as_ref().unwrap().paths.get(id)
+    cache.as_ref().ok_or("Local library not loaded")?.paths.get(id)
         .map(|p| p.to_string_lossy().into_owned())
         .ok_or_else(|| "Track not found".to_string())
 }
@@ -459,7 +463,7 @@ pub fn get_local_cover_art(state: &AppState, id: String) -> Result<String, Strin
     ensure_scanned(state)?;
     let path = {
         let cache = state.local_library.read();
-        cache.as_ref().unwrap().paths.get(&id).cloned().ok_or_else(|| "Cover not found".to_string())?
+        cache.as_ref().ok_or("Local library not loaded")?.paths.get(&id).cloned().ok_or_else(|| "Cover not found".to_string())?
     };
 
     let safe_id = id.replace([':', '/', '\\'], "_");
@@ -495,7 +499,7 @@ pub fn search_local(state: &AppState, query: String) -> Result<LocalSearchResult
     ensure_scanned(state)?;
     let q = query.to_lowercase();
     let cache = state.local_library.read();
-    let cache = cache.as_ref().unwrap();
+    let cache = cache.as_ref().ok_or("Local library not loaded")?;
     let songs = cache.all_songs.iter()
         .filter(|s| s.title.to_lowercase().contains(&q) || s.artist.to_lowercase().contains(&q) || s.album.to_lowercase().contains(&q))
         .take(100).cloned().collect();
@@ -508,7 +512,7 @@ pub fn search_local(state: &AppState, query: String) -> Result<LocalSearchResult
 pub fn get_local_recent_albums(state: &AppState, size: u32) -> Result<Vec<Album>, String> {
     ensure_scanned(state)?;
     let cache = state.local_library.read();
-    let cache = cache.as_ref().unwrap();
+    let cache = cache.as_ref().ok_or("Local library not loaded")?;
     let mut albums = cache.albums.clone();
     albums.sort_by(|a, b| cache.album_mtime.get(&b.id).cmp(&cache.album_mtime.get(&a.id)));
     albums.truncate(size as usize);
@@ -518,7 +522,8 @@ pub fn get_local_recent_albums(state: &AppState, size: u32) -> Result<Vec<Album>
 pub fn get_local_random_albums(state: &AppState, size: u32) -> Result<Vec<Album>, String> {
     use rand::seq::SliceRandom;
     ensure_scanned(state)?;
-    let mut albums = state.local_library.read().as_ref().unwrap().albums.clone();
+    let cache = state.local_library.read();
+    let mut albums = cache.as_ref().ok_or("Local library not loaded")?.albums.clone();
     albums.shuffle(&mut rand::rng());
     albums.truncate(size as usize);
     Ok(albums)
@@ -526,7 +531,8 @@ pub fn get_local_random_albums(state: &AppState, size: u32) -> Result<Vec<Album>
 
 pub fn get_local_newest_albums(state: &AppState, size: u32) -> Result<Vec<Album>, String> {
     ensure_scanned(state)?;
-    let mut albums = state.local_library.read().as_ref().unwrap().albums.clone();
+    let cache = state.local_library.read();
+    let mut albums = cache.as_ref().ok_or("Local library not loaded")?.albums.clone();
     albums.sort_by_key(|a| std::cmp::Reverse(a.year));
     albums.truncate(size as usize);
     Ok(albums)
@@ -545,7 +551,7 @@ pub struct LocalGenre {
 pub fn find_local_match(state: &AppState, title: String, artist: String, album: String) -> Result<Option<String>, String> {
     ensure_scanned(state)?;
     let cache = state.local_library.read();
-    let cache = cache.as_ref().unwrap();
+    let cache = cache.as_ref().ok_or("Local library not loaded")?;
     let title_lc = title.to_lowercase();
     let artist_lc = artist.to_lowercase();
     let album_lc = album.to_lowercase();
@@ -564,7 +570,7 @@ pub fn prewarm_local_library(state: &AppState) -> Result<(), String> {
 pub fn get_local_genres_list(state: &AppState) -> Result<Vec<LocalGenre>, String> {
     ensure_scanned(state)?;
     let cache = state.local_library.read();
-    let cache = cache.as_ref().unwrap();
+    let cache = cache.as_ref().ok_or("Local library not loaded")?;
     let mut song_counts: HashMap<String, u32> = HashMap::new();
     let mut album_genre_sets: HashMap<String, HashSet<String>> = HashMap::new();
     for song in &cache.all_songs {

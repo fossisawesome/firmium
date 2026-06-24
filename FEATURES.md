@@ -216,6 +216,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | ListenBrainz scrobbling — submits completed tracks to ListenBrainz with your user token | ✅ | ✅ |
 | Playback reporting — keeps server "Now Playing" status accurate | ✅ | ✅ |
 | Warning shown when connecting over plain HTTP to a non-local server | ✅ | ✅ |
+| In-app error notifications: plain-language messages when something goes wrong (server unreachable, login failed, item not found), shown as dismissable notifications instead of failing silently | ✅ | ✅ |
 
 ---
 

@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.fossisawesome.firmium.data.api.ApiClient
+import com.fossisawesome.firmium.data.toUserError
 import com.fossisawesome.firmium.data.api.AuthManager
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Album
@@ -136,7 +137,8 @@ class DownloadManager(
                 localLibrary.invalidate()
                 _downloadAll.value = DownloadAllProgress(done = done, total = pending.size, finished = true)
             } catch (e: Exception) {
-                _downloadAll.value = DownloadAllProgress(error = e.message ?: "Download failed")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _downloadAll.value = DownloadAllProgress(error = e.toUserError().message)
             }
         }
     }

@@ -7,6 +7,7 @@ import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.audio.PlaybackController
 import com.fossisawesome.firmium.audio.PlayerState
 import com.fossisawesome.firmium.data.RadioSeeder
+import com.fossisawesome.firmium.data.toUserError
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.model.Song
 import kotlinx.coroutines.flow.StateFlow
@@ -67,9 +68,16 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     // number of tracks so the UI can surface an empty-result message.
     fun playMoodMix(energy: RadioSeeder.Energy, genre: String?, onResult: (Int) -> Unit = {}) {
         viewModelScope.launch {
-            val tracks = radioSeeder.buildMoodMix(energy, genre)
-            if (tracks.isNotEmpty()) controller.playAt(tracks, 0)
-            onResult(tracks.size)
+            try {
+                val tracks = radioSeeder.buildMoodMix(energy, genre)
+                if (tracks.isNotEmpty()) controller.playAt(tracks, 0)
+                onResult(tracks.size)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e !is com.fossisawesome.firmium.data.api.SessionExpiredException) {
+                    getApplication<FirmiumApplication>().errors.report(e.toUserError())
+                }
+            }
         }
     }
     fun skipToIndex(index: Int) = controller.skipToIndex(index)

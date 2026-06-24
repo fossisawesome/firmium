@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.api.SessionExpiredException
+import com.fossisawesome.firmium.data.toUserError
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Song
@@ -53,7 +55,12 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
                     isLoading = false,
                 )
             } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = e.message)
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e is SessionExpiredException) {
+                    _state.value = _state.value.copy(isLoading = false, error = null)
+                    return@launch
+                }
+                _state.value = _state.value.copy(isLoading = false, error = e.toUserError().message)
             }
         }
     }

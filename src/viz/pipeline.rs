@@ -68,6 +68,7 @@ pub struct VisualizerPipeline {
     pub(super) crt_uniform_bind_group: wgpu::BindGroup,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_visualizer_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,

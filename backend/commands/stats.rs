@@ -25,6 +25,7 @@ pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
 }
 
 /// Writes raw bytes to a user-chosen path. Used for recap PNG export.
+#[allow(dead_code)]
 pub fn save_binary_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
     std::fs::write(path, bytes).map_err(|e| e.to_string())
 }

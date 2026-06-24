@@ -67,7 +67,8 @@ class WearStateSync(private val app: FirmiumApplication) {
         }.asPutDataRequest().setUrgent()
         try {
             Tasks.await(dataClient.putDataItem(request))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.d("WearStateSync", "putDataItem failed, ignoring", e)
         }
     }
 
@@ -92,7 +93,8 @@ class WearStateSync(private val app: FirmiumApplication) {
                 lastArtTrackId = snap.trackId
                 lastArtAsset = it
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.d("WearStateSync", "album art encoding failed, ignoring", e)
             null
         }
     }

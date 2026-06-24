@@ -67,7 +67,10 @@ class PlaylistViewModel(app: Application) : AndroidViewModel(app) {
             val fetched = api.getPlaylists()
             _serverPlaylists.value = fetched
             repo.retryPendingCreates(fetched)
-        } catch (_: Exception) { /* keep showing previously fetched server playlists */ }
+        } catch (e: Exception) {
+            android.util.Log.d("PlaylistVM", "server playlist refresh failed, ignoring", e)
+            /* keep showing previously fetched server playlists */
+        }
     }
 
     // Loads (and caches) a server-only playlist's tracks for the detail screen.
@@ -75,7 +78,10 @@ class PlaylistViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val tracks = api.getPlaylistTracks(serverId)
             serverTracksCache.update { it + (serverId to tracks) }
-        } catch (_: Exception) { /* leave cache empty; detail screen shows no tracks */ }
+        } catch (e: Exception) {
+            android.util.Log.d("PlaylistVM", "server playlist track load failed, ignoring", e)
+            /* leave cache empty; detail screen shows no tracks */
+        }
     }
 
     fun serverTracksFor(serverId: String): ServerPlaylistTracks? = serverTracksCache.value[serverId]
@@ -96,7 +102,10 @@ class PlaylistViewModel(app: Application) : AndroidViewModel(app) {
     fun addTracksToServerOnly(serverId: String, songs: List<Song>) = viewModelScope.launch {
         try {
             api.updatePlaylist(serverId, songIdsToAdd = songs.map { it.id })
-        } catch (_: Exception) { /* best-effort, same as local sync */ }
+        } catch (e: Exception) {
+            android.util.Log.d("PlaylistVM", "server-only addTracks failed, ignoring", e)
+            /* best-effort, same as local sync */
+        }
     }
 
     // Adds tracks to whichever playlist `item` represents, local/synced or server-only.
@@ -115,7 +124,10 @@ class PlaylistViewModel(app: Application) : AndroidViewModel(app) {
         serverTracksCache.update { it + (serverId to current.copy(tracks = tracks)) }
         try {
             api.updatePlaylist(serverId, songIndicesToRemove = listOf(index))
-        } catch (_: Exception) { /* best-effort */ }
+        } catch (e: Exception) {
+            android.util.Log.d("PlaylistVM", "server-only removeTrack failed, ignoring", e)
+            /* best-effort */
+        }
     }
 
     fun moveTrack(playlistId: String, from: Int, to: Int) = viewModelScope.launch { repo.moveTrack(playlistId, from, to) }
@@ -131,7 +143,10 @@ class PlaylistViewModel(app: Application) : AndroidViewModel(app) {
         serverTracksCache.update { it + (serverId to current.copy(tracks = tracks)) }
         try {
             api.updatePlaylist(serverId, songIndicesToRemove = tracks.indices.toList(), songIdsToAdd = tracks.map { it.id })
-        } catch (_: Exception) { /* best-effort */ }
+        } catch (e: Exception) {
+            android.util.Log.d("PlaylistVM", "server-only moveTrack failed, ignoring", e)
+            /* best-effort */
+        }
     }
 
     fun playlistById(id: String): Playlist? = state.value.playlists.find { it.id == id }

@@ -66,16 +66,6 @@ fun AccountDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                Text(
-                    text = "Firmium",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Normal,
-                    fontFamily = FontFamily.Monospace,
-                    color = colors.accent,
-                    letterSpacing = (-0.5).sp,
-                    modifier = Modifier.padding(bottom = 28.dp, end = 32.dp),
-                )
-
                 if (isAuthenticated) {
                     val hostname = remember(serverUrl) {
                         try { URI(serverUrl ?: "").host ?: serverUrl ?: "" } catch (_: Exception) { serverUrl ?: "" }
@@ -176,7 +166,6 @@ private fun AccountConnectForm(
     }
 
     SetupField(
-        label = "Server URL",
         value = server,
         onValueChange = { server = it },
         placeholder = "https://navidrome.example.com",
@@ -194,7 +183,6 @@ private fun AccountConnectForm(
     }
 
     SetupField(
-        label = "Username",
         value = username,
         onValueChange = { username = it },
         imeAction = ImeAction.Next,
@@ -204,12 +192,6 @@ private fun AccountConnectForm(
 
     // Password field — intentionally taller than the other inputs.
     Column(modifier = Modifier.padding(bottom = 16.dp)) {
-        Text(
-            "Password".uppercase(),
-            fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-            color = colors.muted, letterSpacing = 0.5.sp,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
         FirmiumTextField(
             value = password,
             onValueChange = { password = it },
@@ -298,7 +280,7 @@ private fun AccountConnectForm(
 // One labeled input field matching .field + .field label + .field input
 @Composable
 private fun SetupField(
-    label: String,
+    label: String = "",
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String = "",
@@ -308,12 +290,14 @@ private fun SetupField(
 ) {
     val colors = LocalFirmiumColors.current
     Column(modifier = Modifier.padding(bottom = 20.dp)) {
-        Text(
-            label.uppercase(),
-            fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-            color = colors.muted, letterSpacing = 0.5.sp,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
+        if (label.isNotEmpty()) {
+            Text(
+                label.uppercase(),
+                fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                color = colors.muted, letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
         FirmiumTextField(
             value = value,
             onValueChange = onValueChange,

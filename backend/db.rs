@@ -472,6 +472,7 @@ fn csv_field(v: Option<&str>) -> String {
 // ── Serializable result types (camelCase to match frontend) ──────────────────
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RecentPlay {
     pub track_id: String,
     pub track_title: String,

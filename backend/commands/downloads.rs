@@ -102,7 +102,7 @@ pub async fn download_track(
 }
 
 pub async fn download_album(state: Arc<AppState>, album_id: String, format: String) -> Result<(), String> {
-    let album_tracks = get_album_tracks(state.clone(), album_id).await?;
+    let album_tracks = get_album_tracks(state.clone(), album_id).await.map_err(|e| e.message())?;
     for track in album_tracks.tracks {
         download_track(
             state.clone(),

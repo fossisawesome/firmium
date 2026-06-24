@@ -213,6 +213,7 @@ impl SimilarMatch {
 }
 
 /// Map a batch of raw `sonicMatches` entries (`{entry, similarity}`) to typed SimilarMatch structs.
+#[allow(dead_code)]
 pub fn map_similar_matches(matches: Vec<serde_json::Value>) -> Vec<SimilarMatch> {
     matches
         .iter()

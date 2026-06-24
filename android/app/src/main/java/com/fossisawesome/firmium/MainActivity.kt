@@ -15,12 +15,21 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import android.app.AlertDialog
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.*
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fossisawesome.firmium.audio.NowPlayingController
+import com.fossisawesome.firmium.data.UserError
+import com.fossisawesome.firmium.ui.components.ErrorHost
 import com.fossisawesome.firmium.ui.navigation.AppNavGraph
 import com.fossisawesome.firmium.ui.screens.AccountDialog
 import com.fossisawesome.firmium.ui.screens.OnboardingScreen
@@ -126,6 +135,22 @@ class MainActivity : ComponentActivity() {
                     val playlistViewModel: PlaylistViewModel = viewModel()
                     val scope = rememberCoroutineScope()
                     var showAccountDialog by remember { mutableStateOf(false) }
+                    var currentError by remember { mutableStateOf<UserError?>(null) }
+
+                    // Single long-lived collector. Single-slot state = newest wins =
+                    // coalesce, so a network drop surfaces one card rather than a dozen.
+                    LaunchedEffect(Unit) {
+                        app.errors.events.collect { err ->
+                            currentError = err
+                        }
+                    }
+                    // Auto-dismiss the visible error after 5s; restarts when a new one arrives.
+                    LaunchedEffect(currentError) {
+                        if (currentError != null) {
+                            kotlinx.coroutines.delay(5000)
+                            currentError = null
+                        }
+                    }
 
                     // Auto-open login dialog when saved credentials couldn't be restored.
                     LaunchedEffect(authState.needsLogin) {
@@ -138,17 +163,28 @@ class MainActivity : ComponentActivity() {
                         app.api.sessionExpired.collect { showAccountDialog = true }
                     }
 
-                    AppNavGraph(
-                        auth = app.auth,
-                        authViewModel = authViewModel,
-                        playerViewModel = playerViewModel,
-                        libraryViewModel = libraryViewModel,
-                        searchViewModel = searchViewModel,
-                        playlistViewModel = playlistViewModel,
-                        currentThemeId = themeId,
-                        onThemeSelected = { id -> scope.launch { app.prefs.setThemeId(id) } },
-                        onAccountClick = { showAccountDialog = true },
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AppNavGraph(
+                            auth = app.auth,
+                            authViewModel = authViewModel,
+                            playerViewModel = playerViewModel,
+                            libraryViewModel = libraryViewModel,
+                            searchViewModel = searchViewModel,
+                            playlistViewModel = playlistViewModel,
+                            currentThemeId = themeId,
+                            onThemeSelected = { id -> scope.launch { app.prefs.setThemeId(id) } },
+                            onAccountClick = { showAccountDialog = true },
+                        )
+                        // Pad above the system nav bar (enableEdgeToEdge draws under it),
+                        // matching how other bottom UI clears the inset.
+                        ErrorHost(
+                            error = currentError,
+                            onDismiss = { currentError = null },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .windowInsetsPadding(WindowInsets.navigationBars),
+                        )
+                    }
 
                     if (showAccountDialog) {
                         AccountDialog(

@@ -1,6 +1,7 @@
 //! SVG icon set, ported from the Svelte `icons.ts`. Each icon uses
 //! `currentColor`; the `icon()` helper recolors it to a theme token via iced's
 //! svg color filter. The logo keeps its embedded gold→purple gradient.
+#![allow(dead_code)]
 
 use iced::widget::svg::{self, Handle};
 use iced::{Color, Element, Length};

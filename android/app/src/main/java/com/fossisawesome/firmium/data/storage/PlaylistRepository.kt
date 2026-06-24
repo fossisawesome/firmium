@@ -81,7 +81,8 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
         val serverId = load().find { it.id == id }?.serverId
         mutate { removeIf { it.id == id } }
         if (serverId != null) {
-            try { api.deletePlaylist(serverId) } catch (_: Exception) { /* best-effort */ }
+            try { api.deletePlaylist(serverId) }
+            catch (e: Exception) { android.util.Log.w("PlaylistRepo", "delete sync failed (best-effort)", e) }
         }
     }
 
@@ -94,8 +95,10 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
                 set(idx, get(idx).copy(name = name))
             }
         }
-        if (serverId != null) {
-            try { api.updatePlaylist(serverId!!, name = name) } catch (_: Exception) { /* best-effort */ }
+        val sid = serverId
+        if (sid != null) {
+            try { api.updatePlaylist(sid, name = name) }
+            catch (e: Exception) { android.util.Log.w("PlaylistRepo", "rename sync failed (best-effort)", e) }
         }
     }
 
@@ -112,8 +115,10 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
             serverId = existing.serverId
             set(idx, existing.copy(tracks = existing.tracks + newSongs))
         }
-        if (serverId != null && newSongs.isNotEmpty()) {
-            try { api.updatePlaylist(serverId!!, songIdsToAdd = newSongs.map { it.id }) } catch (_: Exception) { /* best-effort */ }
+        val sid = serverId
+        if (sid != null && newSongs.isNotEmpty()) {
+            try { api.updatePlaylist(sid, songIdsToAdd = newSongs.map { it.id }) }
+            catch (e: Exception) { android.util.Log.w("PlaylistRepo", "addTracks sync failed (best-effort)", e) }
         }
     }
 
@@ -135,14 +140,16 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
             newTracks = tracks
             set(idx, existing.copy(tracks = tracks))
         }
-        if (serverId != null && newTracks != null) {
+        val sid = serverId
+        val nt = newTracks
+        if (sid != null && nt != null) {
             try {
                 api.updatePlaylist(
-                    serverId!!,
-                    songIndicesToRemove = newTracks!!.indices.toList(),
-                    songIdsToAdd = newTracks!!.map { it.id },
+                    sid,
+                    songIndicesToRemove = nt.indices.toList(),
+                    songIdsToAdd = nt.map { it.id },
                 )
-            } catch (_: Exception) { /* best-effort */ }
+            } catch (e: Exception) { android.util.Log.w("PlaylistRepo", "moveTrack sync failed (best-effort)", e) }
         }
     }
 
@@ -157,8 +164,10 @@ class PlaylistRepository(private val prefs: AppPreferences, private val api: Api
             serverId = existing.serverId
             set(idx, existing.copy(tracks = existing.tracks.filter { it.id != trackId }))
         }
-        if (serverId != null && removedIndex >= 0) {
-            try { api.updatePlaylist(serverId!!, songIndicesToRemove = listOf(removedIndex)) } catch (_: Exception) { /* best-effort */ }
+        val sid = serverId
+        if (sid != null && removedIndex >= 0) {
+            try { api.updatePlaylist(sid, songIndicesToRemove = listOf(removedIndex)) }
+            catch (e: Exception) { android.util.Log.w("PlaylistRepo", "removeTrack sync failed (best-effort)", e) }
         }
     }
 

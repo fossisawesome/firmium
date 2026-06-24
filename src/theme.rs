@@ -19,6 +19,7 @@ pub struct Tokens {
     pub accent: Color,
     pub accent_dim: Color,
     pub error: Color,
+    #[allow(dead_code)]
     pub is_dark: bool,
 }
 
@@ -65,6 +66,7 @@ impl Tokens {
     }
 
     /// Override the accent (dynamic accent extracted from cover art).
+    #[allow(dead_code)]
     pub fn with_accent(mut self, accent: Color) -> Self {
         self.accent = accent;
         self.accent_dim = Color { a: 0.15, ..accent };

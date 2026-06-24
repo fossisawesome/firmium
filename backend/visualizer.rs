@@ -105,11 +105,13 @@ impl VisualizerState {
         self.dirty.load(Ordering::Relaxed)
     }
 
+    #[allow(dead_code)]
     pub fn clear_dirty(&self) {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
     /// Legacy snapshot for any remaining canvas-based callers.
+    #[allow(dead_code)]
     pub fn snapshot(&self) -> (f32, Vec<f32>, Vec<f32>) {
         (self.bass(), self.bars(), self.wave())
     }

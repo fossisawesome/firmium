@@ -12,6 +12,7 @@ use crate::types::PlaybackState;
 
 /// Native sample rate / channel count reported alongside a "playing" state change.
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub struct AudioInfo {
     pub sample_rate: u32,
     pub channels: u16,
@@ -19,10 +20,12 @@ pub struct AudioInfo {
 
 /// An event emitted by the backend for the UI (and the queue manager) to react to.
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum BackendEvent {
     PlaybackStateChanged {
         player_id: String,
         state: PlaybackState,
+        #[allow(dead_code)]
         audio_info: Option<AudioInfo>,
     },
     PlaybackPosition {

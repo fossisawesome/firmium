@@ -54,6 +54,7 @@ fn parse_lrc_lines(lrc_text: &str) -> Vec<LyricLine> {
     lines
 }
 
+#[allow(dead_code)]
 pub fn parse_lrc(lrc_text: String) -> Vec<LyricLine> {
     parse_lrc_lines(&lrc_text)
 }

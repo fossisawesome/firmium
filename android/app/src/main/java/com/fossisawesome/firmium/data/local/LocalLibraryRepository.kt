@@ -133,7 +133,8 @@ class LocalLibraryRepository(private val context: Context) {
             val art = retriever.embeddedPicture ?: return null
             FileOutputStream(file).use { it.write(art) }
             Uri.fromFile(file).toString()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.d("LocalLibrary", "cover art extraction failed, ignoring", e)
             null
         } finally {
             retriever.release()
@@ -219,7 +220,8 @@ class LocalLibraryRepository(private val context: Context) {
                     retriever.setDataSource(context, uri)
                     genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
                     hasArt = retriever.embeddedPicture != null
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    android.util.Log.d("LocalLibrary", "MediaMetadataRetriever failed for track, skipping genre/art", e)
                     // Unreadable file — keep MediaStore-derived fields, skip genre/art.
                 } finally {
                     retriever.release()

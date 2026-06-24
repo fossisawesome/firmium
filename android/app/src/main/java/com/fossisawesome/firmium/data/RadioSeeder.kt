@@ -33,7 +33,10 @@ class RadioSeeder(private val api: ApiClient) {
             else
                 api.getSimilarTracksFallback(seed.id, seed.artistId, genreOf(seed), count * 2)
             matches.forEach { push(it.song) }
-        } catch (_: Exception) { /* fall through to local filter */ }
+        } catch (e: Exception) {
+            android.util.Log.d("RadioSeeder", "server similar tracks failed, falling through to local filter", e)
+            /* fall through to local filter */
+        }
 
         // 2. Local library by genre + BPM.
         if (out.size < count) {
@@ -44,7 +47,10 @@ class RadioSeeder(private val api: ApiClient) {
                 pool.filter { seedBpm == null || (it.bpm != null && abs(it.bpm - seedBpm) <= BPM_TOLERANCE) }
                     .shuffled()
                     .forEach { push(it) }
-            } catch (_: Exception) { /* leave whatever step 1 produced */ }
+            } catch (e: Exception) {
+                android.util.Log.d("RadioSeeder", "local genre/BPM filter failed, ignoring", e)
+                /* leave whatever step 1 produced */
+            }
         }
         return out.take(count)
     }

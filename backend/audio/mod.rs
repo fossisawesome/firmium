@@ -147,7 +147,7 @@ impl AudioPlayer {
     /// Get available audio output devices (real cpal enumeration). Output
     /// routing still uses the system default; the list lets the EQ UI assign a
     /// profile per physical device.
-    #[allow(deprecated)] // cpal 0.17 deprecates name() in favor of description()/id(); name() is sufficient here
+    #[allow(deprecated, dead_code)] // cpal 0.17 deprecates name() in favor of description()/id(); name() is sufficient here
     pub fn list_devices() -> Vec<AudioDevice> {
         use cpal::traits::{DeviceTrait, HostTrait};
         let host = cpal::default_host();
@@ -391,6 +391,7 @@ impl AudioPlayer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_volume(&self, player_id: &str) -> Result<f32, String> {
         let sessions = self.sessions.read();
         let session = sessions.get(player_id).ok_or_else(|| PLAYER_NOT_FOUND.to_string())?;
@@ -413,6 +414,7 @@ impl AudioPlayer {
         })
     }
 
+    #[allow(dead_code)]
     pub fn is_finished(&self, player_id: &str) -> Result<bool, String> {
         let sessions = self.sessions.read();
         match sessions.get(player_id) {
@@ -427,6 +429,7 @@ impl AudioPlayer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_duration(&self, player_id: &str) -> Result<Option<f64>, String> {
         let sessions = self.sessions.read();
         let session = sessions.get(player_id).ok_or_else(|| PLAYER_NOT_FOUND.to_string())?;
@@ -502,6 +505,7 @@ impl AudioPlayer {
     /// Ramps the old session's volume down and the new session's volume up
     /// over `STEPS` steps spanning `fade_duration_ms`, then removes the old
     /// session and reopens the output stream to the new track's native rate.
+    #[allow(clippy::too_many_arguments)]
     pub fn crossfade_to(
         self_arc: &Arc<Self>,
         old_player_id: &str,

@@ -15,29 +15,30 @@ use crate::events::BackendEvent;
 use crate::state::{AppState, ConnectionState};
 use std::sync::Arc;
 
-const SESSION_EXPIRED: &str = "SESSION_EXPIRED";
-
 /// Performs an authenticated GET against the connected OpenSubsonic server and
 /// returns the parsed `subsonic-response` body. On HTTP 401 or OpenSubsonic
 /// error codes 40/41, emits `BackendEvent::SessionExpired` (unless `silent`) and
-/// returns `Err(SESSION_EXPIRED)`.
+/// returns `Err(UserError::SessionExpired)`.
 async fn subsonic_request(
     state: &AppState,
     action: &str,
     params: &[(&str, String)],
     silent: bool,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, crate::errors::UserError> {
+    use crate::errors::UserError;
+
     let (server, username, password) = {
         let conn = state.connection.read();
         (
-            conn.server.clone().ok_or("Not connected")?,
+            conn.server.clone().ok_or(UserError::Network)?,
             conn.username.clone().unwrap_or_default(),
             conn.password.clone().unwrap_or_default(),
         )
     };
 
     let auth = generate_auth_params(username, password);
-    let mut url = reqwest::Url::parse(&format!("{server}/rest/{action}")).map_err(|e| e.to_string())?;
+    let mut url = reqwest::Url::parse(&format!("{server}/rest/{action}"))
+        .map_err(|_| UserError::Unknown)?;
     {
         let mut query = url.query_pairs_mut();
         for key in ["u", "t", "s", "v", "c", "f"] {
@@ -48,19 +49,19 @@ async fn subsonic_request(
         }
     }
 
-    let res = state.http.get(url).send().await.map_err(|e| e.to_string())?;
+    let res = state.http.get(url).send().await?;
     if res.status() == reqwest::StatusCode::UNAUTHORIZED {
         if !silent {
             state.bus.emit(BackendEvent::SessionExpired);
         }
-        return Err(SESSION_EXPIRED.to_string());
+        return Err(UserError::SessionExpired);
     }
     if !res.status().is_success() {
-        return Err(format!("HTTP Error {}", res.status()));
+        return Err(UserError::Server { code: res.status().as_u16() });
     }
 
-    let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-    let body = json.get("subsonic-response").ok_or("Malformed API response")?.clone();
+    let json: serde_json::Value = res.json().await?;
+    let body = json.get("subsonic-response").ok_or(UserError::Unknown)?.clone();
 
     if let Some(ext) = body.get("openSubsonicExtensions") {
         state.connection.write().open_subsonic_extensions = ext.as_array().map(|arr| {
@@ -74,10 +75,9 @@ async fn subsonic_request(
             if !silent {
                 state.bus.emit(BackendEvent::SessionExpired);
             }
-            return Err(SESSION_EXPIRED.to_string());
+            return Err(UserError::SessionExpired);
         }
-        let msg = body.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()).unwrap_or("Engine error");
-        return Err(msg.to_string());
+        return Err(UserError::Server { code: code.unwrap_or(0) as u16 });
     }
 
     Ok(body)
@@ -90,6 +90,7 @@ fn has_extension(state: &AppState, name: &str) -> bool {
 
 /// Returns the OpenSubsonic extensions advertised by the connected server, as
 /// detected from the most recent API response.
+#[allow(dead_code)]
 pub fn get_open_subsonic_extensions(state: &AppState) -> Vec<String> {
     state.connection.read().open_subsonic_extensions.clone().unwrap_or_default()
 }
@@ -125,7 +126,7 @@ pub fn set_connection(state: &AppState, server: Option<String>, username: Option
 /// Validates credentials with a minimal request, used during the initial
 /// login flow. Does not emit `SessionExpired` on failure, since a rejected
 /// login isn't an expired session.
-pub async fn validate_connection(state: Arc<AppState>) -> Result<(), String> {
+pub async fn validate_connection(state: Arc<AppState>) -> Result<(), crate::errors::UserError> {
     match subsonic_request(&state, "getAlbumList2", &[("type", "alphabeticalByName".to_string()), ("size", "1".to_string())], true).await {
         Ok(_) => {
             // openSubsonicExtensions is only included on this dedicated endpoint,
@@ -135,6 +136,14 @@ pub async fn validate_connection(state: Arc<AppState>) -> Result<(), String> {
         }
         Err(e) => {
             *state.connection.write() = ConnectionState::default();
+            // A rejection during login means bad credentials, not an expired
+            // session — surface it as Auth so the user sees a toast (SessionExpired
+            // is suppressed by the UI in favour of the re-login event flow).
+            let e = if matches!(e, crate::errors::UserError::SessionExpired) {
+                crate::errors::UserError::Auth
+            } else {
+                e
+            };
             Err(e)
         }
     }
@@ -144,12 +153,12 @@ pub async fn validate_connection(state: Arc<AppState>) -> Result<(), String> {
 
 const API_PAGE_SIZE: &str = "500";
 
-pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, String> {
+pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::errors::UserError> {
     let body = subsonic_request(&state, "getAlbumList2", &[("type", "alphabeticalByName".to_string()), ("size", API_PAGE_SIZE.to_string())], false).await?;
     Ok(map_albums(array_field(&body, &["albumList2", "album"])))
 }
 
-pub async fn get_artists(state: Arc<AppState>) -> Result<Vec<Artist>, String> {
+pub async fn get_artists(state: Arc<AppState>) -> Result<Vec<Artist>, crate::errors::UserError> {
     let body = subsonic_request(&state, "getArtists", &[], false).await?;
     let mut raw = Vec::new();
     for group in array_field(&body, &["artists", "index"]) {
@@ -169,7 +178,7 @@ pub struct AlbumTracks {
     pub cover_art_id: Option<String>,
 }
 
-pub async fn get_album_tracks(state: Arc<AppState>, id: String) -> Result<AlbumTracks, String> {
+pub async fn get_album_tracks(state: Arc<AppState>, id: String) -> Result<AlbumTracks, crate::errors::UserError> {
     let body = subsonic_request(&state, "getAlbum", &[("id", id)], false).await?;
     let album = body.get("album").cloned().unwrap_or(serde_json::Value::Null);
     let tracks = map_songs(array_field(&album, &["song"]));
@@ -188,7 +197,7 @@ pub struct ArtistDetails {
     pub albums: Vec<Album>,
 }
 
-pub async fn get_artist_details(state: Arc<AppState>, id: String) -> Result<ArtistDetails, String> {
+pub async fn get_artist_details(state: Arc<AppState>, id: String) -> Result<ArtistDetails, crate::errors::UserError> {
     let body = subsonic_request(&state, "getArtist", &[("id", id)], false).await?;
     let artist = body.get("artist").cloned().unwrap_or(serde_json::Value::Null);
     Ok(ArtistDetails {
@@ -213,7 +222,7 @@ pub async fn get_artist_info(
     id: String,
     lastfm_key: String,
     artist_name: String,
-) -> Result<Option<ArtistInfo>, String> {
+) -> Result<Option<ArtistInfo>, crate::errors::UserError> {
     let mut info = match subsonic_request(&state, "getArtistInfo2", &[("id", id)], false).await {
         Ok(body) => {
             let raw = body.get("artistInfo2").cloned().unwrap_or(serde_json::Value::Null);
@@ -292,7 +301,7 @@ pub struct SearchResult {
     pub albums: Vec<Album>,
 }
 
-pub async fn search(state: Arc<AppState>, query: String) -> Result<SearchResult, String> {
+pub async fn search(state: Arc<AppState>, query: String) -> Result<SearchResult, crate::errors::UserError> {
     let body = subsonic_request(&state, "search3", &[("query", query), ("albumCount", "40".to_string()), ("songCount", "100".to_string())], false).await?;
     Ok(SearchResult {
         songs: map_songs(array_field(&body, &["searchResult3", "song"])),
@@ -300,20 +309,20 @@ pub async fn search(state: Arc<AppState>, query: String) -> Result<SearchResult,
     })
 }
 
-async fn fetch_album_list(state: &AppState, list_type: &str, size: u32) -> Result<Vec<Album>, String> {
+async fn fetch_album_list(state: &AppState, list_type: &str, size: u32) -> Result<Vec<Album>, crate::errors::UserError> {
     let body = subsonic_request(state, "getAlbumList2", &[("type", list_type.to_string()), ("size", size.to_string())], false).await?;
     Ok(map_albums(array_field(&body, &["albumList2", "album"])))
 }
 
-pub async fn get_recent_albums(state: Arc<AppState>, size: u32) -> Result<Vec<Album>, String> {
+pub async fn get_recent_albums(state: Arc<AppState>, size: u32) -> Result<Vec<Album>, crate::errors::UserError> {
     fetch_album_list(&state, "recent", size).await
 }
 
-pub async fn get_random_albums(state: Arc<AppState>, size: u32) -> Result<Vec<Album>, String> {
+pub async fn get_random_albums(state: Arc<AppState>, size: u32) -> Result<Vec<Album>, crate::errors::UserError> {
     fetch_album_list(&state, "random", size).await
 }
 
-pub async fn get_newest_albums(state: Arc<AppState>, size: u32) -> Result<Vec<Album>, String> {
+pub async fn get_newest_albums(state: Arc<AppState>, size: u32) -> Result<Vec<Album>, crate::errors::UserError> {
     fetch_album_list(&state, "newest", size).await
 }
 
@@ -325,7 +334,7 @@ pub struct Genre {
     pub song_count: u32,
 }
 
-pub async fn get_genres_list(state: Arc<AppState>) -> Result<Vec<Genre>, String> {
+pub async fn get_genres_list(state: Arc<AppState>) -> Result<Vec<Genre>, crate::errors::UserError> {
     let body = subsonic_request(&state, "getGenres", &[], false).await?;
     let mut genres: Vec<Genre> = array_field(&body, &["genres", "genre"])
         .iter()
@@ -348,7 +357,7 @@ pub async fn get_genres_list(state: Arc<AppState>) -> Result<Vec<Genre>, String>
 // ── Playlists ────────────────────────────────────────────────────────────────
 
 /// Returns all playlists visible to the current user (raw JSON objects).
-pub async fn get_playlists(state: Arc<AppState>) -> Result<Vec<serde_json::Value>, String> {
+pub async fn get_playlists(state: Arc<AppState>) -> Result<Vec<serde_json::Value>, crate::errors::UserError> {
     let body = subsonic_request(&state, "getPlaylists", &[], false).await?;
     Ok(array_field(&body, &["playlists", "playlist"]))
 }
@@ -364,7 +373,7 @@ pub struct PlaylistTracks {
 }
 
 /// Fetches a playlist's full track list from the server.
-pub async fn get_playlist_tracks(state: Arc<AppState>, id: String) -> Result<PlaylistTracks, String> {
+pub async fn get_playlist_tracks(state: Arc<AppState>, id: String) -> Result<PlaylistTracks, crate::errors::UserError> {
     let body = subsonic_request(&state, "getPlaylist", &[("id", id)], false).await?;
     let playlist = body.get("playlist").cloned().unwrap_or(serde_json::Value::Null);
     Ok(PlaylistTracks {
@@ -377,7 +386,7 @@ pub async fn get_playlist_tracks(state: Arc<AppState>, id: String) -> Result<Pla
 }
 
 /// Creates a new playlist on the server and returns the created playlist object.
-pub async fn create_playlist(state: Arc<AppState>, name: String) -> Result<serde_json::Value, String> {
+pub async fn create_playlist(state: Arc<AppState>, name: String) -> Result<serde_json::Value, crate::errors::UserError> {
     let body = subsonic_request(&state, "createPlaylist", &[("name", name)], false).await?;
     Ok(body.get("playlist").cloned().unwrap_or(serde_json::Value::Null))
 }
@@ -391,7 +400,7 @@ pub async fn update_playlist(
     comment: Option<String>,
     song_ids_to_add: Vec<String>,
     song_indices_to_remove: Vec<u32>,
-) -> Result<(), String> {
+) -> Result<(), crate::errors::UserError> {
     let mut params = vec![("playlistId", id)];
     if let Some(name) = name {
         params.push(("name", name));
@@ -410,7 +419,8 @@ pub async fn update_playlist(
 }
 
 /// Deletes a playlist from the server.
-pub async fn delete_playlist(state: Arc<AppState>, id: String) -> Result<(), String> {
+#[allow(dead_code)]
+pub async fn delete_playlist(state: Arc<AppState>, id: String) -> Result<(), crate::errors::UserError> {
     subsonic_request(&state, "deletePlaylist", &[("id", id)], false).await?;
     Ok(())
 }
@@ -469,7 +479,7 @@ pub(crate) fn fire_scrobble(state: Arc<AppState>, id: String, submission: bool) 
     tokio::spawn(async move {
         let params = [("id", id), ("submission", submission.to_string()), ("time", "0".to_string())];
         if let Err(e) = subsonic_request(&state, "scrobble", &params, true).await {
-            eprintln!("Scrobble failed: {e}");
+            eprintln!("Scrobble failed: {}", e.message());
         }
     });
 }
@@ -485,7 +495,7 @@ pub(crate) fn fire_report_playback(state: Arc<AppState>, media_id: String, posit
             ("state", playback_state),
         ];
         if let Err(e) = subsonic_request(&state, "reportPlayback", &params, true).await {
-            eprintln!("Report playback failed: {e}");
+            eprintln!("Report playback failed: {}", e.message());
         }
     });
 }
@@ -497,17 +507,18 @@ pub(crate) fn fire_save_play_queue(state: Arc<AppState>, ids: Vec<String>, curre
         if let Some(c) = current { params.push(("current", c)); }
         if let Some(p) = position_ms { params.push(("position", p.to_string())); }
         if let Err(e) = subsonic_request(&state, "savePlayQueue", &params, true).await {
-            eprintln!("Save play queue failed: {e}");
+            eprintln!("Save play queue failed: {}", e.message());
         }
     });
 }
 
 /// Reports playback progress to the server. Errors are logged, not surfaced,
 /// and never trigger a session-expiry prompt.
+#[allow(dead_code)]
 pub async fn scrobble(state: Arc<AppState>, id: String, submission: bool, time: i64) {
     let params = [("id", id), ("submission", submission.to_string()), ("time", time.to_string())];
     if let Err(e) = subsonic_request(&state, "scrobble", &params, true).await {
-        eprintln!("Scrobble failed: {e}");
+        eprintln!("Scrobble failed: {}", e.message());
     }
 }
 
@@ -515,12 +526,13 @@ pub async fn scrobble(state: Arc<AppState>, id: String, submission: bool, time: 
 pub async fn set_rating(state: Arc<AppState>, id: String, rating: u32) {
     let params = [("id", id), ("rating", rating.to_string())];
     if let Err(e) = subsonic_request(&state, "setRating", &params, true).await {
-        eprintln!("Set rating failed: {e}");
+        eprintln!("Set rating failed: {}", e.message());
     }
 }
 
 /// Reports playback state/position via the `playbackReport` extension. No-op if
 /// the server hasn't advertised it. Logged-only on error.
+#[allow(dead_code)]
 pub async fn report_playback(state: Arc<AppState>, media_id: String, position_ms: i64, playback_state: String) {
     if !has_extension(&state, "playbackReport") {
         return;
@@ -532,7 +544,7 @@ pub async fn report_playback(state: Arc<AppState>, media_id: String, position_ms
         ("state", playback_state),
     ];
     if let Err(e) = subsonic_request(&state, "reportPlayback", &params, true).await {
-        eprintln!("Report playback failed: {e}");
+        eprintln!("Report playback failed: {}", e.message());
     }
 }
 
@@ -540,12 +552,13 @@ pub async fn report_playback(state: Arc<AppState>, media_id: String, position_ms
 
 /// Saves the current queue/position to the server via `savePlayQueue`, so it can
 /// be resumed on another device. Logged-only on error.
+#[allow(dead_code)]
 pub async fn save_play_queue(state: Arc<AppState>, ids: Vec<String>, current: Option<String>, position_ms: Option<i64>) {
     let mut params: Vec<(&str, String)> = ids.into_iter().map(|id| ("id", id)).collect();
     if let Some(c) = current { params.push(("current", c)); }
     if let Some(p) = position_ms { params.push(("position", p.to_string())); }
     if let Err(e) = subsonic_request(&state, "savePlayQueue", &params, true).await {
-        eprintln!("Save play queue failed: {e}");
+        eprintln!("Save play queue failed: {}", e.message());
     }
 }
 
@@ -561,7 +574,7 @@ pub struct RemotePlayQueue {
 /// Fetches the last saved play queue from the server via `getPlayQueue`, for
 /// resuming playback that was started on another device. Returns `None` if no
 /// queue has been saved.
-pub async fn get_play_queue(state: Arc<AppState>) -> Result<Option<RemotePlayQueue>, String> {
+pub async fn get_play_queue(state: Arc<AppState>) -> Result<Option<RemotePlayQueue>, crate::errors::UserError> {
     let body = subsonic_request(&state, "getPlayQueue", &[], true).await?;
     let queue = body.get("playQueue").cloned();
     let Some(queue) = queue else { return Ok(None) };
@@ -584,9 +597,10 @@ pub async fn get_play_queue(state: Arc<AppState>) -> Result<Option<RemotePlayQue
 /// Fetches audio-similar tracks for a song via the `sonicSimilarity` OpenSubsonic
 /// extension (`getSonicSimilarTracks`). Errors if the server hasn't advertised
 /// the extension, so the UI can hide the feature.
-pub async fn get_sonic_similar_tracks(state: Arc<AppState>, id: String, count: Option<i32>) -> Result<Vec<SimilarMatch>, String> {
+#[allow(dead_code)]
+pub async fn get_sonic_similar_tracks(state: Arc<AppState>, id: String, count: Option<i32>) -> Result<Vec<SimilarMatch>, crate::errors::UserError> {
     if !has_extension(&state, "sonicSimilarity") {
-        return Err("sonicSimilarity not supported".to_string());
+        return Err(crate::errors::UserError::Unknown);
     }
     let mut params = vec![("id", id)];
     if let Some(count) = count {
@@ -598,9 +612,10 @@ pub async fn get_sonic_similar_tracks(state: Arc<AppState>, id: String, count: O
 
 /// Finds a transition path of audio-similar tracks between two songs via the
 /// `sonicSimilarity` OpenSubsonic extension (`findSonicPath`).
-pub async fn find_sonic_path(state: Arc<AppState>, start_song_id: String, end_song_id: String, count: Option<i32>) -> Result<Vec<SimilarMatch>, String> {
+#[allow(dead_code)]
+pub async fn find_sonic_path(state: Arc<AppState>, start_song_id: String, end_song_id: String, count: Option<i32>) -> Result<Vec<SimilarMatch>, crate::errors::UserError> {
     if !has_extension(&state, "sonicSimilarity") {
-        return Err("sonicSimilarity not supported".to_string());
+        return Err(crate::errors::UserError::Unknown);
     }
     let mut params = vec![("startSongId", start_song_id), ("endSongId", end_song_id)];
     if let Some(count) = count {
@@ -613,7 +628,7 @@ pub async fn find_sonic_path(state: Arc<AppState>, start_song_id: String, end_so
 /// Fallback "similar tracks" for servers without `sonicSimilarity`: combines
 /// genre-matched songs (`getSongsByGenre`) and tracks by Last.fm-similar artists
 /// (`getArtistInfo2` → `getTopSongs`), with synthetic similarity scores.
-pub async fn get_similar_tracks_fallback(state: Arc<AppState>, song_id: String, artist_id: Option<String>, genre: Option<String>, count: Option<i32>) -> Result<Vec<SimilarMatch>, String> {
+pub async fn get_similar_tracks_fallback(state: Arc<AppState>, song_id: String, artist_id: Option<String>, genre: Option<String>, count: Option<i32>) -> Result<Vec<SimilarMatch>, crate::errors::UserError> {
     use rand::seq::SliceRandom;
 
     let count = count.unwrap_or(10).max(1) as usize;
@@ -654,7 +669,7 @@ pub async fn get_similar_tracks_fallback(state: Arc<AppState>, song_id: String, 
 // ── Library song enumeration (Radio / Mood Mix seeding) ──────────────────────
 
 /// Returns songs of a given genre via `getSongsByGenre`.
-pub async fn get_songs_by_genre(state: Arc<AppState>, genre: String, count: Option<i32>) -> Result<Vec<Song>, String> {
+pub async fn get_songs_by_genre(state: Arc<AppState>, genre: String, count: Option<i32>) -> Result<Vec<Song>, crate::errors::UserError> {
     let count = count.unwrap_or(100).clamp(1, 500);
     let body = subsonic_request(&state, "getSongsByGenre", &[("genre", genre), ("count", count.to_string())], false).await?;
     Ok(map_songs(array_field(&body, &["songsByGenre", "song"])))
@@ -662,7 +677,7 @@ pub async fn get_songs_by_genre(state: Arc<AppState>, genre: String, count: Opti
 
 /// Returns a random sample of library songs via `getRandomSongs` (optionally
 /// scoped to a genre).
-pub async fn get_random_songs(state: Arc<AppState>, count: Option<i32>, genre: Option<String>) -> Result<Vec<Song>, String> {
+pub async fn get_random_songs(state: Arc<AppState>, count: Option<i32>, genre: Option<String>) -> Result<Vec<Song>, crate::errors::UserError> {
     let size = count.unwrap_or(100).clamp(1, 500);
     let mut params = vec![("size", size.to_string())];
     if let Some(genre) = genre {
@@ -674,7 +689,7 @@ pub async fn get_random_songs(state: Arc<AppState>, count: Option<i32>, genre: O
 
 /// Returns the names of similar artists from the server's `getArtistInfo2`
 /// (`similarArtist[]`), for the artist-page "You might also like" section.
-pub async fn get_similar_artists(state: Arc<AppState>, id: String, count: Option<i32>) -> Result<Vec<String>, String> {
+pub async fn get_similar_artists(state: Arc<AppState>, id: String, count: Option<i32>) -> Result<Vec<String>, crate::errors::UserError> {
     let count = count.unwrap_or(20).clamp(1, 100);
     let body = subsonic_request(&state, "getArtistInfo2", &[("id", id), ("count", count.to_string())], false).await?;
     Ok(array_field(&body, &["artistInfo2", "similarArtist"])
@@ -694,7 +709,7 @@ pub async fn get_song_lyrics(
     title: String,
     duration: f64,
     use_lrclib_fallback: bool,
-) -> Result<Option<LyricsResult>, String> {
+) -> Result<Option<LyricsResult>, crate::errors::UserError> {
     // 1. OpenSubsonic structured lyrics (synced preferred)
     if let Ok(body) = subsonic_request(&state, "getLyricsBySongId", &[("id", song_id)], false).await {
         let list = array_field(&body, &["lyricsList", "structuredLyrics"]);

@@ -334,6 +334,7 @@ impl ParticleSystem {
     }
 
     /// Resize the pool, pre-warming any new particles at the current ring.
+    #[allow(dead_code)]
     pub(crate) fn set_count(&mut self, count: usize, ring_radius: f32) {
         if count == self.particles.len() {
             return;

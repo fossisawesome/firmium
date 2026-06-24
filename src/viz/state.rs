@@ -57,8 +57,8 @@ impl VizState {
         let bar_count = bars.len().min(BAR_COUNT);
 
         // Flash: detect onset (bar rose significantly), decay at ~0.88/frame.
-        for i in 0..bar_count {
-            let onset = (bars[i] - self.prev_bars[i]).max(0.0);
+        for (i, &bar) in bars.iter().enumerate().take(bar_count) {
+            let onset = (bar - self.prev_bars[i]).max(0.0);
             if onset > 0.15 {
                 self.flash_intensities[i] =
                     (self.flash_intensities[i] + onset * 2.0).min(1.0);
@@ -73,8 +73,7 @@ impl VizState {
         } else {
             1.0
         };
-        for i in 0..bar_count {
-            let v = bars[i];
+        for (i, &v) in bars.iter().enumerate().take(bar_count) {
             if v >= self.peak_bars[i] {
                 self.peak_bars[i] = v;
                 self.peak_hold[i] = hold_frames;
@@ -125,6 +124,7 @@ impl VizState {
         self.flash_intensities.clone()
     }
 
+    #[allow(dead_code)]
     pub fn bar_count(&self) -> usize {
         self.backend.bars().len()
     }
@@ -141,6 +141,7 @@ impl VizState {
         self.backend.is_dirty()
     }
 
+    #[allow(dead_code)]
     pub fn clear_dirty(&self) {
         self.backend.clear_dirty();
     }

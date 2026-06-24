@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
+import com.fossisawesome.firmium.data.toUserError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,6 +79,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.setSavePasswordEnabled(savePassword)
                 _state.value = AuthState(isAuthenticated = true, isLoading = false, needsLogin = false)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 auth.clearCredentials()
                 _state.value = AuthState(
                     isAuthenticated = false,
@@ -92,8 +94,8 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                             "Wrong username or password"
                         e.message?.contains("Unable to parse TLS") == true ||
                         e.message?.contains("SSLHandshakeException") == true ->
-                            "Login failed: ${e.message}\n\nTry using http:// instead of https:// — your server may not have TLS enabled."
-                        else -> "Login failed: ${e.message}"
+                            "${e.toUserError().message}\n\nTry using http:// instead of https:// — your server may not have TLS enabled."
+                        else -> e.toUserError().message
                     }
                 )
             }
@@ -113,8 +115,9 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 val servers = auth.savedServers()
                 _state.value = AuthState(isAuthenticated = true, isLoading = false, savedServers = servers)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 auth.clearCredentials()
-                _state.value = _state.value.copy(isLoading = false, error = "Switch failed: ${e.message}")
+                _state.value = _state.value.copy(isLoading = false, error = "Switch failed: ${e.toUserError().message}")
             }
         }
     }

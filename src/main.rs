@@ -7,6 +7,8 @@ pub use types::{AudioDevice, PlaybackState};
 
 #[path = "../backend/events.rs"]
 mod events;
+#[path = "../backend/errors.rs"]
+mod errors;
 #[path = "../backend/paths.rs"]
 mod paths;
 #[path = "../backend/state.rs"]

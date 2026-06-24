@@ -1,3 +1,5 @@
+#![allow(clippy::items_after_test_module)]
+
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -388,6 +390,7 @@ pub fn set_crossfade_settings(bus: &EventBus, state: &QueueState, enabled: bool,
     emit_queue_state(bus, state);
 }
 
+#[allow(dead_code)]
 pub fn set_crossfade_curve(bus: &EventBus, state: &QueueState, curve: String) {
     state.inner.lock().crossfade_curve = normalize_crossfade_curve(&curve);
     emit_queue_state(bus, state);
@@ -418,6 +421,7 @@ pub async fn set_queue(
 /// Append songs to the end of the current queue and start playing the first
 /// appended track. Computes the insertion point under the lock so it can't race
 /// a `queue-state-changed` event (used by Smart Radio auto-continue).
+#[allow(dead_code)]
 pub async fn append_and_play(
     queue_state: Arc<QueueState>,
     app_state: Arc<AppState>,
@@ -435,6 +439,7 @@ pub async fn append_and_play(
 }
 
 /// Replace queue without interrupting playback if the current track is still present.
+#[allow(dead_code)]
 pub async fn set_queue_seamless(
     queue_state: Arc<QueueState>,
     app_state: Arc<AppState>,

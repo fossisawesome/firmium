@@ -1,6 +1,7 @@
 package com.fossisawesome.firmium.data.api
 
 import com.fossisawesome.firmium.BuildConfig
+import com.fossisawesome.firmium.data.HttpStatusException
 import com.fossisawesome.firmium.data.model.*
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -61,6 +62,7 @@ class ApiClient(private val auth: AuthManager) {
         val url = auth.buildUrl(action, params)
         return withContext(Dispatchers.IO) {
             val response = http.newCall(Request.Builder().url(url).build()).execute()
+            if (!response.isSuccessful) throw HttpStatusException(response.code)
             val body = response.body?.string() ?: error("Empty response from $action")
             // A misconfigured URL or reverse proxy can return HTML / non-JSON; fail with a
             // clear message instead of an opaque NullPointerException.

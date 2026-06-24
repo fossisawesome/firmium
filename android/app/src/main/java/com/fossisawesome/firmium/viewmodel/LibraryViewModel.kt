@@ -10,6 +10,8 @@ import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Artist
 import com.fossisawesome.firmium.data.model.ArtistDetail
+import com.fossisawesome.firmium.data.toUserError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -141,7 +143,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _homeState.value = HomeState(recentAlbums = mergedRecent, recentArtists = artists, randomAlbums = mergedRandom)
             } catch (e: Exception) {
-                _homeState.value = HomeState(error = e.message)
+                if (e is CancellationException) throw e
+                if (e is com.fossisawesome.firmium.data.api.SessionExpiredException) {
+                    _homeState.value = HomeState(error = null)
+                    return@launch
+                }
+                _homeState.value = HomeState(error = e.toUserError().message)
             }
         }
     }
@@ -161,7 +168,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _albumListState.value = AlbumListState(albums = albums)
             } catch (e: Exception) {
-                _albumListState.value = AlbumListState(error = e.message)
+                if (e is CancellationException) throw e
+                if (e is com.fossisawesome.firmium.data.api.SessionExpiredException) {
+                    _albumListState.value = AlbumListState(error = null)
+                    return@launch
+                }
+                _albumListState.value = AlbumListState(error = e.toUserError().message)
             }
         }
     }
@@ -181,7 +193,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _artistListState.value = ArtistListState(artists = artists)
             } catch (e: Exception) {
-                _artistListState.value = ArtistListState(error = e.message)
+                if (e is CancellationException) throw e
+                if (e is com.fossisawesome.firmium.data.api.SessionExpiredException) {
+                    _artistListState.value = ArtistListState(error = null)
+                    return@launch
+                }
+                _artistListState.value = ArtistListState(error = e.toUserError().message)
             }
         }
     }
@@ -195,7 +212,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 val downloaded = localLibrary.downloadedIds(album.tracks)
                 _albumDetailState.value = AlbumDetailState(album = album, downloadedSongIds = downloaded)
             } catch (e: Exception) {
-                _albumDetailState.value = AlbumDetailState(error = e.message)
+                if (e is CancellationException) throw e
+                if (e is com.fossisawesome.firmium.data.api.SessionExpiredException) {
+                    _albumDetailState.value = AlbumDetailState(error = null)
+                    return@launch
+                }
+                _albumDetailState.value = AlbumDetailState(error = e.toUserError().message)
             }
         }
     }
@@ -220,7 +242,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 resolveRecommendations(artistId, detail.artist.name)
                 loadArtistTopSongs(artistId, detail.artist.name)
             } catch (e: Exception) {
-                _artistDetailState.value = ArtistDetailState(error = e.message)
+                if (e is CancellationException) throw e
+                if (e is com.fossisawesome.firmium.data.api.SessionExpiredException) {
+                    _artistDetailState.value = ArtistDetailState(error = null)
+                    return@launch
+                }
+                _artistDetailState.value = ArtistDetailState(error = e.toUserError().message)
             }
         }
     }

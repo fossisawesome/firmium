@@ -8,13 +8,14 @@ use iced::widget::image::Handle as ImageHandle;
 use iced::widget::{button, checkbox, column, container, pick_list, row, scrollable, slider, stack, text, text_input, toggler};
 use iced::{Alignment, Background, Border, Color, ContentFit, Element, Length, Shadow, Subscription, Task, Theme};
 
-use crate::commands::equalizer::{BandSpec, EqState};
+use crate::commands::equalizer::EqState;
 use crate::commands::lyrics::LyricsResult;
 use crate::commands::mappers::{Album, Artist, SimilarMatch, Song};
 use crate::commands::local_library::LocalAlbumTracks;
 use crate::commands::subsonic::{AlbumTracks, ArtistDetails, ArtistInfo, Genre, PlaylistTracks, RemotePlayQueue, SearchResult};
 use crate::commands::themes::ThemeEntry;
 use crate::config::{Config, SavedAccount};
+use crate::errors::UserError;
 use crate::events::{BackendEvent, EventBus};
 use crate::init::Backend;
 use crate::theme::Tokens;
@@ -33,6 +34,7 @@ pub enum View {
     Search,
     Mix,
     GenreDetail(String),
+    #[allow(dead_code)]
     Local,
     LocalAlbumDetail(String),
     Recap,
@@ -40,6 +42,7 @@ pub enum View {
 }
 
 impl View {
+    #[allow(dead_code)]
     fn title(&self) -> &'static str {
         match self {
             View::Home => "Home",
@@ -72,6 +75,7 @@ pub enum RecapRange {
 
 impl RecapRange {
     /// Inclusive lower bound (unix seconds) for this window, given `now`.
+    #[allow(clippy::wrong_self_convention)]
     fn from_ts(self, now: i64) -> i64 {
         let day = 86_400;
         match self {
@@ -137,30 +141,41 @@ pub enum Energy {
 }
 
 #[derive(Debug, Clone)]
+pub struct Toast {
+    pub id: u64,
+    pub category: UserError,
+    pub text: String,
+    pub spawned: std::time::Instant,
+}
+
+#[derive(Debug, Clone)]
 pub enum Message {
     Navigate(View),
     NavigateBack,
     Backend(BackendEvent),
     VisualizerTick,
+    ShowToast(UserError),
+    DismissToast(u64),
+    ToastTick,
 
     // ── Onboarding ────────────────────────────────────────────────────────────
     ServerInput(String),
     UsernameInput(String),
     PasswordInput(String),
     Connect,
-    Connected(Result<(), String>),
+    Connected(Result<(), UserError>),
     ToggleSavePassword(bool),
 
     // ── Data ──────────────────────────────────────────────────────────────────
-    AlbumsLoaded(Result<Vec<Album>, String>),
-    HomeAlbumsLoaded(HomeSection, Result<Vec<Album>, String>),
-    AlbumTracksLoaded(Result<AlbumTracks, String>),
-    ArtistsLoaded(Result<Vec<Artist>, String>),
-    ArtistDetailLoaded(Result<ArtistDetails, String>),
-    ArtistInfoLoaded(Result<Option<ArtistInfo>, String>),
-    SimilarArtistsLoaded(Result<Vec<String>, String>),
-    PlaylistsLoaded(Result<Vec<serde_json::Value>, String>),
-    PlaylistTracksLoaded(Result<PlaylistTracks, String>),
+    AlbumsLoaded(Result<Vec<Album>, UserError>),
+    HomeAlbumsLoaded(HomeSection, Result<Vec<Album>, UserError>),
+    AlbumTracksLoaded(Result<AlbumTracks, UserError>),
+    ArtistsLoaded(Result<Vec<Artist>, UserError>),
+    ArtistDetailLoaded(Result<ArtistDetails, UserError>),
+    ArtistInfoLoaded(Result<Option<ArtistInfo>, UserError>),
+    SimilarArtistsLoaded(Result<Vec<String>, UserError>),
+    PlaylistsLoaded(Result<Vec<serde_json::Value>, UserError>),
+    PlaylistTracksLoaded(Result<PlaylistTracks, UserError>),
     CoverLoaded(String, Result<String, String>),
     AlbumsScrolled(f32),
     PlayAlbumAt(usize),
@@ -177,13 +192,13 @@ pub enum Message {
     NewPlaylistNameInput(String),
     AddToPlaylist(String),
     CreatePlaylistAndAdd,
-    PlaylistCreatedThenAdd(String, Result<serde_json::Value, String>),
-    AddToPlaylistDone(Result<(), String>),
+    PlaylistCreatedThenAdd(String, Result<serde_json::Value, UserError>),
+    AddToPlaylistDone(Result<(), UserError>),
 
     // ── Search ────────────────────────────────────────────────────────────────
     SearchInput(String),
     SubmitSearch,
-    SearchLoaded(Result<SearchResult, String>),
+    SearchLoaded(Result<SearchResult, UserError>),
 
     // ── Settings ──────────────────────────────────────────────────────────────
     SelectTheme(String),
@@ -217,31 +232,34 @@ pub enum Message {
 
     // ── Mix ───────────────────────────────────────────────────────────────────
     GenerateMix(Energy),
-    MixFetched(Energy, Result<Vec<Song>, String>),
+    MixFetched(Energy, Result<Vec<Song>, UserError>),
 
     // ── Transport ─────────────────────────────────────────────────────────────
     TogglePlay,
     Next,
     Prev,
+    #[allow(dead_code)]
     ToggleShuffle,
     CycleRepeat,
     SetVolume(f32),
     SeekTo(f32),
     TogglePanel(Panel),
     SetVizMode(VizMode),
-    LyricsLoaded(String, Result<Option<LyricsResult>, String>),
-    SimilarLoaded(String, Result<Vec<SimilarMatch>, String>),
+    LyricsLoaded(String, Result<Option<LyricsResult>, UserError>),
+    SimilarLoaded(String, Result<Vec<SimilarMatch>, UserError>),
     PlayQueueIndex(usize),
     PlaybackDone(Result<(), String>),
 
     // ── Resume-queue prompt ───────────────────────────────────────────────────
-    PlayQueueFetched(Result<Option<RemotePlayQueue>, String>),
+    PlayQueueFetched(Result<Option<RemotePlayQueue>, UserError>),
     ResumeQueue,
     DismissResume,
 
     // ── Account switcher ──────────────────────────────────────────────────────
     ToggleAccountSwitcher,
+    #[allow(dead_code)]
     SwitchAccount(SavedAccount),
+    #[allow(dead_code)]
     AddAccount,
 
     // ── Recap ─────────────────────────────────────────────────────────────────
@@ -254,8 +272,8 @@ pub enum Message {
     ExportDone(Result<bool, String>),
 
     // ── Genre browsing ────────────────────────────────────────────────────────
-    GenresLoaded(Result<Vec<Genre>, String>),
-    GenreSongsLoaded(Result<Vec<Song>, String>),
+    GenresLoaded(Result<Vec<Genre>, UserError>),
+    GenreSongsLoaded(Result<Vec<Song>, UserError>),
     PlayGenreAt(usize),
 
     // ── Album download ────────────────────────────────────────────────────────
@@ -280,7 +298,9 @@ pub struct App {
     server_input: String,
     username_input: String,
     password_input: String,
-    connect_error: Option<String>,
+
+    toasts: Vec<Toast>,
+    next_toast_id: u64,
 
     view: View,
     nav_stack: Vec<View>,
@@ -437,7 +457,8 @@ impl App {
             server_input,
             username_input,
             password_input: String::new(),
-            connect_error: None,
+            toasts: Vec::new(),
+            next_toast_id: 0,
             view: View::Home,
             nav_stack: Vec::new(),
             albums: Vec::new(),
@@ -496,7 +517,7 @@ impl App {
             new_playlist_name: String::new(),
             resume_queue: None,
             accounts: cfg.accounts,
-            show_account_switcher: false,
+            show_account_switcher: true,
             recap: None,
             recap_range: RecapRange::Month,
             recap_card: 0,
@@ -627,15 +648,20 @@ impl App {
                         if let Some(history) = &self.backend.history {
                             self.home_recent_plays = history.recent_plays(15).unwrap_or_default();
                         }
+                        let play_cover_ids: Vec<String> = self.home_recent_plays.iter()
+                            .filter_map(|p| p.cover_art_id.clone())
+                            .collect();
+                        let cover_task = self.load_cover_ids(play_cover_ids);
                         if self.home_newest.is_empty() {
                             Task::batch([
                                 Task::perform(crate::commands::subsonic::get_recent_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Recent, r)),
                                 Task::perform(crate::commands::subsonic::get_newest_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Newest, r)),
                                 Task::perform(crate::commands::subsonic::get_random_albums(state.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Random, r)),
                                 Task::perform(crate::commands::subsonic::get_genres_list(state), Message::GenresLoaded),
+                                cover_task,
                             ])
                         } else {
-                            Task::none()
+                            cover_task
                         }
                     }
                     _ => Task::none(),
@@ -652,6 +678,12 @@ impl App {
                 Task::batch([self.maybe_fetch_lyrics(), self.maybe_fetch_similar()])
             }
             Message::VisualizerTick => Task::none(),
+            Message::ShowToast(err) => { self.show_toast(err); Task::none() }
+            Message::DismissToast(id) => { self.toasts.retain(|t| t.id != id); Task::none() }
+            Message::ToastTick => {
+                self.toasts.retain(|t| t.spawned.elapsed().as_secs() < 5);
+                Task::none()
+            }
 
             // ── Onboarding ────────────────────────────────────────────────────
             Message::ServerInput(s) => {
@@ -675,11 +707,16 @@ impl App {
                 let user = self.username_input.trim().to_string();
                 let pass = self.password_input.clone();
                 if server.is_empty() || user.is_empty() {
-                    self.connect_error = Some("Server URL and username are required".to_string());
+                    self.toasts.push(Toast {
+                        id: self.next_toast_id,
+                        category: UserError::Unknown,
+                        text: "Server URL and username are required".to_string(),
+                        spawned: std::time::Instant::now(),
+                    });
+                    self.next_toast_id += 1;
                     return Task::none();
                 }
                 self.connecting = true;
-                self.connect_error = None;
                 crate::commands::subsonic::set_connection(
                     &self.backend.app_state,
                     Some(server.clone()),
@@ -696,6 +733,7 @@ impl App {
             }
             Message::Connected(Ok(())) => {
                 self.authed = true;
+                self.show_account_switcher = false;
                 self.connecting = false;
                 self.password_input.clear();
                 self.remember_current_account();
@@ -703,6 +741,10 @@ impl App {
                 if let Some(history) = &self.backend.history {
                     self.home_recent_plays = history.recent_plays(15).unwrap_or_default();
                 }
+                let play_cover_ids: Vec<String> = self.home_recent_plays.iter()
+                    .filter_map(|p| p.cover_art_id.clone())
+                    .collect();
+                let cover_task = self.load_cover_ids(play_cover_ids);
                 let s = self.backend.app_state.clone();
                 Task::batch([
                     Task::perform(crate::commands::subsonic::get_albums(s.clone()), Message::AlbumsLoaded),
@@ -711,11 +753,14 @@ impl App {
                     Task::perform(crate::commands::subsonic::get_random_albums(s.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Random, r)),
                     Task::perform(crate::commands::subsonic::get_genres_list(s.clone()), Message::GenresLoaded),
                     Task::perform(crate::commands::subsonic::get_play_queue(s), Message::PlayQueueFetched),
+                    cover_task,
                 ])
             }
             Message::Connected(Err(e)) => {
                 self.connecting = false;
-                self.connect_error = Some(e);
+                self.show_account_switcher = true;
+                eprintln!("connect failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
 
@@ -725,7 +770,8 @@ impl App {
                 self.load_covers()
             }
             Message::AlbumsLoaded(Err(e)) => {
-                eprintln!("get_albums failed: {e}");
+                eprintln!("get_albums failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::HomeAlbumsLoaded(section, Ok(albums)) => {
@@ -738,7 +784,8 @@ impl App {
                 self.load_cover_ids(ids)
             }
             Message::HomeAlbumsLoaded(_, Err(e)) => {
-                eprintln!("home albums failed: {e}");
+                eprintln!("home albums failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::CoverLoaded(id, Ok(path)) => {
@@ -768,7 +815,8 @@ impl App {
                 self.load_cover_ids(ids)
             }
             Message::AlbumTracksLoaded(Err(e)) => {
-                eprintln!("get_album_tracks failed: {e}");
+                eprintln!("get_album_tracks failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::ArtistsLoaded(Ok(a)) => {
@@ -776,7 +824,8 @@ impl App {
                 Task::none()
             }
             Message::ArtistsLoaded(Err(e)) => {
-                eprintln!("get_artists failed: {e}");
+                eprintln!("get_artists failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::ArtistDetailLoaded(Ok(d)) => {
@@ -789,7 +838,8 @@ impl App {
                 Task::none()
             }
             Message::ArtistInfoLoaded(Err(e)) => {
-                eprintln!("get_artist_info failed: {e}");
+                eprintln!("get_artist_info failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::SimilarArtistsLoaded(Ok(names)) => {
@@ -797,11 +847,13 @@ impl App {
                 Task::none()
             }
             Message::SimilarArtistsLoaded(Err(e)) => {
-                eprintln!("get_similar_artists failed: {e}");
+                eprintln!("get_similar_artists failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::ArtistDetailLoaded(Err(e)) => {
-                eprintln!("get_artist_details failed: {e}");
+                eprintln!("get_artist_details failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::PlaylistsLoaded(Ok(p)) => {
@@ -809,7 +861,8 @@ impl App {
                 Task::none()
             }
             Message::PlaylistsLoaded(Err(e)) => {
-                eprintln!("get_playlists failed: {e}");
+                eprintln!("get_playlists failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::PlaylistTracksLoaded(Ok(pt)) => {
@@ -818,7 +871,8 @@ impl App {
                 self.load_cover_ids(ids)
             }
             Message::PlaylistTracksLoaded(Err(e)) => {
-                eprintln!("get_playlist_tracks failed: {e}");
+                eprintln!("get_playlist_tracks failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::PlayAlbumAt(idx) => {
@@ -997,7 +1051,8 @@ impl App {
                 }
             }
             Message::PlaylistCreatedThenAdd(_, Err(e)) => {
-                eprintln!("create_playlist failed: {e}");
+                eprintln!("create_playlist failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::AddToPlaylistDone(Ok(())) => {
@@ -1008,7 +1063,8 @@ impl App {
                 )
             }
             Message::AddToPlaylistDone(Err(e)) => {
-                eprintln!("add to playlist failed: {e}");
+                eprintln!("add to playlist failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
 
@@ -1038,7 +1094,8 @@ impl App {
                 self.load_cover_ids(ids)
             }
             Message::SearchLoaded(Err(e)) => {
-                eprintln!("search failed: {e}");
+                eprintln!("search failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
 
@@ -1187,6 +1244,7 @@ impl App {
             Message::Logout => {
                 crate::commands::subsonic::set_connection(&self.backend.app_state, None, None, None);
                 self.authed = false;
+                self.show_account_switcher = true;
                 self.albums.clear();
                 self.search_results = None;
                 self.save_config();
@@ -1278,7 +1336,8 @@ impl App {
                 )
             }
             Message::MixFetched(_, Err(e)) => {
-                eprintln!("mix fetch failed: {e}");
+                eprintln!("mix fetch failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
 
@@ -1394,7 +1453,7 @@ impl App {
             }
             Message::PlayQueueFetched(Ok(None)) => Task::none(),
             Message::PlayQueueFetched(Err(e)) => {
-                eprintln!("get_play_queue failed: {e}");
+                eprintln!("get_play_queue failed: {e:?}");
                 Task::none()
             }
             Message::ResumeQueue => {
@@ -1459,16 +1518,17 @@ impl App {
                         )
                     }
                     Err(_) => {
-                        // Password no longer in keyring — bounce to setup, prefilled.
+                        // Password no longer in keyring — bounce to login popup, prefilled.
                         self.server_input = acct.server.clone();
                         self.username_input = acct.username.clone();
                         self.authed = false;
+                        self.show_account_switcher = true;
                         Task::none()
                     }
                 }
             }
             Message::AddAccount => {
-                self.show_account_switcher = false;
+                self.show_account_switcher = true;
                 self.authed = false;
                 self.server_input.clear();
                 self.username_input.clear();
@@ -1520,7 +1580,8 @@ impl App {
                 Task::none()
             }
             Message::GenresLoaded(Err(e)) => {
-                eprintln!("get_genres_list failed: {e}");
+                eprintln!("get_genres_list failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::GenreSongsLoaded(Ok(songs)) => {
@@ -1529,7 +1590,8 @@ impl App {
                 self.load_cover_ids(ids)
             }
             Message::GenreSongsLoaded(Err(e)) => {
-                eprintln!("get_songs_by_genre failed: {e}");
+                eprintln!("get_songs_by_genre failed: {e:?}");
+                self.show_toast(e);
                 Task::none()
             }
             Message::PlayGenreAt(idx) => {
@@ -1791,6 +1853,7 @@ impl App {
             BackendEvent::QueueExhausted(_song) => {}
             BackendEvent::SessionExpired => {
                 self.authed = false;
+                self.show_account_switcher = true;
             }
         }
     }
@@ -1799,93 +1862,61 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let content = if self.authed { self.shell() } else { self.setup_view() };
-        container(content)
+        let base_el: Element<'_, Message> = container(self.shell())
             .width(Length::Fill)
             .height(Length::Fill)
             .style(fill_bg(t.bg))
-            .into()
+            .into();
+        if self.toasts.is_empty() {
+            base_el
+        } else {
+            stack![base_el, self.toast_host()].into()
+        }
     }
 
-    fn setup_view(&self) -> Element<'_, Message> {
-        let t = self.tokens;
-
-        let save_pw_row = row![
-            checkbox(self.save_password)
-                .on_toggle(Message::ToggleSavePassword)
-                .style(move |_, status| {
-                    use iced::widget::checkbox::{Status, Style};
-                    let checked = matches!(status, Status::Active { is_checked: true } | Status::Hovered { is_checked: true });
-                    Style {
-                        background: Background::Color(if checked { t.accent } else { t.surface }),
-                        icon_color: t.bg,
-                        border: Border { color: if checked { t.accent } else { t.border }, width: 1.0, radius: 3.0.into() },
-                        text_color: None,
-                    }
-                }),
-            text("SAVE PASSWORD").size(11).style(tstyle(t.muted)),
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center)
-        .width(Length::Fixed(320.0));
-
-        let mut form = column![
-            text("Firmium").size(26).style(tstyle(t.accent)),
-            text("SERVER URL").size(11).style(tstyle(t.muted)),
-            text_input("https://music.example.com", &self.server_input)
-                .on_input(Message::ServerInput)
-                .padding(10)
-                .width(Length::Fixed(320.0))
-                .style(text_input_style(t)),
-            text("USERNAME").size(11).style(tstyle(t.muted)),
-            text_input("username", &self.username_input)
-                .on_input(Message::UsernameInput)
-                .padding(10)
-                .width(Length::Fixed(320.0))
-                .style(text_input_style(t)),
-            text("PASSWORD").size(11).style(tstyle(t.muted)),
-            text_input("password", &self.password_input)
-                .on_input(Message::PasswordInput)
-                .secure(true)
-                .padding(10)
-                .width(Length::Fixed(320.0))
-                .style(text_input_style(t)),
-            save_pw_row,
-            button(text("CONNECT").size(13))
-                .on_press(Message::Connect)
-                .padding(14)
-                .width(Length::Fixed(320.0))
-                .style(primary_button(t)),
-        ]
-        .spacing(12)
-        .align_x(Alignment::Start);
-
-        if let Some(err) = &self.connect_error {
-            form = form.push(text(err.clone()).size(12).style(tstyle(t.error)));
+    /// Pushes a toast, coalescing by category (no duplicate visible) and capping
+    /// the visible stack at 3 (drops oldest). `SessionExpired` is suppressed — the
+    /// existing SessionExpired event already drives the UI.
+    fn show_toast(&mut self, err: UserError) {
+        if matches!(err, UserError::SessionExpired) {
+            return;
         }
+        if let Some(existing) = self.toasts.iter_mut().find(|t| t.category == err) {
+            existing.spawned = std::time::Instant::now();
+            return;
+        }
+        self.toasts.push(Toast {
+            id: self.next_toast_id,
+            text: err.message(),
+            category: err.clone(),
+            spawned: std::time::Instant::now(),
+        });
+        self.next_toast_id += 1;
+        while self.toasts.len() > 3 {
+            self.toasts.remove(0);
+        }
+    }
 
-        let card = container(form)
-            .width(Length::Fixed(400.0))
-            .padding(40)
-            .style(move |_| container::Style {
-                background: Some(Background::Color(t.surface)),
-                border: Border { color: t.border, width: 1.0, radius: 10.0.into() },
-                ..container::Style::default()
-            });
-
-        let backdrop = container(text(""))
+    fn toast_host(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        let cards: Vec<Element<Message>> = self.toasts.iter().map(|toast| {
+            let close = icon_button(icons::CLOSE, 14.0, t.muted, t, Message::DismissToast(toast.id));
+            container(
+                row![text(toast.text.clone()).size(14), close]
+                    .spacing(12)
+                    .align_y(Alignment::Center),
+            )
+            .padding(12)
+            .style(fill_bg(t.surface))
+            .into()
+        }).collect();
+        container(column(cards).spacing(8))
+            .padding(16)
+            .align_x(Alignment::End)
+            .align_y(Alignment::End)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(move |_| container::Style {
-                background: Some(Background::Color(Color { a: 0.6, ..Color::BLACK })),
-                ..container::Style::default()
-            });
-
-        stack![
-            backdrop,
-            container(card).center_x(Length::Fill).center_y(Length::Fill),
-        ]
-        .into()
+            .into()
     }
 
     fn shell(&self) -> Element<'_, Message> {
@@ -1951,19 +1982,9 @@ impl App {
         }
     }
 
-    /// Modal listing saved accounts; tap to switch servers, or add a new one.
+    /// Modal: login form when not authed, connected info + disconnect when authed.
     fn account_switcher_overlay(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let cur_server = {
-            let conn = self.backend.app_state.connection.read();
-            conn.server.clone().unwrap_or_default()
-        };
-
-        let server_display = cur_server
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .trim_end_matches('/')
-            .to_string();
 
         let backdrop = button(container(text("")).width(Length::Fill).height(Length::Fill))
             .width(Length::Fill)
@@ -1974,41 +1995,110 @@ impl App {
                 ..button::Style::default()
             });
 
-        let disconnect_btn = button(text("DISCONNECT").size(13))
-            .on_press(Message::Logout)
-            .padding(14)
-            .width(Length::Fixed(320.0))
-            .style(move |_, status| {
-                use iced::widget::button::Status;
-                let base = Color { r: 0.87, g: 0.26, b: 0.21, a: 1.0 };
-                let bg = match status {
-                    Status::Hovered | Status::Pressed => Color { r: 0.75, g: 0.18, b: 0.14, a: 1.0 },
-                    _ => base,
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: Color::BLACK,
-                    border: Border { radius: 4.0.into(), ..Border::default() },
-                    ..button::Style::default()
-                }
-            });
+        let card: Element<'_, Message> = if self.authed {
+            let cur_server = {
+                let conn = self.backend.app_state.connection.read();
+                conn.server.clone().unwrap_or_default()
+            };
+            let server_display = cur_server
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/')
+                .to_string();
 
-        let card = container(
-            column![
-                text("Connected").size(26).style(tstyle(t.accent)),
-                text(server_display).size(13).style(tstyle(t.muted)),
-                disconnect_btn,
+            let disconnect_btn = button(text("DISCONNECT").size(13))
+                .on_press(Message::Logout)
+                .padding(14)
+                .width(Length::Fixed(320.0))
+                .style(move |_, status| {
+                    use iced::widget::button::Status;
+                    let base = Color { r: 0.87, g: 0.26, b: 0.21, a: 1.0 };
+                    let bg = match status {
+                        Status::Hovered | Status::Pressed => Color { r: 0.75, g: 0.18, b: 0.14, a: 1.0 },
+                        _ => base,
+                    };
+                    button::Style {
+                        background: Some(Background::Color(bg)),
+                        text_color: Color::BLACK,
+                        border: Border { radius: 4.0.into(), ..Border::default() },
+                        ..button::Style::default()
+                    }
+                });
+
+            container(
+                column![
+                    text("Connected").size(26).style(tstyle(t.accent)),
+                    text(server_display).size(13).style(tstyle(t.muted)),
+                    disconnect_btn,
+                ]
+                .spacing(20)
+                .align_x(Alignment::Start),
+            )
+            .width(Length::Fixed(400.0))
+            .padding(40)
+            .style(move |_th| container::Style {
+                background: Some(Background::Color(t.surface)),
+                border: Border { radius: 10.0.into(), width: 1.0, color: t.border },
+                ..container::Style::default()
+            })
+            .into()
+        } else {
+            let save_pw_row = row![
+                checkbox(self.save_password)
+                    .on_toggle(Message::ToggleSavePassword)
+                    .style(move |_, status| {
+                        use iced::widget::checkbox::{Status, Style};
+                        let checked = matches!(status, Status::Active { is_checked: true } | Status::Hovered { is_checked: true });
+                        Style {
+                            background: Background::Color(if checked { t.accent } else { t.surface }),
+                            icon_color: t.bg,
+                            border: Border { color: if checked { t.accent } else { t.border }, width: 1.0, radius: 3.0.into() },
+                            text_color: None,
+                        }
+                    }),
+                text("SAVE PASSWORD").size(11).style(tstyle(t.muted)),
             ]
-            .spacing(20)
-            .align_x(Alignment::Start),
-        )
-        .width(Length::Fixed(400.0))
-        .padding(40)
-        .style(move |_th| container::Style {
-            background: Some(Background::Color(t.surface)),
-            border: Border { radius: 10.0.into(), width: 1.0, color: t.border },
-            ..container::Style::default()
-        });
+            .spacing(8)
+            .align_y(Alignment::Center)
+            .width(Length::Fixed(320.0));
+
+            let form = column![
+                text_input("https://music.example.com", &self.server_input)
+                    .on_input(Message::ServerInput)
+                    .padding(10)
+                    .width(Length::Fixed(320.0))
+                    .style(text_input_style(t)),
+                text_input("username", &self.username_input)
+                    .on_input(Message::UsernameInput)
+                    .padding(10)
+                    .width(Length::Fixed(320.0))
+                    .style(text_input_style(t)),
+                text_input("password", &self.password_input)
+                    .on_input(Message::PasswordInput)
+                    .secure(true)
+                    .padding(10)
+                    .width(Length::Fixed(320.0))
+                    .style(text_input_style(t)),
+                save_pw_row,
+                button(text("CONNECT").size(13))
+                    .on_press(Message::Connect)
+                    .padding(14)
+                    .width(Length::Fixed(320.0))
+                    .style(primary_button(t)),
+            ]
+            .spacing(12)
+            .align_x(Alignment::Start);
+
+            container(form)
+                .width(Length::Fixed(400.0))
+                .padding(40)
+                .style(move |_| container::Style {
+                    background: Some(Background::Color(t.surface)),
+                    border: Border { color: t.border, width: 1.0, radius: 10.0.into() },
+                    ..container::Style::default()
+                })
+                .into()
+        };
 
         stack![
             backdrop,
@@ -3737,58 +3827,57 @@ impl App {
     fn home_recent_artists(&self) -> Element<'_, Message> {
         let t = self.tokens;
         let mut seen = std::collections::HashSet::new();
-        let artists: Vec<(String, String)> = self
+        let artists: Vec<(String, String, Option<String>)> = self
             .home_recent_plays
             .iter()
             .filter_map(|p| {
                 let id = p.artist_id.as_ref()?;
                 let name = p.artist_name.as_ref()?;
                 if seen.insert(id.clone()) {
-                    Some((id.clone(), name.clone()))
+                    Some((id.clone(), name.clone(), p.cover_art_id.clone()))
                 } else {
                     None
                 }
             })
             .collect();
 
-        let body: Element<'_, Message> = if artists.is_empty() {
-            text("No recent artists found.")
-                .size(12)
-                .style(tstyle(t.muted))
-                .into()
-        } else {
-            let mut col = column![].spacing(2);
-            for (id, name) in artists {
-                let avatar = container(icons::icon(icons::USER, 18.0, t.muted))
-                    .center_x(Length::Fixed(36.0))
-                    .center_y(Length::Fixed(36.0))
-                    .style(move |_| container::Style {
-                        background: Some(Background::Color(t.surface2)),
-                        border: Border { radius: 18.0.into(), ..Border::default() },
-                        ..container::Style::default()
-                    });
-                col = col.push(
-                    button(
-                        row![
-                            avatar,
-                            text(name).size(13).style(tstyle(t.text)),
-                        ]
-                        .spacing(10)
-                        .align_y(Alignment::Center),
-                    )
-                    .padding([6, 8])
-                    .on_press(Message::Navigate(View::ArtistDetail(id)))
-                    .style(list_row_style(t)),
-                );
-            }
-            col.into()
-        };
+        if artists.is_empty() {
+            return column![].into();
+        }
+
+        let mut cards = row![].spacing(12);
+        for (id, name, cover_art_id) in artists {
+            cards = cards.push(
+                button(
+                    column![
+                        self.cover_image(cover_art_id.as_deref(), 130.0),
+                        text(name).size(12).style(tstyle(t.text)).font(iced::Font {
+                            weight: iced::font::Weight::Bold,
+                            ..iced::Font::MONOSPACE
+                        }),
+                    ]
+                    .spacing(6)
+                    .width(Length::Fixed(130.0)),
+                )
+                .padding(4)
+                .on_press(Message::Navigate(View::ArtistDetail(id)))
+                .style(move |_th, status| {
+                    let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                    button::Style {
+                        background: if h { Some(Background::Color(t.surface)) } else { None },
+                        text_color: t.text,
+                        border: Border { radius: 4.0.into(), ..Border::default() },
+                        ..button::Style::default()
+                    }
+                }),
+            );
+        }
 
         column![
             text("RECENTLY PLAYED ARTISTS").size(11).style(tstyle(t.muted)),
-            body,
+            cards,
         ]
-        .spacing(10)
+        .spacing(12)
         .into()
     }
 
@@ -4156,14 +4245,19 @@ impl App {
 
     pub fn subscription(&self) -> Subscription<Message> {
         let bus = Subscription::run_with(BusSub(self.backend.bus.clone()), bus_stream);
-        if self.right_panel == Some(Panel::Visualizer) {
-            Subscription::batch([
-                bus,
-                iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::VisualizerTick),
-            ])
-        } else {
-            bus
-        }
+        Subscription::batch([
+            bus,
+            if self.right_panel == Some(Panel::Visualizer) {
+                iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::VisualizerTick)
+            } else {
+                Subscription::none()
+            },
+            if self.toasts.is_empty() {
+                Subscription::none()
+            } else {
+                iced::time::every(std::time::Duration::from_millis(500)).map(|_| Message::ToastTick)
+            },
+        ])
     }
 }
 

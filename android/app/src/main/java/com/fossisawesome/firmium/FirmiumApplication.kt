@@ -8,6 +8,7 @@ import coil.memory.MemoryCache
 import com.fossisawesome.firmium.audio.AudioPlayer
 import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.audio.PlaybackController
+import com.fossisawesome.firmium.data.ErrorBus
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.AuthManager
 import com.fossisawesome.firmium.data.db.FirmiumDatabase
@@ -27,6 +28,7 @@ import java.io.File
 // Manual DI container — holds app-wide singletons shared across ViewModels.
 class FirmiumApplication : Application() {
 
+    val errors by lazy { ErrorBus() }
     val prefs by lazy { AppPreferences(this) }
     val secureStorage by lazy { SecureStorage(this) }
     val auth by lazy { AuthManager(secureStorage, prefs) }

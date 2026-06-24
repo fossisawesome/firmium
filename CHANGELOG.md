@@ -1,5 +1,7 @@
 # v7.0.0
 
+> **This is a major rewrite.** The desktop app has been rebuilt from the ground up. Bugs, crashes, and rough edges are expected. Please report any issues you encounter.
+
 ## Desktop
 
 ### Rewritten from Tauri/Svelte to native iced
@@ -13,30 +15,6 @@ The desktop app is now a single pure-Rust binary built on [iced](https://iced.rs
 - **Font**: `LiberationMono` bundled at compile time; no system font required.
 - **No Tauri commands**: all backend calls are direct Rust function calls via `iced::Task::perform` — no IPC overhead.
 - **Codebase layout**: `src-tauri/` removed. Backend modules now live in `backend/`; iced UI in `src/`.
-
-### New features
-
-- **ListenBrainz scrobbling** (desktop) — Settings now exposes a ListenBrainz user token field. Completed tracks are submitted to ListenBrainz alongside the existing OpenSubsonic scrobble.
-
-- **Recently played tracks on home screen** — the home view now shows a "Recently Played" row of tracks derived from local play history (`backend/db.rs::PlayHistory::recent_plays`), visible immediately on login without a network call. `RecentPlay` struct added to `db.rs`.
-
-- **Save password checkbox** — the login form has a "SAVE PASSWORD" checkbox (checked by default). When unchecked, the password is used for the session but not written to the OS keyring.
-
-- **Crossfade / gapless mutual exclusion enforced in UI** — enabling crossfade now automatically disables gapless, and vice versa. Enabling crossfade while in strict bit-perfect mode downgrades bit-perfect to relaxed. `src/app.rs::Message::SetCrossfadeEnabled`, `Message::SetGapless`.
-
-- **Responsive visualizer bar sizing** — bar width and spacing are now auto-computed from the canvas width when `bar_width` is not explicitly set, so bars fill the panel correctly at any window size. `src/viz/shader.rs`.
-
-- **Theme and download format drop-downs** — themes and download format are now selected via `iced::widget::pick_list` instead of a list of buttons. `ThemeEntry` and `ThemeColors` derive `PartialEq` and `Display` (`backend/commands/themes.rs`).
-
-### Changed
-
-- **Login form redesign** — the setup view now shows a dark semi-transparent backdrop behind a rounded card. Form fields are left-aligned. The logo is replaced by a plain "Firmium" text heading.
-
-- **Account switcher simplified** — the overlay now shows the connected server hostname and a single "DISCONNECT" button. The previous multi-account list UI (add/switch/remove accounts) is removed.
-
-- **Sidebar** — the "Offline" and "Recap" navigation items are removed from the sidebar in this release.
-
-- **Styled widgets** — `text_input`, `slider`, `scrollable`, and `toggler` now use consistent theme-token-based styles (`text_input_style`, `slider_style`, `thin_scroll_style`, `toggler_style` helper fns in `src/app.rs`).
 
 ### Build & packaging
 
