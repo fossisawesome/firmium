@@ -5,7 +5,7 @@
 !endif
 
 Name "Firmium"
-OutFile "firmium-setup-${VERSION}.exe"
+OutFile "..\firmium-setup-${VERSION}.exe"
 InstallDir "$PROGRAMFILES64\Firmium"
 InstallDirRegKey HKLM "Software\Firmium" "Install_Dir"
 RequestExecutionLevel admin
