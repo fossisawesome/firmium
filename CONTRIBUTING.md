@@ -81,7 +81,6 @@ cd android && ./gradlew installDebug      # debug build on device
 - **Simplicity first**: No speculative abstractions or premature optimization
 - **Surgical changes**: Touch only what's needed; don't refactor unrelated code
 - **Comments**: Only when the WHY is non-obvious (a workaround, a constraint, a subtle invariant)
-- **Semantic versioning**: Always bump versions correctly
 
 ### Backend (backend/)
 - Use `eprintln!()` for debugging (visible in the `cargo run` terminal)
@@ -193,10 +192,6 @@ Handled by maintainers:
 - Update `CHANGELOG.md` with user-facing changes
 - Tag release and push to GitHub
 - CI builds and publishes installer bundles (deb, rpm, Windows NSIS)
-
-## Code of Conduct
-
-Be respectful. We welcome all contributions that align with the project's goals: a fast, secure, open-source OpenSubsonic client for desktop and mobile.
 
 ## License
 
