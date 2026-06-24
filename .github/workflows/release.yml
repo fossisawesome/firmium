@@ -88,6 +88,8 @@ jobs:
             libxcb-render0-dev \
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
+            libdbus-1-dev \
+            pkg-config \
             dpkg-dev \
             rpm
 
@@ -200,11 +202,14 @@ jobs:
       - name: Build release binary
         run: cargo build --release
 
+      - name: Install NSIS
+        run: choco install nsis --no-progress -y
+
       - name: Build NSIS installer
         shell: pwsh
         run: |
           $version = (Select-String '^version = ' Cargo.toml | Select-Object -First 1).Line.Split('"')[1]
-          makensis /DVERSION=$version packaging\firmium.nsi
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /DVERSION=$version packaging\firmium.nsi
 
       - name: Upload Windows installer
         uses: actions/github-script@v9
