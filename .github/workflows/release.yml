@@ -166,17 +166,18 @@ jobs:
         uses: actions/github-script@v9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ env.VERSION }}
+          RPM_FILE: ${{ env.RPM_FILE }}
         with:
           script: |
             const fs = require('fs')
             const path = require('path')
             const releaseId = ${{ needs.create-release.outputs.release_id }}
-            const files = [
-              `firmium_${{ env.VERSION }}_amd64.deb`,
-              process.env.RPM_FILE,
-            ]
+            const debFile = `firmium_${process.env.VERSION}_amd64.deb`
+            const files = [debFile, process.env.RPM_FILE].filter(Boolean)
+            if (!files.length) throw new Error('No Linux artifacts found')
             for (const file of files) {
-              if (!file) continue
+              if (!fs.existsSync(file)) throw new Error(`Artifact not found: ${file}`)
               await github.rest.repos.uploadReleaseAsset({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -219,7 +220,7 @@ jobs:
           script: |
             const fs = require('fs')
             const files = fs.readdirSync('.').filter(f => f.startsWith('firmium-setup-') && f.endsWith('.exe'))
-            if (!files.length) throw new Error('No NSIS installer found')
+            if (!files.length) throw new Error('No NSIS installer found: ' + fs.readdirSync('.').join(', '))
             await github.rest.repos.uploadReleaseAsset({
               owner: context.repo.owner,
               repo: context.repo.repo,
