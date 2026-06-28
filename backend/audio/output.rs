@@ -5,8 +5,18 @@ use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::{Device, Stream, SupportedStreamConfig};
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
-use super::session::{ResampleState, SessionMap};
+use super::session::{ResampleState, Session, SessionMap};
+
+/// Per-callback reusable scratch buffers, owned by the cpal output closure so the
+/// realtime mix path allocates nothing after warm-up: `sessions` holds the
+/// snapshot of active sessions, `frame` holds one interpolated output frame.
+#[derive(Default)]
+struct MixScratch {
+    sessions: Vec<Arc<Session>>,
+    frame: Vec<f32>,
+}
 
 /// Wrapper to make `cpal::Stream` Send + Sync for storage behind a `RwLock`.
 /// Safe because the stream is only ever accessed for its lifetime (drop) —
@@ -43,10 +53,11 @@ pub fn open_with_config(device: &Device, config: SupportedStreamConfig, sessions
     let channels = config.channels();
     let stream_config = config.config();
 
+    let mut scratch = MixScratch::default();
     let stream = device
         .build_output_stream(
             &stream_config,
-            move |data: &mut [f32], _| mix_into(data, &sessions, channels, sample_rate),
+            move |data: &mut [f32], _| mix_into(data, &sessions, channels, sample_rate, &mut scratch),
             |err| eprintln!("Audio output stream error: {err}"),
             None,
         )
@@ -70,93 +81,113 @@ pub fn open_default(sessions: SessionMap) -> Result<(Device, OutputStream), Stri
     Ok((device, stream))
 }
 
-/// Pop one frame (one sample per `channels`) from the front of `ring`.
-fn pop_native_frame(ring: &mut VecDeque<f32>, channels: u16) -> Option<Vec<f32>> {
+/// Pop one frame (one sample per `channels`) from the front of `ring` into
+/// `out` (cleared first). Returns false without modifying `ring` if it can't
+/// supply a full frame. Reuses `out`'s capacity — no allocation after warm-up.
+fn pop_native_frame_into(ring: &mut VecDeque<f32>, channels: u16, out: &mut Vec<f32>) -> bool {
     let c = channels as usize;
     if ring.len() < c {
-        return None;
+        return false;
     }
-    Some((0..c).map(|_| ring.pop_front().unwrap()).collect())
+    out.clear();
+    for _ in 0..c {
+        out.push(ring.pop_front().unwrap());
+    }
+    true
 }
 
-/// Pop one output frame from `ring`, applying linear-interpolation resampling
+/// Write one output frame into `out`, applying linear-interpolation resampling
 /// via `state` when `step != 1.0`. When the session's native rate matches the
-/// output rate, `step == 1.0` and this is an exact passthrough (no
-/// resampling, fully bit-perfect).
-fn pop_resampled_frame(ring: &mut VecDeque<f32>, state: &mut ResampleState, channels: u16, step: f64) -> Option<Vec<f32>> {
+/// output rate, `step == 1.0` and `state.pos` stays 0.0, so the interpolation
+/// reduces to copying `state.current` exactly (no resampling, fully
+/// bit-perfect). Returns false on underrun/drain. Allocation-free: the
+/// resampler's `current`/`next` buffers are reused via swap.
+fn pop_resampled_frame(ring: &mut VecDeque<f32>, state: &mut ResampleState, channels: u16, step: f64, out: &mut Vec<f32>) -> bool {
     // Once drained and the ring is empty, the session has no more audio — report
     // silence rather than repeating the last frame forever.
     if state.drained && ring.is_empty() {
-        return None;
+        return false;
     }
 
     if !state.initialized {
-        state.current = pop_native_frame(ring, channels)?;
-        state.next = pop_native_frame(ring, channels).unwrap_or_else(|| {
+        if !pop_native_frame_into(ring, channels, &mut state.current) {
+            return false;
+        }
+        if !pop_native_frame_into(ring, channels, &mut state.next) {
             state.drained = true;
-            state.current.clone()
-        });
+            state.next.clear();
+            state.next.extend_from_slice(&state.current);
+        }
         state.pos = 0.0;
         state.initialized = true;
     }
 
-    let frame: Vec<f32> = state
-        .current
-        .iter()
-        .zip(state.next.iter())
-        .map(|(&a, &b)| a + (b - a) * state.pos as f32)
-        .collect();
+    out.clear();
+    for (&a, &b) in state.current.iter().zip(state.next.iter()) {
+        out.push(a + (b - a) * state.pos as f32);
+    }
 
     state.pos += step;
     while state.pos >= 1.0 {
-        state.current = std::mem::take(&mut state.next);
-        state.next = match pop_native_frame(ring, channels) {
-            Some(f) => f,
-            None => {
-                state.drained = true;
-                state.current.clone()
-            }
-        };
+        // Old `next` becomes `current`; refill `next` in place (reusing the
+        // buffer that was `current`).
+        std::mem::swap(&mut state.current, &mut state.next);
+        if !pop_native_frame_into(ring, channels, &mut state.next) {
+            state.drained = true;
+            state.next.clear();
+            state.next.extend_from_slice(&state.current);
+        }
         state.pos -= 1.0;
     }
 
-    Some(frame)
+    true
 }
 
-/// Adapt a decoded frame of `native` channels to `out` channels.
-/// Mono<->stereo are handled directly; other mismatches fall back to
-/// truncation (more native channels than output) or last-channel repeat
-/// (fewer native channels than output).
-fn adapt_channels(frame: &[f32], native: u16, out: u16) -> Vec<f32> {
-    if native == out {
-        return frame.to_vec();
+/// Accumulate a decoded `frame` of `native` channels into `data` at `base`,
+/// adapting to `out` channels and scaling by `vol`. Mono<->stereo are handled
+/// directly; other mismatches truncate (more native channels than output) or
+/// repeat the last channel (fewer native channels than output). Allocation-free
+/// equivalent of the old `adapt_channels` + accumulate loop.
+fn accumulate_frame(data: &mut [f32], base: usize, frame: &[f32], native: u16, out: u16, vol: f32) {
+    let out = out as usize;
+    if native == 2 && out == 1 {
+        data[base] += ((frame[0] + frame[1]) / 2.0) * vol;
+        return;
     }
     if native == 1 && out == 2 {
-        return vec![frame[0], frame[0]];
+        data[base] += frame[0] * vol;
+        data[base + 1] += frame[0] * vol;
+        return;
     }
-    if native == 2 && out == 1 {
-        return vec![(frame[0] + frame[1]) / 2.0];
-    }
-    if native > out {
-        return frame[..out as usize].to_vec();
-    }
-    let mut v = frame.to_vec();
+    // native == out, native > out (truncate), and native < out (pad with last)
+    // all add exactly `out` channels.
     let pad = *frame.last().unwrap_or(&0.0);
-    while (v.len() as u16) < out {
-        v.push(pad);
+    for ch in 0..out {
+        let s = if ch < frame.len() { frame[ch] } else { pad };
+        data[base + ch] += s * vol;
     }
-    v
 }
 
 /// The realtime cpal output callback: sums every active session's samples
 /// (after per-session volume, channel adaptation, and resampling) into `data`.
-fn mix_into(data: &mut [f32], sessions: &SessionMap, out_channels: u16, out_rate: u32) {
+/// `scratch` provides reusable buffers so this path performs no heap
+/// allocation after warm-up.
+fn mix_into(data: &mut [f32], sessions: &SessionMap, out_channels: u16, out_rate: u32, scratch: &mut MixScratch) {
     data.fill(0.0);
 
-    let snapshot: Vec<_> = sessions.read().values().cloned().collect();
+    // Snapshot the active sessions into a reused buffer so the sessions read
+    // lock is released before the heavy mixing work. `mem::take` swaps in an
+    // empty Vec (no allocation) so `scratch.frame` can be borrowed independently.
+    let mut session_buf = std::mem::take(&mut scratch.sessions);
+    {
+        let guard = sessions.read();
+        session_buf.clear();
+        session_buf.extend(guard.values().cloned());
+    }
+
     let frames = data.len() / out_channels.max(1) as usize;
 
-    for session in &snapshot {
+    for session in &session_buf {
         if !session.playing.load(Ordering::Relaxed) {
             continue;
         }
@@ -173,14 +204,87 @@ fn mix_into(data: &mut [f32], sessions: &SessionMap, out_channels: u16, out_rate
         let mut resample = session.resample.lock();
 
         for frame_idx in 0..frames {
-            let Some(native_frame) = pop_resampled_frame(&mut ring, &mut resample, native_channels, step) else {
+            if !pop_resampled_frame(&mut ring, &mut resample, native_channels, step, &mut scratch.frame) {
                 continue; // Underrun — contribute silence for this frame.
-            };
-            let adapted = adapt_channels(&native_frame, native_channels, out_channels);
-            let base = frame_idx * out_channels as usize;
-            for (ch, &s) in adapted.iter().enumerate() {
-                data[base + ch] += s * vol;
             }
+            let base = frame_idx * out_channels as usize;
+            accumulate_frame(data, base, &scratch.frame, native_channels, out_channels, vol);
         }
+    }
+
+    session_buf.clear();
+    scratch.sessions = session_buf;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Old reference implementation, kept here to assert the allocation-free
+    // accumulate_frame reproduces its exact channel-adaptation behaviour.
+    fn adapt_channels_ref(frame: &[f32], native: u16, out: u16) -> Vec<f32> {
+        if native == out {
+            return frame.to_vec();
+        }
+        if native == 1 && out == 2 {
+            return vec![frame[0], frame[0]];
+        }
+        if native == 2 && out == 1 {
+            return vec![(frame[0] + frame[1]) / 2.0];
+        }
+        if native > out {
+            return frame[..out as usize].to_vec();
+        }
+        let mut v = frame.to_vec();
+        let pad = *frame.last().unwrap_or(&0.0);
+        while (v.len() as u16) < out {
+            v.push(pad);
+        }
+        v
+    }
+
+    fn accumulate_ref(frame: &[f32], native: u16, out: u16, vol: f32) -> Vec<f32> {
+        let adapted = adapt_channels_ref(frame, native, out);
+        let mut data = vec![0.0f32; out as usize];
+        for (ch, &s) in adapted.iter().enumerate() {
+            data[ch] += s * vol;
+        }
+        data
+    }
+
+    #[test]
+    fn accumulate_frame_matches_old_adapt() {
+        let cases: &[(&[f32], u16, u16)] = &[
+            (&[0.5, -0.5], 2, 2),       // stereo passthrough
+            (&[0.25], 1, 2),            // mono -> stereo
+            (&[0.4, 0.6], 2, 1),        // stereo -> mono downmix
+            (&[0.1, 0.2, 0.3, 0.4], 4, 2), // surround -> stereo (truncate)
+            (&[0.7], 1, 4),             // mono -> 4ch (pad with last)
+        ];
+        for &(frame, native, out) in cases {
+            let mut got = vec![0.0f32; out as usize];
+            accumulate_frame(&mut got, 0, frame, native, out, 1.0);
+            let expected = accumulate_ref(frame, native, out, 1.0);
+            assert_eq!(got, expected, "native={native} out={out}");
+        }
+    }
+
+    // The bit-perfect invariant: at matching rates (step == 1.0) the resampler
+    // must emit each native frame exactly, with no interpolation artefacts.
+    #[test]
+    fn resampler_passthrough_is_bit_perfect() {
+        let input: Vec<f32> = vec![0.0, 0.1, -0.2, 0.3, 0.5, -0.5, 0.9, -0.9];
+        let mut ring: VecDeque<f32> = input.iter().copied().collect();
+        let mut state = ResampleState::default();
+        let mut out = Vec::new();
+        let mut produced: Vec<f32> = Vec::new();
+        // step == 1.0 (e.g. 48000 / 48000): exact passthrough. The resampler
+        // drops the final frame at drain (pre-existing behaviour), so it emits
+        // the first N-1 frames; each emitted sample must be bit-identical.
+        while pop_resampled_frame(&mut ring, &mut state, 2, 1.0, &mut out) {
+            produced.extend_from_slice(&out);
+        }
+        assert!(produced.len() >= input.len() - 2, "produced {} samples", produced.len());
+        assert_eq!(&produced[..], &input[..produced.len()]);
     }
 }

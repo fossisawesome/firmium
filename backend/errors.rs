@@ -17,7 +17,6 @@ pub enum UserError {
     /// Mid-session 401 / OpenSubsonic 40/41. The toast layer ignores this
     /// variant; the `SessionExpired` event already drives the UI.
     SessionExpired,
-    #[allow(dead_code)]
     NotFound,
     Server { code: u16 },
     Storage,

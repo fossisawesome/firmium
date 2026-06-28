@@ -83,6 +83,7 @@ private val bottomDests = listOf(
     NavDest("artists", "Artists", Icons.Default.People),
     NavDest("mix", "Mix", Icons.Default.Radio),
     NavDest("playlists", "Playlists", Icons.AutoMirrored.Filled.PlaylistPlay),
+    NavDest("podcasts", "Podcasts", Icons.Default.Mic),
 )
 
 // Maps any route (including sub-pages) to its root bottom-nav section.
@@ -91,6 +92,7 @@ private fun routeSection(route: String?): String? = when {
     route.startsWith("artist/") -> "artists"
     route.startsWith("album/") -> "music"
     route.startsWith("playlist/") -> "playlists"
+    route.startsWith("podcast/") -> "podcasts"
     else -> route
 }
 
@@ -102,6 +104,7 @@ fun AppNavGraph(
     libraryViewModel: LibraryViewModel,
     searchViewModel: SearchViewModel,
     playlistViewModel: PlaylistViewModel,
+    podcastsViewModel: PodcastsViewModel,
     currentThemeId: String,
     onThemeSelected: (String) -> Unit,
     onAccountClick: () -> Unit,
@@ -115,6 +118,10 @@ fun AppNavGraph(
     val playerState by playerViewModel.state.collectAsStateWithLifecycle()
     val lyricsState by playerViewModel.lyricsState.collectAsStateWithLifecycle()
     val playlistsState by playlistViewModel.state.collectAsStateWithLifecycle()
+    val podcastChannels by podcastsViewModel.channels.collectAsStateWithLifecycle()
+    val podcastEpisodes by podcastsViewModel.episodes.collectAsStateWithLifecycle()
+    val podcastAddError by podcastsViewModel.addError.collectAsStateWithLifecycle()
+    val podcastPlayingEpisodeId by podcastsViewModel.playingEpisodeId.collectAsStateWithLifecycle()
 
     val lrclibEnabled by app.prefs.lrclibEnabled.collectAsStateWithLifecycle(initialValue = true)
     val lyricsWordFillEnabled by app.prefs.lyricsWordFillEnabled.collectAsStateWithLifecycle(initialValue = true)
@@ -446,6 +453,39 @@ fun AppNavGraph(
                         }
                     }
                 }
+                composable("podcasts") {
+                    LaunchedEffect(Unit) { podcastsViewModel.loadChannels() }
+                    PodcastsScreen(
+                        channels = podcastChannels,
+                        addError = podcastAddError,
+                        onChannelClick = { navController.navigate("podcast/$it") },
+                        onAddChannel = { podcastsViewModel.addChannel(it) },
+                    )
+                }
+                composable(
+                    "podcast/{channelId}",
+                    enterTransition = detailEnterTransition,
+                    exitTransition = detailExitTransition,
+                    popEnterTransition = detailPopEnterTransition,
+                    popExitTransition = detailPopExitTransition,
+                ) { back ->
+                    val channelId = back.arguments?.getString("channelId") ?: return@composable
+                    val channel = podcastChannels.find { it.id == channelId }
+                    LaunchedEffect(channelId) { podcastsViewModel.loadEpisodes(channelId) }
+                    if (channel != null) {
+                        PodcastDetailScreen(
+                            title = channel.title,
+                            episodes = podcastEpisodes,
+                            playingEpisodeId = podcastPlayingEpisodeId,
+                            onRefresh = { podcastsViewModel.refreshChannel(channelId, channel.feedUrl) },
+                            onUnsubscribe = {
+                                podcastsViewModel.unsubscribe(channelId)
+                                navController.popBackStack()
+                            },
+                            onPlayEpisode = { podcastsViewModel.playEpisode(it) },
+                        )
+                    }
+                }
                 composable("search") {
                     SearchScreen(
                         state = searchState,
@@ -458,6 +498,8 @@ fun AppNavGraph(
                         onAlbumClick = { navController.navigate("album/$it") },
                         onAddSongToPlaylist = { item, song -> playlistViewModel.addTracksTo(item, listOf(song)) },
                         onCreatePlaylistAndAddSong = { name, song -> playlistViewModel.createAndAdd(name, listOf(song)) },
+                        onRatingFilterChange = { searchViewModel.setRatingFilter(it) },
+                        onSetRating = { id, rating -> searchViewModel.setRating(id, rating) },
                         onAddAlbum = { albumId -> pendingAddAlbumId = albumId },
                         onDownloadAlbum = onDownloadAlbum,
                         onDownloadTrack = onDownloadTrack,

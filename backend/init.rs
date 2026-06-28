@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::audio::AudioPlayer;
 use crate::db::PlayHistory;
 use crate::events::EventBus;
+use crate::podcasts::PodcastStore;
 use crate::queue_state::QueueState;
 use crate::state::AppState;
 
@@ -18,6 +19,8 @@ pub struct Backend {
     pub queue_state: Arc<QueueState>,
     /// `None` if the play-history DB failed to initialize (stats features no-op).
     pub history: Option<Arc<PlayHistory>>,
+    /// `None` if the podcast DB failed to initialize (Podcasts tab no-ops).
+    pub podcasts: Option<Arc<PodcastStore>>,
 }
 
 impl Backend {
@@ -38,6 +41,14 @@ impl Backend {
             }
         };
 
+        let podcasts = match PodcastStore::new() {
+            Ok(p) => Some(Arc::new(p)),
+            Err(e) => {
+                eprintln!("Podcast DB init failed: {e}");
+                None
+            }
+        };
+
         crate::queue_manager::start(
             bus.clone(),
             Arc::clone(&queue_state),
@@ -46,6 +57,6 @@ impl Backend {
             history.clone(),
         );
 
-        Ok(Backend { bus, audio_player, app_state, queue_state, history })
+        Ok(Backend { bus, audio_player, app_state, queue_state, history, podcasts })
     }
 }

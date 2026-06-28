@@ -169,8 +169,13 @@ class DownloadManager(
         }
     }
 
-    private fun sanitize(name: String): String =
-        name.replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
+    private fun sanitize(name: String): String {
+        val cleaned = name.replace(Regex("[/\\\\:*?\"<>|]"), "_").trim()
+        // Reject empty or all-dot components (".", "..") so a server-controlled name can't
+        // traverse out of the target directory; strip a leading dot to avoid hidden files.
+        if (cleaned.isEmpty() || cleaned.all { it == '.' }) return "unknown"
+        return cleaned.trimStart('.')
+    }
 
     private fun mimeTypeFor(ext: String): String = when (ext.lowercase()) {
         "mp3" -> "audio/mpeg"

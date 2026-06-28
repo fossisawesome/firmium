@@ -30,6 +30,8 @@ pub struct Config {
     pub lyrics_word_fill: Option<bool>,
     #[serde(default)]
     pub window_decorations: Option<bool>,
+    #[serde(default)]
+    pub viz_cover_colors: Option<bool>,
 }
 
 fn config_path() -> PathBuf {

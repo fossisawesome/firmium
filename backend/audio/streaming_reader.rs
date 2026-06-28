@@ -16,6 +16,11 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom};
 use std::sync::Arc;
 use symphonia::core::io::MediaSource;
 
+/// Upper bound on how much of a stream we buffer in memory. Larger than any real
+/// lossless track, so it never trips for legitimate media but stops an abusive
+/// server from forcing unbounded allocation (OOM).
+const MAX_BUFFER_BYTES: u64 = 512 * 1024 * 1024; // 512 MB
+
 pub struct StreamingReader {
     response: reqwest::blocking::Response,
     /// Shared buffer so the seek fallback can rebuild the decoder from buffered bytes.
@@ -36,6 +41,9 @@ impl StreamingReader {
     }
 
     pub fn fill_to(&mut self, target: usize) -> io::Result<()> {
+        if target as u64 > MAX_BUFFER_BYTES {
+            return Err(io::Error::other("audio stream exceeds maximum buffer size"));
+        }
         {
             let buf = self.buffer.lock();
             if target <= buf.len() {
@@ -67,6 +75,10 @@ impl Read for StreamingReader {
             return Ok(n);
         }
         drop(buffered);
+        // Stop buffering once past the cap so an abusive server can't grow this unbounded.
+        if self.buffer.lock().len() as u64 >= MAX_BUFFER_BYTES {
+            return Err(io::Error::other("audio stream exceeds maximum buffer size"));
+        }
         // Read new bytes from the HTTP connection and buffer them.
         let n = self.response.read(buf)?;
         self.buffer.lock().extend_from_slice(&buf[..n]);
@@ -82,7 +94,8 @@ impl Seek for StreamingReader {
             SeekFrom::Current(n) => (self.pos as i64).saturating_add(n).max(0) as usize,
             SeekFrom::End(n) => {
                 let mut rest = Vec::new();
-                self.response.read_to_end(&mut rest)?;
+                let remaining = MAX_BUFFER_BYTES.saturating_sub(self.buffer.lock().len() as u64);
+                self.response.by_ref().take(remaining).read_to_end(&mut rest)?;
                 let mut buf = self.buffer.lock();
                 buf.extend_from_slice(&rest);
                 (buf.len() as i64).saturating_add(n).max(0) as usize

@@ -97,7 +97,7 @@ fun AddToPlaylistDialog(
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            FirmiumIcon(Icons.Default.Radio, contentDescription = null,
+                            FirmiumIcon(Icons.Default.Radio, contentDescription = "Start radio",
                                 tint = colors.accent, modifier = Modifier.size(32.dp))
                             Spacer(Modifier.width(16.dp))
                             Text("Start Radio", fontSize = 14.sp, fontFamily = FontFamily.Monospace,
@@ -112,7 +112,7 @@ fun AddToPlaylistDialog(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        FirmiumIcon(Icons.Default.Add, contentDescription = null,
+                        FirmiumIcon(Icons.Default.Add, contentDescription = "New playlist",
                             tint = colors.accent, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.width(16.dp))
                         Text("New playlist", fontSize = 14.sp, fontFamily = FontFamily.Monospace,
@@ -127,7 +127,7 @@ fun AddToPlaylistDialog(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        FirmiumIcon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null,
+                        FirmiumIcon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "Playlist",
                             tint = colors.muted, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.width(16.dp))
                         Column {
@@ -135,7 +135,7 @@ fun AddToPlaylistDialog(
                                 Text(item.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
                                 if (item.isSynced) {
                                     Spacer(Modifier.width(6.dp))
-                                    FirmiumIcon(Icons.Default.Cloud, contentDescription = null,
+                                    FirmiumIcon(Icons.Default.Cloud, contentDescription = "Synced playlist",
                                         tint = colors.accent, modifier = Modifier.size(12.dp))
                                 }
                             }

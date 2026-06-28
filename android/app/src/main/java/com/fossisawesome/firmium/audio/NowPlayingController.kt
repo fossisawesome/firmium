@@ -198,11 +198,11 @@ class NowPlayingController(private val context: Context) {
             .apply { if (art != null) putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art) }
             .build()
 
-    private fun buildNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long): Notification {
+    // Publishes the seekable progress to the media session. The system notification
+    // seekbar reads position + speed from here and extrapolates, so this cheap call
+    // (not a full notification rebuild) is all the 250ms position tick needs.
+    private fun publishPlaybackState(isPlaying: Boolean, positionMs: Long) {
         val session = ensureMediaSession()
-        val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-
-        // Real position enables the seekable progress bar on the lock screen / notification shade.
         session.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setState(
@@ -224,6 +224,14 @@ class NowPlayingController(private val context: Context) {
                 )
                 .build()
         )
+    }
+
+    private fun buildNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long): Notification {
+        val session = ensureMediaSession()
+        val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+
+        // Real position enables the seekable progress bar on the lock screen / notification shade.
+        publishPlaybackState(isPlaying, positionMs)
 
         // Shuffle/repeat icons reflect current state; titles spell out the state for accessibility.
         val repeatIcon = if (repeatMode == "one") R.drawable.ic_notif_repeat_one else R.drawable.ic_notif_repeat
@@ -272,6 +280,7 @@ class NowPlayingController(private val context: Context) {
         // background. Deferring this behind the async art fetch caused an IllegalStateException
         // on Android O+ ("Not allowed to start service; app is in background").
         val noArtNotification = buildNotification(title, artist, isPlaying, null, 0L, 0L)
+        lastNotifiedPlaying = isPlaying
         NowPlayingService.pendingNotification = noArtNotification
         // Pass the notification in the Intent itself so rapid track skips cannot overwrite the
         // static pendingNotification field before onStartCommand reads it.
@@ -321,6 +330,7 @@ class NowPlayingController(private val context: Context) {
                     }.getOrNull()
                     session.setMetadata(buildMetadata(title, artist, album, art))
                     val artNotification = buildNotification(title, artist, isPlaying, art, 0L, 0L)
+                    lastNotifiedPlaying = isPlaying
                     NowPlayingService.pendingNotification = artNotification
                     // Re-promote the foreground service with the art notification so it stays
                     // alive even if Android killed it while the fetch was in progress.
@@ -353,7 +363,13 @@ class NowPlayingController(private val context: Context) {
         )
     }
 
+    // Whether the last full notification we emitted was in the playing state, so the
+    // 250ms position tick can detect a play/pause change and rebuild only then.
+    private var lastNotifiedPlaying: Boolean? = null
+
     // Lightweight update called every 250ms during playback to drive the notification seekbar.
+    // Refreshes only the cheap media-session playback state (the system extrapolates the
+    // seekbar from it); a full notification rebuild happens only on a play/pause transition.
     fun updatePosition(positionMs: Long, durationMs: Long, isPlaying: Boolean) {
         val session = mediaSession ?: return
         val meta = session.controller?.metadata ?: return
@@ -371,11 +387,14 @@ class NowPlayingController(private val context: Context) {
             )
         }
 
-        val artist = meta.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: ""
-        val art = meta.getBitmap(MediaMetadataCompat.METADATA_KEY_ART)
-        val notification = buildNotification(title, artist, isPlaying, art, positionMs, durationMs)
-        NowPlayingService.pendingNotification = notification
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        publishPlaybackState(isPlaying, positionMs)
+
+        // Only rebuild the notification when play/pause actually changed (icon + ongoing flag).
+        if (lastNotifiedPlaying != isPlaying) {
+            val artist = meta.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: ""
+            val art = meta.getBitmap(MediaMetadataCompat.METADATA_KEY_ART)
+            emitNotification(title, artist, isPlaying, art, positionMs, durationMs)
+        }
     }
 
     fun updatePlaybackState(isPlaying: Boolean) {
@@ -384,7 +403,13 @@ class NowPlayingController(private val context: Context) {
         val art = meta?.getBitmap(MediaMetadataCompat.METADATA_KEY_ART)
         val title = meta?.getString(MediaMetadataCompat.METADATA_KEY_TITLE) ?: return
         val artist = meta.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: ""
-        val notification = buildNotification(title, artist, isPlaying, art, lastPositionMs, lastDurationMs)
+        emitNotification(title, artist, isPlaying, art, lastPositionMs, lastDurationMs)
+    }
+
+    // Builds and posts the full notification, recording the play/pause state it reflects.
+    private fun emitNotification(title: String, artist: String, isPlaying: Boolean, art: Bitmap?, positionMs: Long, durationMs: Long) {
+        val notification = buildNotification(title, artist, isPlaying, art, positionMs, durationMs)
+        lastNotifiedPlaying = isPlaying
         NowPlayingService.pendingNotification = notification
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
     }
@@ -435,9 +460,7 @@ class NowPlayingController(private val context: Context) {
         val artist = meta.getString(MediaMetadataCompat.METADATA_KEY_ARTIST) ?: ""
         val art = meta.getBitmap(MediaMetadataCompat.METADATA_KEY_ART)
         val isPlaying = session.controller?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
-        val notification = buildNotification(title, artist, isPlaying, art, lastPositionMs, lastDurationMs)
-        NowPlayingService.pendingNotification = notification
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        emitNotification(title, artist, isPlaying, art, lastPositionMs, lastDurationMs)
     }
 
     fun clear() {
@@ -447,6 +470,7 @@ class NowPlayingController(private val context: Context) {
         artJob = null
         lastPositionMs = 0L
         lastDurationMs = 0L
+        lastNotifiedPlaying = null
         accentColor = null
         currentUserRating = 0
         mediaSession?.setQueue(null)

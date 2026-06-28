@@ -2,6 +2,7 @@
 //! event-bus subscription, and (Phase 7) the onboarding flow + Albums view.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 
 use iced::widget::image::Handle as ImageHandle;
@@ -11,7 +12,8 @@ use iced::{Alignment, Background, Border, Color, ContentFit, Element, Length, Sh
 use crate::commands::equalizer::EqState;
 use crate::commands::lyrics::LyricsResult;
 use crate::commands::mappers::{Album, Artist, SimilarMatch, Song};
-use crate::commands::local_library::LocalAlbumTracks;
+use crate::podcasts::{PodcastChannel, PodcastEpisode};
+use crate::playlists::Playlist;
 use crate::commands::subsonic::{AlbumTracks, ArtistDetails, ArtistInfo, Genre, PlaylistTracks, RemotePlayQueue, SearchResult};
 use crate::commands::themes::ThemeEntry;
 use crate::config::{Config, SavedAccount};
@@ -34,11 +36,19 @@ pub enum View {
     Search,
     Mix,
     GenreDetail(String),
-    #[allow(dead_code)]
-    Local,
-    LocalAlbumDetail(String),
     Recap,
     Settings,
+    Podcasts,
+    PodcastDetail(String),
+}
+
+/// A row in the merged playlists list: either a local playlist (index into
+/// `App.playlists`) or a server-only playlist (index into `App.server_playlists`)
+/// not claimed by any local `server_id`. Mirrors Android `PlaylistListItem`.
+#[derive(Debug, Clone)]
+enum PlaylistListItem {
+    Local(usize),
+    ServerOnly(usize),
 }
 
 impl View {
@@ -55,10 +65,10 @@ impl View {
             View::Search => "Search",
             View::Mix => "Mix",
             View::GenreDetail(_) => "Genre",
-            View::Local => "Offline",
-            View::LocalAlbumDetail(_) => "Album",
             View::Recap => "Recap",
             View::Settings => "Settings",
+            View::Podcasts => "Podcasts",
+            View::PodcastDetail(_) => "Podcast",
         }
     }
 }
@@ -165,6 +175,8 @@ pub enum Message {
     PasswordInput(String),
     Connect,
     Connected(Result<(), UserError>),
+    CredentialsLoaded(Option<String>),
+    ServiceCredsLoaded(String, String, String),
     ToggleSavePassword(bool),
 
     // ── Data ──────────────────────────────────────────────────────────────────
@@ -179,6 +191,9 @@ pub enum Message {
     PlaylistTracksLoaded(Result<PlaylistTracks, UserError>),
     CoverLoaded(String, Result<String, String>),
     AlbumsScrolled(f32),
+    ArtistsScrolled(f32),
+    AlbumTracksScrolled(f32),
+    PlaylistTracksScrolled(f32),
     PlayAlbumAt(usize),
     PlayPlaylistAt(usize),
     ShuffleAlbum,
@@ -193,13 +208,29 @@ pub enum Message {
     NewPlaylistNameInput(String),
     AddToPlaylist(String),
     CreatePlaylistAndAdd,
-    PlaylistCreatedThenAdd(String, Result<serde_json::Value, UserError>),
-    AddToPlaylistDone(Result<(), UserError>),
+
+    // ── Local-first playlist management ───────────────────────────────────────
+    CreatePlaylist(String),
+    PlaylistCreateSynced(String, Result<serde_json::Value, UserError>),
+    DeleteLocalPlaylist(String),
+    RenamePlaylist(String, String),
+    SyncPlaylistNow(String),
+    MovePlaylistTrack(String, usize, usize),
+    RemovePlaylistTrack(String, String),
+    MoveServerTrack(String, usize, usize),
+    RemoveServerTrack(String, usize),
+    OpenCreatePlaylist,
+    CloseCreatePlaylist,
+    CreatePlaylistNameInput(String),
+    StartRenamePlaylist(String),
+    CommitRenamePlaylist,
+    PlaylistSyncNoop,
 
     // ── Search ────────────────────────────────────────────────────────────────
     SearchInput(String),
     SubmitSearch,
     SearchLoaded(Result<SearchResult, UserError>),
+    SetSearchRatingFilter(u32),
 
     // ── Settings ──────────────────────────────────────────────────────────────
     SelectTheme(String),
@@ -246,6 +277,8 @@ pub enum Message {
     SeekTo(f32),
     TogglePanel(Panel),
     SetVizMode(VizMode),
+    SetVizCoverColors(bool),
+    VizColorsLoaded(String, Result<crate::commands::cover_colors::CoverColorsResult, String>),
     LyricsLoaded(String, Result<Option<LyricsResult>, UserError>),
     SimilarLoaded(String, Result<Vec<SimilarMatch>, UserError>),
     PlayQueueIndex(usize),
@@ -280,8 +313,19 @@ pub enum Message {
     // ── Album download ────────────────────────────────────────────────────────
     DownloadAlbum,
 
-    // ── Offline / local library ───────────────────────────────────────────────
-    PlayLocalAlbumAt(usize),
+    // ── Podcasts ──────────────────────────────────────────────────────────────
+    PodcastChannelsLoaded(Result<Vec<PodcastChannel>, String>),
+    OpenAddPodcastModal,
+    CloseAddPodcastModal,
+    PodcastAddUrlChanged(String),
+    SubmitAddPodcastChannel,
+    PodcastChannelAdded(Result<PodcastChannel, String>),
+    PodcastEpisodesLoaded(Result<Vec<PodcastEpisode>, String>),
+    RefreshPodcastChannel(String, String),
+    PodcastChannelRefreshed(Result<usize, String>),
+    UnsubscribePodcastChannel(String),
+    PodcastChannelUnsubscribed(Result<(), String>),
+    PlayPodcastEpisode(PodcastEpisode),
 }
 
 pub struct App {
@@ -313,17 +357,29 @@ pub struct App {
     home_newest: Vec<Album>,
     home_random: Vec<Album>,
     home_recent_plays: Vec<crate::db::RecentPlay>,
+    // Deduplicated (artist_id, name, cover_art_id) derived from home_recent_plays;
+    // recomputed only when home_recent_plays changes so view() doesn't rebuild it per frame.
+    home_recent_artists_cache: Vec<(String, String, Option<String>)>,
     album_detail: Option<AlbumTracks>,
     album_detail_id: Option<String>,
+    album_tracks_scroll: f32,
     artists: Vec<Artist>,
+    artists_scroll: f32,
     artist_detail: Option<ArtistDetails>,
     artist_detail_id: Option<String>,
     artist_info: Option<ArtistInfo>,
     similar_artists: Vec<String>,
-    playlists: Vec<serde_json::Value>,
+    server_playlists: Vec<serde_json::Value>,
+    playlists: Vec<Playlist>,
+    playlist_items: Vec<PlaylistListItem>,
     playlist_detail: Option<PlaylistTracks>,
     playlist_detail_id: Option<String>,
+    playlist_tracks_scroll: f32,
     cover_cache: HashMap<String, ImageHandle>,
+    // Insertion order for cover_cache, used to evict the oldest decoded handles
+    // once MAX_COVER_HANDLES is exceeded (the disk cache in cover_cache.rs is
+    // bounded separately; this bounds in-memory decoded images).
+    cover_cache_order: VecDeque<String>,
 
     // ── Playback mirror ───────────────────────────────────────────────────────
     queue: Vec<Song>,
@@ -338,6 +394,12 @@ pub struct App {
     shuffle: bool,
     right_panel: Option<Panel>,
     visualizer_mode: VizMode,
+    // When true, the visualizer gradient is derived from the current track's
+    // cover art; otherwise it follows the active theme's colors.
+    viz_cover_colors: bool,
+    viz_palette: Option<crate::commands::cover_colors::OrbPalette>,
+    // Track id the current viz_palette was extracted for, so it's fetched once per track.
+    viz_palette_track: Option<String>,
     lyrics: Option<LyricsResult>,
     lyrics_track_id: Option<String>,
     similar_results: Vec<SimilarMatch>,
@@ -367,10 +429,14 @@ pub struct App {
     // ── Search ────────────────────────────────────────────────────────────────
     search_query: String,
     search_results: Option<SearchResult>,
+    search_rating_filter: u32,
 
     // ── Add-to-playlist overlay ───────────────────────────────────────────────
     add_to_playlist_song: Option<Song>,
     new_playlist_name: String,
+    show_create_playlist: bool,
+    create_playlist_name: String,
+    renaming_playlist: Option<String>,
 
     // ── Resume-queue prompt ───────────────────────────────────────────────────
     resume_queue: Option<RemotePlayQueue>,
@@ -395,10 +461,15 @@ pub struct App {
     // ── Equalizer profile editing ─────────────────────────────────────────────
     eq_new_profile_name: String,
 
-    // ── Offline / local library ───────────────────────────────────────────────
-    local_albums: Vec<Album>,
-    local_album: Option<LocalAlbumTracks>,
-    local_album_id: Option<String>,
+    // ── Podcasts ───────────────────────────────────────────────────────────────
+    podcast_channels: Vec<PodcastChannel>,
+    podcast_episodes: Vec<PodcastEpisode>,
+    podcast_add_url_input: String,
+    podcast_add_modal_open: bool,
+    podcast_add_error: Option<String>,
+    // The episode loaded into `current_player_id`, if the active player session
+    // is a podcast episode rather than a queued `Song` — used to persist resume position.
+    current_podcast_episode: Option<PodcastEpisode>,
 }
 
 impl App {
@@ -419,35 +490,19 @@ impl App {
         );
 
         // Attempt auto-login from saved server + keyring password.
-        let mut connecting = false;
+        // Keyring reads are deferred to async tasks in initial_task() to avoid
+        // blocking the iced event loop thread (first libsecret call establishes
+        // a D-Bus connection, which can block ~500ms–1s on Linux).
+        let connecting = false;
         let (server_input, username_input) = match (&cfg.server, &cfg.username) {
-            (Some(server), Some(user)) => {
-                if let Ok(pass) = crate::commands::credentials::get_password(Some(server), user) {
-                    crate::commands::subsonic::set_connection(
-                        &backend.app_state,
-                        Some(server.clone()),
-                        Some(user.clone()),
-                        Some(pass),
-                    );
-                    connecting = true;
-                }
-                (server.clone(), user.clone())
-            }
+            (Some(server), Some(user)) => (server.clone(), user.clone()),
             _ => (String::new(), String::new()),
         };
+        let lastfm_key = String::new();
+        let lastfm_secret = String::new();
+        let listenbrainz_token = String::new();
 
-        // Service credentials live in the OS keyring (service "firmium-desktop"),
-        // never in config.toml. Presence of a value is what enables the feature.
-        let keyring_read = |key: &str| {
-            crate::commands::credentials::get_password(Some("firmium-desktop"), key)
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default()
-        };
-        let lastfm_key = keyring_read("lastfm_key");
-        let lastfm_secret = keyring_read("lastfm_secret");
-        let listenbrainz_token = keyring_read("listenbrainz_token");
-
-        Self {
+        let mut app = Self {
             backend,
             themes,
             theme_id,
@@ -468,17 +523,24 @@ impl App {
             home_newest: Vec::new(),
             home_random: Vec::new(),
             home_recent_plays: Vec::new(),
+            home_recent_artists_cache: Vec::new(),
             album_detail: None,
             album_detail_id: None,
+            album_tracks_scroll: 0.0,
             artists: Vec::new(),
+            artists_scroll: 0.0,
             artist_detail: None,
             artist_detail_id: None,
             artist_info: None,
             similar_artists: Vec::new(),
-            playlists: Vec::new(),
+            server_playlists: Vec::new(),
+            playlists: crate::playlists::load_playlists(),
+            playlist_items: Vec::new(),
             playlist_detail: None,
             playlist_detail_id: None,
+            playlist_tracks_scroll: 0.0,
             cover_cache: HashMap::new(),
+            cover_cache_order: VecDeque::new(),
             queue: Vec::new(),
             queue_idx: -1,
             playback_state: PlaybackState::Stopped,
@@ -491,6 +553,9 @@ impl App {
             shuffle: false,
             right_panel: None,
             visualizer_mode: VizMode::Bars,
+            viz_cover_colors: cfg.viz_cover_colors.unwrap_or(true),
+            viz_palette: None,
+            viz_palette_track: None,
             lyrics: None,
             lyrics_track_id: None,
             similar_results: Vec::new(),
@@ -514,8 +579,12 @@ impl App {
             window_decorations: cfg.window_decorations.unwrap_or(true),
             search_query: String::new(),
             search_results: None,
+            search_rating_filter: 0,
             add_to_playlist_song: None,
             new_playlist_name: String::new(),
+            show_create_playlist: false,
+            create_playlist_name: String::new(),
+            renaming_playlist: None,
             resume_queue: None,
             accounts: cfg.accounts,
             show_account_switcher: true,
@@ -527,25 +596,63 @@ impl App {
             genre_songs: Vec::new(),
             genre_detail_name: None,
             eq_new_profile_name: String::new(),
-            local_albums: Vec::new(),
-            local_album: None,
-            local_album_id: None,
+            podcast_channels: Vec::new(),
+            podcast_episodes: Vec::new(),
+            podcast_add_url_input: String::new(),
+            podcast_add_modal_open: false,
+            podcast_add_error: None,
+            current_podcast_episode: None,
+        };
+        app.rebuild_playlist_items();
+        if !app.authed {
+            app.populate_offline_library();
         }
+        app
     }
 
     pub fn theme(&self) -> Theme {
         self.tokens.iced_theme()
     }
 
-    /// Auto-login validation task if saved credentials were loaded at startup.
+    /// Spawn startup tasks: async keyring reads so the event loop isn't blocked.
     pub fn initial_task(&self) -> Task<Message> {
-        if self.backend.app_state.connection.read().server.is_some() {
-            Task::perform(
-                crate::commands::subsonic::validate_connection(self.backend.app_state.clone()),
-                Message::Connected,
-            )
+        // Cover art for the offline-library fallback populated in `App::new()`.
+        let offline_cover_task = Task::batch([self.load_covers(), self.load_cover_ids(self.offline_home_cover_ids())]);
+
+        // Always load service credentials (lastfm, listenbrainz) from keyring.
+        let service_task = Task::perform(
+            async {
+                tokio::task::spawn_blocking(|| {
+                    let read = |key: &str| {
+                        crate::commands::credentials::get_password(Some("firmium-desktop"), key)
+                            .map(|s| s.trim().to_string())
+                            .unwrap_or_default()
+                    };
+                    (read("lastfm_key"), read("lastfm_secret"), read("listenbrainz_token"))
+                })
+                .await
+                .unwrap_or_default()
+            },
+            |(k, s, t)| Message::ServiceCredsLoaded(k, s, t),
+        );
+
+        // If server + username are in config, fetch the saved password to auto-login.
+        if !self.server_input.is_empty() && !self.username_input.is_empty() {
+            let server = self.server_input.clone();
+            let user = self.username_input.clone();
+            let creds_task = Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || {
+                        crate::commands::credentials::get_password(Some(&server), &user).ok()
+                    })
+                    .await
+                    .unwrap_or(None)
+                },
+                Message::CredentialsLoaded,
+            );
+            Task::batch([creds_task, service_task, offline_cover_task])
         } else {
-            Task::none()
+            Task::batch([service_task, offline_cover_task])
         }
     }
 
@@ -564,6 +671,7 @@ impl App {
             lrclib_enabled: Some(self.lrclib_enabled),
             lyrics_word_fill: Some(self.lyrics_word_fill),
             window_decorations: Some(self.window_decorations),
+            viz_cover_colors: Some(self.viz_cover_colors),
         }
         .save();
     }
@@ -594,34 +702,65 @@ impl App {
                     View::AlbumDetail(id) if self.album_detail_id.as_deref() != Some(id.as_str()) => {
                         self.album_detail = None;
                         self.album_detail_id = Some(id.clone());
-                        Task::perform(crate::commands::subsonic::get_album_tracks(state, id), Message::AlbumTracksLoaded)
+                        self.album_tracks_scroll = 0.0;
+                        if id.starts_with("local:") {
+                            let result = crate::commands::local_library::get_local_album_tracks(&self.backend.app_state, id)
+                                .map(|r| crate::commands::subsonic::AlbumTracks {
+                                    tracks: r.tracks,
+                                    album_name: r.album_name,
+                                    album_artist: r.album_artist,
+                                    cover_art_id: r.cover_art_id,
+                                })
+                                .map_err(|_| UserError::NotFound);
+                            Task::done(Message::AlbumTracksLoaded(result))
+                        } else {
+                            Task::perform(crate::commands::subsonic::get_album_tracks(state, id), Message::AlbumTracksLoaded)
+                        }
                     }
                     View::ArtistDetail(id) if self.artist_detail_id.as_deref() != Some(id.as_str()) => {
                         self.artist_detail = None;
                         self.artist_info = None;
                         self.similar_artists.clear();
                         self.artist_detail_id = Some(id.clone());
-                        let artist_name = self
-                            .artists
-                            .iter()
-                            .find(|a| a.id == *id)
-                            .map(|a| a.name.clone())
-                            .unwrap_or_default();
-                        Task::batch([
-                            Task::perform(crate::commands::subsonic::get_artist_details(state.clone(), id.clone()), Message::ArtistDetailLoaded),
-                            Task::perform(crate::commands::subsonic::get_artist_info(state.clone(), id.clone(), self.lastfm_key.clone(), artist_name), Message::ArtistInfoLoaded),
-                            Task::perform(crate::commands::subsonic::get_similar_artists(state, id, None), Message::SimilarArtistsLoaded),
-                        ])
+                        if id.starts_with("local:") {
+                            let result = crate::commands::local_library::get_local_artist_details(&self.backend.app_state, id)
+                                .map(|r| crate::commands::subsonic::ArtistDetails { name: r.name, albums: r.albums })
+                                .map_err(|_| UserError::NotFound);
+                            Task::done(Message::ArtistDetailLoaded(result))
+                        } else {
+                            let artist_name = self
+                                .artists
+                                .iter()
+                                .find(|a| a.id == *id)
+                                .map(|a| a.name.clone())
+                                .unwrap_or_default();
+                            Task::batch([
+                                Task::perform(crate::commands::subsonic::get_artist_details(state.clone(), id.clone()), Message::ArtistDetailLoaded),
+                                Task::perform(crate::commands::subsonic::get_artist_info(state.clone(), id.clone(), self.lastfm_key.clone(), artist_name), Message::ArtistInfoLoaded),
+                                Task::perform(crate::commands::subsonic::get_similar_artists(state, id, None), Message::SimilarArtistsLoaded),
+                            ])
+                        }
                     }
                     View::PlaylistDetail(id) if self.playlist_detail_id.as_deref() != Some(id.as_str()) => {
                         self.playlist_detail = None;
                         self.playlist_detail_id = Some(id.clone());
-                        Task::perform(crate::commands::subsonic::get_playlist_tracks(state, id), Message::PlaylistTracksLoaded)
+                        self.playlist_tracks_scroll = 0.0;
+                        self.renaming_playlist = None;
+                        if let Some(server_id) = id.strip_prefix("server-") {
+                            Task::perform(
+                                crate::commands::subsonic::get_playlist_tracks(state, server_id.to_string()),
+                                Message::PlaylistTracksLoaded,
+                            )
+                        } else {
+                            // Local playlist: build detail from memory, no fetch.
+                            self.refresh_local_detail(&id);
+                            Task::none()
+                        }
                     }
                     View::Artists if self.artists.is_empty() => {
                         Task::perform(crate::commands::subsonic::get_artists(state), Message::ArtistsLoaded)
                     }
-                    View::Playlists if self.playlists.is_empty() => {
+                    View::Playlists => {
                         Task::perform(crate::commands::subsonic::get_playlists(state), Message::PlaylistsLoaded)
                     }
                     View::Recap => self.compute_recap(),
@@ -630,24 +769,34 @@ impl App {
                         self.genre_detail_name = Some(name.clone());
                         Task::perform(crate::commands::subsonic::get_songs_by_genre(state, name, None), Message::GenreSongsLoaded)
                     }
-                    View::Local => {
-                        // Local library scan is synchronous + cached after first run.
-                        self.local_albums = crate::commands::local_library::get_local_albums(&self.backend.app_state)
-                            .unwrap_or_default();
-                        Task::none()
-                    }
-                    View::LocalAlbumDetail(id) if self.local_album_id.as_deref() != Some(id.as_str()) => {
-                        self.local_album_id = Some(id.clone());
-                        self.local_album = crate::commands::local_library::get_local_album_tracks(&self.backend.app_state, id).ok();
-                        Task::none()
-                    }
                     View::Settings => {
                         self.load_history_summary();
                         Task::none()
                     }
+                    View::Podcasts => {
+                        if let Some(store) = self.backend.podcasts.clone() {
+                            Task::perform(
+                                async move { crate::podcasts::list_channels(store) },
+                                Message::PodcastChannelsLoaded,
+                            )
+                        } else {
+                            Task::none()
+                        }
+                    }
+                    View::PodcastDetail(id) => {
+                        if let Some(store) = self.backend.podcasts.clone() {
+                            Task::perform(
+                                async move { crate::podcasts::list_episodes(store, id) },
+                                Message::PodcastEpisodesLoaded,
+                            )
+                        } else {
+                            Task::none()
+                        }
+                    }
                     View::Home => {
                         if let Some(history) = &self.backend.history {
                             self.home_recent_plays = history.recent_plays(15).unwrap_or_default();
+                            self.recompute_home_recent_artists();
                         }
                         let play_cover_ids: Vec<String> = self.home_recent_plays.iter()
                             .filter_map(|p| p.cover_art_id.clone())
@@ -676,7 +825,7 @@ impl App {
             }
             Message::Backend(event) => {
                 self.handle_backend(event);
-                Task::batch([self.maybe_fetch_lyrics(), self.maybe_fetch_similar()])
+                Task::batch([self.maybe_fetch_lyrics(), self.maybe_fetch_similar(), self.maybe_fetch_viz_colors()])
             }
             Message::VisualizerTick => Task::none(),
             Message::ShowToast(err) => { self.show_toast(err); Task::none() }
@@ -739,8 +888,12 @@ impl App {
                 self.password_input.clear();
                 self.remember_current_account();
                 self.save_config();
+                // Local-fallback artists aren't auto-refetched on connect (only on
+                // first Artists nav); clear so that nav re-fetches from the server.
+                self.artists.clear();
                 if let Some(history) = &self.backend.history {
                     self.home_recent_plays = history.recent_plays(15).unwrap_or_default();
+                    self.recompute_home_recent_artists();
                 }
                 let play_cover_ids: Vec<String> = self.home_recent_plays.iter()
                     .filter_map(|p| p.cover_art_id.clone())
@@ -753,7 +906,8 @@ impl App {
                     Task::perform(crate::commands::subsonic::get_newest_albums(s.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Newest, r)),
                     Task::perform(crate::commands::subsonic::get_random_albums(s.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Random, r)),
                     Task::perform(crate::commands::subsonic::get_genres_list(s.clone()), Message::GenresLoaded),
-                    Task::perform(crate::commands::subsonic::get_play_queue(s), Message::PlayQueueFetched),
+                    Task::perform(crate::commands::subsonic::get_play_queue(s.clone()), Message::PlayQueueFetched),
+                    Task::perform(crate::podcasts::probe_server_podcast_support(s), |_| Message::PlaylistSyncNoop),
                     cover_task,
                 ])
             }
@@ -762,6 +916,30 @@ impl App {
                 self.show_account_switcher = true;
                 eprintln!("connect failed: {e:?}");
                 self.show_toast(e);
+                Task::none()
+            }
+
+            // Deferred startup keyring reads — see initial_task().
+            Message::CredentialsLoaded(Some(pass)) => {
+                crate::commands::subsonic::set_connection(
+                    &self.backend.app_state,
+                    Some(self.server_input.clone()),
+                    Some(self.username_input.clone()),
+                    Some(pass),
+                );
+                self.connecting = true;
+                Task::perform(
+                    crate::commands::subsonic::validate_connection(self.backend.app_state.clone()),
+                    Message::Connected,
+                )
+            }
+            Message::CredentialsLoaded(None) => Task::none(),
+            Message::ServiceCredsLoaded(lastfm_key, lastfm_secret, listenbrainz_token) => {
+                self.lastfm_enabled = !lastfm_key.is_empty();
+                self.lastfm_key = lastfm_key;
+                self.lastfm_secret = lastfm_secret;
+                self.listenbrainz_enabled = !listenbrainz_token.is_empty();
+                self.listenbrainz_token = listenbrainz_token;
                 Task::none()
             }
 
@@ -790,7 +968,7 @@ impl App {
                 Task::none()
             }
             Message::CoverLoaded(id, Ok(path)) => {
-                self.cover_cache.insert(id, ImageHandle::from_path(path));
+                self.cache_cover(id, load_rounded_cover(&path));
                 Task::none()
             }
             Message::CoverLoaded(_, Err(_)) => Task::none(),
@@ -804,6 +982,18 @@ impl App {
                     .filter_map(|a| a.cover_art_id.clone())
                     .collect();
                 self.load_cover_ids(ids)
+            }
+            Message::ArtistsScrolled(y) => {
+                self.artists_scroll = y;
+                Task::none()
+            }
+            Message::AlbumTracksScrolled(y) => {
+                self.album_tracks_scroll = y;
+                Task::none()
+            }
+            Message::PlaylistTracksScrolled(y) => {
+                self.playlist_tracks_scroll = y;
+                Task::none()
             }
             Message::AlbumTracksLoaded(Ok(at)) => {
                 let ids: Vec<String> = at
@@ -858,8 +1048,41 @@ impl App {
                 Task::none()
             }
             Message::PlaylistsLoaded(Ok(p)) => {
-                self.playlists = p;
-                Task::none()
+                self.server_playlists = p;
+                // Adopt same-named server playlists for unsynced locals (avoid dups);
+                // retry creating the rest that are still under the attempt cap.
+                let mut to_retry: Vec<(String, String, Vec<String>)> = Vec::new();
+                for local in self.playlists.iter_mut() {
+                    if local.server_id.is_some() || !local.create_pending {
+                        continue;
+                    }
+                    if local.create_attempts >= crate::playlists::CREATE_ATTEMPT_CAP {
+                        continue;
+                    }
+                    let same = self.server_playlists.iter().find(|sp| {
+                        sp.get("name").and_then(|v| v.as_str()) == Some(local.name.as_str())
+                    });
+                    if let Some(sp) = same {
+                        local.server_id = sp.get("id").and_then(|v| v.as_str()).map(String::from);
+                        local.create_pending = false;
+                    } else {
+                        let ids = local.tracks.iter().map(|s| s.id.clone()).collect();
+                        to_retry.push((local.id.clone(), local.name.clone(), ids));
+                    }
+                }
+                crate::playlists::save_playlists(&self.playlists);
+                self.rebuild_playlist_items();
+                let tasks = to_retry.into_iter().map(|(local_id, name, ids)| {
+                    Task::perform(
+                        crate::commands::playlists::sync_create(
+                            self.backend.app_state.clone(),
+                            name,
+                            ids,
+                        ),
+                        move |res| Message::PlaylistCreateSynced(local_id.clone(), res),
+                    )
+                });
+                Task::batch(tasks)
             }
             Message::PlaylistsLoaded(Err(e)) => {
                 eprintln!("get_playlists failed: {e:?}");
@@ -952,6 +1175,18 @@ impl App {
                         }
                     }
                 }
+                if let Some(res) = &mut self.search_results {
+                    for s in &mut res.songs {
+                        if s.id == id {
+                            s.user_rating = Some(rating);
+                        }
+                    }
+                }
+                for m in &mut self.similar_results {
+                    if m.song.id == id {
+                        m.song.user_rating = Some(rating);
+                    }
+                }
                 Task::perform(
                     crate::commands::subsonic::set_rating(self.backend.app_state.clone(), id, rating),
                     |_| Message::DownloadDone(Ok(())),
@@ -981,7 +1216,7 @@ impl App {
                 self.add_to_playlist_song = Some(song);
                 self.new_playlist_name.clear();
                 // Lazily load the playlist list the first time the overlay opens.
-                if self.playlists.is_empty() {
+                if self.server_playlists.is_empty() {
                     Task::perform(
                         crate::commands::subsonic::get_playlists(self.backend.app_state.clone()),
                         Message::PlaylistsLoaded,
@@ -998,19 +1233,24 @@ impl App {
                 self.new_playlist_name = s;
                 Task::none()
             }
-            Message::AddToPlaylist(playlist_id) => {
+            Message::AddToPlaylist(local_id) => {
                 if let Some(song) = self.add_to_playlist_song.take() {
-                    Task::perform(
-                        crate::commands::subsonic::update_playlist(
-                            self.backend.app_state.clone(),
-                            playlist_id,
-                            None,
-                            None,
-                            vec![song.id],
-                            Vec::new(),
+                    let added = crate::playlists::add_tracks(&mut self.playlists, &local_id, vec![song]);
+                    crate::playlists::save_playlists(&self.playlists);
+                    self.rebuild_playlist_items();
+                    self.refresh_local_detail(&local_id);
+                    let server_id = self
+                        .playlists
+                        .iter()
+                        .find(|p| p.id == local_id)
+                        .and_then(|p| p.server_id.clone());
+                    match server_id {
+                        Some(sid) => Task::perform(
+                            crate::commands::playlists::push_add(self.backend.app_state.clone(), sid, added),
+                            |_| Message::PlaylistSyncNoop,
                         ),
-                        Message::AddToPlaylistDone,
-                    )
+                        None => Task::none(),
+                    }
                 } else {
                     Task::none()
                 }
@@ -1019,10 +1259,21 @@ impl App {
                 let name = self.new_playlist_name.trim().to_string();
                 match self.add_to_playlist_song.take() {
                     Some(song) if !name.is_empty() => {
-                        let sid = song.id;
+                        let mut p = crate::playlists::new_local(name.clone());
+                        let local_id = p.id.clone();
+                        p.tracks.push(song);
+                        let track_ids: Vec<String> = p.tracks.iter().map(|s| s.id.clone()).collect();
+                        self.playlists.insert(0, p);
+                        crate::playlists::save_playlists(&self.playlists);
+                        self.rebuild_playlist_items();
+                        self.new_playlist_name.clear();
                         Task::perform(
-                            crate::commands::subsonic::create_playlist(self.backend.app_state.clone(), name),
-                            move |res| Message::PlaylistCreatedThenAdd(sid.clone(), res),
+                            crate::commands::playlists::sync_create(
+                                self.backend.app_state.clone(),
+                                name,
+                                track_ids,
+                            ),
+                            move |res| Message::PlaylistCreateSynced(local_id.clone(), res),
                         )
                     }
                     // Nothing to do if the name is blank; keep the overlay open.
@@ -1032,41 +1283,212 @@ impl App {
                     }
                 }
             }
-            Message::PlaylistCreatedThenAdd(song_id, Ok(playlist)) => {
-                let id = playlist.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
-                if let Some(id) = id {
-                    Task::perform(
-                        crate::commands::subsonic::update_playlist(
-                            self.backend.app_state.clone(),
-                            id,
-                            None,
-                            None,
-                            vec![song_id],
-                            Vec::new(),
-                        ),
-                        Message::AddToPlaylistDone,
-                    )
-                } else {
-                    eprintln!("create_playlist returned no id");
-                    Task::none()
-                }
-            }
-            Message::PlaylistCreatedThenAdd(_, Err(e)) => {
-                eprintln!("create_playlist failed: {e:?}");
-                self.show_toast(e);
+            Message::PlaylistSyncNoop => Task::none(),
+
+            // ── Local-first playlist management ──────────────────────────────────
+            Message::OpenCreatePlaylist => {
+                self.create_playlist_name.clear();
+                self.show_create_playlist = true;
                 Task::none()
             }
-            Message::AddToPlaylistDone(Ok(())) => {
-                // Refresh playlists so new entries / counts reflect the change.
+            Message::CloseCreatePlaylist => {
+                self.show_create_playlist = false;
+                Task::none()
+            }
+            Message::CreatePlaylistNameInput(s) => {
+                self.create_playlist_name = s;
+                Task::none()
+            }
+            Message::CreatePlaylist(name) => {
+                let name = name.trim().to_string();
+                self.show_create_playlist = false;
+                if name.is_empty() {
+                    return Task::none();
+                }
+                let p = crate::playlists::new_local(name.clone());
+                let local_id = p.id.clone();
+                self.playlists.insert(0, p);
+                crate::playlists::save_playlists(&self.playlists);
+                self.rebuild_playlist_items();
                 Task::perform(
-                    crate::commands::subsonic::get_playlists(self.backend.app_state.clone()),
-                    Message::PlaylistsLoaded,
+                    crate::commands::playlists::sync_create(
+                        self.backend.app_state.clone(),
+                        name,
+                        Vec::new(),
+                    ),
+                    move |res| Message::PlaylistCreateSynced(local_id.clone(), res),
                 )
             }
-            Message::AddToPlaylistDone(Err(e)) => {
-                eprintln!("add to playlist failed: {e:?}");
-                self.show_toast(e);
+            Message::PlaylistCreateSynced(local_id, Ok(server_pl)) => {
+                let server_id = server_pl.get("id").and_then(|v| v.as_str()).map(String::from);
+                if let Some(p) = self.playlists.iter_mut().find(|p| p.id == local_id) {
+                    p.server_id = server_id;
+                    p.create_pending = false;
+                }
+                crate::playlists::save_playlists(&self.playlists);
+                self.rebuild_playlist_items();
                 Task::none()
+            }
+            Message::PlaylistCreateSynced(local_id, Err(e)) => {
+                eprintln!("playlist create sync failed: {e:?}");
+                if let Some(p) = self.playlists.iter_mut().find(|p| p.id == local_id) {
+                    p.create_attempts += 1;
+                    p.create_pending = p.create_attempts < crate::playlists::CREATE_ATTEMPT_CAP;
+                }
+                crate::playlists::save_playlists(&self.playlists);
+                Task::none()
+            }
+            Message::SyncPlaylistNow(local_id) => {
+                let Some(p) = self.playlists.iter().find(|p| p.id == local_id) else {
+                    return Task::none();
+                };
+                if p.server_id.is_some() {
+                    return Task::none();
+                }
+                let name = p.name.clone();
+                let track_ids: Vec<String> = p.tracks.iter().map(|s| s.id.clone()).collect();
+                let lid = local_id.clone();
+                Task::perform(
+                    crate::commands::playlists::sync_create(
+                        self.backend.app_state.clone(),
+                        name,
+                        track_ids,
+                    ),
+                    move |res| Message::PlaylistCreateSynced(lid.clone(), res),
+                )
+            }
+            Message::DeleteLocalPlaylist(local_id) => {
+                let server_id = self
+                    .playlists
+                    .iter()
+                    .find(|p| p.id == local_id)
+                    .and_then(|p| p.server_id.clone());
+                self.playlists.retain(|p| p.id != local_id);
+                crate::playlists::save_playlists(&self.playlists);
+                self.rebuild_playlist_items();
+                // If the open detail belonged to this playlist, go back to the list.
+                if self.playlist_detail_id.as_deref() == Some(local_id.as_str()) {
+                    self.view = View::Playlists;
+                    self.playlist_detail = None;
+                    self.playlist_detail_id = None;
+                }
+                match server_id {
+                    Some(sid) => Task::perform(
+                        crate::commands::playlists::push_delete(self.backend.app_state.clone(), sid),
+                        |_| Message::PlaylistSyncNoop,
+                    ),
+                    None => Task::none(),
+                }
+            }
+            Message::RenamePlaylist(local_id, name) => {
+                let name = name.trim().to_string();
+                if name.is_empty() {
+                    return Task::none();
+                }
+                let mut server_id = None;
+                if let Some(p) = self.playlists.iter_mut().find(|p| p.id == local_id) {
+                    p.name = name.clone();
+                    server_id = p.server_id.clone();
+                }
+                crate::playlists::save_playlists(&self.playlists);
+                self.rebuild_playlist_items();
+                self.refresh_local_detail(&local_id);
+                match server_id {
+                    Some(sid) => Task::perform(
+                        crate::commands::playlists::push_rename(self.backend.app_state.clone(), sid, name),
+                        |_| Message::PlaylistSyncNoop,
+                    ),
+                    None => Task::none(),
+                }
+            }
+            Message::StartRenamePlaylist(id) => {
+                self.create_playlist_name = self
+                    .playlists
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map(|p| p.name.clone())
+                    .unwrap_or_default();
+                self.renaming_playlist = Some(id);
+                Task::none()
+            }
+            Message::CommitRenamePlaylist => {
+                match self.renaming_playlist.take() {
+                    Some(id) => {
+                        let name = self.create_playlist_name.clone();
+                        self.update(Message::RenamePlaylist(id, name))
+                    }
+                    None => Task::none(),
+                }
+            }
+            Message::MovePlaylistTrack(local_id, from, to) => {
+                let ordered = crate::playlists::move_track(&mut self.playlists, &local_id, from, to);
+                if ordered.is_none() {
+                    return Task::none();
+                }
+                crate::playlists::save_playlists(&self.playlists);
+                self.refresh_local_detail(&local_id);
+                let server_id = self
+                    .playlists
+                    .iter()
+                    .find(|p| p.id == local_id)
+                    .and_then(|p| p.server_id.clone());
+                match (server_id, ordered) {
+                    (Some(sid), Some(ids)) => Task::perform(
+                        crate::commands::playlists::push_reorder(self.backend.app_state.clone(), sid, ids),
+                        |_| Message::PlaylistSyncNoop,
+                    ),
+                    _ => Task::none(),
+                }
+            }
+            Message::RemovePlaylistTrack(local_id, track_id) => {
+                let idx = crate::playlists::remove_track(&mut self.playlists, &local_id, &track_id);
+                if idx.is_none() {
+                    return Task::none();
+                }
+                crate::playlists::save_playlists(&self.playlists);
+                self.refresh_local_detail(&local_id);
+                self.rebuild_playlist_items();
+                let server_id = self
+                    .playlists
+                    .iter()
+                    .find(|p| p.id == local_id)
+                    .and_then(|p| p.server_id.clone());
+                match (server_id, idx) {
+                    (Some(sid), Some(i)) => Task::perform(
+                        crate::commands::playlists::push_remove(self.backend.app_state.clone(), sid, i as u32),
+                        |_| Message::PlaylistSyncNoop,
+                    ),
+                    _ => Task::none(),
+                }
+            }
+            Message::MoveServerTrack(server_id, from, to) => {
+                let Some(pt) = &mut self.playlist_detail else {
+                    return Task::none();
+                };
+                let n = pt.tracks.len();
+                if from >= n || to >= n || from == to {
+                    return Task::none();
+                }
+                let moved = pt.tracks.remove(from);
+                pt.tracks.insert(to, moved);
+                let ids: Vec<String> = pt.tracks.iter().map(|s| s.id.clone()).collect();
+                Task::perform(
+                    crate::commands::playlists::push_reorder(self.backend.app_state.clone(), server_id, ids),
+                    |_| Message::PlaylistSyncNoop,
+                )
+            }
+            Message::RemoveServerTrack(server_id, index) => {
+                let Some(pt) = &mut self.playlist_detail else {
+                    return Task::none();
+                };
+                if index >= pt.tracks.len() {
+                    return Task::none();
+                }
+                pt.tracks.remove(index);
+                Task::perform(
+                    crate::commands::playlists::push_remove(self.backend.app_state.clone(), server_id, index as u32),
+                    |_| Message::PlaylistSyncNoop,
+                )
             }
 
             // ── Search ──────────────────────────────────────────────────────────
@@ -1097,6 +1519,10 @@ impl App {
             Message::SearchLoaded(Err(e)) => {
                 eprintln!("search failed: {e:?}");
                 self.show_toast(e);
+                Task::none()
+            }
+            Message::SetSearchRatingFilter(n) => {
+                self.search_rating_filter = if self.search_rating_filter == n { 0 } else { n };
                 Task::none()
             }
 
@@ -1220,6 +1646,7 @@ impl App {
             Message::WipeCoverCache => {
                 let _ = crate::commands::cover_cache::clear_cover_cache();
                 self.cover_cache.clear();
+                self.cover_cache_order.clear();
                 Task::none()
             }
             Message::DeleteSettings => {
@@ -1228,6 +1655,7 @@ impl App {
                 self.lrclib_enabled = true;
                 self.lyrics_word_fill = false;
                 self.window_decorations = true;
+                self.viz_cover_colors = true;
                 self.bit_perfect_mode = "relaxed".to_string();
                 self.crossfade_enabled = false;
                 self.crossfade_duration = 5.0;
@@ -1246,10 +1674,10 @@ impl App {
                 crate::commands::subsonic::set_connection(&self.backend.app_state, None, None, None);
                 self.authed = false;
                 self.show_account_switcher = true;
-                self.albums.clear();
                 self.search_results = None;
+                self.populate_offline_library();
                 self.save_config();
-                Task::none()
+                Task::batch([self.load_covers(), self.load_cover_ids(self.offline_home_cover_ids())])
             }
 
             // ── Equalizer ───────────────────────────────────────────────────────
@@ -1405,10 +1833,23 @@ impl App {
                 if self.right_panel == Some(Panel::Equalizer) {
                     self.eq_state = Some(crate::commands::equalizer::get_eq_state());
                 }
-                Task::batch([self.maybe_fetch_lyrics(), self.maybe_fetch_similar()])
+                Task::batch([self.maybe_fetch_lyrics(), self.maybe_fetch_similar(), self.maybe_fetch_viz_colors()])
             }
             Message::SetVizMode(m) => {
                 self.visualizer_mode = m;
+                Task::none()
+            }
+            Message::SetVizCoverColors(on) => {
+                self.viz_cover_colors = on;
+                self.save_config();
+                self.maybe_fetch_viz_colors()
+            }
+            Message::VizColorsLoaded(track_id, res) => {
+                if self.viz_palette_track.as_deref() == Some(track_id.as_str()) {
+                    if let Ok(colors) = res {
+                        self.viz_palette = Some(colors.orb);
+                    }
+                }
                 Task::none()
             }
             Message::LyricsLoaded(track_id, res) => {
@@ -1623,19 +2064,130 @@ impl App {
                     Message::DownloadDone,
                 )
             }
-            Message::PlayLocalAlbumAt(idx) => match &self.local_album {
-                Some(la) if !la.tracks.is_empty() => Task::perform(
-                    crate::commands::queue::set_queue(
-                        self.backend.queue_state.clone(),
-                        self.backend.app_state.clone(),
-                        self.backend.audio_player.clone(),
-                        la.tracks.clone(),
-                        idx,
-                    ),
-                    Message::PlaybackDone,
-                ),
-                _ => Task::none(),
-            },
+
+            // ── Podcasts ─────────────────────────────────────────────────────
+            Message::PodcastChannelsLoaded(Ok(channels)) => {
+                self.podcast_channels = channels;
+                Task::none()
+            }
+            Message::PodcastChannelsLoaded(Err(e)) => {
+                eprintln!("Failed to load podcast channels: {e}");
+                Task::none()
+            }
+            Message::OpenAddPodcastModal => {
+                self.podcast_add_modal_open = true;
+                self.podcast_add_error = None;
+                Task::none()
+            }
+            Message::CloseAddPodcastModal => {
+                self.podcast_add_modal_open = false;
+                self.podcast_add_url_input.clear();
+                Task::none()
+            }
+            Message::PodcastAddUrlChanged(url) => {
+                self.podcast_add_url_input = url;
+                Task::none()
+            }
+            Message::SubmitAddPodcastChannel => {
+                let url = self.podcast_add_url_input.clone();
+                if url.trim().is_empty() {
+                    return Task::none();
+                }
+                if let Some(store) = self.backend.podcasts.clone() {
+                    let state = self.backend.app_state.clone();
+                    Task::perform(crate::podcasts::add_channel(state, store, url), Message::PodcastChannelAdded)
+                } else {
+                    Task::none()
+                }
+            }
+            Message::PodcastChannelAdded(Ok(channel)) => {
+                self.podcast_channels.push(channel);
+                self.podcast_add_modal_open = false;
+                self.podcast_add_url_input.clear();
+                self.podcast_add_error = None;
+                Task::none()
+            }
+            Message::PodcastChannelAdded(Err(e)) => {
+                self.podcast_add_error = Some(e);
+                Task::none()
+            }
+            Message::PodcastEpisodesLoaded(Ok(episodes)) => {
+                self.podcast_episodes = episodes;
+                Task::none()
+            }
+            Message::PodcastEpisodesLoaded(Err(e)) => {
+                eprintln!("Failed to load podcast episodes: {e}");
+                Task::none()
+            }
+            Message::RefreshPodcastChannel(channel_id, feed_url) => {
+                if let Some(store) = self.backend.podcasts.clone() {
+                    let state = self.backend.app_state.clone();
+                    Task::perform(
+                        crate::podcasts::refresh_channel(state, store, channel_id, feed_url),
+                        Message::PodcastChannelRefreshed,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            Message::PodcastChannelRefreshed(Ok(_new_count)) => {
+                if let View::PodcastDetail(channel_id) = self.view.clone() {
+                    if let Some(store) = self.backend.podcasts.clone() {
+                        return Task::perform(
+                            async move { crate::podcasts::list_episodes(store, channel_id) },
+                            Message::PodcastEpisodesLoaded,
+                        );
+                    }
+                }
+                Task::none()
+            }
+            Message::PodcastChannelRefreshed(Err(e)) => {
+                eprintln!("Failed to refresh podcast channel: {e}");
+                Task::none()
+            }
+            Message::UnsubscribePodcastChannel(channel_id) => {
+                if let Some(store) = self.backend.podcasts.clone() {
+                    Task::perform(
+                        async move { crate::podcasts::unsubscribe(store, channel_id) },
+                        Message::PodcastChannelUnsubscribed,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            Message::PodcastChannelUnsubscribed(Ok(())) => {
+                if let Some(store) = self.backend.podcasts.clone() {
+                    Task::perform(
+                        async move { crate::podcasts::list_channels(store) },
+                        Message::PodcastChannelsLoaded,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            Message::PodcastChannelUnsubscribed(Err(e)) => {
+                eprintln!("Failed to unsubscribe podcast channel: {e}");
+                Task::none()
+            }
+            Message::PlayPodcastEpisode(episode) => {
+                let resume_secs = episode.position_ms as f64 / 1000.0;
+                match crate::audio::AudioPlayer::play_stream(
+                    &self.backend.audio_player,
+                    &episode.audio_url,
+                    episode.id.clone(),
+                    None,
+                ) {
+                    Ok(player_id) => {
+                        self.current_player_id = Some(player_id.clone());
+                        self.current_podcast_episode = Some(episode);
+                        if resume_secs > 0.0 {
+                            let _ = self.backend.audio_player.seek(&player_id, resume_secs);
+                        }
+                    }
+                    Err(e) => eprintln!("Failed to play podcast episode: {e}"),
+                }
+                Task::none()
+            }
         }
     }
 
@@ -1688,27 +2240,54 @@ impl App {
         self.home_newest.clear();
         self.home_random.clear();
         self.home_recent_plays.clear();
+        self.home_recent_artists_cache.clear();
         self.album_detail = None;
         self.album_detail_id = None;
+        self.album_tracks_scroll = 0.0;
         self.artists.clear();
+        self.artists_scroll = 0.0;
         self.artist_detail = None;
         self.artist_detail_id = None;
         self.artist_info = None;
         self.similar_artists.clear();
-        self.playlists.clear();
+        self.server_playlists.clear();
         self.playlist_detail = None;
         self.playlist_detail_id = None;
+        self.playlist_tracks_scroll = 0.0;
         self.cover_cache.clear();
+        self.cover_cache_order.clear();
         self.search_results = None;
         self.resume_queue = None;
         self.genres.clear();
         self.genre_songs.clear();
         self.genre_detail_name = None;
-        self.local_albums.clear();
-        self.local_album = None;
-        self.local_album_id = None;
         self.view = View::Home;
         self.nav_stack.clear();
+    }
+
+    /// Loads Home/Albums/Artists from the on-disk local library (`~/Music/Firmium`)
+    /// so browsing works without a server connection, mirroring Android's
+    /// `if (auth.isAuthenticated) api... else localLibrary...` fallback. Overwritten
+    /// by server data once a connection succeeds (see `Connected(Ok(()))`).
+    fn populate_offline_library(&mut self) {
+        self.albums = crate::commands::local_library::get_local_albums(&self.backend.app_state).unwrap_or_default();
+        self.artists = crate::commands::local_library::get_local_artists(&self.backend.app_state).unwrap_or_default();
+        self.home_recent = crate::commands::local_library::get_local_recent_albums(&self.backend.app_state, 12).unwrap_or_default();
+        self.home_newest = crate::commands::local_library::get_local_newest_albums(&self.backend.app_state, 12).unwrap_or_default();
+        self.home_random = crate::commands::local_library::get_local_random_albums(&self.backend.app_state, 12).unwrap_or_default();
+    }
+
+    fn offline_home_cover_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .home_recent
+            .iter()
+            .chain(self.home_newest.iter())
+            .chain(self.home_random.iter())
+            .filter_map(|a| a.cover_art_id.clone())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
     }
 
     /// Spawn lazy cover-art loads for the first chunk of albums (virtual list +
@@ -1731,7 +2310,14 @@ impl App {
             if self.cover_cache.contains_key(&cid) {
                 continue;
             }
-            if let Ok(url) = crate::commands::subsonic::build_cover_url(&self.backend.app_state, &cid, 300) {
+            if cid.starts_with("local:") {
+                let state = self.backend.app_state.clone();
+                let arg_id = cid.clone();
+                tasks.push(Task::perform(
+                    crate::commands::local_library::get_local_cover_art_async(state, arg_id),
+                    move |res| Message::CoverLoaded(cid.clone(), res),
+                ));
+            } else if let Ok(url) = crate::commands::subsonic::build_cover_url(&self.backend.app_state, &cid, 300) {
                 let arg_id = cid.clone();
                 tasks.push(Task::perform(
                     crate::commands::cover_cache::get_cover_art(arg_id, url),
@@ -1774,6 +2360,68 @@ impl App {
                 self.lrclib_enabled,
             ),
             move |res| Message::LyricsLoaded(id.clone(), res),
+        )
+    }
+
+    /// Build the visualizer config, overriding its gradient with either the
+    /// current cover-art palette or the active theme's colors.
+    fn viz_config(&self) -> crate::viz::VizConfig {
+        let gradient_colors = match (self.viz_cover_colors, &self.viz_palette) {
+            (true, Some(p)) => ramp8(
+                rgb_to_color(p.primary),
+                rgb_to_color(p.secondary),
+                rgb_to_color(p.tertiary),
+            ),
+            _ => self.theme_gradient(),
+        };
+        crate::viz::VizConfig { gradient_colors, ..crate::viz::VizConfig::default() }
+    }
+
+    /// An 8-stop gradient derived from the active theme's accent colors, used
+    /// when cover coloring is off or no cover palette is available.
+    fn theme_gradient(&self) -> Vec<iced::Color> {
+        let t = self.tokens;
+        let lighten = |c: iced::Color, k: f32| iced::Color {
+            r: c.r + (1.0 - c.r) * k,
+            g: c.g + (1.0 - c.g) * k,
+            b: c.b + (1.0 - c.b) * k,
+            a: c.a,
+        };
+        ramp8(t.accent, lighten(t.accent, 0.35), t.accent_dim)
+    }
+
+    /// Extract the cover-art palette for the current track when the Visualizer
+    /// panel is open, the cover-color option is on, and the track changed.
+    fn maybe_fetch_viz_colors(&mut self) -> Task<Message> {
+        if self.right_panel != Some(Panel::Visualizer) || !self.viz_cover_colors {
+            return Task::none();
+        }
+        let song = if self.queue_idx >= 0 {
+            self.queue.get(self.queue_idx as usize).cloned()
+        } else {
+            None
+        };
+        let Some(song) = song else {
+            self.viz_palette = None;
+            self.viz_palette_track = None;
+            return Task::none();
+        };
+        if self.viz_palette_track.as_deref() == Some(song.id.as_str()) {
+            return Task::none();
+        }
+        self.viz_palette_track = Some(song.id.clone());
+        // No cover → fall back to the theme gradient (handled in viz_config).
+        let Some(cover_id) = song.cover_art_id.clone() else {
+            self.viz_palette = None;
+            return Task::none();
+        };
+        let Ok(url) = crate::commands::subsonic::build_cover_url(&self.backend.app_state, &cover_id, 300) else {
+            return Task::none();
+        };
+        let track_id = song.id.clone();
+        Task::perform(
+            crate::commands::cover_colors::extract_cover_colors(cover_id, url),
+            move |res| Message::VizColorsLoaded(track_id.clone(), res),
         )
     }
 
@@ -1833,6 +2481,14 @@ impl App {
                 if self.current_player_id.as_deref() == Some(player_id.as_str()) {
                     self.position = position;
                     self.duration = duration;
+                    if let Some(episode) = &self.current_podcast_episode {
+                        if let Some(store) = &self.backend.podcasts {
+                            let position_ms = (position * 1000.0) as i64;
+                            if let Err(e) = store.update_position(&episode.id, position_ms) {
+                                eprintln!("Failed to save podcast position: {e}");
+                            }
+                        }
+                    }
                 }
             }
             BackendEvent::PlaybackFinished { .. } => {
@@ -1850,6 +2506,7 @@ impl App {
                 self.gapless_enabled = snapshot.gapless_enabled;
                 self.replay_gain_enabled = snapshot.replay_gain_enabled;
                 self.current_player_id = snapshot.player_id;
+                self.current_podcast_episode = None;
             }
             BackendEvent::QueueExhausted(_song) => {}
             BackendEvent::SessionExpired => {
@@ -1937,6 +2594,7 @@ impl App {
             self.nav_button(icons::DISC, "Albums", View::Albums),
             self.nav_button(icons::USER, "Artists", View::Artists),
             self.nav_button(icons::LIST, "Playlists", View::Playlists),
+            self.nav_button(icons::PODCAST, "Podcasts", View::Podcasts),
             self.nav_button(icons::SEARCH, "Search", View::Search),
             self.nav_button(icons::MUSIC, "Mix", View::Mix),
             self.nav_button(icons::SETTINGS, "Settings", View::Settings),
@@ -1978,12 +2636,151 @@ impl App {
             stack![base, self.account_switcher_overlay()].into()
         } else if self.add_to_playlist_song.is_some() {
             stack![base, self.add_to_playlist_overlay()].into()
+        } else if self.show_create_playlist {
+            stack![base, self.create_playlist_overlay()].into()
+        } else if self.podcast_add_modal_open {
+            stack![base, self.add_podcast_overlay()].into()
         } else {
             base.into()
         }
     }
 
+    fn add_podcast_overlay(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        let can_add = !self.podcast_add_url_input.trim().is_empty();
+
+        let backdrop = button(container(text("")).width(Length::Fill).height(Length::Fill))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .on_press(Message::CloseAddPodcastModal)
+            .style(|_th, _status| button::Style {
+                background: Some(Background::Color(Color { a: 0.55, ..Color::BLACK })),
+                ..button::Style::default()
+            });
+
+        let add_msg = can_add.then(|| Message::SubmitAddPodcastChannel);
+        let mut card_col = column![
+            text("Add a podcast").size(16).style(tstyle(t.text)),
+            text_input("RSS feed URL…", &self.podcast_add_url_input)
+                .on_input(Message::PodcastAddUrlChanged)
+                .on_submit(Message::SubmitAddPodcastChannel)
+                .padding(10)
+                .size(13)
+                .style(text_input_style(t)),
+        ]
+        .spacing(16);
+
+        if let Some(err) = &self.podcast_add_error {
+            card_col = card_col.push(text(err).size(12).style(tstyle(t.muted)));
+        }
+
+        card_col = card_col.push(
+            row![
+                button(text("Cancel").size(13).style(tstyle(t.muted)))
+                    .padding(8)
+                    .on_press(Message::CloseAddPodcastModal)
+                    .style(list_row_style(t)),
+                button(text("Add").size(13).style(tstyle(if can_add { t.bg } else { t.muted })))
+                    .padding([8, 16])
+                    .on_press_maybe(add_msg)
+                    .style(primary_button(t)),
+            ]
+            .spacing(12)
+            .align_y(Alignment::Center),
+        );
+
+        let card = container(card_col)
+            .width(Length::Fixed(420.0))
+            .padding(24)
+            .style(move |_th| container::Style {
+                background: Some(Background::Color(t.surface)),
+                border: Border { radius: 10.0.into(), width: 1.0, color: t.border },
+                ..container::Style::default()
+            });
+
+        stack![
+            backdrop,
+            container(card).center_x(Length::Fill).center_y(Length::Fill),
+        ]
+        .into()
+    }
+
+    fn create_playlist_overlay(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        let can_create = !self.create_playlist_name.trim().is_empty();
+
+        let backdrop = button(container(text("")).width(Length::Fill).height(Length::Fill))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .on_press(Message::CloseCreatePlaylist)
+            .style(|_th, _status| button::Style {
+                background: Some(Background::Color(Color { a: 0.55, ..Color::BLACK })),
+                ..button::Style::default()
+            });
+
+        let create_msg = can_create.then(|| Message::CreatePlaylist(self.create_playlist_name.clone()));
+        let card = container(
+            column![
+                text("New Playlist").size(16).style(tstyle(t.text)),
+                text_input("Playlist name…", &self.create_playlist_name)
+                    .on_input(Message::CreatePlaylistNameInput)
+                    .on_submit(Message::CreatePlaylist(self.create_playlist_name.clone()))
+                    .padding(10)
+                    .size(13)
+                    .style(text_input_style(t)),
+                row![
+                    button(text("Cancel").size(13).style(tstyle(t.muted)))
+                        .padding(8)
+                        .on_press(Message::CloseCreatePlaylist)
+                        .style(list_row_style(t)),
+                    button(text("Create").size(13).style(tstyle(if can_create { t.bg } else { t.muted })))
+                        .padding([8, 16])
+                        .on_press_maybe(create_msg)
+                        .style(primary_button(t)),
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center),
+            ]
+            .spacing(16),
+        )
+        .width(Length::Fixed(360.0))
+        .padding(24)
+        .style(move |_th| container::Style {
+            background: Some(Background::Color(t.surface)),
+            border: Border { radius: 10.0.into(), width: 1.0, color: t.border },
+            ..container::Style::default()
+        });
+
+        stack![
+            backdrop,
+            container(card).center_x(Length::Fill).center_y(Length::Fill),
+        ]
+        .into()
+    }
+
     /// Modal: login form when not authed, connected info + disconnect when authed.
+    fn saved_account_row(&self, acct: &SavedAccount) -> Element<'_, Message> {
+        let t = self.tokens;
+        let server_display = acct
+            .server
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .trim_end_matches('/')
+            .to_string();
+        button(
+            column![
+                text(acct.username.clone()).size(13).style(tstyle(t.text)),
+                text(server_display).size(11).style(tstyle(t.muted)),
+            ]
+            .spacing(2),
+        )
+        .width(Length::Fixed(320.0))
+        .padding(10)
+        .on_press(Message::SwitchAccount(acct.clone()))
+        .style(list_row_style(t))
+        .into()
+    }
+
     fn account_switcher_overlay(&self) -> Element<'_, Message> {
         let t = self.tokens;
 
@@ -1997,15 +2794,20 @@ impl App {
             });
 
         let card: Element<'_, Message> = if self.authed {
-            let cur_server = {
+            let (cur_server, cur_username) = {
                 let conn = self.backend.app_state.connection.read();
-                conn.server.clone().unwrap_or_default()
+                (conn.server.clone().unwrap_or_default(), conn.username.clone().unwrap_or_default())
             };
             let server_display = cur_server
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
                 .trim_end_matches('/')
                 .to_string();
+            let other_accounts: Vec<&SavedAccount> = self
+                .accounts
+                .iter()
+                .filter(|a| a.server != cur_server || a.username != cur_username)
+                .collect();
 
             let disconnect_btn = button(text("DISCONNECT").size(13))
                 .on_press(Message::Logout)
@@ -2013,10 +2815,14 @@ impl App {
                 .width(Length::Fixed(320.0))
                 .style(move |_, status| {
                     use iced::widget::button::Status;
-                    let base = Color { r: 0.87, g: 0.26, b: 0.21, a: 1.0 };
                     let bg = match status {
-                        Status::Hovered | Status::Pressed => Color { r: 0.75, g: 0.18, b: 0.14, a: 1.0 },
-                        _ => base,
+                        Status::Hovered | Status::Pressed => Color {
+                            r: t.error.r * 0.85,
+                            g: t.error.g * 0.85,
+                            b: t.error.b * 0.85,
+                            ..t.error
+                        },
+                        _ => t.error,
                     };
                     button::Style {
                         background: Some(Background::Color(bg)),
@@ -2026,24 +2832,42 @@ impl App {
                     }
                 });
 
-            container(
-                column![
-                    text("Connected").size(26).style(tstyle(t.accent)),
-                    text(server_display).size(13).style(tstyle(t.muted)),
-                    disconnect_btn,
-                ]
-                .spacing(20)
-                .align_x(Alignment::Start),
-            )
-            .width(Length::Fixed(400.0))
-            .padding(40)
-            .style(move |_th| container::Style {
-                background: Some(Background::Color(t.surface)),
-                border: Border { radius: 10.0.into(), width: 1.0, color: t.border },
-                ..container::Style::default()
-            })
-            .into()
+            let mut card_col = column![
+                text("Connected").size(26).style(tstyle(t.accent)),
+                text(server_display).size(13).style(tstyle(t.muted)),
+            ]
+            .spacing(20)
+            .align_x(Alignment::Start);
+
+            if !other_accounts.is_empty() {
+                let mut switch_col = column![text("SWITCH ACCOUNT").size(11).style(tstyle(t.muted))].spacing(8);
+                for acct in &other_accounts {
+                    switch_col = switch_col.push(self.saved_account_row(acct));
+                }
+                card_col = card_col.push(switch_col);
+            }
+            card_col = card_col.push(disconnect_btn);
+
+            container(card_col)
+                .width(Length::Fixed(400.0))
+                .padding(40)
+                .style(move |_th| container::Style {
+                    background: Some(Background::Color(t.surface)),
+                    border: Border { radius: 10.0.into(), width: 1.0, color: t.border },
+                    ..container::Style::default()
+                })
+                .into()
         } else {
+            let mut card_col = column![].spacing(20).align_x(Alignment::Start);
+            if !self.accounts.is_empty() {
+                let mut switch_col = column![text("SAVED ACCOUNTS").size(11).style(tstyle(t.muted))].spacing(8);
+                for acct in &self.accounts {
+                    switch_col = switch_col.push(self.saved_account_row(acct));
+                }
+                card_col = card_col.push(switch_col);
+                card_col = card_col.push(text("OR CONNECT TO A NEW SERVER").size(11).style(tstyle(t.muted)));
+            }
+
             let save_pw_row = row![
                 checkbox(self.save_password)
                     .on_toggle(Message::ToggleSavePassword)
@@ -2089,8 +2913,9 @@ impl App {
             ]
             .spacing(12)
             .align_x(Alignment::Start);
+            card_col = card_col.push(form);
 
-            container(form)
+            container(card_col)
                 .width(Length::Fixed(400.0))
                 .padding(40)
                 .style(move |_| container::Style {
@@ -2204,24 +3029,27 @@ impl App {
         if self.playlists.is_empty() {
             list = list.push(text("No playlists yet").size(12).style(tstyle(t.muted)));
         } else {
-            for v in &self.playlists {
-                let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
-                let name = v.get("name").and_then(|x| x.as_str()).unwrap_or("Untitled").to_string();
-                let count = v.get("songCount").and_then(|x| x.as_u64()).unwrap_or(0);
+            for p in &self.playlists {
+                let id = p.id.clone();
+                let name = p.name.clone();
+                let count = p.tracks.len();
+                let synced = p.server_id.is_some();
+                let mut label = row![
+                    icons::icon(icons::LIST, 16.0, t.muted),
+                    text(name).size(13).style(tstyle(t.text)).width(Length::Fill),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center);
+                if synced {
+                    label = label.push(icons::icon(icons::CLOUD, 12.0, t.muted));
+                }
+                label = label.push(text(format!("{count}")).size(11).style(tstyle(t.muted)));
                 list = list.push(
-                    button(
-                        row![
-                            icons::icon(icons::LIST, 16.0, t.muted),
-                            text(name).size(13).style(tstyle(t.text)).width(Length::Fill),
-                            text(format!("{count}")).size(11).style(tstyle(t.muted)),
-                        ]
-                        .spacing(10)
-                        .align_y(Alignment::Center),
-                    )
-                    .width(Length::Fill)
-                    .padding(8)
-                    .on_press(Message::AddToPlaylist(id))
-                    .style(list_row_style(t)),
+                    button(label)
+                        .width(Length::Fill)
+                        .padding(8)
+                        .on_press(Message::AddToPlaylist(id))
+                        .style(list_row_style(t)),
                 );
             }
         }
@@ -2300,7 +3128,7 @@ impl App {
         let canvas = iced::widget::shader(Visualizer::new(
             self.backend.audio_player.visualizer(),
             self.visualizer_mode,
-            crate::viz::VizConfig::default(),
+            self.viz_config(),
         ))
         .width(Length::Fill)
         .height(Length::Fill);
@@ -2325,10 +3153,10 @@ impl App {
             View::Search => self.search_view(),
             View::Mix => self.mix_view(),
             View::GenreDetail(_) => self.genre_detail_view(),
-            View::Local => self.local_view(),
-            View::LocalAlbumDetail(_) => self.local_album_detail_view(),
             View::Recap => self.recap_view(),
             View::Settings => self.settings_view(),
+            View::Podcasts => self.podcasts_view(),
+            View::PodcastDetail(_) => self.podcast_detail_view(),
         }
     }
 
@@ -2350,15 +3178,27 @@ impl App {
 
         let results: Element<'_, Message> = if let Some(res) = &self.search_results {
             let mut col = column![].spacing(4);
+            col = col.push(self.rating_filter_row());
             if !res.albums.is_empty() {
                 col = col.push(text("Albums").size(13).style(tstyle(t.muted)));
                 for a in res.albums.iter().take(40) {
                     col = col.push(self.album_row(a));
                 }
             }
-            if !res.songs.is_empty() {
+            let filter = self.search_rating_filter;
+            let filtered_songs: Vec<&Song> = res
+                .songs
+                .iter()
+                .filter(|s| {
+                    filter == 0
+                        || s.user_rating.unwrap_or(0) >= filter
+                        || s.average_rating.unwrap_or(0.0) >= filter as f32
+                })
+                .take(100)
+                .collect();
+            if !filtered_songs.is_empty() {
                 col = col.push(text("Songs").size(13).style(tstyle(t.muted)));
-                for s in res.songs.iter().take(100) {
+                for s in filtered_songs {
                     col = col.push(self.song_row(s));
                 }
             }
@@ -2404,6 +3244,8 @@ impl App {
         });
         row![
             play_area,
+            self.star_rating(song),
+            self.avg_rating_badge(song),
             icon_button(icons::PLUS, 14.0, t.muted, t, Message::OpenAddToPlaylist(song.clone())),
         ]
         .spacing(8)
@@ -2718,6 +3560,12 @@ impl App {
                 "Show native title bar and borders",
                 t,
                 toggler(self.window_decorations).on_toggle(Message::SetDecorations).style(toggler_style(t)).into(),
+            ),
+            sett_row(
+                "Cover-Colored Visualizer",
+                "Tint the visualizer with the current album's artwork. When off, it follows your theme colors.",
+                t,
+                toggler(self.viz_cover_colors).on_toggle(Message::SetVizCoverColors).style(toggler_style(t)).into(),
             ),
             sett_row("Theme", "Color scheme for the interface", t, theme_picker),
         ]
@@ -3140,12 +3988,19 @@ impl App {
         ]
         .spacing(20);
 
-        let mut list = column![].spacing(2);
-        for (i, track) in at.tracks.iter().enumerate() {
-            list = list.push(self.track_row(i, track, Message::PlayAlbumAt(i)));
+        let (first, end, top, bottom) = list_window(at.tracks.len(), self.album_tracks_scroll, TRACK_ROW_H);
+        let mut list = column![];
+        if top > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(top)));
+        }
+        for (i, track) in at.tracks[first..end].iter().enumerate() {
+            list = list.push(self.track_row(first + i, track, Message::PlayAlbumAt(first + i)));
+        }
+        if bottom > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(bottom)));
         }
 
-        column![back, header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))]
+        column![back, header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::AlbumTracksScrolled(v.absolute_offset().y))]
             .spacing(16)
             .into()
     }
@@ -3194,6 +4049,7 @@ impl App {
         row![
             play_area,
             self.star_rating(song),
+            self.avg_rating_badge(song),
             icon_button(icons::PLUS, 14.0, t.muted, t, Message::OpenAddToPlaylist(song.clone())),
             icon_button(icons::DOWNLOAD, 14.0, t.muted, t, Message::DownloadTrack(song.clone())),
             text(fmt_time(song.duration)).size(11).style(tstyle(t.muted)).width(Length::Fixed(44.0)),
@@ -3215,15 +4071,64 @@ impl App {
             let sid = id.clone();
             stars = stars.push(
                 button(icons::icon(src, 12.0, color))
-                    .padding(1)
+                    .padding(4)
                     .on_press(Message::SetRating(sid, i))
-                    .style(|_th, _status| button::Style {
-                        background: None,
-                        ..button::Style::default()
+                    .style(move |_th, status| {
+                        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                        button::Style {
+                            background: if hovered { Some(Background::Color(t.surface2)) } else { None },
+                            border: Border { radius: 4.0.into(), ..Border::default() },
+                            ..button::Style::default()
+                        }
                     }),
             );
         }
         stars.into()
+    }
+
+    fn avg_rating_badge(&self, song: &Song) -> Element<'_, Message> {
+        let t = self.tokens;
+        match song.average_rating {
+            Some(r) if r > 0.0 => row![
+                icons::icon(icons::STAR_FILLED, 11.0, t.muted),
+                text(format!("{r:.1}")).size(11).style(tstyle(t.muted)),
+            ]
+            .spacing(2)
+            .align_y(Alignment::Center)
+            .into(),
+            _ => row![].into(),
+        }
+    }
+
+    fn rating_filter_row(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        let active = self.search_rating_filter;
+        let mut stars = row![].spacing(1);
+        for i in 1..=5u32 {
+            let filled = i <= active;
+            let src = if filled { icons::STAR_FILLED } else { icons::STAR_EMPTY };
+            let color = if filled { t.accent } else { t.muted };
+            stars = stars.push(
+                button(icons::icon(src, 14.0, color))
+                    .padding(4)
+                    .on_press(Message::SetSearchRatingFilter(i))
+                    .style(move |_th, status| {
+                        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                        button::Style {
+                            background: if hovered { Some(Background::Color(t.surface2)) } else { None },
+                            border: Border { radius: 4.0.into(), ..Border::default() },
+                            ..button::Style::default()
+                        }
+                    }),
+            );
+        }
+        row![
+            text("Min rating:").size(12).style(tstyle(t.muted)),
+            stars,
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center)
+        .into()
     }
 
     fn album_list_view(&self) -> Element<'_, Message> {
@@ -3233,20 +4138,16 @@ impl App {
         // Windowed (virtual) rendering: only the visible rows are built; the
         // scrolled-past and remaining heights are filled with spacers so the
         // scrollbar stays correct for libraries with thousands of albums.
-        let total = self.albums.len();
-        let first = ((self.albums_scroll / ALBUM_ROW_H).floor().max(0.0) as usize).min(total);
-        let count = (VIEWPORT_H / ALBUM_ROW_H).ceil() as usize + 4;
-        let end = (first + count).min(total);
-
+        let (first, end, top, bottom) = list_window(self.albums.len(), self.albums_scroll, ALBUM_ROW_H);
         let mut list = column![];
-        if first > 0 {
-            list = list.push(container(text("")).height(Length::Fixed(first as f32 * ALBUM_ROW_H)));
+        if top > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(top)));
         }
         for album in &self.albums[first..end] {
             list = list.push(self.album_row(album));
         }
-        if end < total {
-            list = list.push(container(text("")).height(Length::Fixed((total - end) as f32 * ALBUM_ROW_H)));
+        if bottom > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(bottom)));
         }
 
         let scroller = scrollable(list)
@@ -3283,7 +4184,7 @@ impl App {
 
     fn cover_image(&self, cover_id: Option<&str>, size: f32) -> Element<'_, Message> {
         let t = self.tokens;
-        let radius = if size >= 80.0 { 12.0_f32 } else if size >= 40.0 { 8.0 } else { 6.0 };
+        let radius = if size >= 80.0 { 14.0_f32 } else if size >= 40.0 { 10.0 } else { 6.0 };
         if let Some(id) = cover_id {
             if let Some(handle) = self.cover_cache.get(id) {
                 return container(
@@ -3316,11 +4217,18 @@ impl App {
     fn artists_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
         let header = text(format!("Artists ({})", self.artists.len())).size(22).style(tstyle(t.text));
-        let mut list = column![].spacing(2);
-        for artist in self.artists.iter().take(300) {
+        let (first, end, top, bottom) = list_window(self.artists.len(), self.artists_scroll, ARTIST_ROW_H);
+        let mut list = column![];
+        if top > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(top)));
+        }
+        for artist in &self.artists[first..end] {
             list = list.push(self.artist_row(artist));
         }
-        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(16).into()
+        if bottom > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(bottom)));
+        }
+        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::ArtistsScrolled(v.absolute_offset().y))].spacing(16).into()
     }
 
     fn artist_row(&self, artist: &Artist) -> Element<'_, Message> {
@@ -3438,122 +4346,345 @@ impl App {
         .into()
     }
 
-    fn local_view(&self) -> Element<'_, Message> {
+    fn podcasts_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let header = text(format!("Offline Library ({})", self.local_albums.len()))
-            .size(22)
-            .style(tstyle(t.text));
-        if self.local_albums.is_empty() {
+        let header = row![
+            text(format!("Podcasts ({})", self.podcast_channels.len()))
+                .size(22)
+                .style(tstyle(t.text))
+                .width(Length::Fill),
+            button(
+                row![icons::icon(icons::PLUS, 12.0, t.accent), text("Add podcast").size(12).style(tstyle(t.accent))]
+                    .spacing(6)
+                    .align_y(Alignment::Center)
+            )
+            .padding([6, 14])
+            .on_press(Message::OpenAddPodcastModal)
+            .style(list_row_style(t)),
+        ]
+        .align_y(Alignment::Center);
+
+        if self.podcast_channels.is_empty() {
             return column![
                 header,
-                text("No downloaded music yet. Use the download button on a track or album to save it here for offline playback.")
-                    .size(12)
-                    .style(tstyle(t.muted)),
+                text("No podcasts yet. Add one by RSS feed URL.").size(13).style(tstyle(t.muted))
             ]
             .spacing(16)
             .into();
         }
+
         let mut list = column![].spacing(2);
-        for album in &self.local_albums {
-            let id = album.id.clone();
-            let cover = self.cover_image(album.cover_art_id.as_deref(), 44.0);
-            let info = column![
-                text(album.name.clone()).size(13).style(tstyle(t.text)),
-                text(album.album_artist.clone()).size(11).style(tstyle(t.muted)),
-            ]
-            .spacing(2);
+        for channel in &self.podcast_channels {
             list = list.push(
-                button(row![cover, info].spacing(12).align_y(Alignment::Center))
-                    .width(Length::Fill)
-                    .padding(8)
-                    .on_press(Message::Navigate(View::LocalAlbumDetail(id)))
-                    .style(list_row_style(t)),
+                button(
+                    column![
+                        text(&channel.title).size(14).style(tstyle(t.text)),
+                        text(channel.description.clone().unwrap_or_default()).size(12).style(tstyle(t.muted)),
+                    ]
+                    .spacing(4),
+                )
+                .width(Length::Fill)
+                .padding(10)
+                .on_press(Message::Navigate(View::PodcastDetail(channel.id.clone())))
+                .style(list_row_style(t)),
             );
         }
-        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(16).into()
+
+        column![
+            header,
+            scrollable(list)
+                .height(Length::Fill)
+                .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+                .style(thin_scroll_style(t))
+        ]
+        .spacing(16)
+        .into()
     }
 
-    fn local_album_detail_view(&self) -> Element<'_, Message> {
+    fn podcast_detail_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let Some(la) = &self.local_album else {
-            return column![back_button(t), text("Loading…").size(13).style(tstyle(t.muted))]
-                .spacing(12)
-                .into();
+        let View::PodcastDetail(channel_id) = self.view.clone() else {
+            return text("No channel selected").size(13).style(tstyle(t.muted)).into();
         };
-        let play = button(
-            row![
-                icons::icon(icons::PLAY, 14.0, t.bg),
-                text("Play").size(12).style(tstyle(t.bg)),
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center),
-        )
-        .padding(8)
-        .on_press(Message::PlayLocalAlbumAt(0))
-        .style(primary_button(t));
+
+        let channel = self.podcast_channels.iter().find(|c| c.id == channel_id);
+        let channel_title = channel.map(|c| c.title.clone()).unwrap_or_default();
+        let feed_url = channel.map(|c| c.feed_url.clone()).unwrap_or_default();
 
         let header = row![
-            self.cover_image(la.cover_art_id.as_deref(), 120.0),
-            column![
-                text(la.album_name.clone()).size(24).style(tstyle(t.text)),
-                text(la.album_artist.clone()).size(14).style(tstyle(t.muted)),
-                text(format!("{} tracks · offline", la.tracks.len())).size(11).style(tstyle(t.muted)),
-                play,
-            ]
-            .spacing(10),
+            text(channel_title).size(20).style(tstyle(t.text)).width(Length::Fill),
+            button(text("Refresh").size(12).style(tstyle(t.text)))
+                .padding([6, 12])
+                .on_press(Message::RefreshPodcastChannel(channel_id.clone(), feed_url))
+                .style(list_row_style(t)),
+            button(text("Unsubscribe").size(12).style(tstyle(t.text)))
+                .padding([6, 12])
+                .on_press(Message::UnsubscribePodcastChannel(channel_id.clone()))
+                .style(list_row_style(t)),
         ]
-        .spacing(20);
+        .spacing(8)
+        .align_y(Alignment::Center);
 
-        let mut list = column![].spacing(2);
-        for (i, track) in la.tracks.iter().enumerate() {
-            list = list.push(self.track_row(i, track, Message::PlayLocalAlbumAt(i)));
+        if self.podcast_episodes.is_empty() {
+            return column![header, text("No episodes found.").size(13).style(tstyle(t.muted))]
+                .spacing(16)
+                .into();
         }
 
-        column![back_button(t), header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))]
-            .spacing(16)
-            .into()
+        let mut list = column![].spacing(2);
+        for episode in &self.podcast_episodes {
+            let duration_label = episode
+                .duration_seconds
+                .map(|s| fmt_time(s as f64))
+                .unwrap_or_default();
+            list = list.push(
+                row![
+                    column![
+                        text(&episode.title).size(13).style(tstyle(t.text)),
+                        text(duration_label).size(11).style(tstyle(t.muted)),
+                    ]
+                    .spacing(2)
+                    .width(Length::Fill),
+                    button(icons::icon(icons::PLAY, 14.0, t.accent))
+                        .padding(8)
+                        .on_press(Message::PlayPodcastEpisode(episode.clone()))
+                        .style(list_row_style(t)),
+                ]
+                .spacing(12)
+                .padding(10)
+                .align_y(Alignment::Center),
+            );
+        }
+
+        column![
+            header,
+            scrollable(list)
+                .height(Length::Fill)
+                .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+                .style(thin_scroll_style(t))
+        ]
+        .spacing(16)
+        .into()
     }
 
     fn playlists_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let header = text(format!("Playlists ({})", self.playlists.len())).size(22).style(tstyle(t.text));
-        let mut list = column![].spacing(2);
-        for v in &self.playlists {
-            list = list.push(self.playlist_row(v));
+        let header = row![
+            text(format!("Playlists ({})", self.playlist_items.len()))
+                .size(22)
+                .style(tstyle(t.text))
+                .width(Length::Fill),
+            button(
+                row![icons::icon(icons::PLUS, 12.0, t.accent), text("New").size(12).style(tstyle(t.accent))]
+                    .spacing(6)
+                    .align_y(Alignment::Center)
+            )
+            .padding([6, 14])
+            .on_press(Message::OpenCreatePlaylist)
+            .style(list_row_style(t)),
+        ]
+        .align_y(Alignment::Center);
+
+        if self.playlist_items.is_empty() {
+            return column![header, text("No playlists yet").size(13).style(tstyle(t.muted))]
+                .spacing(16)
+                .into();
         }
-        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(16).into()
+
+        let mut list = column![].spacing(2);
+        for item in &self.playlist_items {
+            list = list.push(self.playlist_row(item));
+        }
+        column![
+            header,
+            scrollable(list)
+                .height(Length::Fill)
+                .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+                .style(thin_scroll_style(t))
+        ]
+        .spacing(16)
+        .into()
     }
 
-    fn playlist_row(&self, v: &serde_json::Value) -> Element<'_, Message> {
+    /// Rebuilds `playlist_items` from the local + server lists: local first, then
+    /// server playlists whose id is not already a local playlist's `server_id`.
+    fn rebuild_playlist_items(&mut self) {
+        let claimed: std::collections::HashSet<&str> = self
+            .playlists
+            .iter()
+            .filter_map(|p| p.server_id.as_deref())
+            .collect();
+        let mut items: Vec<PlaylistListItem> =
+            (0..self.playlists.len()).map(PlaylistListItem::Local).collect();
+        for (i, sp) in self.server_playlists.iter().enumerate() {
+            let sid = sp.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            if !claimed.contains(sid) {
+                items.push(PlaylistListItem::ServerOnly(i));
+            }
+        }
+        self.playlist_items = items;
+    }
+
+    /// If the playlist detail view currently shows local playlist `local_id`,
+    /// rebuild its `playlist_detail` from the in-memory tracks (after a local edit).
+    fn refresh_local_detail(&mut self, local_id: &str) {
+        if self.playlist_detail_id.as_deref() != Some(local_id) {
+            return;
+        }
+        if let Some(p) = self.playlists.iter().find(|p| p.id == local_id) {
+            self.playlist_detail = Some(PlaylistTracks {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                comment: String::new(),
+                song_count: Some(p.tracks.len() as u32),
+                tracks: p.tracks.clone(),
+            });
+        }
+    }
+
+    /// Cover for a playlist row: mosaic of distinct track covers (local) or the
+    /// single server cover (server-only), falling back to the list icon.
+    fn playlist_cover(&self, item: &PlaylistListItem) -> Element<'_, Message> {
         let t = self.tokens;
-        let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
-        let name = v.get("name").and_then(|x| x.as_str()).unwrap_or("Untitled").to_string();
-        let count = v.get("songCount").and_then(|x| x.as_u64()).unwrap_or(0);
-        let icon_box = container(icons::icon(icons::LIST, 22.0, t.muted))
+        // Up to 4 distinct cover ids.
+        let cover_ids: Vec<String> = match item {
+            PlaylistListItem::Local(i) => {
+                let mut seen = std::collections::HashSet::new();
+                self.playlists[*i]
+                    .tracks
+                    .iter()
+                    .filter_map(|s| s.cover_art_id.clone())
+                    .filter(|c| seen.insert(c.clone()))
+                    .take(4)
+                    .collect()
+            }
+            PlaylistListItem::ServerOnly(i) => self.server_playlists[*i]
+                .get("coverArt")
+                .and_then(|v| v.as_str())
+                .map(|s| vec![s.to_string()])
+                .unwrap_or_default(),
+        };
+
+        let inner: Element<'_, Message> = match cover_ids.len() {
+            0 => icons::icon(icons::LIST, 22.0, t.muted).into(),
+            1 => self.cover_image(Some(cover_ids[0].as_str()), 44.0),
+            _ => {
+                let cell = |idx: usize| -> Element<'_, Message> {
+                    self.cover_image(Some(cover_ids[idx % cover_ids.len()].as_str()), 22.0)
+                };
+                column![row![cell(0), cell(1)].spacing(0), row![cell(2), cell(3)].spacing(0)]
+                    .spacing(0)
+                    .into()
+            }
+        };
+
+        container(inner)
             .center_x(Length::Fixed(44.0))
             .center_y(Length::Fixed(44.0))
+            .clip(true)
             .style(move |_| container::Style {
                 background: Some(Background::Color(t.surface2)),
                 border: Border { radius: 6.0.into(), ..Border::default() },
                 ..container::Style::default()
-            });
-        button(
+            })
+            .into()
+    }
+
+    fn playlist_row(&self, item: &PlaylistListItem) -> Element<'_, Message> {
+        let t = self.tokens;
+        let (nav_id, name, count, synced, local_id): (String, String, usize, bool, Option<String>) =
+            match item {
+                PlaylistListItem::Local(i) => {
+                    let p = &self.playlists[*i];
+                    (p.id.clone(), p.name.clone(), p.tracks.len(), p.server_id.is_some(), Some(p.id.clone()))
+                }
+                PlaylistListItem::ServerOnly(i) => {
+                    let sp = &self.server_playlists[*i];
+                    let sid = sp.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let nm = sp.get("name").and_then(|v| v.as_str()).unwrap_or("Untitled").to_string();
+                    let c = sp.get("songCount").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                    (format!("server-{sid}"), nm, c, true, None)
+                }
+            };
+
+        let mut name_row = row![text(name).size(13).style(tstyle(t.text))]
+            .spacing(6)
+            .align_y(Alignment::Center);
+        if synced {
+            name_row = name_row.push(icons::icon(icons::CLOUD, 12.0, t.muted));
+        }
+
+        let open = button(
             row![
-                icon_box,
-                column![
-                    text(name).size(13).style(tstyle(t.text)),
-                    text(format!("{count} tracks")).size(11).style(tstyle(t.muted)),
-                ]
-                .spacing(2),
+                self.playlist_cover(item),
+                column![name_row, text(format!("{count} tracks")).size(11).style(tstyle(t.muted))].spacing(2),
             ]
             .spacing(12)
             .align_y(Alignment::Center),
         )
         .width(Length::Fill)
         .padding(8)
-        .on_press(Message::Navigate(View::PlaylistDetail(id)))
-        .style(list_row_style(t))
-        .into()
+        .on_press(Message::Navigate(View::PlaylistDetail(nav_id)))
+        .style(list_row_style(t));
+
+        let mut trailing = row![].spacing(4).align_y(Alignment::Center);
+        if let Some(lid) = &local_id {
+            if !synced {
+                trailing = trailing.push(icon_button(
+                    icons::CLOUD, 16.0, t.accent, t, Message::SyncPlaylistNow(lid.clone()),
+                ));
+            }
+            trailing = trailing.push(icon_button(
+                icons::TRASH, 16.0, t.error, t, Message::DeleteLocalPlaylist(lid.clone()),
+            ));
+        }
+
+        row![open, trailing].spacing(8).align_y(Alignment::Center).into()
+    }
+
+    /// A playlist detail track row: the standard track row plus reorder (up/down)
+    /// and remove controls, dispatching local vs server-only messages.
+    fn playlist_track_row(
+        &self,
+        idx: usize,
+        total: usize,
+        song: &Song,
+        local_id: &Option<String>,
+        server_id: &Option<String>,
+    ) -> Element<'_, Message> {
+        let t = self.tokens;
+        let base = self.track_row(idx, song, Message::PlayPlaylistAt(idx));
+
+        let up_msg = match (local_id, server_id) {
+            (Some(id), _) => Some(Message::MovePlaylistTrack(id.clone(), idx, idx.saturating_sub(1))),
+            (None, Some(sid)) => Some(Message::MoveServerTrack(sid.clone(), idx, idx.saturating_sub(1))),
+            _ => None,
+        };
+        let down_msg = match (local_id, server_id) {
+            (Some(id), _) => Some(Message::MovePlaylistTrack(id.clone(), idx, idx + 1)),
+            (None, Some(sid)) => Some(Message::MoveServerTrack(sid.clone(), idx, idx + 1)),
+            _ => None,
+        };
+        let remove_msg = match (local_id, server_id) {
+            (Some(id), _) => Some(Message::RemovePlaylistTrack(id.clone(), song.id.clone())),
+            (None, Some(sid)) => Some(Message::RemoveServerTrack(sid.clone(), idx)),
+            _ => None,
+        };
+
+        let up = button(icons::icon(icons::CHEVRON_UP, 14.0, t.muted))
+            .padding(4)
+            .on_press_maybe((idx > 0).then(|| up_msg).flatten())
+            .style(list_row_style(t));
+        let down = button(icons::icon(icons::CHEVRON_DOWN, 14.0, t.muted))
+            .padding(4)
+            .on_press_maybe((idx + 1 < total).then(|| down_msg).flatten())
+            .style(list_row_style(t));
+        let remove = button(icons::icon(icons::CLOSE, 14.0, t.error))
+            .padding(4)
+            .on_press_maybe(remove_msg)
+            .style(list_row_style(t));
+
+        row![base, up, down, remove].spacing(6).align_y(Alignment::Center).into()
     }
 
     fn playlist_detail_view(&self) -> Element<'_, Message> {
@@ -3561,6 +4692,10 @@ impl App {
         let Some(pt) = &self.playlist_detail else {
             return text("Loading…").size(13).style(tstyle(t.muted)).into();
         };
+        let detail_id = self.playlist_detail_id.clone().unwrap_or_default();
+        let server_id = detail_id.strip_prefix("server-").map(String::from);
+        let local_id = server_id.is_none().then(|| detail_id.clone());
+
         let play = button(
             row![
                 icons::icon(icons::PLAY, 14.0, t.bg),
@@ -3573,36 +4708,75 @@ impl App {
         .on_press(Message::PlayPlaylistAt(0))
         .style(primary_button(t));
 
-        let mut list = column![].spacing(2);
-        for (i, track) in pt.tracks.iter().enumerate() {
-            list = list.push(self.track_row(i, track, Message::PlayPlaylistAt(i)));
+        // Title row: editable for local playlists when renaming.
+        let renaming = local_id
+            .as_ref()
+            .map(|id| self.renaming_playlist.as_deref() == Some(id.as_str()))
+            .unwrap_or(false);
+        let title: Element<'_, Message> = if renaming {
+            row![
+                text_input("Playlist name…", &self.create_playlist_name)
+                    .on_input(Message::CreatePlaylistNameInput)
+                    .on_submit(Message::CommitRenamePlaylist)
+                    .padding(8)
+                    .size(20)
+                    .width(Length::Fixed(360.0))
+                    .style(text_input_style(t)),
+                icon_button(icons::PLAY, 16.0, t.accent, t, Message::CommitRenamePlaylist),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+            .into()
+        } else {
+            let mut tr = row![text(pt.name.clone()).size(24).style(tstyle(t.text))]
+                .spacing(10)
+                .align_y(Alignment::Center);
+            if let Some(id) = &local_id {
+                tr = tr.push(icon_button(icons::PENCIL, 16.0, t.muted, t, Message::StartRenamePlaylist(id.clone())));
+            }
+            tr.into()
+        };
+
+        let (first, end, top, bottom) = list_window(pt.tracks.len(), self.playlist_tracks_scroll, TRACK_ROW_H);
+        let mut list = column![];
+        if top > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(top)));
+        }
+        for (i, track) in pt.tracks[first..end].iter().enumerate() {
+            list = list.push(self.playlist_track_row(first + i, pt.tracks.len(), track, &local_id, &server_id));
+        }
+        if bottom > 0.0 {
+            list = list.push(container(text("")).height(Length::Fixed(bottom)));
         }
 
         column![
             back_button(t),
             column![
-                text(pt.name.clone()).size(24).style(tstyle(t.text)),
+                title,
                 text(format!("{} tracks", pt.tracks.len())).size(11).style(tstyle(t.muted)),
                 play,
             ]
             .spacing(8),
-            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::PlaylistTracksScrolled(v.absolute_offset().y)),
         ]
         .spacing(16)
         .into()
     }
 
-    fn nav_button(&self, _icon_src: &'static str, label: &'static str, target: View) -> Element<'_, Message> {
+    fn nav_button(&self, icon_src: &'static str, label: &'static str, target: View) -> Element<'_, Message> {
         let active = self.view == target;
         let t = self.tokens;
         let color = if active { t.accent } else { t.muted };
-        let mut content = text(label).size(13).style(tstyle(color));
+        let mut label_text = text(label).size(13).style(tstyle(color));
         if active {
-            content = content.font(iced::Font {
+            label_text = label_text.font(iced::Font {
                 weight: iced::font::Weight::Bold,
                 ..iced::Font::MONOSPACE
             });
         }
+        let content = row![icons::icon(icon_src, 16.0, color), label_text]
+            .spacing(10)
+            .align_y(Alignment::Center);
 
         button(content)
             .width(Length::Fill)
@@ -3756,12 +4930,13 @@ impl App {
                 .spacing(4),
                 self.home_recent_songs_view(),
                 self.home_recent_artists(),
-                self.home_section("RECENTLY PLAYED ALBUMS", &self.home_recent),
                 self.home_section("RANDOM PICKS", &self.home_random),
                 self.home_genres(),
             ]
-            .spacing(28),
+            .spacing(28)
+            .padding(iced::Padding { right: 16.0, ..iced::Padding::ZERO }),
         )
+        .width(Length::Fill)
         .height(Length::Fill)
         .direction(scrollable::Direction::Vertical(thin_scrollbar()))
         .style(thin_scroll_style(t))
@@ -3774,7 +4949,7 @@ impl App {
             return column![].into();
         }
         let mut cards = row![].spacing(12);
-        for play in self.home_recent_plays.iter().take(8) {
+        for play in self.home_recent_plays.iter().take(5) {
             let artist = play.artist_name.clone().unwrap_or_default();
             let card_content = column![
                 self.cover_image(play.cover_art_id.as_deref(), 130.0),
@@ -3825,10 +5000,24 @@ impl App {
         .into()
     }
 
-    fn home_recent_artists(&self) -> Element<'_, Message> {
-        let t = self.tokens;
+    /// Insert a decoded cover handle, evicting the oldest entries once the
+    /// in-memory budget is exceeded.
+    fn cache_cover(&mut self, id: String, handle: ImageHandle) {
+        if self.cover_cache.insert(id.clone(), handle).is_none() {
+            self.cover_cache_order.push_back(id);
+            while self.cover_cache_order.len() > MAX_COVER_HANDLES {
+                if let Some(old) = self.cover_cache_order.pop_front() {
+                    self.cover_cache.remove(&old);
+                }
+            }
+        }
+    }
+
+    /// Rebuild the deduplicated recent-artists list. Called when
+    /// `home_recent_plays` changes, not every frame.
+    fn recompute_home_recent_artists(&mut self) {
         let mut seen = std::collections::HashSet::new();
-        let artists: Vec<(String, String, Option<String>)> = self
+        self.home_recent_artists_cache = self
             .home_recent_plays
             .iter()
             .filter_map(|p| {
@@ -3841,13 +5030,17 @@ impl App {
                 }
             })
             .collect();
+    }
 
-        if artists.is_empty() {
+    fn home_recent_artists(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        if self.home_recent_artists_cache.is_empty() {
             return column![].into();
         }
 
         let mut cards = row![].spacing(12);
-        for (id, name, cover_art_id) in artists {
+        for (id, name, cover_art_id) in self.home_recent_artists_cache.iter().take(5) {
+            let (id, name, cover_art_id) = (id.clone(), name.clone(), cover_art_id.clone());
             cards = cards.push(
                 button(
                     column![
@@ -3920,7 +5113,7 @@ impl App {
             return column![].into();
         }
         let mut cards = row![].spacing(12);
-        for a in albums.iter().take(8) {
+        for a in albums.iter().take(5) {
             cards = cards.push(self.album_card(a));
         }
         column![
@@ -4184,18 +5377,24 @@ impl App {
         let song = if self.queue_idx >= 0 { self.queue.get(self.queue_idx as usize) } else { None };
 
         let cover = self.cover_image(song.and_then(|s| s.cover_art_id.as_deref()), 44.0);
-        let title = text(song.map(|s| s.title.clone()).unwrap_or_else(|| "No track selected".to_string()))
-            .size(13)
-            .style(tstyle(t.text))
-            .width(Length::Fill);
+        let title_text = song.map(|s| s.title.clone()).unwrap_or_else(|| "No track selected".to_string());
+        let mut title_col = column![text(title_text).size(13).style(tstyle(t.text))].spacing(2);
+        if let Some(s) = song {
+            let subtitle = match &s.track_info {
+                Some(info) if !info.is_empty() => format!("{} · {}", s.artist, info),
+                _ => s.artist.clone(),
+            };
+            title_col = title_col.push(text(subtitle).size(11).style(tstyle(t.muted)));
+        }
+        let title_col = title_col.width(Length::Fill);
         let volume = row![
             icons::icon(icons::VOLUME, 16.0, t.muted),
             slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01).width(Length::Fixed(55.0)).style(slider_style(t)),
         ]
         .spacing(6)
         .align_y(Alignment::Center);
-        let left = container(row![cover, title, volume].spacing(10).align_y(Alignment::Center))
-            .width(Length::Fixed(290.0));
+        let left = container(row![cover, title_col, volume].spacing(10).align_y(Alignment::Center))
+            .width(Length::Fixed(320.0));
 
         let dur = self.duration.unwrap_or(0.0).max(0.1) as f32;
         let pos = (self.position as f32).clamp(0.0, dur);
@@ -4213,22 +5412,28 @@ impl App {
         let playing = matches!(self.playback_state, PlaybackState::Playing);
         let pp_icon = if playing { icons::PAUSE } else { icons::PLAY };
         let repeat_color = if self.repeat_one || self.repeat_all { t.accent } else { t.muted };
+        let shuffle_color = if self.shuffle { t.accent } else { t.muted };
         let viz_color = if self.right_panel == Some(Panel::Visualizer) { t.accent } else { t.muted };
         let lyr_color = if self.right_panel == Some(Panel::Lyrics) { t.accent } else { t.muted };
         let q_color = if self.right_panel == Some(Panel::Queue) { t.accent } else { t.muted };
+        let sim_color = if self.right_panel == Some(Panel::Similar) { t.accent } else { t.muted };
+        let stats_color = if self.right_panel == Some(Panel::AudioStats) { t.accent } else { t.muted };
 
         let controls = row![
+            ctrl_button(icons::SHUFFLE, 15.0, shuffle_color, t, Message::ToggleShuffle),
             ctrl_button(icons::PREV, 15.0, t.text, t, Message::Prev),
             main_ctrl_button(pp_icon, 20.0, t, Message::TogglePlay),
             ctrl_button(icons::NEXT, 15.0, t.text, t, Message::Next),
             ctrl_button(icons::REPEAT, 16.0, repeat_color, t, Message::CycleRepeat),
             ctrl_button(icons::LYRICS, 16.0, lyr_color, t, Message::TogglePanel(Panel::Lyrics)),
             ctrl_button(icons::QUEUE, 16.0, q_color, t, Message::TogglePanel(Panel::Queue)),
+            ctrl_button(icons::HEXAGON, 16.0, sim_color, t, Message::TogglePanel(Panel::Similar)),
+            ctrl_button(icons::BAR_CHART, 16.0, stats_color, t, Message::TogglePanel(Panel::AudioStats)),
             ctrl_button(icons::WAVEFORM, 16.0, viz_color, t, Message::TogglePanel(Panel::Visualizer)),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
-        let right = container(controls).width(Length::Fixed(280.0));
+        let right = container(controls).width(Length::Fixed(410.0));
 
         column![
             container(text(""))
@@ -4401,7 +5606,7 @@ fn setting_toggle<'a>(label: &'a str, on: bool, on_toggle: fn(bool) -> Message, 
 
 fn icon_button<'a>(src: &'static str, size: f32, color: Color, t: Tokens, msg: Message) -> Element<'a, Message> {
     button(icons::icon(src, size, color))
-        .padding(6)
+        .padding(8)
         .on_press(msg)
         .style(move |_theme, status| {
             let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -4418,7 +5623,7 @@ fn icon_button<'a>(src: &'static str, size: f32, color: Color, t: Tokens, msg: M
 /// Circular player-control button (matches the old `.ctrl-btn` style).
 fn ctrl_button<'a>(src: &'static str, size: f32, color: Color, t: Tokens, msg: Message) -> Element<'a, Message> {
     button(icons::icon(src, size, color))
-        .padding(8)
+        .padding(10)
         .on_press(msg)
         .style(move |_theme, status| {
             let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -4449,10 +5654,56 @@ fn main_ctrl_button<'a>(src: &'static str, size: f32, t: Tokens, msg: Message) -
         .into()
 }
 
-/// Approximate album-row height (cover 44 + padding) and assumed viewport
-/// height, used by the windowed album list.
+/// Approximate row heights (cover/avatar + padding) and assumed viewport
+/// height, used by the windowed lists.
 const ALBUM_ROW_H: f32 = 60.0;
+const ARTIST_ROW_H: f32 = 60.0;
+const TRACK_ROW_H: f32 = 52.0;
 const VIEWPORT_H: f32 = 640.0;
+
+/// Max number of decoded cover-art image handles kept in memory at once.
+const MAX_COVER_HANDLES: usize = 512;
+
+/// Visible window for a virtualized list of `total` rows of height `row_h`,
+/// given the current `scroll` offset. Returns the first/last visible indices
+/// and the spacer heights that stand in for the off-screen rows so the
+/// scrollbar stays correct for large lists.
+fn list_window(total: usize, scroll: f32, row_h: f32) -> (usize, usize, f32, f32) {
+    let first = ((scroll / row_h).floor().max(0.0) as usize).min(total);
+    let count = (VIEWPORT_H / row_h).ceil() as usize + 4;
+    let end = (first + count).min(total);
+    let top = first as f32 * row_h;
+    let bottom = total.saturating_sub(end) as f32 * row_h;
+    (first, end, top, bottom)
+}
+
+fn rgb_to_color(c: crate::commands::cover_colors::Rgb) -> iced::Color {
+    iced::Color::from_rgb8(c.r, c.g, c.b)
+}
+
+/// Build the 8-stop gradient LUT the visualizer shaders expect, smoothly
+/// cycling `c0 -> c1 -> c2 -> c0` (the same 3-stop palette cycling the Android
+/// visualizer uses).
+fn ramp8(c0: iced::Color, c1: iced::Color, c2: iced::Color) -> Vec<iced::Color> {
+    let lerp = |a: iced::Color, b: iced::Color, t: f32| iced::Color {
+        r: a.r + (b.r - a.r) * t,
+        g: a.g + (b.g - a.g) * t,
+        b: a.b + (b.b - a.b) * t,
+        a: a.a + (b.a - a.a) * t,
+    };
+    (0..8)
+        .map(|i| {
+            let t = i as f32 / 8.0;
+            if t < 1.0 / 3.0 {
+                lerp(c0, c1, t * 3.0)
+            } else if t < 2.0 / 3.0 {
+                lerp(c1, c2, (t - 1.0 / 3.0) * 3.0)
+            } else {
+                lerp(c2, c0, (t - 2.0 / 3.0) * 3.0)
+            }
+        })
+        .collect()
+}
 
 fn text_input_style(t: Tokens) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
     move |_theme, status| {
@@ -4473,7 +5724,8 @@ fn text_input_style(t: Tokens) -> impl Fn(&Theme, text_input::Status) -> text_in
 }
 
 fn slider_style(t: Tokens) -> impl Fn(&Theme, slider::Status) -> slider::Style {
-    move |_theme, _status| {
+    move |_theme, status| {
+        let active = matches!(status, slider::Status::Hovered | slider::Status::Dragged);
         slider::Style {
             rail: slider::Rail {
                 backgrounds: (
@@ -4484,26 +5736,26 @@ fn slider_style(t: Tokens) -> impl Fn(&Theme, slider::Status) -> slider::Style {
                 border: Border { radius: 10.0.into(), ..Border::default() },
             },
             handle: slider::Handle {
-                shape: slider::HandleShape::Circle { radius: 7.0 },
+                shape: slider::HandleShape::Circle { radius: if active { 8.5 } else { 7.0 } },
                 background: Background::Color(t.accent),
-                border_width: 0.0,
-                border_color: Color::TRANSPARENT,
+                border_width: if active { 1.0 } else { 0.0 },
+                border_color: if active { t.bg } else { Color::TRANSPARENT },
             },
         }
     }
 }
 
 fn thin_scrollbar() -> scrollable::Scrollbar {
-    scrollable::Scrollbar::new().width(4).scroller_width(3)
+    scrollable::Scrollbar::new().width(10).margin(2).scroller_width(5)
 }
 
 fn thin_scroll_style(t: Tokens) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
     move |_, _| {
         let rail = scrollable::Rail {
-            background: None,
-            border: Border::default(),
+            background: Some(Background::Color(Color { a: 0.08, ..t.muted })),
+            border: Border { radius: 3.0.into(), ..Border::default() },
             scroller: scrollable::Scroller {
-                background: Background::Color(Color { a: 0.35, ..t.muted }),
+                background: Background::Color(Color { a: 0.55, ..t.muted }),
                 border: Border { radius: 3.0.into(), ..Border::default() },
             },
         };
@@ -4646,4 +5898,47 @@ fn bus_stream(data: &BusSub) -> impl iced::futures::Stream<Item = Message> {
             }
         }
     })
+}
+
+/// Decode a cover art file and bake rounded corners into the RGBA pixels.
+/// The corner radius is scaled proportionally so that images displayed at
+/// 130 px get ~28 px visual radius regardless of the source file's native size.
+fn load_rounded_cover(path: &str) -> ImageHandle {
+    let img = match image::open(path) {
+        Ok(i) => i.into_rgba8(),
+        Err(_) => return ImageHandle::from_path(path),
+    };
+    let w = img.width();
+    let h = img.height();
+    let r = (14.0 * (w.min(h) as f32 / 130.0))
+        .min(w as f32 / 2.0)
+        .min(h as f32 / 2.0);
+    let mut pixels = img.into_raw();
+    for y in 0..h {
+        for x in 0..w {
+            let xf = x as f32 + 0.5;
+            let yf = y as f32 + 0.5;
+            let wf = w as f32;
+            let hf = h as f32;
+            let outside = if xf < r && yf < r {
+                let (dx, dy) = (r - xf, r - yf);
+                dx * dx + dy * dy > r * r
+            } else if xf > wf - r && yf < r {
+                let (dx, dy) = (xf - (wf - r), r - yf);
+                dx * dx + dy * dy > r * r
+            } else if xf < r && yf > hf - r {
+                let (dx, dy) = (r - xf, yf - (hf - r));
+                dx * dx + dy * dy > r * r
+            } else if xf > wf - r && yf > hf - r {
+                let (dx, dy) = (xf - (wf - r), yf - (hf - r));
+                dx * dx + dy * dy > r * r
+            } else {
+                false
+            };
+            if outside {
+                pixels[((y * w + x) * 4 + 3) as usize] = 0;
+            }
+        }
+    }
+    ImageHandle::from_rgba(w, h, pixels)
 }

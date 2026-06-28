@@ -43,9 +43,14 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
         super.onDestroy()
     }
 
-    // Allow any caller to browse. Firmium's library structure is not sensitive; transport still
-    // requires the shared session. A later refinement can validate caller signatures.
-    override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot {
+    // The service is exported so the system media browsers (Android Auto, Wear, Assistant) can
+    // bind. Restrict the browse tree to those known callers plus ourselves so an arbitrary app
+    // can't enumerate the user's library; returning null denies the bind. Transport still also
+    // requires the shared session.
+    override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot? {
+        if (clientPackageName != packageName && clientPackageName !in ALLOWED_BROWSER_PACKAGES) {
+            return null
+        }
         val extras = Bundle().apply {
             putBoolean(CONTENT_STYLE_SUPPORTED, true)
             putBoolean(SEARCH_SUPPORTED, true)
@@ -221,5 +226,15 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
         const val CONTENT_STYLE_PLAYABLE_HINT = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT"
         const val CONTENT_STYLE_LIST = 1
         const val CONTENT_STYLE_GRID = 2
+
+        // System media browsers permitted to bind and enumerate the library.
+        val ALLOWED_BROWSER_PACKAGES = setOf(
+            "com.google.android.projection.gearhead", // Android Auto
+            "com.google.android.carassistant",        // Android Automotive / Assistant Driving Mode
+            "com.google.android.googlequicksearchbox", // Google Assistant
+            "com.google.android.wearable.app",        // Wear OS companion
+            "com.android.bluetooth",                  // Car/headunit Bluetooth media browsing
+            "com.android.systemui",
+        )
     }
 }

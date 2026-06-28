@@ -36,6 +36,8 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Album detail pages with full track list | ✅ | ✅ |
 | Search across your whole library | ✅ | ✅ |
 | Track ratings — 1-5 star rating on tracks, synced to your server | ✅ | ✅ |
+| Community average rating — see how other listeners on your server rated a track, shown next to your own rating | ✅ | ✅ |
+| Filter search results by minimum rating (yours or the server-wide average, whichever is higher) | ✅ | ✅ |
 | Genre and decade filter chips on the album list | ✅ | ✅ |
 | BPM range filter on track lists (album detail, playlists) | ✅ | ✅ |
 
@@ -46,6 +48,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | Create and delete playlists | ✅ | ✅ |
+| Rename playlists | ✅ | ✅ |
 | Add and remove tracks | ✅ | ✅ |
 | Reorder tracks (move up / move down) | ✅ | ✅ |
 | Shuffle play a playlist | ✅ | ✅ |
@@ -101,6 +104,19 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 ---
 
+## Podcasts
+
+| Feature | Desktop | Android |
+|---|:---:|:---:|
+| Subscribe to a podcast by RSS feed URL | ✅ | ✅ |
+| Browse subscribed channels and episode lists | ✅ | ✅ |
+| Play episodes through the regular player | ✅ | ✅ |
+| Resume playback from where you left off in an episode | ✅ | ✅ |
+| Manually refresh a channel for new episodes | ✅ | ✅ |
+| Unsubscribe | ✅ | ✅ |
+
+---
+
 ## Audio Visualizer
 
 | Feature | Desktop | Android |
@@ -113,6 +129,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Beat-reactive bloom and pulse — effects intensify on bass hits | ✅ | ❌ |
 | Toggle visualizer on/off | ✅ | ✅ |
 | Switch visualizer mode from the panel header | ✅ | ✅ |
+| Visualizer colors follow the album artwork (desktop: toggle in Settings, falls back to theme colors; Android: always-on) | ✅ | ✅ |
 
 ---
 

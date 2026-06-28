@@ -34,6 +34,10 @@ impl AppState {
             connection: RwLock::new(ConnectionState::default()),
             http: reqwest::Client::builder()
                 .user_agent("Firmium")
+                // Defaults already validate certs; pin it explicitly so a future refactor
+                // can't silently weaken TLS verification.
+                .danger_accept_invalid_certs(false)
+                .danger_accept_invalid_hostnames(false)
                 .build()
                 .expect("failed to build reqwest client"),
             local_library: RwLock::new(None),

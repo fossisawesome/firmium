@@ -16,7 +16,13 @@ use std::sync::Arc;
 pub(crate) fn sanitize_path_component(name: &str) -> String {
     let cleaned: String = name.chars().map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
     let trimmed = cleaned.trim();
-    if trimmed.is_empty() { "Unknown".to_string() } else { trimmed.to_string() }
+    // Reject empty or all-dot components (".", "..", …): a server-controlled "../.." would
+    // otherwise let PathBuf::join walk out of local_library_dir(). Also strip a leading dot
+    // so server data can't create hidden files.
+    if trimmed.is_empty() || trimmed.chars().all(|c| c == '.') {
+        return "Unknown".to_string();
+    }
+    trimmed.trim_start_matches('.').to_string()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -83,12 +89,13 @@ pub async fn download_track(
         Some(n) => format!("{n:02} - {title}"),
         None => title,
     };
-    let file_name = format!("{}.{}", sanitize_path_component(&file_stem), ext);
+    let file_name = format!("{}.{}", sanitize_path_component(&file_stem), sanitize_path_component(&ext));
 
     let dir = local_library_dir()
         .join(sanitize_path_component(&album_artist))
         .join(sanitize_path_component(&album));
     let path = dir.join(file_name);
+    #[cfg(debug_assertions)]
     eprintln!("Downloading track to {}", path.display());
 
     let bytes = res.bytes().await.map_err(|e| e.to_string())?;

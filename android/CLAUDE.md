@@ -1,6 +1,6 @@
 # CLAUDE.md (Android)
 
-Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../CLAUDE.md) for project-wide conventions, principles, and desktop (Tauri/Svelte) architecture.
+Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../CLAUDE.md) for project-wide conventions, principles, and desktop (iced-rs/Rust) architecture.
 
 ## Tech Stack
 
@@ -14,7 +14,7 @@ Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../C
 
 ## Architecture (android/app/src/main/java/com/fossisawesome/firmium/)
 
-Native Kotlin/Compose app, independent of Tauri build, sharing OpenSubsonic API contract with desktop. Second Gradle module, `wear/`, is Wear OS companion (remote control for phone playback over Wearable Data Layer); shares phone's `applicationId` but no code.
+Native Kotlin/Compose app, independent of the desktop iced/Rust build, sharing OpenSubsonic API contract with desktop. Second Gradle module, `wear/`, is Wear OS companion (remote control for phone playback over Wearable Data Layer); shares phone's `applicationId` but no code.
 
 - **MainActivity.kt / FirmiumApplication.kt**: App entry points
 - **viewmodel/**: `AuthViewModel`, `LibraryViewModel`, `PlayerViewModel`, `PlaylistViewModel`, `SearchViewModel` — state holders feeding Compose UI

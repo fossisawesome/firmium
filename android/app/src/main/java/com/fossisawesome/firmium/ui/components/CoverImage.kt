@@ -14,10 +14,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
+import coil.request.ImageRequest
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 
 // Consistent cover art image with a music note placeholder behind it.
@@ -35,13 +38,24 @@ fun CoverImage(
 
     var isLoading by remember(url) { mutableStateOf(!url.isNullOrBlank()) }
 
+    val context = LocalContext.current
+    // For fixed-size covers (grid thumbnails), decode to the display size so large
+    // server art isn't kept full-resolution in memory. Full-bleed covers (size == null)
+    // fall back to Coil sizing the request to the layout constraints.
+    val targetPx = if (size != null) with(LocalDensity.current) { size.roundToPx() } else null
+
     Box(mod) {
         // Music-note placeholder always rendered underneath; AsyncImage covers it once loaded.
         PlaceholderCover(Modifier.fillMaxSize())
 
         if (!url.isNullOrBlank()) {
+            val model = if (targetPx != null) {
+                remember(url, targetPx) {
+                    ImageRequest.Builder(context).data(url).size(targetPx).build()
+                }
+            } else url
             AsyncImage(
-                model = url,
+                model = model,
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,

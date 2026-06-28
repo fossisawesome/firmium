@@ -17,3 +17,4 @@ pub mod local_library;
 pub mod downloads;
 pub mod listenbrainz;
 pub mod stats;
+pub mod playlists;

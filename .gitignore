@@ -29,3 +29,6 @@ Thumbs.db
 # misc
 extra
 scripts
+
+# superpowers scratch artifacts (plans/specs), not meant for repo
+docs/superpowers/

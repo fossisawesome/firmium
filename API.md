@@ -85,10 +85,10 @@ Returns the libraries accessible to the authenticated user. Each entry has `id` 
 Returns all artists grouped alphabetically by initial letter. Filters to album artists by default. Includes `lastModified` timestamps for client-side cache invalidation (derived from scan time).
 
 #### `getArtist`
-Returns a single artist with all associated albums. Used by `ArtistDetail.svelte` via `api.ts`.
+Returns a single artist with all associated albums. Used by the artists view in `src/app.rs`.
 
 #### `getAlbum`
-Returns album metadata and full track listing. Used by `AlbumDetail.svelte`.
+Returns album metadata and full track listing. Used by the album detail view in `src/app.rs`.
 
 #### `getAlbumList` / `getAlbumList2`
 Returns curated album lists. Supported `type` values:
@@ -199,7 +199,7 @@ Firmium calls `scrobble` via `commands/subsonic.rs::scrobble()`. This updates th
 
 **Smart playlists** are read-only; Navidrome re-evaluates their contents automatically based on refresh interval. They include a `validUntil` field.
 
-Firmium exposes playlist CRUD via `PlaylistsView.svelte` and `PlaylistDetail.svelte`, backed by `api.ts` wrappers.
+Firmium exposes playlist CRUD via the playlists view in `src/app.rs`, backed by `backend/commands/subsonic.rs`.
 
 ---
 
@@ -290,7 +290,7 @@ Matches by song ID. Returns structured format with timed lines (LRC-compatible) 
 
 ## OpenSubsonic Extensions
 
-Navidrome advertises supported extensions via `getOpenSubsonicExtensions` and includes the `openSubsonicExtensions` field in every response. Firmium detects this and stores it in the `openSubsonicExtensions` Svelte store. When absent, Firmium degrades gracefully and the Settings page shows a "Subsonic" badge instead of "OpenSubsonic".
+Navidrome advertises supported extensions via `getOpenSubsonicExtensions` and includes the `openSubsonicExtensions` field in every response. Firmium detects this and stores it in `AppState`'s `ConnectionState` (`backend/state.rs`). When absent, Firmium degrades gracefully and the Settings page shows a "Subsonic" badge instead of "OpenSubsonic".
 
 Tracking issue for all extensions: [navidrome/navidrome#2695](https://github.com/navidrome/navidrome/issues/2695).
 
@@ -457,9 +457,8 @@ These are intentional differences from the standard Subsonic spec to keep in min
 
 ## Firmium-Specific Notes
 
-- **Auth token generation**: `src-tauri/src/commands/auth.rs::generate_auth_params()` — produces `t`, `s` for every request
-- **Request builder**: `src-tauri/src/commands/subsonic.rs::subsonic_request()` — attaches all required params, handles 401/error 40/41
-- **URL builder**: `src/lib/api.ts::OpenSubsonicRouter` — constructs cover art and stream URLs for the frontend
-- **Streaming**: `src-tauri/src/audio/streaming_reader.rs` — keeps the connection alive so Navidrome tracks "Now Playing"
-- **Cover cache**: `src-tauri/src/commands/cover_cache.rs` — avoids redundant `getCoverArt` calls
+- **Auth token generation**: `backend/commands/auth.rs::generate_auth_params()` — produces `t`, `s` for every request
+- **Request builder**: `backend/commands/subsonic.rs::subsonic_request()` — attaches all required params, handles 401/error 40/41
+- **Streaming**: `backend/audio/streaming_reader.rs` — keeps the connection alive so Navidrome tracks "Now Playing"
+- **Cover cache**: `backend/commands/cover_cache.rs` — avoids redundant `getCoverArt` calls
 - **Lyrics cascade**: `get_song_lyrics()` → OpenSubsonic structured → legacy → LRCLIB

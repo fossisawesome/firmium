@@ -30,7 +30,7 @@ fun FirmiumSlider(
     onValueChangeFinished: (() -> Unit)? = null,
 ) {
     val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
-    val thumbDiameter = 14.dp
+    val thumbDiameter = 20.dp
     val thumbRadius = thumbDiameter / 2
     // rememberUpdatedState lets the running pointerInput coroutine always call the
     // latest lambda without restarting the coroutine on every recomposition.
@@ -102,7 +102,7 @@ fun FirmiumSeekBar(
     fillColor: Color,
 ) {
     val fraction = progress.coerceIn(0f, 1f)
-    val thumbDiameter = 12.dp
+    val thumbDiameter = 20.dp
     val thumbRadius = thumbDiameter / 2
 
     BoxWithConstraints(

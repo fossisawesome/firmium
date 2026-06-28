@@ -74,6 +74,9 @@ impl AudioPlayer {
 
         let http_client = reqwest::blocking::Client::builder()
             .user_agent(concat!("firmium-desktop/", env!("CARGO_PKG_VERSION")))
+            // Pin TLS verification explicitly (default is on) so it can't be weakened by accident.
+            .danger_accept_invalid_certs(false)
+            .danger_accept_invalid_hostnames(false)
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
@@ -234,7 +237,10 @@ impl AudioPlayer {
                         }
                     }
 
-                    let gain_factor = replay_gain_db.map(|db| (10f32).powf(db / 20.0).clamp(0.01, 4.0)).unwrap_or(1.0);
+                    let gain_factor = replay_gain_db
+                        .filter(|db| db.is_finite())
+                        .map(|db| (10f32).powf(db / 20.0).clamp(0.01, 4.0))
+                        .unwrap_or(1.0);
                     let cancel = Arc::new(AtomicBool::new(false));
                     let (seek_tx, seek_rx) = std::sync::mpsc::sync_channel(1);
                     *session.cancel.lock() = Arc::clone(&cancel);

@@ -15,12 +15,15 @@ import com.fossisawesome.firmium.data.db.FirmiumDatabase
 import com.fossisawesome.firmium.data.db.PlayHistoryRepository
 import com.fossisawesome.firmium.data.download.DownloadManager
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
+import com.fossisawesome.firmium.data.podcast.PodcastRepository
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
 import com.fossisawesome.firmium.wear.WearStateSync
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okio.Path.Companion.toOkioPath
 import java.io.File
@@ -38,6 +41,8 @@ class FirmiumApplication : Application() {
     val playlists by lazy { PlaylistRepository(prefs, api) }
     // Local play-history store (Room) — powers Stats Export and Firmium Recap.
     val playHistory by lazy { PlayHistoryRepository(FirmiumDatabase.get(this).playDao()) }
+    // Local-only podcast subscriptions (RSS, client-side — Navidrome has no podcast API).
+    val podcasts by lazy { PodcastRepository(FirmiumDatabase.get(this).podcastDao()) }
     val audioPlayer by lazy { AudioPlayer(this) }
     val nowPlaying by lazy { NowPlayingController(this) }
     // App-scoped playback orchestration shared by the phone UI (PlayerViewModel) and Android Auto
@@ -45,6 +50,8 @@ class FirmiumApplication : Application() {
     val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists, secureStorage, playHistory) }
     // Mirrors now-playing state to a paired Wear OS watch and applies its transport commands.
     val wearSync by lazy { WearStateSync(this) }
+    // App-lifetime scope for background work (cancelable, unlike GlobalScope).
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -72,9 +79,8 @@ class FirmiumApplication : Application() {
 
         // Pre-scan local files so PlayerViewModel can prefer downloaded tracks over streaming
         // and DownloadManager can skip already-downloaded songs — even in server mode.
-        @Suppress("OPT_IN_USAGE")
-        GlobalScope.launch(Dispatchers.IO) {
-            try { localLibrary.prewarm() } catch (_: Exception) {}
+        appScope.launch {
+            try { localLibrary.prewarm() } catch (e: Exception) { Log.w("Firmium", "prewarm failed", e) }
         }
     }
 }

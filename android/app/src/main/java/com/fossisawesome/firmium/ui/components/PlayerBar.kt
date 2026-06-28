@@ -87,7 +87,7 @@ fun PlayerBar(
                 }
             }
             Spacer(Modifier.width(4.dp))
-            FirmiumIconButton(onClick = onShuffleToggle, modifier = Modifier.size(40.dp)) {
+            FirmiumIconButton(onClick = onShuffleToggle, modifier = Modifier.size(44.dp)) {
                 FirmiumIcon(Icons.Default.Shuffle, contentDescription = "Shuffle",
                     tint = if (state.shuffleEnabled) colors.accent else colors.muted,
                     modifier = Modifier.size(18.dp))
@@ -112,7 +112,7 @@ fun PlayerBar(
                     tint = if (state.hasNext) colors.text else colors.muted)
             }
             Box(contentAlignment = Alignment.TopEnd) {
-                FirmiumIconButton(onClick = onRepeatCycle, modifier = Modifier.size(40.dp)) {
+                FirmiumIconButton(onClick = onRepeatCycle, modifier = Modifier.size(44.dp)) {
                     FirmiumIcon(
                         imageVector = if (state.repeatMode == "one") Icons.Default.RepeatOne else Icons.Default.Repeat,
                         contentDescription = "Repeat",

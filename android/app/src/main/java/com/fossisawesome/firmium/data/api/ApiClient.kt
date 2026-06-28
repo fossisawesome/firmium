@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import android.util.Log
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
@@ -31,7 +32,12 @@ class ApiClient(private val auth: AuthManager) {
             // BASIC logging includes the request URL, which carries the OpenSubsonic
             // auth token (t=) and salt (s=) as query params — keep this out of release logcat.
             if (BuildConfig.DEBUG) {
-                addInterceptor(HttpLoggingInterceptor().apply {
+                val redactingLogger = HttpLoggingInterceptor.Logger { message ->
+                    // Strip the auth token (t=) and salt (s=) from logged URLs even in debug.
+                    val safe = message.replace(Regex("([?&](?:t|s)=)[^&\\s]+"), "$1<redacted>")
+                    Log.d("Firmium/OkHttp", safe)
+                }
+                addInterceptor(HttpLoggingInterceptor(redactingLogger).apply {
                     level = HttpLoggingInterceptor.Level.BASIC
                 })
             }
@@ -71,11 +77,11 @@ class ApiClient(private val auth: AuthManager) {
             val data = root.getAsJsonObject("subsonic-response")
                        ?: error("Invalid response from $action")
             data.getAsJsonArray("openSubsonicExtensions")?.let { extensions ->
-                openSubsonicExtensions = extensions.mapNotNull { it.asJsonObject.get("name")?.asString }.toSet()
+                openSubsonicExtensions = extensions.mapNotNull { it.asJsonObject.optString("name") }.toSet()
             }
-            if (data.get("status")?.asString != "ok") {
-                val code = data.getAsJsonObject("error")?.get("code")?.asInt
-                val msg = data.getAsJsonObject("error")?.get("message")?.asString
+            if (data.optString("status") != "ok") {
+                val code = data.getAsJsonObject("error")?.optInt("code")
+                val msg = data.getAsJsonObject("error")?.optString("message")
                 if (code == 40 || code == 41) { _sessionExpired.tryEmit(Unit); throw SessionExpiredException() }
                 error("Subsonic error $code: $msg")
             }
@@ -85,8 +91,11 @@ class ApiClient(private val auth: AuthManager) {
 
     // ── Albums ─────────────────────────────────────────────────────────────────
 
-    // Fetches alphabetical album list with up to 500 entries per page.
-    suspend fun getAlbums(): List<Album> {
+    // Fetches alphabetical album list with up to 500 entries per page. When
+    // onPage is supplied it is invoked after each page with the accumulated
+    // list so callers can render the first page without waiting for the whole
+    // library to paginate.
+    suspend fun getAlbums(onPage: (suspend (List<Album>) -> Unit)? = null): List<Album> {
         val results = mutableListOf<Album>()
         var offset = 0
         while (true) {
@@ -100,6 +109,7 @@ class ApiClient(private val auth: AuthManager) {
                 ?.map { parseAlbum(it.asJsonObject) }
                 ?: break
             results.addAll(albums)
+            onPage?.invoke(results.toList())
             if (albums.size < 500) break
             offset += 500
         }
@@ -172,9 +182,9 @@ class ApiClient(private val auth: AuthManager) {
 
         // Attempt to fetch bio from getArtistInfo2 (may fail on servers without Last.fm integration).
         val info = infoDeferred.await()?.getAsJsonObject("artistInfo2")
-        val bio = info?.get("biography")?.asString
-        val imageUrl = info?.get("largeImageUrl")?.asString
-            ?: info?.get("mediumImageUrl")?.asString
+        val bio = info?.optString("biography")
+        val imageUrl = info?.optString("largeImageUrl")
+            ?: info?.optString("mediumImageUrl")
 
         ArtistDetail(artist, albums, bio, imageUrl)
     }
@@ -209,10 +219,10 @@ class ApiClient(private val auth: AuthManager) {
         val data = fetch("getPlaylist", mapOf("id" to id))
         val playlist = data.getAsJsonObject("playlist") ?: JsonObject()
         return ServerPlaylistTracks(
-            id = playlist.get("id")?.asString ?: "",
-            name = playlist.get("name")?.asString ?: "",
-            comment = playlist.get("comment")?.asString ?: "",
-            songCount = playlist.get("songCount")?.asInt ?: 0,
+            id = playlist.optString("id") ?: "",
+            name = playlist.optString("name") ?: "",
+            comment = playlist.optString("comment") ?: "",
+            songCount = playlist.optInt("songCount") ?: 0,
             tracks = jsonArray(playlist, "entry").map { parseSong(it.asJsonObject) },
         )
     }
@@ -252,11 +262,11 @@ class ApiClient(private val auth: AuthManager) {
     }
 
     private fun parsePlaylist(obj: JsonObject): ServerPlaylist = ServerPlaylist(
-        id = obj.get("id")?.asString ?: "",
-        name = obj.get("name")?.asString ?: "",
-        comment = obj.get("comment")?.asString,
-        songCount = obj.get("songCount")?.asInt ?: 0,
-        coverArt = obj.get("coverArt")?.asString,
+        id = obj.optString("id") ?: "",
+        name = obj.optString("name") ?: "",
+        comment = obj.optString("comment"),
+        songCount = obj.optInt("songCount") ?: 0,
+        coverArt = obj.optString("coverArt"),
     )
 
     // ── Scrobble ───────────────────────────────────────────────────────────────
@@ -311,7 +321,7 @@ class ApiClient(private val auth: AuthManager) {
         return data.getAsJsonArray("sonicMatch")
             ?.map {
                 val obj = it.asJsonObject
-                SimilarMatch(parseSong(obj.getAsJsonObject("entry")), obj.get("similarity")?.asDouble ?: 0.0)
+                SimilarMatch(parseSong(obj.getAsJsonObject("entry")), obj.optDouble("similarity") ?: 0.0)
             }
             ?: emptyList()
     }
@@ -338,7 +348,7 @@ class ApiClient(private val auth: AuthManager) {
                 val data = fetch("getArtistInfo2", mapOf("id" to artistId, "count" to "5"))
                 val similarArtists = data.getAsJsonObject("artistInfo2")?.getAsJsonArray("similarArtist") ?: emptyList()
                 for (similar in similarArtists.take(3)) {
-                    val name = similar.asJsonObject.get("name")?.asString ?: continue
+                    val name = similar.asJsonObject.optString("name") ?: continue
                     try {
                         val topData = fetch("getTopSongs", mapOf("artist" to name, "count" to "2"))
                         topData.getAsJsonObject("topSongs")?.getAsJsonArray("song")?.forEach {
@@ -386,7 +396,7 @@ class ApiClient(private val auth: AuthManager) {
         return try {
             val data = fetch("getArtistInfo2", mapOf("id" to artistId, "count" to count.toString()))
             data.getAsJsonObject("artistInfo2")?.getAsJsonArray("similarArtist")
-                ?.mapNotNull { it.asJsonObject.get("name")?.asString } ?: emptyList()
+                ?.mapNotNull { it.asJsonObject.optString("name") } ?: emptyList()
         } catch (_: Exception) { emptyList() }
     }
 
@@ -394,7 +404,7 @@ class ApiClient(private val auth: AuthManager) {
     suspend fun getGenres(): List<String> {
         val data = fetch("getGenres")
         return data.getAsJsonObject("genres")?.getAsJsonArray("genre")
-            ?.mapNotNull { it.asJsonObject.get("value")?.asString }
+            ?.mapNotNull { it.asJsonObject.optString("value") }
             ?.filter { it.isNotBlank() }
             ?: emptyList()
     }
@@ -412,7 +422,7 @@ class ApiClient(private val auth: AuthManager) {
                 val body = resp.body?.string() ?: return@withContext emptyList()
                 JsonParser.parseString(body).asJsonObject
                     .getAsJsonObject("similarartists")?.getAsJsonArray("artist")
-                    ?.mapNotNull { it.asJsonObject.get("name")?.asString } ?: emptyList()
+                    ?.mapNotNull { it.asJsonObject.optString("name") } ?: emptyList()
             }
         } catch (_: Exception) { emptyList() }
     }
@@ -477,12 +487,12 @@ class ApiClient(private val auth: AuthManager) {
                 ?.getAsJsonArray("structuredLyrics")
                 ?.firstOrNull()?.asJsonObject
                 ?: return@tryFetchLyrics null
-            val synced = lyricsObj.get("synced")?.asBoolean ?: false
+            val synced = lyricsObj.optBoolean("synced") ?: false
             val lines = lyricsObj.getAsJsonArray("line")?.map { line ->
                 val obj = line.asJsonObject
                 LyricLine(
-                    startMs = if (synced) obj.get("start")?.asLong else null,
-                    text = obj.get("value")?.asString ?: "",
+                    startMs = if (synced) obj.optLong("start") else null,
+                    text = obj.optString("value") ?: "",
                 )
             } ?: emptyList()
             if (lines.isNotEmpty()) LyricsResult(lines, synced) else null
@@ -491,7 +501,7 @@ class ApiClient(private val auth: AuthManager) {
         // 2. Legacy getLyrics endpoint (Subsonic, no timestamps).
         tryFetchLyrics {
             val data = fetch("getLyrics", mapOf("artist" to artist, "title" to title))
-            val text = data.getAsJsonObject("lyrics")?.get("value")?.asString
+            val text = data.getAsJsonObject("lyrics")?.optString("value")
             if (text.isNullOrBlank()) return@tryFetchLyrics null
             val lines = text.lines().map { LyricLine(null, it) }
             if (lines.isNotEmpty()) LyricsResult(lines, false) else null
@@ -517,12 +527,12 @@ class ApiClient(private val auth: AuthManager) {
                 }
                 if (body == null || !isSuccessful) return@tryFetchLyrics null
                 val obj = JsonParser.parseString(body).asJsonObject
-                val synced = obj.get("syncedLyrics")?.takeIf { !it.isJsonNull }?.asString
+                val synced = obj.optString("syncedLyrics")
                 if (!synced.isNullOrBlank()) {
                     val result = parseLrc(synced)
                     if (result.lines.isNotEmpty()) return@tryFetchLyrics result
                 }
-                val plain = obj.get("plainLyrics")?.takeIf { !it.isJsonNull }?.asString
+                val plain = obj.optString("plainLyrics")
                 if (!plain.isNullOrBlank()) {
                     val lines = plain.lines().map { LyricLine(null, it) }
                     if (lines.isNotEmpty()) LyricsResult(lines, false) else null
@@ -549,70 +559,81 @@ class ApiClient(private val auth: AuthManager) {
 
     // ── JSON parsers ───────────────────────────────────────────────────────────
 
+    // Gson's JsonObject.get(key) returns a non-null JsonNull element when a field is
+    // present-but-null (e.g. OpenSubsonic servers emitting "year": null). Kotlin's ?.
+    // doesn't short-circuit on that — only on a true Kotlin null — so .asInt/.asString
+    // would throw UnsupportedOperationException. These treat JsonNull as absent.
+    private fun JsonObject.optString(key: String): String? = get(key)?.takeIf { !it.isJsonNull }?.asString
+    private fun JsonObject.optInt(key: String): Int? = get(key)?.takeIf { !it.isJsonNull }?.asInt
+    private fun JsonObject.optLong(key: String): Long? = get(key)?.takeIf { !it.isJsonNull }?.asLong
+    private fun JsonObject.optBoolean(key: String): Boolean? = get(key)?.takeIf { !it.isJsonNull }?.asBoolean
+    private fun JsonObject.optDouble(key: String): Double? = get(key)?.takeIf { !it.isJsonNull }?.asDouble
+
     private fun parseAlbum(obj: JsonObject): Album {
         val genres = obj.getAsJsonArray("genres")
-            ?.mapNotNull { it.asJsonObject.get("name")?.asString }
+            ?.mapNotNull { it.asJsonObject.optString("name") }
             ?: emptyList()
         val releaseType = inferReleaseType(
             obj.get("releaseTypes")?.let {
                 if (it.isJsonArray) it.asJsonArray.mapNotNull { t -> t.asString } else null
             },
-            obj.get("isCompilation")?.asBoolean ?: false,
+            obj.optBoolean("isCompilation") ?: false,
         )
         return Album(
             id = obj.get("id").asString,
             name = obj.get("name").asString,
-            artist = obj.get("artist")?.asString ?: "",
-            artistId = obj.get("artistId")?.asString ?: "",
-            coverArt = obj.get("coverArt")?.asString,
-            songCount = obj.get("songCount")?.asInt ?: 0,
-            duration = obj.get("duration")?.asInt ?: 0,
-            year = obj.get("year")?.asInt,
-            genre = obj.get("genre")?.asString,
+            artist = obj.optString("artist") ?: "",
+            artistId = obj.optString("artistId") ?: "",
+            coverArt = obj.optString("coverArt"),
+            songCount = obj.optInt("songCount") ?: 0,
+            duration = obj.optInt("duration") ?: 0,
+            year = obj.optInt("year"),
+            genre = obj.optString("genre"),
             genres = genres,
             releaseType = releaseType,
-            isCompilation = obj.get("isCompilation")?.asBoolean ?: false,
+            isCompilation = obj.optBoolean("isCompilation") ?: false,
         )
     }
 
     private fun parseSong(obj: JsonObject): Song {
         val replayGain = obj.getAsJsonObject("replayGain")
         val genres = obj.getAsJsonArray("genres")
-            ?.mapNotNull { it.asJsonObject.get("name")?.asString }
+            ?.mapNotNull { it.asJsonObject.optString("name") }
             ?: emptyList()
         return Song(
             id = obj.get("id").asString,
-            title = obj.get("title")?.asString ?: "",
-            artist = obj.get("artist")?.asString ?: "",
-            displayArtist = obj.get("displayArtist")?.asString,
-            album = obj.get("album")?.asString ?: "",
-            albumId = obj.get("albumId")?.asString ?: "",
-            artistId = obj.get("artistId")?.asString ?: "",
-            duration = obj.get("duration")?.asInt ?: 0,
-            track = obj.get("track")?.asInt,
-            year = obj.get("year")?.asInt,
-            genre = obj.get("genre")?.asString,
+            title = obj.optString("title") ?: "",
+            artist = obj.optString("artist") ?: "",
+            displayArtist = obj.optString("displayArtist"),
+            album = obj.optString("album") ?: "",
+            albumId = obj.optString("albumId") ?: "",
+            artistId = obj.optString("artistId") ?: "",
+            duration = obj.optInt("duration") ?: 0,
+            track = obj.optInt("track"),
+            year = obj.optInt("year"),
+            genre = obj.optString("genre"),
             genres = genres,
-            coverArt = obj.get("coverArt")?.asString,
-            size = obj.get("size")?.asLong,
-            bitRate = obj.get("bitRate")?.asInt,
-            samplingRate = obj.get("samplingRate")?.asInt,
-            bitDepth = obj.get("bitDepth")?.asInt,
-            suffix = obj.get("suffix")?.asString,
-            replayGainTrack = replayGain?.get("trackGain")?.asDouble,
-            replayGainAlbum = replayGain?.get("albumGain")?.asDouble,
-            replayGainTrackPeak = replayGain?.get("trackPeak")?.asDouble,
-            replayGainAlbumPeak = replayGain?.get("albumPeak")?.asDouble,
-            bpm = obj.get("bpm")?.asInt,
-            userRating = obj.get("userRating")?.asInt,
+            coverArt = obj.optString("coverArt"),
+            size = obj.optLong("size"),
+            bitRate = obj.optInt("bitRate"),
+            samplingRate = obj.optInt("samplingRate"),
+            bitDepth = obj.optInt("bitDepth"),
+            suffix = obj.optString("suffix"),
+            replayGainTrack = replayGain?.optDouble("trackGain"),
+            replayGainAlbum = replayGain?.optDouble("albumGain"),
+            replayGainTrackPeak = replayGain?.optDouble("trackPeak"),
+            replayGainAlbumPeak = replayGain?.optDouble("albumPeak"),
+            bpm = obj.optInt("bpm"),
+            userRating = obj.optInt("userRating"),
+            averageRating = obj.optDouble("averageRating")?.takeIf { it > 0.0 },
         )
     }
 
     private fun parseArtist(obj: JsonObject) = Artist(
         id = obj.get("id").asString,
-        name = obj.get("name")?.asString ?: "",
-        albumCount = obj.get("albumCount")?.asInt ?: 0,
-        coverArt = obj.get("coverArt")?.asString,
+        name = obj.optString("name") ?: "",
+        albumCount = obj.optInt("albumCount") ?: 0,
+        coverArt = obj.optString("coverArt"),
     )
 
     // Android release-type inference. NOTE: diverges from infer_release_type in mappers.rs

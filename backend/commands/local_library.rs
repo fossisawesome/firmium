@@ -205,6 +205,7 @@ fn scan() -> Result<LocalLibraryCache, String> {
             content_type: Some(content_type_for(&raw_track.suffix).to_string()),
             track_info: format_track_info(&track_info_json),
             user_rating: None,
+            average_rating: None,
         };
 
         songs_by_album.entry(album_id).or_default().push(song.clone());
@@ -486,6 +487,12 @@ pub fn get_local_cover_art(state: &AppState, id: String) -> Result<String, Strin
     let out_path = dir.join(format!("{safe_id}.{ext}"));
     std::fs::write(&out_path, picture.data()).map_err(|e| e.to_string())?;
     Ok(out_path.to_string_lossy().into_owned())
+}
+
+/// Async wrapper around `get_local_cover_art` for use with `iced::Task::perform`
+/// (the file read + tag parse can block, so it runs via `spawn_blocking`).
+pub async fn get_local_cover_art_async(state: Arc<AppState>, id: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || get_local_cover_art(&state, id)).await.map_err(|e| e.to_string())?
 }
 
 #[derive(serde::Serialize, Clone)]

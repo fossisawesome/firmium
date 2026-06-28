@@ -201,7 +201,10 @@ fun AlbumDetailScreen(
                         album.tracks.filter { (it.bpm ?: 0) in r.min..r.max }
                     }
 
-                    itemsIndexed(displayTracks, key = { _, s -> s.id }) { index, song ->
+                    // Server-side track lists can contain duplicate song ids (bonus track
+                    // re-releases, malformed responses) — key by index+id so LazyColumn's
+                    // uniqueness requirement can't be violated.
+                    itemsIndexed(displayTracks, key = { index, s -> "$index-${s.id}" }) { index, song ->
                         AlbumTrackRow(
                             track = song,
                             index = index + 1,

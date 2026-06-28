@@ -425,7 +425,7 @@ private fun PlayerControls(
         Text(formatSeconds(state.currentPosition), fontSize = 11.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
         Spacer(Modifier.weight(1f))
         Text(formatSeconds(state.trackDuration), fontSize = 11.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
-        FirmiumIconButton(onClick = onMoreOpen, modifier = Modifier.size(32.dp)) {
+        FirmiumIconButton(onClick = onMoreOpen, modifier = Modifier.size(44.dp)) {
             FirmiumIcon(Icons.Default.MoreVert, contentDescription = "More",
                 tint = colors.muted, modifier = Modifier.size(20.dp))
         }
@@ -433,7 +433,7 @@ private fun PlayerControls(
 
     Spacer(Modifier.height(gap))
 
-    val secSize = if (compact) 42.dp else 48.dp
+    val secSize = if (compact) 44.dp else 48.dp
 
     // Primary controls: shuffle / prev / play / next / repeat.
     Row(
@@ -812,32 +812,6 @@ private fun FirmiumCircleButton(
         contentAlignment = Alignment.Center,
         content = content,
     )
-}
-
-// 1–5 star rating row. Tapping the current rating clears it (via caller logic).
-@Composable
-private fun StarRating(
-    rating: Int,
-    onRate: (Int) -> Unit,
-    starSize: Dp,
-    accentColor: Color,
-    mutedColor: Color,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        for (i in 1..5) {
-            FirmiumIcon(
-                imageVector = if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                contentDescription = "Rate $i",
-                tint = if (i <= rating) accentColor else mutedColor,
-                modifier = Modifier
-                    .size(starSize)
-                    .clickable { onRate(i) },
-            )
-        }
-    }
 }
 
 private fun formatSeconds(seconds: Double): String {

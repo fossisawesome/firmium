@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext (plain HTTP) is permitted on purpose: Firmium connects to user-hosted
+  Subsonic/Navidrome servers, which are commonly reached over plain HTTP on a LAN
+  (e.g. http://192.168.x.x). System CA trust is used for HTTPS; no user-added or
+  bundled CAs. Making the policy explicit here keeps it auditable and lets it be
+  tightened to specific domains later without touching the manifest.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

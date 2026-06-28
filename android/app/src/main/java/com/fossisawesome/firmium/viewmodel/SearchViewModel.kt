@@ -24,6 +24,7 @@ data class SearchState(
     val albums: List<Album> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
+    val ratingFilter: Int = 0,
 )
 
 class SearchViewModel(app: Application) : AndroidViewModel(app) {
@@ -68,5 +69,19 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
     fun clearSearch() {
         searchJob?.cancel()
         _state.value = SearchState()
+    }
+
+    // Toggles the active "N and up" threshold; tapping the active star again clears it.
+    fun setRatingFilter(n: Int) {
+        _state.value = _state.value.copy(ratingFilter = if (_state.value.ratingFilter == n) 0 else n)
+    }
+
+    // Optimistic local update (matches desktop's Message::SetRating handling) — api.setRating
+    // already swallows its own errors, so no extra error handling is needed here.
+    fun setRating(songId: String, rating: Int) {
+        _state.value = _state.value.copy(
+            songs = _state.value.songs.map { if (it.id == songId) it.copy(userRating = rating) else it },
+        )
+        viewModelScope.launch { api.setRating(songId, rating) }
     }
 }

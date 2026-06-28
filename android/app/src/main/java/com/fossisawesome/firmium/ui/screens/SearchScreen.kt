@@ -48,6 +48,8 @@ fun SearchScreen(
     onAlbumClick: (String) -> Unit,
     onAddSongToPlaylist: (item: PlaylistListItem, song: Song) -> Unit,
     onCreatePlaylistAndAddSong: (name: String, song: Song) -> Unit,
+    onRatingFilterChange: (Int) -> Unit,
+    onSetRating: (String, Int) -> Unit,
     onAddAlbum: (albumId: String) -> Unit = {},
     onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
@@ -57,6 +59,13 @@ fun SearchScreen(
     var pendingSong by remember { mutableStateOf<Song?>(null) }
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val visibleSongs = remember(state.songs, state.ratingFilter) {
+        state.songs.filter { s ->
+            state.ratingFilter == 0 ||
+                (s.userRating ?: 0) >= state.ratingFilter ||
+                (s.averageRating ?: 0.0) >= state.ratingFilter
+        }
+    }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
@@ -133,6 +142,23 @@ fun SearchScreen(
         // Border-bottom matching .ms-header border-bottom
         FirmiumDivider()
 
+        if (state.songs.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Min rating:", fontSize = 12.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+                StarRating(
+                    rating = state.ratingFilter,
+                    onRate = onRatingFilterChange,
+                    starSize = 18.dp,
+                    accentColor = colors.accent,
+                    mutedColor = colors.muted,
+                )
+            }
+        }
+
         // Results body
         when {
             state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -148,21 +174,22 @@ fun SearchScreen(
             }
             else -> LazyColumn(modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)) {
-                if (state.songs.isNotEmpty()) {
+                if (visibleSongs.isNotEmpty()) {
                     // .section-header: 12sp uppercase, muted, letterSpacing 1, margin 10/12dp
                     item {
                         Text("SONGS", fontSize = 12.sp, color = colors.muted, fontFamily = FontFamily.Monospace,
                             letterSpacing = 1.sp,
                             modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
                     }
-                    itemsIndexed(state.songs, key = { _, s -> "song_${s.id}" }) { index, song ->
+                    itemsIndexed(visibleSongs, key = { _, s -> "song_${s.id}" }) { index, song ->
                         SearchTrackRow(
                             song = song,
                             index = index + 1,
                             coverUrl = coverUrlFor(song.coverArt),
                             isPlaying = false,
-                            onClick = { onPlaySong(state.songs, index) },
+                            onClick = { onPlaySong(visibleSongs, index) },
                             onAddToPlaylist = { pendingSong = song },
+                            onRate = { rating -> onSetRating(song.id, rating) },
                             onDownloadClick = onDownloadTrack?.invoke(song),
                         )
                         FirmiumDivider()
@@ -212,6 +239,7 @@ private fun SearchTrackRow(
     isPlaying: Boolean,
     onClick: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onRate: (Int) -> Unit,
     onDownloadClick: (suspend () -> Result<Unit>)? = null,
 ) {
     val colors = LocalFirmiumColors.current
@@ -257,6 +285,20 @@ private fun SearchTrackRow(
                 maxLines = 1,
             )
         }
+        StarRating(
+            rating = song.userRating ?: 0,
+            onRate = { r -> onRate(if (r == song.userRating) 0 else r) },
+            starSize = 16.dp,
+            accentColor = colors.accent,
+            mutedColor = colors.muted,
+        )
+        Spacer(Modifier.width(6.dp))
+        AvgRatingBadge(
+            rating = song.averageRating,
+            starSize = 12.dp,
+            mutedColor = colors.muted,
+        )
+        Spacer(Modifier.width(6.dp))
         // Duration — .track-duration: 12sp muted
         Text(
             text = formatDuration(song.duration),

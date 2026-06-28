@@ -233,9 +233,9 @@ Common endpoints: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverArt`, 
 
 ## Performance Considerations
 
-- **Cover Art Caching**: Disk-based cache under app cache dir (`commands/cover_cache.rs`), up to 200MB budget; LRU (by mtime) eviction when budget exceeded. Persists across restarts; loaded into an `iced::widget::image::Handle` cached in `App` so covers survive restarts without re-downloading.
+- **Cover Art Caching**: Disk-based cache under app cache dir (`commands/cover_cache.rs`), up to 200MB budget; LRU (by mtime) eviction when budget exceeded. Persists across restarts; loaded into an `iced::widget::image::Handle` cached in `App` (bounded to `MAX_COVER_HANDLES` decoded handles in memory, oldest evicted) so covers survive restarts without re-downloading.
 - **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit, `backend/commands/subsonic.rs`)
-- **Long lists**: the album list uses a windowed renderer in `src/app.rs` (scroll offset + spacers) that only builds the rows currently on screen.
+- **Long lists**: albums, artists, and album/playlist track lists use a windowed renderer in `src/app.rs` (the `list_window` helper: scroll offset + spacers) that only builds the rows currently on screen.
 - **Search**: Limited to 40 albums, 100 songs per query (`commands/subsonic.rs::search`)
 - **Playback Concurrency**: One audio stream per device active at a time; multiple devices can play different streams concurrently
 - **CPU**: Release build has `opt-level = 3` + LTO + `codegen-units = 1`; `strip = false` keeps debug symbols for crash reporting

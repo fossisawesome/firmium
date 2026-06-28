@@ -25,6 +25,8 @@ mod queue_state;
 mod queue_manager;
 #[path = "../backend/commands/mod.rs"]
 mod commands;
+#[path = "../backend/podcasts/mod.rs"]
+mod podcasts;
 #[path = "../backend/init.rs"]
 mod init;
 
@@ -32,6 +34,7 @@ mod app;
 mod theme;
 mod icons;
 mod config;
+mod playlists;
 mod viz;
 
 use app::{App, Message};
@@ -48,21 +51,34 @@ fn main() -> iced::Result {
     // supports toggling at runtime, so the initial state must be set here).
     let decorations = crate::config::Config::load().window_decorations.unwrap_or(true);
 
-    iced::application(boot, App::update, App::view)
-        .title("Firmium")
-        .theme(App::theme)
-        .subscription(App::subscription)
-        .default_font(iced::Font::with_name("Liberation Mono"))
-        .font(include_bytes!("../assets/fonts/LiberationMono-Regular.ttf").as_slice())
-        .window_size(iced::Size::new(1200.0, 800.0))
-        .decorations(decorations)
-        .run()
+    // Build the backend before the window opens so slow one-time init (cpal
+    // device negotiation, SQLite open, TLS client construction) blocks before
+    // winit creates a window rather than after — invisible delay instead of a
+    // visible "not responding" freeze.
+    let backend = std::sync::Arc::new(std::sync::Mutex::new(
+        Some(Backend::new().expect("backend init failed"))
+    ));
+
+    // BootFn requires Fn (not FnOnce); use Mutex<Option<_>> to take the backend
+    // exactly once on the single boot call.
+    iced::application(
+        move || boot(backend.lock().unwrap().take().expect("boot called twice")),
+        App::update,
+        App::view,
+    )
+    .title("Firmium")
+    .theme(App::theme)
+    .subscription(App::subscription)
+    .default_font(iced::Font::with_name("Liberation Mono"))
+    .font(include_bytes!("../assets/fonts/LiberationMono-Regular.ttf").as_slice())
+    .window_size(iced::Size::new(1200.0, 800.0))
+    .decorations(decorations)
+    .run()
 }
 
-/// Boot: build the backend (inside the entered runtime), the initial App state,
-/// and the auto-login task (if saved credentials exist).
-fn boot() -> (App, iced::Task<Message>) {
-    let backend = Backend::new().expect("backend init failed");
+/// Build the initial App state and spawn startup tasks.
+/// Backend is already constructed before the window opens.
+fn boot(backend: Backend) -> (App, iced::Task<Message>) {
     let app = App::new(backend);
     let task = app.initial_task();
     (app, task)

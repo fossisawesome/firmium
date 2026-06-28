@@ -133,6 +133,7 @@ class MainActivity : ComponentActivity() {
                     val libraryViewModel: LibraryViewModel = viewModel()
                     val searchViewModel: SearchViewModel = viewModel()
                     val playlistViewModel: PlaylistViewModel = viewModel()
+                    val podcastsViewModel: PodcastsViewModel = viewModel()
                     val scope = rememberCoroutineScope()
                     var showAccountDialog by remember { mutableStateOf(false) }
                     var currentError by remember { mutableStateOf<UserError?>(null) }
@@ -171,6 +172,7 @@ class MainActivity : ComponentActivity() {
                             libraryViewModel = libraryViewModel,
                             searchViewModel = searchViewModel,
                             playlistViewModel = playlistViewModel,
+                            podcastsViewModel = podcastsViewModel,
                             currentThemeId = themeId,
                             onThemeSelected = { id -> scope.launch { app.prefs.setThemeId(id) } },
                             onAccountClick = { showAccountDialog = true },

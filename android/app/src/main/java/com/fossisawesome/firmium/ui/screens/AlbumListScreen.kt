@@ -99,9 +99,13 @@ fun AlbumListScreen(
         }
 
         else -> {
-            val grouped = filteredAlbums
-                .sortedWith(compareBy({ it.effectiveType().releaseTypeSortOrder() }, { -(it.year ?: 0) }))
-                .groupBy { it.effectiveType() }
+            // Sort + group only when the filtered album set changes, not on every
+            // recomposition (e.g. when pendingAlbumId toggles).
+            val grouped = remember(filteredAlbums) {
+                filteredAlbums
+                    .sortedWith(compareBy({ it.effectiveType().releaseTypeSortOrder() }, { -(it.year ?: 0) }))
+                    .groupBy { it.effectiveType() }
+            }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

@@ -160,9 +160,16 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val albums = if (auth.isAuthenticated) {
-                    val serverDeferred = async { api.getAlbums() }
-                    val localDeferred = async { localLibrary.getAlbums() }
-                    mergeAlbums(serverDeferred.await(), localDeferred.await())
+                    val local = localLibrary.getAlbums()
+                    // Render each page as it arrives so the grid appears after the
+                    // first 500 albums instead of waiting for the full library.
+                    val server = api.getAlbums { serverSoFar ->
+                        _albumListState.value = AlbumListState(
+                            albums = mergeAlbums(serverSoFar, local),
+                            isLoading = true,
+                        )
+                    }
+                    mergeAlbums(server, local)
                 } else {
                     localLibrary.getAlbums()
                 }

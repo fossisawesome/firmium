@@ -419,7 +419,6 @@ pub async fn update_playlist(
 }
 
 /// Deletes a playlist from the server.
-#[allow(dead_code)]
 pub async fn delete_playlist(state: Arc<AppState>, id: String) -> Result<(), crate::errors::UserError> {
     subsonic_request(&state, "deletePlaylist", &[("id", id)], false).await?;
     Ok(())

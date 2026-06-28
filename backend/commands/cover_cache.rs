@@ -2,10 +2,18 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 const MAX_CACHE_BYTES: u64 = 200 * 1024 * 1024; // 200 MB
+const MAX_COVER_BYTES: u64 = 32 * 1024 * 1024; // 32 MB — far above any real cover, caps server OOM abuse
 
 fn http_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(reqwest::Client::new)
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            // Pin TLS verification explicitly (default is on) so it can't be weakened by accident.
+            .danger_accept_invalid_certs(false)
+            .danger_accept_invalid_hostnames(false)
+            .build()
+            .expect("failed to build cover-art http client")
+    })
 }
 
 fn covers_dir() -> PathBuf {
@@ -16,10 +24,16 @@ fn covers_dir() -> PathBuf {
 
 /// Replaces characters that aren't safe in a filename with '_'.
 fn sanitize_cover_id(cover_id: &str) -> String {
-    cover_id
+    let safe: String = cover_id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' })
-        .collect()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    // A server-controlled "." or ".." would otherwise become a traversal-prone filename prefix.
+    if safe.is_empty() || safe.chars().all(|c| c == '.') {
+        "unknown".to_string()
+    } else {
+        safe
+    }
 }
 
 /// Finds an existing cached file for this cover id, regardless of extension.
@@ -88,6 +102,9 @@ pub async fn get_cover_art(cover_id: String, url: String) -> Result<String, Stri
     let res = http_client().get(&url).send().await.map_err(|e| e.to_string())?;
     if !res.status().is_success() {
         return Err(format!("Cover art unavailable (HTTP {})", res.status()));
+    }
+    if res.content_length().is_some_and(|len| len > MAX_COVER_BYTES) {
+        return Err("Cover art exceeds maximum size".to_string());
     }
     let content_type = res
         .headers()

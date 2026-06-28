@@ -69,7 +69,10 @@ fun PlaylistDetailScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 32.dp),
             ) {
-                itemsIndexed(tracks, key = { _, s -> s.id }) { index, song ->
+                // Server playlists can contain the same song id twice (added via another
+                // client with no dedup) — key by index+id so LazyColumn's uniqueness
+                // requirement can't be violated.
+                itemsIndexed(tracks, key = { index, s -> "$index-${s.id}" }) { index, song ->
                     TrackRow(
                         track = song,
                         index = index + 1,
