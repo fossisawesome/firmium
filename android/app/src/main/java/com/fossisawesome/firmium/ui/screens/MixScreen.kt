@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,13 +45,13 @@ fun MixScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(20.dp),
     ) {
-        Text("Mix", fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.text)
+        Text("Mix", fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current, color = colors.text)
         Spacer(Modifier.height(4.dp))
         Text("Generate a shuffled queue tuned to an energy level.",
-            fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
 
         Spacer(Modifier.height(24.dp))
-        Text("ENERGY", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted, letterSpacing = 1.sp)
+        Text("ENERGY", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, letterSpacing = 1.sp)
         Spacer(Modifier.height(10.dp))
         ENERGIES.forEach { opt ->
             val selected = energy == opt.energy
@@ -66,15 +67,15 @@ fun MixScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(opt.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, color = colors.text)
-                    Text(opt.desc, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                    Text(opt.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, fontFamily = LocalAppFontFamily.current, color = colors.text)
+                    Text(opt.desc, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                 }
             }
         }
 
         if (genres.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))
-            Text("GENRE (OPTIONAL)", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted, letterSpacing = 1.sp)
+            Text("GENRE (OPTIONAL)", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, letterSpacing = 1.sp)
             Spacer(Modifier.height(10.dp))
             FlowGenres(genres = genres, selected = genre, onSelect = { genre = if (genre == it) null else it })
         }
@@ -88,7 +89,7 @@ fun MixScreen(
                 .padding(horizontal = 28.dp, vertical = 14.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("Start Mix", fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+            Text("Start Mix", fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                 color = androidx.compose.ui.graphics.Color.Black)
         }
     }
@@ -113,7 +114,7 @@ private fun FlowGenres(genres: List<String>, selected: String?, onSelect: (Strin
                             .clickable { onSelect(g) }
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
-                        Text(g, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                        Text(g, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                             color = if (sel) colors.accent else colors.text, maxLines = 1)
                     }
                 }

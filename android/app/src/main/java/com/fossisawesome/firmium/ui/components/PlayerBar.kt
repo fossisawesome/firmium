@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -59,7 +60,7 @@ fun PlayerBar(
                 Text(
                     text = track.title,
                     fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = LocalAppFontFamily.current,
                     color = colors.text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -68,7 +69,7 @@ fun PlayerBar(
                 Text(
                     text = track.displayArtist ?: track.artist,
                     fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = LocalAppFontFamily.current,
                     color = colors.muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -79,7 +80,7 @@ fun PlayerBar(
                     Text(
                         text = trackInfo,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = LocalAppFontFamily.current,
                         color = colors.muted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

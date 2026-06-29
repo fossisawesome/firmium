@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -65,7 +66,7 @@ fun AvgRatingBadge(
         Text(
             text = "%.1f".format(rating),
             fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = mutedColor,
         )
     }

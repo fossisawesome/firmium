@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -74,14 +75,14 @@ fun AccountDialog(
                         text = "Connected",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = LocalAppFontFamily.current,
                         color = colors.text,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                     Text(
                         text = hostname,
                         fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = LocalAppFontFamily.current,
                         color = colors.muted,
                         modifier = Modifier.padding(bottom = 20.dp),
                     )
@@ -101,7 +102,7 @@ fun AccountDialog(
                             text = "Disconnect",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = LocalAppFontFamily.current,
                             color = colors.error,
                             letterSpacing = 0.5.sp,
                         )
@@ -177,7 +178,7 @@ private fun AccountConnectForm(
             text = cleartextWarning,
             color = colors.muted,
             fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             modifier = Modifier.padding(bottom = 16.dp),
         )
     }
@@ -230,7 +231,7 @@ private fun AccountConnectForm(
         Text(
             "Save password",
             fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.muted,
         )
         FirmiumToggle(checked = savePassword, onCheckedChange = { savePassword = it })
@@ -241,7 +242,7 @@ private fun AccountConnectForm(
             text = state.error,
             color = colors.error,
             fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             modifier = Modifier.padding(bottom = 12.dp),
         )
     }
@@ -269,7 +270,7 @@ private fun AccountConnectForm(
                 text = "Connect",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = Color.Black,
                 letterSpacing = 0.5.sp,
             )
@@ -293,7 +294,7 @@ private fun SetupField(
         if (label.isNotEmpty()) {
             Text(
                 label.uppercase(),
-                fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.muted, letterSpacing = 0.5.sp,
                 modifier = Modifier.padding(bottom = 6.dp),
             )
@@ -321,7 +322,7 @@ private fun SavedServersList(
     Column(modifier = Modifier.padding(bottom = 16.dp)) {
         Text(
             "Saved Servers".uppercase(),
-            fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, letterSpacing = 0.5.sp,
             modifier = Modifier.padding(bottom = 8.dp),
         )
@@ -339,12 +340,12 @@ private fun SavedServersList(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         server.url,
-                        fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                         color = colors.text, maxLines = 1,
                     )
                     Text(
                         server.username,
-                        fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                         color = colors.muted,
                     )
                 }
@@ -358,7 +359,7 @@ private fun SavedServersList(
                     Text(
                         "Connect",
                         fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace, color = Color.Black,
+                        fontFamily = LocalAppFontFamily.current, color = Color.Black,
                     )
                 }
                 Spacer(Modifier.width(6.dp))
@@ -372,7 +373,7 @@ private fun SavedServersList(
         }
         Text(
             "or add a new server",
-            fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, letterSpacing = 0.5.sp,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

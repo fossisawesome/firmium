@@ -116,8 +116,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             // Observe theme and UI theme from DataStore — recompose the entire tree when they change.
             val themeId by app.prefs.themeId.collectAsStateWithLifecycle(initialValue = "firmium")
+            val fontFamily by app.prefs.fontFamily.collectAsStateWithLifecycle(initialValue = "Liberation Mono")
 
-            FirmiumTheme(themeId = themeId) {
+            FirmiumTheme(themeId = themeId, fontFamily = fontFamily) {
                 val authViewModel: AuthViewModel = viewModel()
                 val authState by authViewModel.state.collectAsStateWithLifecycle()
                 val onboarded by app.prefs.onboarded.collectAsStateWithLifecycle(initialValue = true)
@@ -175,6 +176,8 @@ class MainActivity : ComponentActivity() {
                             podcastsViewModel = podcastsViewModel,
                             currentThemeId = themeId,
                             onThemeSelected = { id -> scope.launch { app.prefs.setThemeId(id) } },
+                            currentFontFamily = fontFamily,
+                            onFontSelected = { name -> scope.launch { app.prefs.setFontFamily(name) } },
                             onAccountClick = { showAccountDialog = true },
                         )
                         // Pad above the system nav bar (enableEdgeToEdge draws under it),

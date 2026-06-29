@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -63,7 +64,7 @@ fun LyricsSheet(
             Text(
                 text = trackTitle,
                 fontSize = 15.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.text,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 textAlign = TextAlign.Center,
@@ -134,7 +135,7 @@ fun LyricsLines(
             Text(
                 "No lyrics available",
                 fontSize = 14.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 fontStyle = FontStyle.Italic,
                 color = colors.muted,
             )
@@ -157,7 +158,7 @@ fun LyricsLines(
                         text = annotated,
                         style = TextStyle(
                             fontSize = activeFontSize,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = LocalAppFontFamily.current,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                         ),
@@ -168,7 +169,7 @@ fun LyricsLines(
                         text = line.text.ifBlank { "​" }, // zero-width space preserves blank line height
                         fontSize = if (isActive) activeFontSize else inactiveFontSize,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = LocalAppFontFamily.current,
                         color = when {
                             isActive -> colors.accent
                             isNear -> colors.text.copy(alpha = 0.7f)

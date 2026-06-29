@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,7 +41,7 @@ fun PodcastsScreen(
         ) {
             Text(
                 "Podcasts".uppercase(),
-                fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.muted, letterSpacing = 1.sp,
                 modifier = Modifier.weight(1f),
             )
@@ -52,7 +53,7 @@ fun PodcastsScreen(
                     .clickable { showAddDialog = true }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
-                Text("+ Add", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+                Text("+ Add", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
             }
         }
 
@@ -60,7 +61,7 @@ fun PodcastsScreen(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     "No podcasts yet. Add one by RSS feed URL.",
-                    fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = colors.muted,
+                    fontFamily = LocalAppFontFamily.current, fontSize = 14.sp, color = colors.muted,
                 )
             }
         } else {
@@ -107,12 +108,12 @@ private fun PodcastChannelRow(channel: PodcastChannelEntity, onClick: () -> Unit
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                channel.title, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                channel.title, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                 fontSize = 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Text(
                 channel.description.orEmpty(),
-                fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -140,7 +141,7 @@ private fun AddPodcastDialog(
         ) {
             Text(
                 "Add a podcast", fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace, color = colors.text,
+                fontFamily = LocalAppFontFamily.current, color = colors.text,
             )
             FirmiumTextField(
                 value = url,
@@ -149,18 +150,18 @@ private fun AddPodcastDialog(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (error != null) {
-                Text(error, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.error)
+                Text(error, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.error)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
             ) {
                 Text(
-                    "Cancel", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                    "Cancel", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
                     modifier = Modifier.clickable { onDismiss() }.padding(8.dp),
                 )
                 Text(
-                    "Add", fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                    "Add", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                     color = if (url.isNotBlank()) colors.accent else colors.muted,
                     modifier = Modifier
                         .clickable(enabled = url.isNotBlank()) { onConfirm(url) }

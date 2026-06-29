@@ -225,3 +225,213 @@ pub fn map_similar_matches(matches: Vec<serde_json::Value>) -> Vec<SimilarMatch>
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // --- infer_release_type ---
+
+    #[test]
+    fn release_type_prefers_release_types_array() {
+        let a = json!({ "releaseTypes": ["Album"], "releaseType": "EP", "songCount": 1 });
+        assert_eq!(infer_release_type(&a), "album");
+    }
+
+    #[test]
+    fn release_type_falls_back_to_release_type_string() {
+        let a = json!({ "releaseType": "Single" });
+        assert_eq!(infer_release_type(&a), "single");
+    }
+
+    #[test]
+    fn release_type_empty_release_types_array_falls_through_to_title() {
+        let a = json!({ "releaseTypes": [], "name": "Some Track - Single" });
+        assert_eq!(infer_release_type(&a), "single");
+    }
+
+    #[test]
+    fn release_type_detects_single_from_title_suffix() {
+        for name in ["Foo - Single", "Foo (Single)", "Foo- Single"] {
+            let a = json!({ "name": name });
+            assert_eq!(infer_release_type(&a), "single", "name={name}");
+        }
+    }
+
+    #[test]
+    fn release_type_detects_ep_from_title_suffix() {
+        for name in ["Foo - EP", "Foo (EP)", "Foo- EP"] {
+            let a = json!({ "name": name });
+            assert_eq!(infer_release_type(&a), "ep", "name={name}");
+        }
+    }
+
+    #[test]
+    fn release_type_uses_title_field_when_name_absent() {
+        let a = json!({ "title": "Foo - Single" });
+        assert_eq!(infer_release_type(&a), "single");
+    }
+
+    #[test]
+    fn release_type_song_count_buckets() {
+        assert_eq!(infer_release_type(&json!({ "songCount": 0 })), "album");
+        assert_eq!(infer_release_type(&json!({ "songCount": 1 })), "single");
+        assert_eq!(infer_release_type(&json!({ "songCount": 2 })), "single");
+        assert_eq!(infer_release_type(&json!({ "songCount": 3 })), "ep");
+        assert_eq!(infer_release_type(&json!({ "songCount": 6 })), "ep");
+        assert_eq!(infer_release_type(&json!({ "songCount": 7 })), "album");
+    }
+
+    #[test]
+    fn release_type_missing_fields_defaults_to_album() {
+        assert_eq!(infer_release_type(&json!({})), "album");
+    }
+
+    // --- format_track_info ---
+
+    #[test]
+    fn track_info_joins_all_present_parts() {
+        let s = json!({
+            "suffix": "flac",
+            "samplingRate": 44100.0,
+            "bitDepth": 16,
+            "bitRate": 1234,
+        });
+        assert_eq!(
+            format_track_info(&s),
+            Some("FLAC · 44.1 kHz · 16-bit · 1234 kbps".to_string())
+        );
+    }
+
+    #[test]
+    fn track_info_strips_trailing_zero_decimal_on_khz() {
+        let s = json!({ "samplingRate": 48000.0 });
+        assert_eq!(format_track_info(&s), Some("48 kHz".to_string()));
+    }
+
+    #[test]
+    fn track_info_skips_zero_and_absent_fields() {
+        let s = json!({ "suffix": "", "samplingRate": 0.0, "bitDepth": 0, "bitRate": 0 });
+        assert_eq!(format_track_info(&s), None);
+    }
+
+    #[test]
+    fn track_info_empty_object_returns_none() {
+        assert_eq!(format_track_info(&json!({})), None);
+    }
+
+    #[test]
+    fn track_info_uppercases_suffix() {
+        let s = json!({ "suffix": "mp3" });
+        assert_eq!(format_track_info(&s), Some("MP3".to_string()));
+    }
+
+    // --- map_albums / map_artists / map_songs ---
+
+    #[test]
+    fn map_albums_applies_defaults_for_missing_fields() {
+        let albums = map_albums(vec![json!({})]);
+        assert_eq!(albums.len(), 1);
+        let a = &albums[0];
+        assert_eq!(a.id, "");
+        assert_eq!(a.name, "Unknown Album");
+        assert_eq!(a.album_artist, "Unknown Artist");
+        assert_eq!(a.artist_id, None);
+        assert_eq!(a.song_count, None);
+        assert_eq!(a.release_type, "album");
+        assert_eq!(a.year, None);
+        assert!(!a.is_compilation);
+    }
+
+    #[test]
+    fn map_albums_prefers_display_artist_over_artist() {
+        let albums = map_albums(vec![json!({ "displayArtist": "DA", "artist": "A" })]);
+        assert_eq!(albums[0].album_artist, "DA");
+    }
+
+    #[test]
+    fn map_albums_falls_back_to_artist_when_no_display_artist() {
+        let albums = map_albums(vec![json!({ "artist": "A" })]);
+        assert_eq!(albums[0].album_artist, "A");
+    }
+
+    #[test]
+    fn map_albums_preserves_all_real_values() {
+        let raw = json!({
+            "id": "a1",
+            "name": "Album Name",
+            "displayArtist": "Artist Name",
+            "artistId": "ar1",
+            "coverArt": "cov1",
+            "songCount": 10,
+            "releaseType": "Album",
+            "year": 2024,
+            "isCompilation": true,
+        });
+        let albums = map_albums(vec![raw]);
+        let a = &albums[0];
+        assert_eq!(a.id, "a1");
+        assert_eq!(a.name, "Album Name");
+        assert_eq!(a.album_artist, "Artist Name");
+        assert_eq!(a.artist_id, Some("ar1".to_string()));
+        assert_eq!(a.cover_art_id, Some("cov1".to_string()));
+        assert_eq!(a.song_count, Some(10));
+        assert_eq!(a.release_type, "album");
+        assert_eq!(a.year, Some(2024));
+        assert!(a.is_compilation);
+    }
+
+    #[test]
+    fn map_artists_applies_defaults() {
+        let artists = map_artists(vec![json!({})]);
+        assert_eq!(artists[0].id, "");
+        assert_eq!(artists[0].name, "Unknown Artist");
+        assert_eq!(artists[0].album_count, 0);
+    }
+
+    #[test]
+    fn map_songs_applies_defaults_for_missing_fields() {
+        let songs = map_songs(vec![json!({})]);
+        let s = &songs[0];
+        assert_eq!(s.id, "");
+        assert_eq!(s.title, "Unknown Track");
+        assert_eq!(s.artist, "Unknown Artist");
+        assert_eq!(s.album, "Unknown Album");
+        assert_eq!(s.duration, 0.0);
+        assert_eq!(s.track_info, None);
+        assert_eq!(s.average_rating, None);
+    }
+
+    #[test]
+    fn map_songs_average_rating_filters_non_positive() {
+        let songs = map_songs(vec![json!({ "averageRating": 0.0 })]);
+        assert_eq!(songs[0].average_rating, None);
+        let songs = map_songs(vec![json!({ "averageRating": 3.5 })]);
+        assert_eq!(songs[0].average_rating, Some(3.5));
+    }
+
+    #[test]
+    fn map_songs_id_accessor_matches_field() {
+        let songs = map_songs(vec![json!({ "id": "song-1" })]);
+        assert_eq!(songs[0].id(), "song-1");
+    }
+
+    // --- map_similar_matches ---
+
+    #[test]
+    fn map_similar_matches_extracts_entry_and_similarity() {
+        let raw = vec![json!({ "entry": { "id": "s1", "title": "T" }, "similarity": 0.87 })];
+        let matches = map_similar_matches(raw);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].song.id, "s1");
+        assert_eq!(matches[0].similarity, 0.87);
+    }
+
+    #[test]
+    fn map_similar_matches_missing_fields_default_to_zero_and_empty_song() {
+        let matches = map_similar_matches(vec![json!({})]);
+        assert_eq!(matches[0].similarity, 0.0);
+        assert_eq!(matches[0].song.id, "");
+    }
+}

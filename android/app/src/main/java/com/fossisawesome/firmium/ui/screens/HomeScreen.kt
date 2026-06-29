@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -98,7 +99,7 @@ private fun HomeGreeting(username: String) {
         Text(
             text = "Good $timeOfDay,".uppercase(),
             fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.muted,
             letterSpacing = 1.sp,
         )
@@ -106,7 +107,7 @@ private fun HomeGreeting(username: String) {
             text = username,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.accent,
             letterSpacing = (-0.5).sp,
         )
@@ -119,7 +120,7 @@ private fun HomeSectionTitle(title: String) {
     Text(
         text = title.uppercase(),
         fontSize = 11.sp,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = LocalAppFontFamily.current,
         color = LocalFirmiumColors.current.muted,
         letterSpacing = 1.sp,
     )
@@ -178,11 +179,11 @@ private fun HomeAlbumCard(album: Album, coverUrl: String?, width: Dp, onClick: (
         ) {
             Text(
                 album.name, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace, color = colors.text,
+                fontFamily = LocalAppFontFamily.current, color = colors.text,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Text(
-                album.artist, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                album.artist, fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -206,7 +207,7 @@ private fun HomeArtistCard(artist: RecentArtist, coverUrl: String?, onClick: (St
         )
         Text(
             artist.name, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace, color = colors.text,
+            fontFamily = LocalAppFontFamily.current, color = colors.text,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp),
         )
@@ -222,9 +223,9 @@ private fun ErrorSection(message: String, onRetry: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("Failed to load: $message", color = colors.error, fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace)
+            fontFamily = LocalAppFontFamily.current)
         FirmiumTextButton(onClick = onRetry) {
-            Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
+            Text("Retry", fontFamily = LocalAppFontFamily.current, color = colors.accent, fontSize = 14.sp)
         }
     }
 }

@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -42,7 +43,7 @@ fun FirmiumDetailHeader(
                 text = title,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,9 +39,9 @@ fun ArtistListScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(state.error, color = colors.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text(state.error, color = colors.error, fontFamily = LocalAppFontFamily.current, fontSize = 13.sp)
             FirmiumTextButton(onClick = onLoad) {
-                Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
+                Text("Retry", fontFamily = LocalAppFontFamily.current, color = colors.accent, fontSize = 14.sp)
             }
         }
         else -> LazyColumn(
@@ -74,11 +75,11 @@ private fun ArtistRow(artist: Artist, coverUrl: String?, onArtistClick: (String)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 artist.name, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace, color = colors.text,
+                fontFamily = LocalAppFontFamily.current, color = colors.text,
             )
             Text(
                 "${artist.albumCount} album${if (artist.albumCount != 1) "s" else ""}",
-                fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
             )
         }
     }

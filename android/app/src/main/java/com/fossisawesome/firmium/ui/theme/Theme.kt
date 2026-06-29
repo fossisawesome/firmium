@@ -2,8 +2,12 @@ package com.fossisawesome.firmium.ui.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import com.fossisawesome.firmium.R
 
 // One entry per theme — id matches the key stored in AppPreferences.
 data class FirmiumTheme(
@@ -92,11 +96,27 @@ val DEFAULT_THEME_ID = "firmium"
 fun themeById(id: String): FirmiumTheme =
     ALL_THEMES.find { it.id == id } ?: ALL_THEMES.first()
 
+val LocalAppFontFamily = compositionLocalOf<FontFamily> { FontFamily.Monospace }
+
+fun AppFontKey.toFontFamilyPublic(): FontFamily = when (this) {
+    AppFontKey.INTER -> FontFamily(Font(R.font.inter))
+    AppFontKey.LIBERATION_MONO -> FontFamily(Font(R.font.liberation_mono))
+    AppFontKey.MONOSPACE -> FontFamily.Monospace
+    AppFontKey.COMIC_SANS -> FontFamily.Default
+    AppFontKey.SANS_SERIF -> FontFamily.SansSerif
+    AppFontKey.BIGBLUE_TERMINAL -> FontFamily(Font(R.font.bigblue_terminal_plus))
+    AppFontKey.COUSINE -> FontFamily(Font(R.font.cousine))
+    AppFontKey.FIRACODE -> FontFamily(Font(R.font.firacode))
+    AppFontKey.HACK -> FontFamily(Font(R.font.hack))
+    AppFontKey.DEFAULT -> FontFamily.Default
+}
+
 // Provides FirmiumColors and isDark flag to the entire composable tree via CompositionLocals.
 // No MaterialTheme — all color tokens are accessed via LocalFirmiumColors.current.
 @Composable
 fun FirmiumTheme(
     themeId: String = DEFAULT_THEME_ID,
+    fontFamily: String = "Liberation Mono",
     content: @Composable () -> Unit,
 ) {
     // Resolve against built-ins plus any imported themes on disk so a saved
@@ -108,6 +128,7 @@ fun FirmiumTheme(
     CompositionLocalProvider(
         LocalFirmiumColors provides remember(theme) { theme.toFirmiumColors() },
         LocalFirmiumIsDark provides theme.isDark,
+        LocalAppFontFamily provides remember(fontFamily) { fontKeyFor(fontFamily).toFontFamilyPublic() },
         content = content,
     )
 }

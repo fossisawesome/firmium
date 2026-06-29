@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,7 +45,7 @@ fun AlbumRow(
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                album.name, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                album.name, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val meta = listOfNotNull(
@@ -52,7 +53,7 @@ fun AlbumRow(
                 album.year?.toString(),
             ).joinToString(" · ")
             if (meta.isNotBlank()) {
-                Text(meta, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (onDownloadClick != null) {

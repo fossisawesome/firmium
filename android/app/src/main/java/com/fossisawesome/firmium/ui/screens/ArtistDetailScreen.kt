@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -66,9 +67,9 @@ fun ArtistDetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(state.error, color = colors.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text(state.error, color = colors.error, fontFamily = LocalAppFontFamily.current, fontSize = 13.sp)
             FirmiumTextButton(onClick = { onLoad(artistId) }) {
-                Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
+                Text("Retry", fontFamily = LocalAppFontFamily.current, color = colors.accent, fontSize = 14.sp)
             }
         }
         state.detail != null -> {
@@ -127,7 +128,7 @@ fun ArtistDetailScreen(
                             }
                             Text(
                                 detail.artist.name,
-                                fontSize = 32.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                                fontSize = 32.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                                 color = colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
                             )
@@ -152,7 +153,7 @@ fun ArtistDetailScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     FirmiumIcon(Icons.Default.Shuffle, null, tint = Color.Black, modifier = Modifier.size(18.dp))
                                     Text("Shuffle", fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace, color = Color.Black)
+                                        fontFamily = LocalAppFontFamily.current, color = Color.Black)
                                 }
                             }
                             if (onStartRadio != null) {
@@ -166,7 +167,7 @@ fun ArtistDetailScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         FirmiumIcon(Icons.Default.Radio, null, tint = colors.text, modifier = Modifier.size(18.dp))
                                         Text("Radio", fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace, color = colors.text)
+                                            fontFamily = LocalAppFontFamily.current, color = colors.text)
                                     }
                                 }
                             }
@@ -238,7 +239,7 @@ fun ArtistDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text("View Biography", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+                                Text("View Biography", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
                                 FirmiumIcon(Icons.Default.ChevronRight, null, tint = colors.accent, modifier = Modifier.size(18.dp))
                             }
                         }
@@ -249,7 +250,7 @@ fun ArtistDetailScreen(
                         item {
                             Text(
                                 "YOU MIGHT ALSO LIKE · ${recommendations.size}",
-                                fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                                 color = colors.muted, letterSpacing = 1.sp,
                                 modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp),
                             )
@@ -262,7 +263,7 @@ fun ArtistDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text(rec.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                                Text(rec.name, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
                                 FirmiumIcon(Icons.Default.ChevronRight, null, tint = colors.muted, modifier = Modifier.size(18.dp))
                             }
                             FirmiumDivider()
@@ -289,7 +290,7 @@ private fun SectionHeader(title: String, onArrow: (() -> Unit)? = null) {
         modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
             color = colors.text, modifier = Modifier.weight(1f))
         if (onArrow != null) {
             FirmiumIconButton(onClick = onArrow, modifier = Modifier.size(36.dp)) {
@@ -311,9 +312,9 @@ private fun ArtistSongRow(song: Song, coverUrl: String?, onClick: () -> Unit) {
         CoverImage(url = coverUrl, contentDescription = null,
             modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)))
         Column(modifier = Modifier.weight(1f)) {
-            Text(song.title, fontFamily = FontFamily.Monospace, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            Text(song.title, fontFamily = LocalAppFontFamily.current, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                 color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(song.displayArtist ?: song.artist, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            Text(song.displayArtist ?: song.artist, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -339,7 +340,7 @@ private fun BiographySheet(bio: String, artistName: String, onDismiss: () -> Uni
             text = artistName,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.text,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
         )
@@ -354,7 +355,7 @@ private fun BiographySheet(bio: String, artistName: String, onDismiss: () -> Uni
             Text(
                 text = bio,
                 fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.muted,
                 lineHeight = 20.sp,
             )

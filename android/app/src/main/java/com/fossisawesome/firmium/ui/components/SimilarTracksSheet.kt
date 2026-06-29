@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,7 +33,7 @@ fun SimilarTracksSheet(
         Text(
             text = "Similar Tracks",
             fontSize = 16.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.text,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
@@ -51,7 +52,7 @@ fun SimilarTracksSheet(
                 Text(
                     text = state.error ?: "No similar tracks found",
                     fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = LocalAppFontFamily.current,
                     fontStyle = FontStyle.Italic,
                     color = colors.muted,
                 )
@@ -90,7 +91,7 @@ private fun SimilarTrackItem(
             Text(
                 text = song.title,
                 fontSize = 14.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -98,7 +99,7 @@ private fun SimilarTrackItem(
             Text(
                 text = song.displayArtist ?: song.artist,
                 fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -110,7 +111,7 @@ private fun SimilarTrackItem(
         Text(
             text = "${(match.similarity * 100).roundToInt()}%",
             fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.muted,
         )
     }

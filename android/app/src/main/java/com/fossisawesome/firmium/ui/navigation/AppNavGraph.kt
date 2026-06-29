@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.navigation
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -107,6 +108,8 @@ fun AppNavGraph(
     podcastsViewModel: PodcastsViewModel,
     currentThemeId: String,
     onThemeSelected: (String) -> Unit,
+    currentFontFamily: String,
+    onFontSelected: (String) -> Unit,
     onAccountClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -512,6 +515,7 @@ fun AppNavGraph(
                         username = auth.credentials?.username ?: "",
                         appVersion = BuildConfig.VERSION_NAME,
                         currentThemeId = currentThemeId,
+                        currentFontFamily = currentFontFamily,
                         lrclibEnabled = lrclibEnabled,
                         lyricsWordFillEnabled = lyricsWordFillEnabled,
                         lastfmEnabled = lastfmEnabled,
@@ -525,6 +529,7 @@ fun AppNavGraph(
                         onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
                         onReplayGainToggle = { playerViewModel.setReplayGainEnabled(it) },
                         onThemeSelected = onThemeSelected,
+                        onFontSelected = onFontSelected,
                         onVisualizerToggle = { playerViewModel.setVisualizerEnabled(it) },
                         onVisualizerTypeSelected = { playerViewModel.setVisualizerType(it) },
                         onLrclibToggle = { scope.launch { app.prefs.setLrclibEnabled(it) } },
@@ -746,7 +751,7 @@ private fun FirmiumPageHeader(
                 text = title,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.text,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,

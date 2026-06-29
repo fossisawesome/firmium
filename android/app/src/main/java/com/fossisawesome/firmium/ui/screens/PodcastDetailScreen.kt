@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,7 +37,7 @@ fun PodcastDetailScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                title, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                title, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
@@ -44,14 +45,14 @@ fun PodcastDetailScreen(
                 FirmiumIcon(Icons.Default.Refresh, contentDescription = "Refresh", tint = colors.muted)
             }
             Text(
-                "Unsubscribe", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.error,
+                "Unsubscribe", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.error,
                 modifier = Modifier.clickable { onUnsubscribe() }.padding(8.dp),
             )
         }
 
         if (episodes.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No episodes found.", fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = colors.muted)
+                Text("No episodes found.", fontFamily = LocalAppFontFamily.current, fontSize = 14.sp, color = colors.muted)
             }
         } else {
             LazyColumn(
@@ -87,11 +88,11 @@ private fun PodcastEpisodeRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                episode.title, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+                episode.title, fontFamily = LocalAppFontFamily.current, fontSize = 13.sp,
                 color = if (isPlaying) colors.accent else colors.text,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
-            Text(durationLabel, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Text(durationLabel, fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         }
         FirmiumIconButton(onClick = onPlay, modifier = Modifier.size(36.dp)) {
             FirmiumIcon(Icons.Default.PlayArrow, contentDescription = "Play", tint = colors.accent)

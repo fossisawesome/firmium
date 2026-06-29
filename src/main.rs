@@ -34,6 +34,7 @@ mod app;
 mod theme;
 mod icons;
 mod config;
+mod fonts;
 mod playlists;
 mod viz;
 
@@ -61,7 +62,11 @@ fn main() -> iced::Result {
 
     // BootFn requires Fn (not FnOnce); use Mutex<Option<_>> to take the backend
     // exactly once on the single boot call.
-    iced::application(
+    let font_family = crate::config::Config::load()
+        .font_family
+        .unwrap_or_else(|| "Liberation Mono".to_string());
+
+    let mut builder = iced::application(
         move || boot(backend.lock().unwrap().take().expect("boot called twice")),
         App::update,
         App::view,
@@ -69,11 +74,20 @@ fn main() -> iced::Result {
     .title("Firmium")
     .theme(App::theme)
     .subscription(App::subscription)
-    .default_font(iced::Font::with_name("Liberation Mono"))
     .font(include_bytes!("../assets/fonts/LiberationMono-Regular.ttf").as_slice())
+    .font(include_bytes!("../assets/fonts/Inter-Regular.ttf").as_slice())
+    .font(include_bytes!("../assets/fonts/FiraCode-Regular.ttf").as_slice())
+    .font(include_bytes!("../assets/fonts/Hack-Regular.ttf").as_slice())
+    .font(include_bytes!("../assets/fonts/Cousine-Regular.ttf").as_slice())
+    .font(include_bytes!("../assets/fonts/BigBlueTerminalPlus.ttf").as_slice())
     .window_size(iced::Size::new(1200.0, 800.0))
-    .decorations(decorations)
-    .run()
+    .decorations(decorations);
+
+    if let Some(font) = crate::fonts::resolve_font(&font_family) {
+        builder = builder.default_font(font);
+    }
+
+    builder.run()
 }
 
 /// Build the initial App state and spawn startup tasks.

@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,7 +47,7 @@ fun FirmiumTextField(
             Text(
                 text = label,
                 fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = if (isFocused) colors.accent else colors.muted,
                 modifier = Modifier.padding(bottom = 4.dp),
             )
@@ -55,7 +56,7 @@ fun FirmiumTextField(
             value = value,
             onValueChange = onValueChange,
             textStyle = TextStyle(
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 fontSize = 13.sp,
                 color = colors.text,
             ),
@@ -81,7 +82,7 @@ fun FirmiumTextField(
                             Text(
                                 text = placeholder,
                                 fontSize = 13.sp,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = LocalAppFontFamily.current,
                                 color = colors.muted,
                             )
                         }

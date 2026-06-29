@@ -16,6 +16,10 @@ The desktop app is now a single pure-Rust binary built on [iced](https://iced.rs
 - **No Tauri commands**: all backend calls are direct Rust function calls via `iced::Task::perform` — no IPC overhead.
 - **Codebase layout**: `src-tauri/` removed. Backend modules now live in `backend/`; iced UI in `src/`.
 
+### New features
+
+- **Custom UI font** — Settings > Appearance now has a font picker. Choose from System, Iced, Inter, Liberation Mono, Monospace, Comic Sans, Sans Serif, BigBlue Terminal, Cousine, FiraCode, and Hack; persists in `config.toml` (`font_family`) and applies at next launch via `default_font`. `src/fonts.rs` (`FONT_OPTIONS`, `resolve_font()`), `src/config.rs`, `src/main.rs`.
+
 ### Build & packaging
 
 - **Windows NSIS installer rebuilt without Tauri** — `packaging/firmium.nsi` is a new standalone NSIS script that packages the native iced binary. Tauri's bundler is no longer involved.
@@ -39,6 +43,8 @@ The desktop app is now a single pure-Rust binary built on [iced](https://iced.rs
 - **Theme import from file** — users can import a `.toml` custom theme via the Android file picker. `ThemeImport.kt`.
 
 - **Share utilities** — `ShareUtils.kt` provides the logic to share Recap card images via the Android share sheet.
+
+- **Custom UI font** — Settings now has a font picker mirroring desktop: System, Iced, Inter, Liberation Mono, Monospace, Comic Sans, Sans Serif, BigBlue Terminal, Cousine, FiraCode, Hack. Applied live via `LocalAppFontFamily` composition local. `AppFont.kt` (`FONT_OPTIONS`, `fontKeyFor()`), `Theme.kt`, `SettingsScreen.kt`.
 
 ---
 

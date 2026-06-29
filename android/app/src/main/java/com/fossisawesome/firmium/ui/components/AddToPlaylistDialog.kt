@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,7 +42,7 @@ fun AddToPlaylistDialog(
         Text(
             "Add to playlist",
             fontSize = 16.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             fontWeight = FontWeight.Bold,
             color = colors.text,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -67,7 +68,7 @@ fun AddToPlaylistDialog(
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("Cancel", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                        Text("Cancel", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                     }
                     // Create & Add button
                     Box(
@@ -80,7 +81,7 @@ fun AddToPlaylistDialog(
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("Create & Add", fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                        Text("Create & Add", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                             color = if (newName.isNotBlank()) androidx.compose.ui.graphics.Color.Black else colors.muted)
                     }
                 }
@@ -100,7 +101,7 @@ fun AddToPlaylistDialog(
                             FirmiumIcon(Icons.Default.Radio, contentDescription = "Start radio",
                                 tint = colors.accent, modifier = Modifier.size(32.dp))
                             Spacer(Modifier.width(16.dp))
-                            Text("Start Radio", fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                            Text("Start Radio", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
                                 color = colors.accent)
                         }
                         FirmiumDivider()
@@ -115,7 +116,7 @@ fun AddToPlaylistDialog(
                         FirmiumIcon(Icons.Default.Add, contentDescription = "New playlist",
                             tint = colors.accent, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.width(16.dp))
-                        Text("New playlist", fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                        Text("New playlist", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
                             color = colors.accent)
                     }
                     FirmiumDivider()
@@ -132,7 +133,7 @@ fun AddToPlaylistDialog(
                         Spacer(Modifier.width(16.dp))
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(item.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                                Text(item.name, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
                                 if (item.isSynced) {
                                     Spacer(Modifier.width(6.dp))
                                     FirmiumIcon(Icons.Default.Cloud, contentDescription = "Synced playlist",
@@ -140,7 +141,7 @@ fun AddToPlaylistDialog(
                                 }
                             }
                             Text("${item.trackCount} tracks", fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace, color = colors.muted)
+                                fontFamily = LocalAppFontFamily.current, color = colors.muted)
                         }
                     }
                     FirmiumDivider()

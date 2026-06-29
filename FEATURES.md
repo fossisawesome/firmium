@@ -169,6 +169,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | 18+ built-in color themes | ✅ | ✅ |
 | Custom user themes via TOML files | ✅ | ✅ |
 | Import custom themes from a `.toml` file (desktop: `themes/` drop folder; Android: file picker) | ✅ | ✅ |
+| Choose the interface font from a curated list of 11 fonts | ✅ | ✅ |
 | Responsive sidebar (collapses to icons, then a bottom tab bar on narrow windows) | ✅ | — |
 
 **Built-in themes include:** Firmium, Gruvbox, Tokyo Night, Dracula, Catppuccin Mocha / Macchiato / Frappé / Latte, Monokai Classic, Monokai Pro, Adwaita, Adwaita Dark, ayu, ayu Light, GitHub Dark, Nordfox, Synthwave '84, Svalbard.

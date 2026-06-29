@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -122,7 +123,7 @@ fun RecapScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Firmium Recap", fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace, color = colors.text, modifier = Modifier.weight(1f))
+                fontFamily = LocalAppFontFamily.current, color = colors.text, modifier = Modifier.weight(1f))
             CircleIconButton(Icons.Default.Share, "Share", colors.text) { shareCurrentCard() }
             Spacer(Modifier.width(8.dp))
             CircleIconButton(Icons.Default.Close, "Close", colors.text) { onClose() }
@@ -144,7 +145,7 @@ fun RecapScreen(
                         .clickable { range = opt.id }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    Text(opt.label, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    Text(opt.label, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                         color = if (active) colors.bg else colors.muted)
                 }
             }
@@ -225,7 +226,7 @@ private fun CircleIconButton(icon: androidx.compose.ui.graphics.vector.ImageVect
 private fun ColumnScope.CenterMessage(text: String) {
     val colors = LocalFirmiumColors.current
     Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.muted, textAlign = TextAlign.Center)
+        Text(text, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, textAlign = TextAlign.Center)
     }
 }
 
@@ -237,13 +238,13 @@ private fun HeroCard(kicker: String, hero: String, sub: String, accent: Boolean 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(kicker.uppercase(), fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+        Text(kicker.uppercase(), fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, letterSpacing = 1.sp)
         Spacer(Modifier.height(12.dp))
-        Text(hero, fontSize = 56.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace,
+        Text(hero, fontSize = 56.sp, fontWeight = FontWeight.Black, fontFamily = LocalAppFontFamily.current,
             color = if (accent) colors.accent else colors.text, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
-        Text(sub, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.muted, textAlign = TextAlign.Center)
+        Text(sub, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, textAlign = TextAlign.Center)
     }
 }
 
@@ -255,7 +256,7 @@ private fun CardScaffold(title: String, content: @Composable ColumnScope.() -> U
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.text)
+        Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current, color = colors.text)
         Spacer(Modifier.height(20.dp))
         content()
     }
@@ -268,7 +269,7 @@ private fun RankRow(rank: Int, coverUrl: String?, name: String, meta: String?, c
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$rank", fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace,
+        Text("$rank", fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = LocalAppFontFamily.current,
             color = colors.accent, modifier = Modifier.width(28.dp))
         if (coverUrl != null || meta != null) {
             CoverImage(url = coverUrl, contentDescription = null,
@@ -276,15 +277,15 @@ private fun RankRow(rank: Int, coverUrl: String?, name: String, meta: String?, c
             Spacer(Modifier.width(10.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace,
+            Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (meta != null) {
-                Text(meta, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                Text(meta, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.width(8.dp))
-        Text("$count", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        Text("$count", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
     }
 }
 
@@ -324,12 +325,12 @@ private fun TimeOfDayCard(s: RecapStats) {
     CardScaffold("By Time of Day") {
         rows.forEach { (label, value) ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(label, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.text, modifier = Modifier.width(84.dp))
+                Text(label, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.text, modifier = Modifier.width(84.dp))
                 Box(modifier = Modifier.weight(1f).height(12.dp).clip(RoundedCornerShape(50)).background(colors.surface2)) {
                     Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(value.toFloat() / max).clip(RoundedCornerShape(50)).background(colors.accent))
                 }
                 Spacer(Modifier.width(8.dp))
-                Text("$value", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted, modifier = Modifier.width(36.dp))
+                Text("$value", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, modifier = Modifier.width(36.dp))
             }
         }
     }
@@ -355,7 +356,7 @@ private fun DayOfWeekCard(s: RecapStats) {
                             .background(colors.accent),
                     )
                     Spacer(Modifier.height(6.dp))
-                    Text(DOW[i], fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                    Text(DOW[i], fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                 }
             }
         }
@@ -367,19 +368,19 @@ private fun DiscoveryCard(d: DiscoveryStat?, coverUrlFor: (String?) -> String?) 
     val colors = LocalFirmiumColors.current
     CardScaffold("Biggest Discovery") {
         if (d == null) {
-            Text("Not enough plays yet", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Text("Not enough plays yet", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         } else {
             CoverImage(url = coverUrlFor(d.coverArtId), contentDescription = null,
                 modifier = Modifier.size(160.dp).clip(RoundedCornerShape(12.dp)))
             Spacer(Modifier.height(16.dp))
-            Text(d.title, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+            Text(d.title, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             d.artist?.let {
-                Text(it, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                Text(it, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
             }
             Spacer(Modifier.height(8.dp))
             val date = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(d.firstHeard * 1000))
-            Text("${d.count} plays · first heard $date", fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+            Text("${d.count} plays · first heard $date", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.muted, textAlign = TextAlign.Center)
         }
     }
@@ -396,12 +397,12 @@ private fun SummaryCard(s: RecapStats) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("FIRMIUM RECAP", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.accent, letterSpacing = 2.sp)
+        Text("FIRMIUM RECAP", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent, letterSpacing = 2.sp)
         Spacer(Modifier.height(8.dp))
         Text(formatDuration(s.totalSeconds), fontSize = 48.sp, fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.Monospace, color = colors.text)
+            fontFamily = LocalAppFontFamily.current, color = colors.text)
         Text("${s.totalPlays} tracks · ${s.daysActive} active days", fontSize = 14.sp,
-            fontFamily = FontFamily.Monospace, color = colors.muted)
+            fontFamily = LocalAppFontFamily.current, color = colors.muted)
         Spacer(Modifier.height(20.dp))
         s.topTracks.firstOrNull()?.let { SummaryLine("Top track", it.title) }
         s.topArtists.firstOrNull()?.let { SummaryLine("Top artist", it.name) }
@@ -414,8 +415,8 @@ private fun SummaryCard(s: RecapStats) {
 private fun SummaryLine(label: String, value: String) {
     val colors = LocalFirmiumColors.current
     Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        Text(label.uppercase(), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted, letterSpacing = 0.5.sp)
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace,
+        Text(label.uppercase(), fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, letterSpacing = 0.5.sp)
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, fontFamily = LocalAppFontFamily.current,
             color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

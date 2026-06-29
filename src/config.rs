@@ -32,6 +32,8 @@ pub struct Config {
     pub window_decorations: Option<bool>,
     #[serde(default)]
     pub viz_cover_colors: Option<bool>,
+    #[serde(default)]
+    pub font_family: Option<String>,
 }
 
 fn config_path() -> PathBuf {
@@ -50,5 +52,27 @@ impl Config {
         if let Ok(s) = toml::to_string_pretty(self) {
             let _ = std::fs::write(config_path(), s);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn font_family_round_trips_through_toml() {
+        let cfg = Config {
+            font_family: Some("Inter".to_string()),
+            ..Config::default()
+        };
+        let s = toml::to_string_pretty(&cfg).unwrap();
+        let parsed: Config = toml::from_str(&s).unwrap();
+        assert_eq!(parsed.font_family, Some("Inter".to_string()));
+    }
+
+    #[test]
+    fn font_family_defaults_to_none_when_absent() {
+        let parsed: Config = toml::from_str("").unwrap();
+        assert_eq!(parsed.font_family, None);
     }
 }

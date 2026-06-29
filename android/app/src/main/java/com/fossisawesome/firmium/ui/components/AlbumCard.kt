@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,11 +58,11 @@ fun AlbumCard(
             }
         }
         Text(
-            album.name, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+            album.name, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
             color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         album.year?.let { year ->
-            Text("$year", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Text("$year", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         }
     }
 }

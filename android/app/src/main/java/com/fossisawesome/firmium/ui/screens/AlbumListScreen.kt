@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,9 +93,9 @@ fun AlbumListScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(state.error, color = colors.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text(state.error, color = colors.error, fontFamily = LocalAppFontFamily.current, fontSize = 13.sp)
             FirmiumTextButton(onClick = onLoad) {
-                Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
+                Text("Retry", fontFamily = LocalAppFontFamily.current, color = colors.accent, fontSize = 14.sp)
             }
         }
 
@@ -131,7 +132,7 @@ fun AlbumListScreen(
                 item(key = "sort_label") {
                     Text(
                         "Sorted by type, then year",
-                        fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                         color = colors.muted,
                         modifier = Modifier.padding(start = 16.dp, top = 12.dp),
                     )
@@ -146,7 +147,7 @@ fun AlbumListScreen(
                         }
                         Text(
                             "${label.uppercase()} · ${albums.size}",
-                            fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                             color = colors.muted, letterSpacing = 1.sp,
                             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
                         )
@@ -206,7 +207,7 @@ private fun FilterChipsRow(
                     .clickable { onClick() }
                     .padding(horizontal = 10.dp, vertical = 3.dp),
             ) {
-                Text(label, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = fg)
+                Text(label, fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = fg)
             }
         }
 
@@ -219,7 +220,7 @@ private fun FilterChipsRow(
                         .clickable { onClear() }
                         .padding(horizontal = 10.dp, vertical = 3.dp),
                 ) {
-                    Text("Clear", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                    Text("Clear", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                         color = colors.muted, fontWeight = FontWeight.Normal)
                 }
             }

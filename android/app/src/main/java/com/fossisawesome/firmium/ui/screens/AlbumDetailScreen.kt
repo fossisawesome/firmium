@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,9 +77,9 @@ fun AlbumDetailScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(state.error, color = colors.error, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                Text(state.error, color = colors.error, fontFamily = LocalAppFontFamily.current, fontSize = 13.sp)
                 FirmiumTextButton(onClick = { onLoad(albumId) }) {
-                    Text("Retry", fontFamily = FontFamily.Monospace, color = colors.accent, fontSize = 14.sp)
+                    Text("Retry", fontFamily = LocalAppFontFamily.current, color = colors.accent, fontSize = 14.sp)
                 }
             }
             state.album != null -> {
@@ -100,12 +101,12 @@ fun AlbumDetailScreen(
                                 Column(modifier = Modifier.weight(1f).heightIn(min = 130.dp), verticalArrangement = Arrangement.Center) {
                                     Text(
                                         album.name, fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace, color = colors.text,
+                                        fontFamily = LocalAppFontFamily.current, color = colors.text,
                                         maxLines = 3, overflow = TextOverflow.Ellipsis,
                                     )
                                     Spacer(Modifier.height(6.dp))
                                     Text(
-                                        album.artist, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                                        album.artist, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                                         color = colors.accent,
                                         textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
                                         modifier = Modifier.clickable(enabled = album.artistId.isNotBlank()) {
@@ -118,7 +119,7 @@ fun AlbumDetailScreen(
                                         countLabel,
                                         album.year?.toString(),
                                     ).joinToString(" · ")
-                                    Text(meta, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                                    Text(meta, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                                     Spacer(Modifier.height(10.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         if (onDownloadAlbum != null) {
@@ -146,7 +147,7 @@ fun AlbumDetailScreen(
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             FirmiumIcon(Icons.Default.PlayArrow, null, tint = colors.bg, modifier = Modifier.size(16.dp))
-                                            Text("Play", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.bg, letterSpacing = 0.5.sp)
+                                            Text("Play", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current, color = colors.bg, letterSpacing = 0.5.sp)
                                         }
                                     }
                                     Box(
@@ -158,7 +159,7 @@ fun AlbumDetailScreen(
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             FirmiumIcon(Icons.Default.Shuffle, null, tint = colors.text, modifier = Modifier.size(16.dp))
-                                            Text("Shuffle", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.text, letterSpacing = 0.5.sp)
+                                            Text("Shuffle", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current, color = colors.text, letterSpacing = 0.5.sp)
                                         }
                                     }
                                 }
@@ -188,7 +189,7 @@ fun AlbumDetailScreen(
                                             .padding(horizontal = 10.dp, vertical = 3.dp),
                                     ) {
                                         Text("BPM ${range.label}", fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace, color = fg)
+                                            fontFamily = LocalAppFontFamily.current, color = fg)
                                     }
                                 }
                             }
@@ -260,7 +261,7 @@ private fun AlbumTrackRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            "$index", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+            "$index", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, modifier = Modifier.width(24.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.End,
         )
@@ -271,17 +272,17 @@ private fun AlbumTrackRow(
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                track.title, fontFamily = FontFamily.Monospace, fontSize = 14.sp,
+                track.title, fontFamily = LocalAppFontFamily.current, fontSize = 14.sp,
                 color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             if (track.displayArtist != null && track.displayArtist != track.artist) {
                 Text(
-                    track.displayArtist, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    track.displayArtist, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                     color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         if (onDownloadClick != null) {
             DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp,
                 initiallyDownloaded = isDownloaded)
@@ -314,26 +315,26 @@ fun TrackRow(
     ) {
         if (index != null) {
             Text(
-                "$index", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                "$index", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                 color = if (isCurrentlyPlaying) colors.accent else colors.muted,
                 modifier = Modifier.width(28.dp),
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                track.title, fontFamily = FontFamily.Monospace, fontSize = 14.sp,
+                track.title, fontFamily = LocalAppFontFamily.current, fontSize = 14.sp,
                 color = if (isCurrentlyPlaying) colors.accent else colors.text,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             if (track.displayArtist != null && track.displayArtist != track.artist) {
                 Text(
-                    track.displayArtist, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    track.displayArtist, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                     color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         Spacer(Modifier.width(8.dp))
-        Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         if (onDownloadClick != null) {
             DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp,
                 initiallyDownloaded = isDownloaded)

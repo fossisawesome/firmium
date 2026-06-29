@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -72,7 +73,7 @@ fun ErrorHost(
                 text = lastMessage,
                 color = colors.text,
                 fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 12.dp, vertical = 12.dp),

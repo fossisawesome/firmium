@@ -57,6 +57,10 @@ import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.ui.theme.allThemes
 import com.fossisawesome.firmium.ui.theme.deleteImportedTheme
 import com.fossisawesome.firmium.ui.theme.importThemeFromUri
+import com.fossisawesome.firmium.ui.theme.FONT_OPTIONS
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
+import com.fossisawesome.firmium.ui.theme.fontKeyFor
+import com.fossisawesome.firmium.ui.theme.toFontFamilyPublic
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +75,7 @@ fun SettingsScreen(
     username: String,
     appVersion: String,
     currentThemeId: String,
+    currentFontFamily: String,
     lrclibEnabled: Boolean,
     lyricsWordFillEnabled: Boolean,
     lastfmEnabled: Boolean,
@@ -84,6 +89,7 @@ fun SettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
+    onFontSelected: (String) -> Unit,
     onVisualizerToggle: (Boolean) -> Unit,
     onVisualizerTypeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
@@ -105,6 +111,7 @@ fun SettingsScreen(
         username = username,
         appVersion = appVersion,
         currentThemeId = currentThemeId,
+        currentFontFamily = currentFontFamily,
         lrclibEnabled = lrclibEnabled,
         lyricsWordFillEnabled = lyricsWordFillEnabled,
         lastfmEnabled = lastfmEnabled,
@@ -118,6 +125,7 @@ fun SettingsScreen(
         onGaplessToggle = onGaplessToggle,
         onReplayGainToggle = onReplayGainToggle,
         onThemeSelected = onThemeSelected,
+        onFontSelected = onFontSelected,
         onVisualizerToggle = onVisualizerToggle,
         onVisualizerTypeSelected = onVisualizerTypeSelected,
         onLrclibToggle = onLrclibToggle,
@@ -168,6 +176,7 @@ private fun FirmiumSettingsScreen(
     username: String,
     appVersion: String,
     currentThemeId: String,
+    currentFontFamily: String,
     lrclibEnabled: Boolean,
     lyricsWordFillEnabled: Boolean,
     lastfmEnabled: Boolean,
@@ -181,6 +190,7 @@ private fun FirmiumSettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
+    onFontSelected: (String) -> Unit,
     onVisualizerToggle: (Boolean) -> Unit,
     onVisualizerTypeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
@@ -233,7 +243,7 @@ private fun FirmiumSettingsScreen(
                 else "Settings",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.text,
             )
         }
@@ -281,7 +291,7 @@ private fun FirmiumSettingsScreen(
                             FirmiumIcon(cat.icon, contentDescription = null,
                                 tint = colors.accent, modifier = Modifier.size(20.dp))
                             // .mset-cat-label: 15sp text color
-                            Text(cat.label, fontSize = 15.sp, fontFamily = FontFamily.Monospace,
+                            Text(cat.label, fontSize = 15.sp, fontFamily = LocalAppFontFamily.current,
                                 color = colors.text, modifier = Modifier.weight(1f))
                             // .mset-cat-chevron: muted color
                             FirmiumIcon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null,
@@ -303,6 +313,8 @@ private fun FirmiumSettingsScreen(
                         "appearance" -> FirmiumAppearancePanel(
                             currentThemeId = currentThemeId,
                             onThemeSelected = onThemeSelected,
+                            currentFontFamily = currentFontFamily,
+                            onFontSelected = onFontSelected,
                             visualizerEnabled = playerState.visualizerEnabled,
                             visualizerType = playerState.visualizerType,
                             onVisualizerToggle = onVisualizerToggle,
@@ -373,9 +385,9 @@ private fun FirmiumSettingsRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+            Text(title, fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
             Spacer(Modifier.height(2.dp))
-            Text(desc, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Text(desc, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         }
         Spacer(Modifier.width(12.dp))
         content()
@@ -388,6 +400,8 @@ private fun FirmiumSettingsRow(
 private fun FirmiumAppearancePanel(
     currentThemeId: String,
     onThemeSelected: (String) -> Unit,
+    currentFontFamily: String,
+    onFontSelected: (String) -> Unit,
     visualizerEnabled: Boolean,
     visualizerType: String,
     onVisualizerToggle: (Boolean) -> Unit,
@@ -432,7 +446,7 @@ private fun FirmiumAppearancePanel(
 
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Color Theme", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+        Text("Color Theme", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, modifier = Modifier.padding(bottom = 4.dp))
         ThemeDropdown(
             currentThemeId = currentThemeId,
@@ -446,19 +460,26 @@ private fun FirmiumAppearancePanel(
             },
         )
         FirmiumTextButton(onClick = { themeImportLauncher.launch("*/*") }) {
-            Text("Import theme", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+            Text("Import theme", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
         }
         Text("Import a .toml theme file. The same format works on desktop and Android.",
-            fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
 
-        Text("Visualizer", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+        Text("Font", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
+            color = colors.muted, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        FontDropdown(
+            currentFontFamily = currentFontFamily,
+            onFontSelected = onFontSelected,
+        )
+
+        Text("Visualizer", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, modifier = Modifier.padding(top = 8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Audio Visualizer", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                Text("Audio Visualizer", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
                 Spacer(Modifier.height(2.dp))
                 Text("Show an audio-reactive visualizer on the now playing screen",
-                    fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                    fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
             }
             Spacer(Modifier.width(12.dp))
             FirmiumSwitch(checked = visualizerEnabled, onCheckedChange = handleVisualizerToggle)
@@ -486,7 +507,7 @@ private fun VisualizerDropdown(visualizerType: String, onTypeSelected: (String) 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(current.label, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+            Text(current.label, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, modifier = Modifier.weight(1f))
             FirmiumIcon(
                 if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -513,7 +534,7 @@ private fun VisualizerDropdown(visualizerType: String, onTypeSelected: (String) 
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Text(
-                            t.label, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            t.label, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                             color = if (t.id == visualizerType) colors.accent else colors.text,
                             modifier = Modifier.weight(1f),
                         )
@@ -540,22 +561,22 @@ private fun FirmiumDownloadsPanel(
 
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Download Format", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+        Text("Download Format", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, modifier = Modifier.padding(bottom = 4.dp))
         Text(
             "Format used when downloading tracks and albums. \"Original\" saves the file exactly as stored on the server.",
-            fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+            fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
         )
         FormatDropdown(downloadFormat = downloadFormat, onFormatSelected = onDownloadFormatSelected)
 
         // Whole-library download — only meaningful when connected to a server.
         if (app.auth.isAuthenticated) {
             Spacer(Modifier.height(8.dp))
-            Text("Offline Library", fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            Text("Offline Library", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.muted)
             Text(
                 "Download every album and track from the server to this device for offline playback.",
-                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
             )
             val statusText = when {
                 progress.running && progress.total > 0 -> "Downloading ${progress.done}/${progress.total}…"
@@ -576,12 +597,12 @@ private fun FirmiumDownloadsPanel(
             ) {
                 Text(
                     if (progress.running) "Downloading…" else "Download entire library",
-                    fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                     color = if (progress.running) colors.muted else Color.Black,
                 )
             }
             if (statusText != null) {
-                Text(statusText, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                Text(statusText, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                     color = if (progress.error != null) colors.error else colors.muted)
             }
         }
@@ -614,20 +635,20 @@ private fun FirmiumStatsPanel(onViewRecap: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Firmium Recap", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+            Text("Firmium Recap", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
             Spacer(Modifier.height(2.dp))
             Text("A swipeable, shareable recap of your listening", fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace, color = colors.muted)
+                fontFamily = LocalAppFontFamily.current, color = colors.muted)
         }
-        Text("View", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+        Text("View", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
     }
     FirmiumDivider()
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
-        Text("Export Play History", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+        Text("Export Play History", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
         Spacer(Modifier.height(2.dp))
         Text("Share your full local play history as a file", fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace, color = colors.muted)
+            fontFamily = LocalAppFontFamily.current, color = colors.muted)
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FirmiumTextButton(onClick = {
@@ -635,13 +656,13 @@ private fun FirmiumStatsPanel(onViewRecap: () -> Unit) {
                     val csv = app.playHistory.exportCsv()
                     ShareUtils.shareText(context, "firmium-play-history.csv", csv, "text/csv")
                 }
-            }) { Text("Export CSV", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+            }) { Text("Export CSV", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.text) }
             FirmiumTextButton(onClick = {
                 scope.launch {
                     val json = app.playHistory.exportJson()
                     ShareUtils.shareText(context, "firmium-play-history.json", json, "application/json")
                 }
-            }) { Text("Export JSON", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+            }) { Text("Export JSON", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.text) }
         }
     }
     FirmiumDivider()
@@ -664,7 +685,7 @@ private fun FormatDropdown(downloadFormat: String, onFormatSelected: (String) ->
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(current.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+            Text(current.name, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, modifier = Modifier.weight(1f))
             FirmiumIcon(
                 if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -692,7 +713,7 @@ private fun FormatDropdown(downloadFormat: String, onFormatSelected: (String) ->
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Text(
-                            fmt.name, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            fmt.name, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                             color = if (fmt.id == downloadFormat) colors.accent else colors.text,
                             modifier = Modifier.weight(1f),
                         )
@@ -726,7 +747,7 @@ private fun CurveDropdown(curve: String, onCurveSelected: (String) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(current.second, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+            Text(current.second, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, modifier = Modifier.weight(1f))
             FirmiumIcon(
                 if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -754,7 +775,7 @@ private fun CurveDropdown(curve: String, onCurveSelected: (String) -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Text(
-                            label, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            label, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                             color = if (id == curve) colors.accent else colors.text,
                             modifier = Modifier.weight(1f),
                         )
@@ -787,9 +808,9 @@ private fun FirmiumPlaybackPanel(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Crossfade", fontSize = 15.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+            Text("Crossfade", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
             Spacer(Modifier.height(2.dp))
-            Text("Smoothly blend between tracks", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Text("Smoothly blend between tracks", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         }
         Spacer(Modifier.width(12.dp))
         FirmiumSwitch(
@@ -803,7 +824,7 @@ private fun FirmiumPlaybackPanel(
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
             Text(
                 "Crossfade: ${playerState.crossfadeDurationMs / 1000}s",
-                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
             )
             FirmiumSlider(
                 value = playerState.crossfadeDurationMs.toFloat(),
@@ -815,10 +836,10 @@ private fun FirmiumPlaybackPanel(
         FirmiumDivider()
 
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-            Text("Crossfade Curve", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+            Text("Crossfade Curve", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
             Spacer(Modifier.height(2.dp))
             Text("Linear blends evenly; Logarithmic approximates an equal-power fade",
-                fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
             Spacer(Modifier.height(8.dp))
             CurveDropdown(curve = playerState.crossfadeCurve, onCurveSelected = onCrossfadeCurveChange)
         }
@@ -906,11 +927,11 @@ private fun FirmiumEqualizerPanel() {
 
     // Profile picker
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-        Text("Profiles", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        Text("Profiles", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         Spacer(Modifier.height(6.dp))
         if (profiles.isEmpty()) {
             Text("No saved profiles. Import a .toml or save one below.",
-                fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
         } else {
             profiles.forEach { p ->
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -918,7 +939,7 @@ private fun FirmiumEqualizerPanel() {
                     Box(modifier = Modifier.weight(1f).clickable { persist(profiles, p.name) }) {
                         Text(
                             (if (active?.name == p.name) "● " else "○ ") + "${p.name} (${p.mode})",
-                            fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                            fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
                             color = if (active?.name == p.name) colors.text else colors.muted,
                         )
                     }
@@ -926,7 +947,7 @@ private fun FirmiumEqualizerPanel() {
                         val remaining = profiles.filter { it.name != p.name }
                         persist(remaining, remaining.firstOrNull()?.name)
                     }) {
-                        Text("Delete", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                        Text("Delete", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                     }
                 }
             }
@@ -938,7 +959,7 @@ private fun FirmiumEqualizerPanel() {
         onClick = { importLauncher.launch(arrayOf("*/*")) },
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
     ) {
-        Text("Import profile (.toml)", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+        Text("Import profile (.toml)", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
     }
     FirmiumDivider()
 
@@ -949,7 +970,7 @@ private fun FirmiumEqualizerPanel() {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
                 a.bands.forEachIndexed { i, band ->
                     Text("${freqLabel(band.freq)} Hz: ${if (band.gain > 0) "+" else ""}${band.gain.toInt()} dB",
-                        fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                        fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                     FirmiumSlider(
                         value = band.gain,
                         onValueChange = { g ->
@@ -977,12 +998,12 @@ private fun FirmiumEqualizerPanel() {
                             onValueChange = { v -> v.toFloatOrNull()?.let { updateActiveBands(a.bands.toMutableList().also { l -> l[i] = band.copy(q = it) }) } },
                             label = "Q", keyboardOptions = numberKeyboard, modifier = Modifier.weight(1f))
                         FirmiumTextButton(onClick = { updateActiveBands(a.bands.filterIndexed { idx, _ -> idx != i }) }) {
-                            Text("×", fontSize = 16.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                            Text("×", fontSize = 16.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                         }
                     }
                 }
                 FirmiumTextButton(onClick = { updateActiveBands(a.bands + EqBand(1000f, 0f, 1.0f)) }) {
-                    Text("Add band", fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+                    Text("Add band", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
                 }
             }
         }
@@ -1001,14 +1022,14 @@ private fun FirmiumEqualizerPanel() {
                 val profile = EqProfile(name, "graphic", GRAPHIC_FREQS.map { EqBand(it, 0f) })
                 persist(profiles.filter { it.name != name } + profile, name)
                 newName = ""
-            }) { Text("Save Graphic", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+            }) { Text("Save Graphic", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.text) }
             FirmiumTextButton(onClick = {
                 val name = newName.trim()
                 if (name.isEmpty()) return@FirmiumTextButton
                 val profile = EqProfile(name, "parametric", listOf(EqBand(100f, 0f, 1f), EqBand(1000f, 0f, 1f), EqBand(8000f, 0f, 1f)))
                 persist(profiles.filter { it.name != name } + profile, name)
                 newName = ""
-            }) { Text("Save Parametric", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.text) }
+            }) { Text("Save Parametric", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.text) }
         }
     }
 }
@@ -1128,9 +1149,9 @@ private fun FirmiumAccountPanel(
 ) {
     val colors = LocalFirmiumColors.current
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
-        Text(serverUrl, fontSize = 14.sp, fontFamily = FontFamily.Monospace, color = colors.text)
+        Text(serverUrl, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
         Spacer(Modifier.height(2.dp))
-        Text("Logged in as $username", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+        Text("Logged in as $username", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
     }
     FirmiumDivider()
     FirmiumSettingsRow("Auto-Login",
@@ -1142,7 +1163,7 @@ private fun FirmiumAccountPanel(
             .clickable { onLogout() }
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
-        Text("Disconnect server", fontSize = 15.sp, fontFamily = FontFamily.Monospace,
+        Text("Disconnect server", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.error)
     }
     FirmiumDivider()
@@ -1165,21 +1186,21 @@ private fun FirmiumAboutPanel(
         Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable {
             onWipeCache(); wipeCacheLabel = "Wiped!"
         }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text(wipeCacheLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+            Text(wipeCacheLabel, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
         }
     }
     FirmiumSettingsRow("Clear Cache", "Remove all cached app data from disk") {
         Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable {
             onClearCache(); clearCacheLabel = "Cleared!"
         }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text(clearCacheLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.error)
+            Text(clearCacheLabel, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.error)
         }
     }
     FirmiumSettingsRow("Reset Settings", "Reset all preferences to defaults") {
         Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable {
             onResetSettings(); resetLabel = "Done!"
         }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text(resetLabel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.error)
+            Text(resetLabel, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.error)
         }
     }
 }
@@ -1218,7 +1239,7 @@ private fun ThemeDropdown(
                 Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.text).border(0.5.dp, colors.border, CircleShape))
                 Box(Modifier.size(12.dp).clip(CircleShape).background(currentTheme.accent))
             }
-            Text(currentTheme.name, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+            Text(currentTheme.name, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.text, modifier = Modifier.weight(1f))
             FirmiumIcon(
                 if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -1253,7 +1274,7 @@ private fun ThemeDropdown(
                             Box(Modifier.size(12.dp).clip(CircleShape).background(theme.accent))
                         }
                         Text(
-                            theme.name, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                            theme.name, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                             color = if (theme.id == currentThemeId) colors.accent else colors.text,
                             modifier = Modifier.weight(1f),
                         )
@@ -1270,6 +1291,68 @@ private fun ThemeDropdown(
                                     .size(16.dp)
                                     .clickable { onDeleteImported(theme) },
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FontDropdown(
+    currentFontFamily: String,
+    onFontSelected: (String) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(6.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(currentFontFamily, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
+                color = colors.text, modifier = Modifier.weight(1f))
+            FirmiumIcon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp),
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .background(colors.surface),
+            ) {
+                FONT_OPTIONS.forEachIndexed { i, name ->
+                    if (i > 0) FirmiumDivider(color = colors.border)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onFontSelected(name); expanded = false }
+                            .background(if (name == currentFontFamily) colors.surface2.copy(alpha = 0.5f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            name, fontSize = 13.sp, fontFamily = fontKeyFor(name).toFontFamilyPublic(),
+                            color = if (name == currentFontFamily) colors.accent else colors.text,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (name == currentFontFamily) {
+                            FirmiumIcon(Icons.Default.Check, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(14.dp))
                         }
                     }
                 }

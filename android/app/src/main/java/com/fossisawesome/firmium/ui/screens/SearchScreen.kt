@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -100,7 +101,7 @@ fun SearchScreen(
                 textStyle = TextStyle(
                     color = colors.text,
                     fontSize = 16.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = LocalAppFontFamily.current,
                 ),
                 cursorBrush = SolidColor(colors.accent),
                 singleLine = true,
@@ -120,7 +121,7 @@ fun SearchScreen(
                     ) {
                         if (state.query.isEmpty()) {
                             Text("Search albums, songs…",
-                                fontSize = 16.sp, fontFamily = FontFamily.Monospace, color = colors.muted)
+                                fontSize = 16.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                         }
                         inner()
                     }
@@ -148,7 +149,7 @@ fun SearchScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Min rating:", fontSize = 12.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+                Text("Min rating:", fontSize = 12.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current)
                 StarRating(
                     rating = state.ratingFilter,
                     onRate = onRatingFilterChange,
@@ -162,22 +163,22 @@ fun SearchScreen(
         // Results body
         when {
             state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Searching…", fontSize = 14.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+                Text("Searching…", fontSize = 14.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current)
             }
             state.query.isBlank() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Type above and press Search or Enter",
-                    fontSize = 14.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+                    fontSize = 14.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current)
             }
             state.songs.isEmpty() && state.albums.isEmpty() -> Box(
                 Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No results found.", fontSize = 14.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+                Text("No results found.", fontSize = 14.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current)
             }
             else -> LazyColumn(modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)) {
                 if (visibleSongs.isNotEmpty()) {
                     // .section-header: 12sp uppercase, muted, letterSpacing 1, margin 10/12dp
                     item {
-                        Text("SONGS", fontSize = 12.sp, color = colors.muted, fontFamily = FontFamily.Monospace,
+                        Text("SONGS", fontSize = 12.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current,
                             letterSpacing = 1.sp,
                             modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
                     }
@@ -197,7 +198,7 @@ fun SearchScreen(
                 }
                 if (state.albums.isNotEmpty()) {
                     item {
-                        Text("ALBUMS", fontSize = 12.sp, color = colors.muted, fontFamily = FontFamily.Monospace,
+                        Text("ALBUMS", fontSize = 12.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current,
                             letterSpacing = 1.sp,
                             modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
                     }
@@ -257,7 +258,7 @@ private fun SearchTrackRow(
             text = "$index",
             fontSize = 11.sp,
             color = if (isPlaying) colors.accent else colors.muted,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             modifier = Modifier.width(24.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.End,
         )
@@ -272,7 +273,7 @@ private fun SearchTrackRow(
             Text(
                 text = song.title,
                 fontSize = 14.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = if (isPlaying) colors.accent else colors.text,
                 maxLines = 1,
             )
@@ -280,7 +281,7 @@ private fun SearchTrackRow(
             Text(
                 text = song.displayArtist ?: song.artist,
                 fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.muted,
                 maxLines = 1,
             )
@@ -304,7 +305,7 @@ private fun SearchTrackRow(
             text = formatDuration(song.duration),
             fontSize = 12.sp,
             color = colors.muted,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             modifier = Modifier.padding(end = 10.dp),
         )
         if (onDownloadClick != null) {

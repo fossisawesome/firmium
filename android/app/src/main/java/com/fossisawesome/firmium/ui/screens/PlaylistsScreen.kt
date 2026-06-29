@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,7 +49,7 @@ fun PlaylistsScreen(
         ) {
             Text(
                 "Playlists".uppercase(),
-                fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
                 color = colors.muted, letterSpacing = 1.sp,
                 modifier = Modifier.weight(1f),
             )
@@ -61,13 +62,13 @@ fun PlaylistsScreen(
                     .clickable { showCreateDialog = true }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
-                Text("+ New", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.accent)
+                Text("+ New", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
             }
         }
 
         if (state.items.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No playlists yet", fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = colors.muted)
+                Text("No playlists yet", fontFamily = LocalAppFontFamily.current, fontSize = 14.sp, color = colors.muted)
             }
         } else {
             LazyColumn(
@@ -132,7 +133,7 @@ private fun PlaylistRow(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    item.name, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                    item.name, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                     fontSize = 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 if (item.isSynced) {
@@ -142,7 +143,7 @@ private fun PlaylistRow(
             }
             Text(
                 "${item.trackCount} track${if (item.trackCount != 1) "s" else ""}",
-                fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
             )
         }
         // Sync — small icon button for local-only playlists not yet on the server
@@ -183,7 +184,7 @@ private fun FirmiumCreatePlaylistDialog(
         ) {
             Text(
                 "New Playlist", fontSize = 16.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace, color = colors.text,
+                fontFamily = LocalAppFontFamily.current, color = colors.text,
             )
             FirmiumTextField(
                 value = name,
@@ -196,11 +197,11 @@ private fun FirmiumCreatePlaylistDialog(
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
             ) {
                 Text(
-                    "Cancel", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = colors.muted,
+                    "Cancel", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted,
                     modifier = androidx.compose.ui.Modifier.clickable { onDismiss() }.padding(8.dp),
                 )
                 Text(
-                    "Create", fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                    "Create", fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
                     color = if (name.isNotBlank()) colors.accent else colors.muted,
                     modifier = androidx.compose.ui.Modifier
                         .clickable(enabled = name.isNotBlank()) { onConfirm(name) }

@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,7 +47,7 @@ fun QueueSheet(
         Text(
             text = "Queue",
             fontSize = 16.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.text,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
@@ -97,7 +98,7 @@ private fun QueueItem(
                 Text(
                     text = "${index + 1}",
                     fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = LocalAppFontFamily.current,
                     color = colors.muted,
                 )
             }
@@ -109,7 +110,7 @@ private fun QueueItem(
             Text(
                 text = song.title,
                 fontSize = 14.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = if (isActive) colors.accent else colors.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -117,7 +118,7 @@ private fun QueueItem(
             Text(
                 text = song.displayArtist ?: song.artist,
                 fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 color = colors.muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -127,7 +128,7 @@ private fun QueueItem(
         Text(
             text = formatDuration(song.duration),
             fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             color = colors.muted,
         )
     }

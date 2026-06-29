@@ -28,6 +28,7 @@ class AppPreferences(context: Context) {
         val SHUFFLE_ENABLED = booleanPreferencesKey("shuffle_enabled")
         val THEME_ID = stringPreferencesKey("theme_id")
         val UI_THEME_ID = stringPreferencesKey("ui_theme_id")
+        val FONT_FAMILY = stringPreferencesKey("font_family")
         val LRCLIB_ENABLED = booleanPreferencesKey("lrclib_enabled")
         val LYRICS_WORD_FILL_ENABLED = booleanPreferencesKey("lyrics_word_fill_enabled")
         val LASTFM_ENABLED = booleanPreferencesKey("lastfm_enabled")
@@ -71,6 +72,7 @@ class AppPreferences(context: Context) {
     val themeId: Flow<String> = store.data.map { it[THEME_ID] ?: "firmium" }
     // "firmium" = icon-only bottom nav with monospace player; "material3" = standard M3 components
     val uiThemeId: Flow<String> = store.data.map { it[UI_THEME_ID] ?: "material3" }
+    val fontFamily: Flow<String> = store.data.map { it[FONT_FAMILY] ?: "Liberation Mono" }
     val lrclibEnabled: Flow<Boolean> = store.data.map { it[LRCLIB_ENABLED] ?: true }
     val lyricsWordFillEnabled: Flow<Boolean> = store.data.map { it[LYRICS_WORD_FILL_ENABLED] ?: true }
     val lastfmEnabled: Flow<Boolean> = store.data.map { it[LASTFM_ENABLED] ?: false }
@@ -103,6 +105,7 @@ class AppPreferences(context: Context) {
     suspend fun setShuffleEnabled(v: Boolean) = store.edit { it[SHUFFLE_ENABLED] = v }
     suspend fun setThemeId(id: String) = store.edit { it[THEME_ID] = id }
     suspend fun setUiThemeId(id: String) = store.edit { it[UI_THEME_ID] = id }
+    suspend fun setFontFamily(name: String) = store.edit { it[FONT_FAMILY] = name }
     suspend fun setLrclibEnabled(v: Boolean) = store.edit { it[LRCLIB_ENABLED] = v }
     suspend fun setLyricsWordFillEnabled(v: Boolean) = store.edit { it[LYRICS_WORD_FILL_ENABLED] = v }
     suspend fun setLastfmEnabled(v: Boolean) = store.edit { it[LASTFM_ENABLED] = v }

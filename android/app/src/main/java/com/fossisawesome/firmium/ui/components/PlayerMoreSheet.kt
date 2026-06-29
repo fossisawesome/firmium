@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -111,7 +112,7 @@ private fun MoreTile(action: MoreAction, modifier: Modifier = Modifier) {
             FirmiumIcon(action.icon, contentDescription = action.label,
                 tint = colors.text, modifier = Modifier.size(22.dp))
         }
-        Text(action.label, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+        Text(action.label, fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, textAlign = TextAlign.Center, maxLines = 2)
     }
 }

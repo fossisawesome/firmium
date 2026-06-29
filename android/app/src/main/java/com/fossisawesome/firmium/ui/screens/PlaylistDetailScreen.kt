@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.screens
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -58,11 +59,11 @@ fun PlaylistDetailScreen(
 
         if (isServerOnly && serverLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Loading…", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = colors.muted)
+                Text("Loading…", fontFamily = LocalAppFontFamily.current, fontSize = 13.sp, color = colors.muted)
             }
         } else if (tracks.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No tracks yet", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = colors.muted)
+                Text("No tracks yet", fontFamily = LocalAppFontFamily.current, fontSize = 13.sp, color = colors.muted)
             }
         } else {
             LazyColumn(

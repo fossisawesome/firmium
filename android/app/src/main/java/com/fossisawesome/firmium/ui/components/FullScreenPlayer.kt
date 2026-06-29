@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -371,7 +372,7 @@ private fun PlayerControls(
     ) {
         Text(
             text = track.title,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             fontSize = if (compact) 16.sp else 20.sp,
             fontWeight = FontWeight.Bold,
             color = colors.text,
@@ -382,7 +383,7 @@ private fun PlayerControls(
         Spacer(Modifier.height(6.dp))
         Text(
             text = track.displayArtist ?: track.artist,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = LocalAppFontFamily.current,
             fontSize = if (compact) 12.sp else 14.sp,
             color = colors.muted,
             textAlign = TextAlign.Center,
@@ -395,7 +396,7 @@ private fun PlayerControls(
             Spacer(Modifier.height(4.dp))
             Text(
                 text = trackInfo + "  ▾",
-                fontFamily = FontFamily.Monospace,
+                fontFamily = LocalAppFontFamily.current,
                 fontSize = if (compact) 10.sp else 11.sp,
                 color = colors.muted,
                 textAlign = TextAlign.Center,
@@ -422,9 +423,9 @@ private fun PlayerControls(
     )
     Spacer(Modifier.height(6.dp))
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(formatSeconds(state.currentPosition), fontSize = 11.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+        Text(formatSeconds(state.currentPosition), fontSize = 11.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current)
         Spacer(Modifier.weight(1f))
-        Text(formatSeconds(state.trackDuration), fontSize = 11.sp, color = colors.muted, fontFamily = FontFamily.Monospace)
+        Text(formatSeconds(state.trackDuration), fontSize = 11.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current)
         FirmiumIconButton(onClick = onMoreOpen, modifier = Modifier.size(44.dp)) {
             FirmiumIcon(Icons.Default.MoreVert, contentDescription = "More",
                 tint = colors.muted, modifier = Modifier.size(20.dp))
@@ -543,14 +544,14 @@ private fun AudioStats(track: Song, compact: Boolean) {
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         if (rows.isEmpty()) {
-            Text("No extra stats provided by server", fontFamily = FontFamily.Monospace,
+            Text("No extra stats provided by server", fontFamily = LocalAppFontFamily.current,
                 fontSize = size, color = colors.muted, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth())
         } else {
             rows.forEach { (label, value) ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(label, fontFamily = FontFamily.Monospace, fontSize = size, color = colors.muted)
-                    Text(value, fontFamily = FontFamily.Monospace, fontSize = size, color = colors.text)
+                    Text(label, fontFamily = LocalAppFontFamily.current, fontSize = size, color = colors.muted)
+                    Text(value, fontFamily = LocalAppFontFamily.current, fontSize = size, color = colors.text)
                 }
             }
         }
@@ -715,7 +716,7 @@ private fun ArtOrOrb(
                 Text(
                     vizType.label,
                     fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = LocalAppFontFamily.current,
                     color = Color.White.copy(alpha = 0.65f),
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
                 )

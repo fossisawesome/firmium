@@ -110,7 +110,7 @@ Strong criteria = operate independently. Vague criteria = constant back-and-fort
 
 ## 7. Keep Docs in Sync
 
-Change touches settings (the settings view + state in `src/app.rs`), themes (`themes/*.toml`, `src/theme.rs`), or build/packaging commands (`Cargo.toml`, `PKGBUILD`, `firmium.spec`): update matching pages in `firmium-docs` repo in same change:
+Change touches settings (the settings view in `src/app/view/settings.rs` + state in `src/app/mod.rs`), themes (`themes/*.toml`, `src/theme.rs`), or build/packaging commands (`Cargo.toml`, `PKGBUILD`, `firmium.spec`): update matching pages in `firmium-docs` repo in same change:
 
 - Settings: `src/content/settings.md` (what it does, layman's terms) and `src/content/settings-themes-internals.md` (storage keys, code references)
 - Themes: `src/content/custom-themes.md` (how to use/create themes) and `src/content/settings-themes-internals.md` (how themes loaded/applied internally)
