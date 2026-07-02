@@ -132,6 +132,7 @@ pub struct App {
     lyrics_word_fill: bool,
     window_decorations: bool,
     font_family: String,
+    scrollbar_width: u32,
 
     // ── Search ────────────────────────────────────────────────────────────────
     search_query: String,
@@ -285,6 +286,7 @@ impl App {
             lyrics_word_fill: cfg.lyrics_word_fill.unwrap_or(false),
             window_decorations: cfg.window_decorations.unwrap_or(true),
             font_family: cfg.font_family.clone().unwrap_or_else(|| "Liberation Mono".to_string()),
+            scrollbar_width: cfg.scrollbar_width.unwrap_or(10).max(6).min(20),
             search_query: String::new(),
             search_results: None,
             search_rating_filter: 0,
@@ -381,6 +383,7 @@ impl App {
             window_decorations: Some(self.window_decorations),
             viz_cover_colors: Some(self.viz_cover_colors),
             font_family: Some(self.font_family.clone()),
+            scrollbar_width: Some(self.scrollbar_width),
         }
         .save();
     }

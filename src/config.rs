@@ -34,6 +34,8 @@ pub struct Config {
     pub viz_cover_colors: Option<bool>,
     #[serde(default)]
     pub font_family: Option<String>,
+    #[serde(default)]
+    pub scrollbar_width: Option<u32>,
 }
 
 fn config_path() -> PathBuf {
