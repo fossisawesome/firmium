@@ -1,3 +1,22 @@
+# v7.1.0
+
+## Desktop
+
+- **Command line control** — control a running instance from the terminal: `firmium play-pause`, `next`, `prev`, `volume <0-100>`, `seek <secs>`, `queue-index <n>`, `shuffle-toggle`, `repeat-cycle`, `status`, etc. Unix domain socket on Linux/macOS (`$XDG_RUNTIME_DIR/firmium.sock`), named pipe on Windows. New `backend/ipc.rs`; dispatch reuses the same `commands::queue` fns as the UI's transport controls. Useful for scripts and global keyboard shortcuts.
+- **Scrollbar width setting** — Appearance settings gains a scrollbar width slider; `make_scrollbar()` replaces the old fixed `thin_scrollbar()` across all views.
+- **Full album list pagination** — `get_albums()` now pages through `getAlbumList2` with `offset` until a short page, instead of a single capped 500-item fetch. Fixes libraries over 500 albums showing incomplete.
+- **Queue/playlist cover art prefetch** — cover art for all tracks in the queue (on any backend event) and for local + server playlists (after playlist changes) is now proactively fetched into the image cache, instead of only on scroll-into-view.
+- **Account switcher close button** — the "Connected" account overlay now has an explicit close (✕) button in its header.
+- Removed **in-app software updater** from the features list (not present in the native iced build — `.deb`/`.rpm`/COPR/AUR users update via their package manager).
+- Bug fixes: `clamp()` used instead of `max().min()` chains; dead-code warnings suppressed where false positives.
+
+## Android
+
+- **Play button on artist page** — instantly plays that artist's top tracks; replaces the old inline "Songs" preview list (top 5 tracks) on the artist detail screen, which is removed.
+- Scrobble failures are now logged (`Log.e`) instead of silently swallowed.
+
+---
+
 # v7.0.0
 
 > **This is a major rewrite.** The desktop app has been rebuilt from the ground up. Bugs, crashes, and rough edges are expected. Please report any issues you encounter.
