@@ -215,8 +215,16 @@ pub(crate) fn slider_style(t: Tokens) -> impl Fn(&Theme, slider::Status) -> slid
     }
 }
 
+pub(crate) fn scrollbar_width(width: u32) -> scrollable::Scrollbar {
+    let scroller = (width / 2).max(3);
+    scrollable::Scrollbar::new()
+        .width(width)
+        .margin(2)
+        .scroller_width(scroller)
+}
+
 pub(crate) fn thin_scrollbar() -> scrollable::Scrollbar {
-    scrollable::Scrollbar::new().width(10).margin(2).scroller_width(5)
+    scrollbar_width(10)
 }
 
 pub(crate) fn thin_scroll_style(t: Tokens) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
