@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 
 use iced::widget::image::Handle as ImageHandle;
-use iced::widget::{button, column, container, row, stack, text};
+use iced::widget::{button, column, container, row, scrollable, stack, text};
 use iced::{Alignment, Background, Border, Element, Length, Task, Theme};
 
 use crate::commands::equalizer::EqState;
@@ -181,6 +181,10 @@ pub struct App {
 }
 
 impl App {
+    pub(crate) fn make_scrollbar(&self) -> scrollable::Scrollbar {
+        scrollbar_width(self.scrollbar_width)
+    }
+
     pub fn new(backend: Backend) -> Self {
         let cfg = Config::load();
         let themes = crate::commands::themes::list_themes();
