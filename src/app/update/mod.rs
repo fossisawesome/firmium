@@ -97,6 +97,7 @@ impl App {
             | Message::SetLrclibEnabled(..)
             | Message::SetLyricsWordFill(..)
             | Message::SetDecorations(..)
+            | Message::SetScrollbarWidth(..)
             | Message::WipeCoverCache
             | Message::DeleteSettings => self.update_settings(message),
             Message::SetEqEnabled(..)

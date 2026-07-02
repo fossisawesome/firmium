@@ -129,6 +129,12 @@ impl App {
                     None => Task::none(),
                 })
             }
+            Message::SetScrollbarWidth(width) => {
+                let clamped = width.max(6).min(20);
+                self.scrollbar_width = clamped;
+                self.save_config();
+                Task::none()
+            }
             Message::WipeCoverCache => {
                 let _ = crate::commands::cover_cache::clear_cover_cache();
                 self.cover_cache.clear();
@@ -142,6 +148,7 @@ impl App {
                 self.lyrics_word_fill = false;
                 self.window_decorations = true;
                 self.viz_cover_colors = true;
+                self.scrollbar_width = 10;
                 self.bit_perfect_mode = "relaxed".to_string();
                 self.crossfade_enabled = false;
                 self.crossfade_duration = 5.0;

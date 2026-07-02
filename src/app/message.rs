@@ -102,6 +102,7 @@ pub enum Message {
     SetLrclibEnabled(bool),
     SetLyricsWordFill(bool),
     SetDecorations(bool),
+    SetScrollbarWidth(u32),
     WipeCoverCache,
     DeleteSettings,
     Logout,
