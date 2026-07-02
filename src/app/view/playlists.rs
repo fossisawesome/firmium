@@ -44,7 +44,7 @@ impl App {
             header,
             scrollable(list)
                 .height(Length::Fill)
-                .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+                .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
                 .style(thin_scroll_style(t))
         ]
         .spacing(16)
@@ -294,7 +294,7 @@ impl App {
                 play,
             ]
             .spacing(8),
-            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::PlaylistTracksScrolled(v.absolute_offset().y)),
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::PlaylistTracksScrolled(v.absolute_offset().y)),
         ]
         .spacing(16)
         .into()

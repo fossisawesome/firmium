@@ -52,7 +52,7 @@ impl App {
                     col = col.push(self.song_row(s));
                 }
             }
-            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
         } else {
             text("Type a query and press Enter").size(12).style(tstyle(t.muted)).into()
         };

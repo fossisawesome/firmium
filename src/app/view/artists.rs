@@ -25,7 +25,7 @@ impl App {
         if bottom > 0.0 {
             list = list.push(container(text("")).height(Length::Fixed(bottom)));
         }
-        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::ArtistsScrolled(v.absolute_offset().y))].spacing(16).into()
+        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::ArtistsScrolled(v.absolute_offset().y))].spacing(16).into()
     }
 
     pub(crate) fn artist_row(&self, artist: &Artist) -> Element<'_, Message> {
@@ -102,7 +102,7 @@ impl App {
             );
         }
 
-        column![head, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))]
+        column![head, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t))]
             .spacing(12)
             .into()
     }

@@ -38,7 +38,7 @@ impl App {
             text(name).size(24).style(tstyle(t.text)),
             text(format!("{} songs", self.genre_songs.len())).size(11).style(tstyle(t.muted)),
             play,
-            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)),
         ]
         .spacing(12)
         .into()

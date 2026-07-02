@@ -80,7 +80,7 @@ impl App {
             SettingsCategory::Debug => self.settings_debug(t),
         })
         .height(Length::Fill)
-        .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+        .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
         .style(thin_scroll_style(t));
 
         row![sidebar, sep, container(panel).padding([0, 4]).width(Length::Fill)]

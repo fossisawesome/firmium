@@ -86,7 +86,7 @@ impl App {
                 subtitle,
                 create_row,
                 text("Your playlists").size(11).style(tstyle(t.muted)),
-                scrollable(list).height(Length::Fixed(260.0)).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
+                scrollable(list).height(Length::Fixed(260.0)).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)),
             ]
             .spacing(14),
         )

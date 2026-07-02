@@ -122,7 +122,7 @@ impl App {
                     }),
                 );
             }
-            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
         };
 
         container(column![header, body].spacing(12))
@@ -177,7 +177,7 @@ impl App {
                         col = col.push(text(value).size(sz).style(tstyle(c)));
                     }
                 }
-                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
             }
         };
 
@@ -204,7 +204,7 @@ impl App {
             for m in &self.similar_results {
                 col = col.push(self.song_row(&m.song));
             }
-            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
         };
 
         container(column![header, body].spacing(12))
@@ -250,7 +250,7 @@ impl App {
                         col = col.push(stat_row("Track peak", format!("{v:.3}"), t));
                     }
                 }
-                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
             }
         };
 
@@ -385,7 +385,7 @@ impl App {
             }
         };
 
-        container(column![header, scrollable(body).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(12))
+        container(column![header, scrollable(body).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t))].spacing(12))
             .width(Length::Fixed(340.0))
             .height(Length::Fill)
             .padding(16)

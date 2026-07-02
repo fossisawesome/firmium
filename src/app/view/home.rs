@@ -1,4 +1,4 @@
-use iced::widget::{button, column, row, scrollable, text};
+use iced::widget::{button, column, responsive, row, scrollable, text};
 use iced::{Background, Border, Element, Length};
 
 use crate::commands::mappers::Album;
@@ -38,7 +38,7 @@ impl App {
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .direction(scrollable::Direction::Vertical(thin_scrollbar()))
+        .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
         .style(thin_scroll_style(t))
         .into()
     }
@@ -148,13 +148,41 @@ impl App {
         if self.genres.is_empty() {
             return column![].into();
         }
-        let mut chips = row![].spacing(8);
-        for g in self.genres.iter().take(30) {
-            let name = g.name.clone();
-            chips = chips.push(
-                button(text(g.name.clone()).size(12).style(tstyle(t.text)))
+        let names: Vec<String> = self.genres.iter().take(30).map(|g| g.name.clone()).collect();
+        column![
+            text("GENRES").size(11).style(tstyle(t.muted)),
+            responsive(move |size| self.genre_chip_rows(&names, size.width)),
+        ]
+        .spacing(10)
+        .into()
+    }
+
+    // Chips don't wrap natively in an iced `row`, so lines are packed by hand
+    // using a rough per-glyph width estimate and rebuilt on every resize breakpoint.
+    fn genre_chip_rows<'a>(&'a self, names: &[String], available_width: f32) -> Element<'a, Message> {
+        let t = self.tokens;
+        const GLYPH_WIDTH: f32 = 7.2;
+        const CHIP_PADDING: f32 = 24.0;
+        const SPACING: f32 = 8.0;
+
+        let mut lines = column![].spacing(SPACING);
+        let mut current_row = row![].spacing(SPACING);
+        let mut current_width = 0.0f32;
+
+        for name in names {
+            let chip_width = name.chars().count() as f32 * GLYPH_WIDTH + CHIP_PADDING;
+            if current_width > 0.0 && current_width + SPACING + chip_width > available_width {
+                lines = lines.push(current_row);
+                current_row = row![].spacing(SPACING);
+                current_width = 0.0;
+            }
+            current_width += if current_width > 0.0 { SPACING } else { 0.0 } + chip_width;
+
+            let owned = name.clone();
+            current_row = current_row.push(
+                button(text(name.clone()).size(12).style(tstyle(t.text)))
                     .padding([6, 12])
-                    .on_press(Message::Navigate(View::GenreDetail(name)))
+                    .on_press(Message::Navigate(View::GenreDetail(owned)))
                     .style(move |_th, status| {
                         let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
                         button::Style {
@@ -166,12 +194,8 @@ impl App {
                     }),
             );
         }
-        column![
-            text("GENRES").size(11).style(tstyle(t.muted)),
-            chips,
-        ]
-        .spacing(10)
-        .into()
+        lines = lines.push(current_row);
+        lines.into()
     }
 
     pub(crate) fn home_section(&self, title: &'static str, albums: &[Album]) -> Element<'_, Message> {
