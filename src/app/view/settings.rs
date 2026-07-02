@@ -122,6 +122,25 @@ impl App {
             ),
             sett_row("Theme", "Color scheme for the interface", t, theme_picker),
             sett_row("Font", "Interface font, applies after restart", t, font_picker),
+            sett_row(
+                "Scrollbar Width",
+                "Adjust scrollbar thickness (6-20px)",
+                t,
+                row![
+                    slider(6.0..=20.0, self.scrollbar_width as f32, |v| {
+                        Message::SetScrollbarWidth(v as u32)
+                    })
+                    .width(Length::Fixed(150.0))
+                    .style(slider_style(t)),
+                    text(format!("{} px", self.scrollbar_width))
+                        .size(12)
+                        .style(tstyle(t.text))
+                        .width(Length::Fixed(50.0)),
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .into(),
+            ),
         ]
         .spacing(0)
         .into()
