@@ -130,8 +130,7 @@ impl App {
                 })
             }
             Message::SetScrollbarWidth(width) => {
-                let clamped = width.max(6).min(20);
-                self.scrollbar_width = clamped;
+                self.scrollbar_width = width.clamp(6, 20);
                 self.save_config();
                 Task::none()
             }

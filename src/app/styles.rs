@@ -223,6 +223,7 @@ pub(crate) fn scrollbar_width(width: u32) -> scrollable::Scrollbar {
         .scroller_width(scroller)
 }
 
+#[allow(dead_code)]
 pub(crate) fn thin_scrollbar() -> scrollable::Scrollbar {
     scrollbar_width(10)
 }

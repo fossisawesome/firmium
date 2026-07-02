@@ -290,7 +290,7 @@ impl App {
             lyrics_word_fill: cfg.lyrics_word_fill.unwrap_or(false),
             window_decorations: cfg.window_decorations.unwrap_or(true),
             font_family: cfg.font_family.clone().unwrap_or_else(|| "Liberation Mono".to_string()),
-            scrollbar_width: cfg.scrollbar_width.unwrap_or(10).max(6).min(20),
+            scrollbar_width: cfg.scrollbar_width.unwrap_or(10).clamp(6, 20),
             search_query: String::new(),
             search_results: None,
             search_rating_filter: 0,
