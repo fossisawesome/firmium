@@ -57,6 +57,8 @@ impl Backend {
             history.clone(),
         );
 
+        crate::ipc::start(bus.clone(), Arc::clone(&queue_state), Arc::clone(&app_state), Arc::clone(&audio_player));
+
         Ok(Backend { bus, audio_player, app_state, queue_state, history, podcasts })
     }
 }

@@ -33,6 +33,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Browse albums, artists, and genres | ✅ | ✅ |
 | Home screen — recently played, newest, and random albums | ✅ | ✅ |
 | Artist pages with photos and Last.fm biography | ✅ | ✅ |
+| Play button on artist page — instantly plays that artist's top tracks | ❌ | ✅ |
 | Album detail pages with full track list | ✅ | ✅ |
 | Search across your whole library | ✅ | ✅ |
 | Track ratings — 1-5 star rating on tracks, synced to your server | ✅ | ✅ |
@@ -215,11 +216,11 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 ## Desktop-Only Features
 
-- **In-app software updater** — check for and install new versions directly (Windows and Linux AppImage)
 - **Bit-perfect audio** — open the output stream at each track's exact native sample rate
 - **Window decorations toggle** — show or hide the native title bar and window borders from Settings
 - **Wipe cover-art cache** — clear cached cover art from Settings → Debug
 - **Reset preferences** — restore all settings to their defaults from Settings → Debug
+- **Command line control** — control a running instance from the terminal (`firmium play-pause`, `next`, `prev`, `volume`, `seek`, `status`, etc.), for scripts and keyboard shortcuts
 
 ---
 

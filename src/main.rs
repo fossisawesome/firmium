@@ -29,6 +29,8 @@ mod commands;
 mod podcasts;
 #[path = "../backend/init.rs"]
 mod init;
+#[path = "../backend/ipc.rs"]
+mod ipc;
 
 mod app;
 mod theme;
@@ -42,6 +44,13 @@ use app::{App, Message};
 use init::Backend;
 
 fn main() -> iced::Result {
+    // `firmium <cmd> [arg]` controls an already-running instance over the IPC
+    // socket/pipe instead of launching a second GUI — e.g. `firmium play-pause`.
+    let cli_args: Vec<String> = std::env::args().skip(1).collect();
+    if !cli_args.is_empty() {
+        std::process::exit(run_cli(&cli_args.join(" ")));
+    }
+
     // Own a Tokio runtime for the whole process and enter it so the backend's
     // background tasks (audio decode feeders, visualizer analysis, queue manager)
     // spawn onto it. iced's winit event loop blocks the main thread inside run().
@@ -87,7 +96,17 @@ fn main() -> iced::Result {
         builder = builder.default_font(font);
     }
 
-    builder.run()
+    let result = builder.run();
+
+    // `runtime`'s Drop blocks the current thread until every outstanding
+    // spawn_blocking task (e.g. decode-feeder loops in audio/session.rs,
+    // which only stop at end-of-track/error/cancel, never on window close)
+    // finishes — so closing the window mid-playback would hang the process
+    // and require a kill. Shut down without waiting: the OS reclaims threads
+    // on exit anyway.
+    runtime.shutdown_background();
+
+    result
 }
 
 /// Build the initial App state and spawn startup tasks.
@@ -96,4 +115,40 @@ fn boot(backend: Backend) -> (App, iced::Task<Message>) {
     let app = App::new(backend);
     let task = app.initial_task();
     (app, task)
+}
+
+/// Sends one line to the running instance's IPC socket/pipe and prints the
+/// reply. Synchronous std I/O — a one-shot CLI command doesn't need a Tokio
+/// runtime. Returns the process exit code.
+fn run_cli(cmd: &str) -> i32 {
+    match cli_send(cmd) {
+        Ok(reply) => {
+            println!("{reply}");
+            if reply.starts_with("error") { 1 } else { 0 }
+        }
+        Err(e) => {
+            eprintln!("firmium: {e} (is the app running?)");
+            1
+        }
+    }
+}
+
+#[cfg(unix)]
+fn cli_send(cmd: &str) -> std::io::Result<String> {
+    use std::io::{BufRead, BufReader, Write};
+    let mut stream = std::os::unix::net::UnixStream::connect(ipc::socket_path())?;
+    writeln!(stream, "{cmd}")?;
+    let mut reply = String::new();
+    BufReader::new(stream).read_line(&mut reply)?;
+    Ok(reply.trim_end().to_string())
+}
+
+#[cfg(windows)]
+fn cli_send(cmd: &str) -> std::io::Result<String> {
+    use std::io::{BufRead, BufReader, Write};
+    let mut pipe = std::fs::OpenOptions::new().read(true).write(true).open(ipc::PIPE_NAME)?;
+    writeln!(pipe, "{cmd}")?;
+    let mut reply = String::new();
+    BufReader::new(pipe).read_line(&mut reply)?;
+    Ok(reply.trim_end().to_string())
 }

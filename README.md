@@ -107,7 +107,7 @@ Before running Firmium, install the required system libraries for your distribut
 <summary><b>Debian / Ubuntu</b></summary>
 
 ```bash
-sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3 libsecret-1-0 libxdo3 libxcb1
+sudo apt update && sudo apt install -y libasound2 libssl3 libsecret-1-0 libxkbcommon0
 ```
 </details>
 
@@ -115,7 +115,7 @@ sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3 li
 <summary><b>Fedora</b></summary>
 
 ```bash
-sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs libsecret libxdo libxcb
+sudo dnf install -y alsa-lib openssl-libs libsecret libxkbcommon
 ```
 </details>
 
@@ -123,13 +123,14 @@ sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs libsecret libxdo libxcb
 <summary><b>Arch Linux</b></summary>
 
 ```bash
-sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl libsecret xdotool libxcb
+sudo pacman -S --needed alsa-lib openssl libsecret libxkbcommon
 ```
 </details>
 
 Firmium also requires:
 - A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments. Without it, passwords won't be saved and you'll need to log in every launch.
 - **PipeWire or PulseAudio** — on modern distros ALSA routes through one of these. Run `aplay -l` to verify audio devices are visible.
+- A **Vulkan or OpenGL driver** for iced's `wgpu` renderer — included with most GPU drivers already.
 
 ### Installing the App
 
@@ -167,7 +168,7 @@ sudo dpkg -i ./firmium_*.deb
 ### Prerequisites
 
 - Rust 1.80 or later (`rustup default stable`)
-- System dependencies for your distribution (see [System Dependencies](#system-dependencies) above) — ALSA, GTK 3, libsecret, and a Vulkan/OpenGL driver
+- System dependencies for your distribution (see [System Dependencies](#system-dependencies) above) — ALSA, libsecret, libxkbcommon, and a Vulkan/OpenGL driver
 
 ### Steps
 

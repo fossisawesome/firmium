@@ -209,8 +209,15 @@ impl App {
                     }
                 });
 
+            let close = icon_button(icons::CLOSE, 16.0, t.muted, t, Message::ToggleAccountSwitcher);
+            let header = row![
+                text("Connected").size(26).style(tstyle(t.accent)).width(Length::Fill),
+                close,
+            ]
+            .align_y(Alignment::Center);
+
             let mut card_col = column![
-                text("Connected").size(26).style(tstyle(t.accent)),
+                header,
                 text(server_display).size(13).style(tstyle(t.muted)),
             ]
             .spacing(20)

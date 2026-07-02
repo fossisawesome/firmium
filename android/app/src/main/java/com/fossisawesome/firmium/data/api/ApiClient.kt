@@ -279,7 +279,7 @@ class ApiClient(private val auth: AuthManager) {
                 "submission" to submission.toString(),
                 "time" to System.currentTimeMillis().toString(),
             ))
-        } catch (_: Exception) { /* scrobble failures are non-fatal */ }
+        } catch (e: Exception) { Log.e("Firmium/Scrobble", "scrobble($songId, $submission) failed", e) }
     }
 
     // ── Rating ─────────────────────────────────────────────────────────────────

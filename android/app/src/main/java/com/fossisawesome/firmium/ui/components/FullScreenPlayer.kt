@@ -636,6 +636,20 @@ private fun ArtOrLyrics(
 
             // Star-rating popup, animated in over the art on long-press.
             if (onRate != null) {
+                // Tap anywhere over the art (outside the stars) dismisses the popup.
+                // Declared before the popup so it sits behind it in z-order and doesn't
+                // swallow taps meant for the star icons.
+                if (showStars) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onDismissStars,
+                            ),
+                    )
+                }
                 AnimatedVisibility(
                     visible = showStars,
                     enter = scaleIn(initialScale = 0.7f) + fadeIn(),
@@ -656,18 +670,6 @@ private fun ArtOrLyrics(
                             mutedColor = colors.muted,
                         )
                     }
-                }
-                // Tap anywhere over the art (outside the stars) dismisses the popup.
-                if (showStars) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onDismissStars,
-                            ),
-                    )
                 }
             }
         }

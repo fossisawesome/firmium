@@ -154,8 +154,26 @@ pub async fn validate_connection(state: Arc<AppState>) -> Result<(), crate::erro
 const API_PAGE_SIZE: &str = "500";
 
 pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::errors::UserError> {
-    let body = subsonic_request(&state, "getAlbumList2", &[("type", "alphabeticalByName".to_string()), ("size", API_PAGE_SIZE.to_string())], false).await?;
-    Ok(map_albums(array_field(&body, &["albumList2", "album"])))
+    let page_size: u32 = API_PAGE_SIZE.parse().unwrap_or(500);
+    let mut all = Vec::new();
+    let mut offset: u32 = 0;
+    loop {
+        let body = subsonic_request(
+            &state,
+            "getAlbumList2",
+            &[("type", "alphabeticalByName".to_string()), ("size", page_size.to_string()), ("offset", offset.to_string())],
+            false,
+        )
+        .await?;
+        let page = array_field(&body, &["albumList2", "album"]);
+        let page_len = page.len();
+        all.extend(page);
+        if page_len < page_size as usize {
+            break;
+        }
+        offset += page_size;
+    }
+    Ok(map_albums(all))
 }
 
 pub async fn get_artists(state: Arc<AppState>) -> Result<Vec<Artist>, crate::errors::UserError> {

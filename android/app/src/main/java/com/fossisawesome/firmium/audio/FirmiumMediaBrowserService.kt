@@ -77,6 +77,9 @@ class FirmiumMediaBrowserService : MediaBrowserServiceCompat() {
     // ── Browse tree ──────────────────────────────────────────────────────────────
 
     private suspend fun loadChildren(parentId: String): MutableList<MediaItem> {
+        // Car-only cold start: no phone Activity ran to restore saved credentials into memory.
+        // Try once before deciding we're signed out, so browsing doesn't show a false sign-in prompt.
+        if (!auth.isAuthenticated) auth.tryRestoreCredentials()
         // Nothing to browse when signed out and no local library — prompt the user to sign in.
         if (!auth.isAuthenticated && localLibrary.getAlbums().isEmpty()) {
             return mutableListOf(browsable("info_sign_in", "Sign in on your phone", "Open Firmium to connect", null))
