@@ -317,7 +317,7 @@ jobs:
           operating_system: freebsd
           version: '14.2'
           run: |
-            sudo pkg install -y rust alsa-lib dbus libxkbcommon
+            sudo pkg install -y rust alsa-lib dbus libxkbcommon pkgconf
             cargo build --release
 
             mkdir -p stage/usr/bin stage/usr/share/applications \
