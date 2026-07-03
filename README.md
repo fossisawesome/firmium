@@ -21,7 +21,7 @@
 
 ---
 
-Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client targeting **Linux desktop, Windows, macOS and Android**. The desktop app is a native [iced](https://iced.rs) (Rust) application; Android is native Kotlin/Compose. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
+Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client targeting **Linux desktop, Windows, macOS, FreeBSD and Android**. The desktop app is a native [iced](https://iced.rs) (Rust) application; Android is native Kotlin/Compose. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
 
 > **Note:** Firmium is a *client only* — you need a self-hosted OpenSubsonic-compatible server to use it. [Navidrome](https://www.navidrome.org/) is the most popular choice and is free and open source.
 
@@ -64,7 +64,7 @@ That's it. Your library will load automatically.
 
 ## Install
 
-Firmium is available for **Linux desktop, macOS** and **Android**.
+Firmium is available for **Linux desktop, macOS, FreeBSD** and **Android**.
 
 > **Compatibility (Linux):** Tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
 
