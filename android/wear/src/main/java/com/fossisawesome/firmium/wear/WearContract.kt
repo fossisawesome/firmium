@@ -24,4 +24,14 @@ object WearContract {
     const val KEY_VOLUME = "volume"
     const val KEY_TRACK_ID = "track_id"
     const val KEY_ART = "art" // Asset: downscaled JPEG cover art
+
+    // DataClient path for the active-account credentials pushed phone -> watch.
+    const val AUTH_PATH = "/firmium/auth"
+
+    // DataMap keys on AUTH_PATH. When KEY_HAS_ACCOUNT is false, the other three are absent
+    // and the watch should clear any stored credentials.
+    const val KEY_HAS_ACCOUNT = "has_account"
+    const val KEY_SERVER_URL = "server_url"
+    const val KEY_USERNAME = "username"
+    const val KEY_PASSWORD = "password"
 }

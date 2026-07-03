@@ -7,10 +7,12 @@ import androidx.activity.compose.setContent
 class MainActivity : ComponentActivity() {
 
     private lateinit var client: WearPlaybackClient
+    private lateinit var authClient: WearAuthClient
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         client = WearPlaybackClient(applicationContext)
+        authClient = WearAuthClient(applicationContext)
         setContent {
             FirmiumWearTheme {
                 RemoteScreen(client)
@@ -22,10 +24,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         client.start()
+        authClient.start()
     }
 
     override fun onStop() {
         client.stop()
+        authClient.stop()
         super.onStop()
     }
 }

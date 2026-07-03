@@ -19,6 +19,7 @@ import com.fossisawesome.firmium.data.podcast.PodcastRepository
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
+import com.fossisawesome.firmium.wear.WearAuthSync
 import com.fossisawesome.firmium.wear.WearStateSync
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +51,9 @@ class FirmiumApplication : Application() {
     val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists, secureStorage, playHistory) }
     // Mirrors now-playing state to a paired Wear OS watch and applies its transport commands.
     val wearSync by lazy { WearStateSync(this) }
+    // Pushes the active account's credentials to a paired Wear OS watch so it can
+    // authenticate standalone. See WearAuthSync for push/clear.
+    val wearAuthSync by lazy { WearAuthSync(this) }
     // App-lifetime scope for background work (cancelable, unlike GlobalScope).
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

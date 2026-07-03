@@ -29,6 +29,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     private val auth: AuthManager = getApplication<FirmiumApplication>().auth
     private val api: ApiClient = getApplication<FirmiumApplication>().api
     private val prefs = getApplication<FirmiumApplication>().prefs
+    private val wearAuthSync = getApplication<FirmiumApplication>().wearAuthSync
 
     private val _state = MutableStateFlow(AuthState())
     val state: StateFlow<AuthState> = _state.asStateFlow()
@@ -50,6 +51,10 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } else {
                 Pair(false, false)
+            }
+
+            if (restored) {
+                auth.credentials?.let { wearAuthSync.push(it.server, it.username, it.password) }
             }
 
             val servers = auth.savedServers()
@@ -76,6 +81,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                 api.getArtists()
                 // Persist now that we know they work.
                 auth.persistCredentials(server, username, password, savePassword)
+                wearAuthSync.push(server, username, password)
                 prefs.setSavePasswordEnabled(savePassword)
                 _state.value = AuthState(isAuthenticated = true, isLoading = false, needsLogin = false)
             } catch (e: Exception) {
@@ -112,6 +118,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 api.getArtists()
+                auth.credentials?.let { wearAuthSync.push(it.server, it.username, it.password) }
                 val servers = auth.savedServers()
                 _state.value = AuthState(isAuthenticated = true, isLoading = false, savedServers = servers)
             } catch (e: Exception) {
@@ -133,6 +140,7 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             getApplication<FirmiumApplication>().prefs.clear()
             auth.clearCredentials()
+            wearAuthSync.clear()
             _state.value = AuthState(isAuthenticated = false, isLoading = false)
         }
     }
