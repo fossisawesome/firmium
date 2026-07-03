@@ -102,4 +102,13 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
     implementation("androidx.datastore:datastore-preferences:1.2.1")
+
+    // Browse UI navigation — same version as the already-pinned compose-material/compose-foundation
+    implementation("androidx.wear.compose:compose-navigation:1.4.1")
+
+    // Cover art (same version as the phone app)
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Search text/voice entry (RemoteInputIntentHelper)
+    implementation("androidx.wear:wear-input:1.2.0")
 }
