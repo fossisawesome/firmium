@@ -49,7 +49,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 kotlin {
@@ -81,4 +84,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+
+    // OpenSubsonic API client (Task 5) — same versions as the phone app's build.gradle.kts
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.4.0")
+    implementation("com.google.code.gson:gson:2.14.0")
 }
