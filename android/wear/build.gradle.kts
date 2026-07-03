@@ -103,8 +103,11 @@ dependencies {
     implementation("androidx.media3:media3-common:1.4.1")
     implementation("androidx.datastore:datastore-preferences:1.2.1")
 
-    // Browse UI navigation — same version as the already-pinned compose-material/compose-foundation
+    // Browse UI navigation — same version as the already-pinned compose-material/compose-foundation.
+    // navigation-compose pinned explicitly too: compose-navigation only brings it in as a version
+    // constraint, which doesn't put currentBackStackEntryAsState() on the compile classpath.
     implementation("androidx.wear.compose:compose-navigation:1.4.1")
+    implementation("androidx.navigation:navigation-compose:2.6.0")
 
     // Cover art (same version as the phone app)
     implementation("io.coil-kt:coil-compose:2.7.0")
