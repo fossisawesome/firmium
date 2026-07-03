@@ -1,6 +1,7 @@
 package com.fossisawesome.firmium.wear
 
 import android.content.Context
+import com.fossisawesome.firmium.data.api.WatchAuthManager
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
@@ -13,12 +14,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 // Watch-side receiver for the active-account credentials the phone pushes over the Wearable
-// Data Layer. Stores into WatchSecureStorage so later standalone-auth work (API client,
-// playback) can read credentials without the phone present.
-class WearAuthClient(context: Context) {
+// Data Layer. Stores into the shared WatchSecureStorage (owned by FirmiumWearApplication) and
+// refreshes the shared WatchAuthManager so a running ApiClient sees new credentials immediately.
+class WearAuthClient(
+    context: Context,
+    private val storage: WatchSecureStorage,
+    private val authManager: WatchAuthManager,
+) {
 
     private val dataClient = Wearable.getDataClient(context)
-    private val storage = WatchSecureStorage(context.applicationContext)
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val listener = DataClient.OnDataChangedListener { events ->
@@ -61,11 +65,13 @@ class WearAuthClient(context: Context) {
     private fun applyDataMap(map: DataMap) {
         if (!map.getBoolean(WearContract.KEY_HAS_ACCOUNT)) {
             storage.clear()
+            authManager.refresh()
             return
         }
         val serverUrl = map.getString(WearContract.KEY_SERVER_URL) ?: return
         val username = map.getString(WearContract.KEY_USERNAME) ?: return
         val password = map.getString(WearContract.KEY_PASSWORD) ?: return
         storage.save(serverUrl, username, password)
+        authManager.refresh()
     }
 }

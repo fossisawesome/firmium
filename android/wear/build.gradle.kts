@@ -53,6 +53,14 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // logging-interceptor and jspecify both ship this file; same conflict the phone app's
+    // build.gradle.kts already excludes.
+    packaging {
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 kotlin {

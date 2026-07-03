@@ -4,6 +4,7 @@
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
+        android:name=".FirmiumWearApplication"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
