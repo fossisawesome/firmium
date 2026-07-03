@@ -71,7 +71,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
 
     // Keystore-backed credential storage (mirrors the phone app's SecureStorage.kt)
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // Compose for Wear OS (classic Material — stable; Material 3 for Wear is still alpha)
     implementation("androidx.wear.compose:compose-material:1.4.1")
