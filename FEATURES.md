@@ -1,6 +1,6 @@
 # Firmium Features
 
-A complete list of what Firmium can do, for both **desktop** (Linux/Windows) and **Android**.
+A complete list of what Firmium can do, for both **desktop** (Linux/Windows/macOS) and **Android**.
 
 Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
@@ -202,6 +202,24 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Now-playing display on the watch (title, artist, cover art) | ✅ |
 | Transport controls from the wrist (play/pause, next, previous) | ✅ |
 | Volume control via the rotating crown/bezel or on-screen buttons | ✅ |
+
+---
+
+## Android TV
+
+| Feature | Android |
+|---|:---:|
+| Browse your library on the big screen (Home, Albums, Artists, Playlists) | ✅ |
+| Album, artist, and playlist detail pages | ✅ |
+| Search | ✅ |
+| Full-screen Now Playing with cover art and transport controls | ✅ |
+| Queue panel on the Now Playing screen | ✅ |
+| Synced lyrics panel on the Now Playing screen (line highlighting, no word-fill animation) | ✅ |
+| Similar Tracks panel on the Now Playing screen | ✅ |
+| Smart Mix (energy + genre picker) | ✅ |
+| Equalizer — enable/select profile, adjust the 10 graphic bands (parametric editing, `.toml` import are phone/desktop-only) | ✅ |
+| Recap & listening stats | ✅ |
+| Settings — theme, font, crossfade, gapless, ReplayGain, visualizer, logout (Last.fm setup, cache/reset actions are phone/desktop-only) | ✅ |
 
 ---
 

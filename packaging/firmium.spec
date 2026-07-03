@@ -12,6 +12,11 @@ BuildArch:      x86_64
 # old prebuilt-Tauri-RPM repackage flow is retired).
 Source0:        %{url}/archive/vVERSION_PLACEHOLDER.tar.gz
 
+# Copr/mock builds run without network access, so crates.io can't be reached
+# during %%build. CI (.github/workflows/copr.yml) runs `cargo vendor` and
+# packages the result here; %%build then compiles fully offline against it.
+Source1:        firmium-VERSION_PLACEHOLDER-vendor.tar.xz
+
 BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  gcc
@@ -33,9 +38,18 @@ keyring credential storage, and OpenSubsonic server integration (e.g. Navidrome)
 
 %prep
 %setup -q -n firmium-VERSION_PLACEHOLDER
+tar xf %{SOURCE1}
+mkdir -p .cargo
+cat > .cargo/config.toml <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"
+EOF
 
 %build
-cargo build --release --locked
+cargo build --release --locked --offline
 
 %install
 install -Dm755 target/release/firmium %{buildroot}%{_bindir}/firmium

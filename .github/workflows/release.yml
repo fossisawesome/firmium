@@ -232,6 +232,138 @@ jobs:
               data: fs.readFileSync(files[0]),
             })
 
+  build-macos:
+    needs: create-release
+    runs-on: macos-14
+
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            label: AppleSilicon
+          - target: x86_64-apple-darwin
+            label: Intel
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Set version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Assemble .app bundle
+        run: |
+          APP="Firmium.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp "target/${{ matrix.target }}/release/firmium" "$APP/Contents/MacOS/firmium"
+          cp assets/app-icons/icon.icns "$APP/Contents/Resources/icon.icns"
+          sed "s/VERSIONTOKEN/${{ env.VERSION }}/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
+
+      - name: Package .dmg
+        run: |
+          mkdir dmg-src
+          mv Firmium.app dmg-src/
+          ln -s /Applications dmg-src/Applications
+          hdiutil create -volname Firmium -srcfolder dmg-src -ov -format UDZO "firmium-${{ env.VERSION }}-${{ matrix.label }}.dmg"
+
+      - name: Upload macOS artifact
+        uses: actions/github-script@v9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ env.VERSION }}
+          LABEL: ${{ matrix.label }}
+        with:
+          script: |
+            const fs = require('fs')
+            const file = `firmium-${process.env.VERSION}-${process.env.LABEL}.dmg`
+            if (!fs.existsSync(file)) throw new Error(`Artifact not found: ${file}`)
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              name: file,
+              data: fs.readFileSync(file),
+            })
+
+  build-freebsd:
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Build and package on FreeBSD
+        uses: cross-platform-actions/action@v1.3.0
+        with:
+          operating_system: freebsd
+          version: '14.2'
+          run: |
+            sudo pkg install -y rust alsa-lib dbus libxkbcommon
+            cargo build --release
+
+            mkdir -p stage/usr/bin stage/usr/share/applications \
+              stage/usr/share/icons/hicolor/128x128/apps \
+              stage/usr/share/icons/hicolor/32x32/apps
+            cp target/release/firmium stage/usr/bin/
+            cp packaging/firmium.desktop stage/usr/share/applications/
+            cp assets/app-icons/128x128.png stage/usr/share/icons/hicolor/128x128/apps/firmium.png
+            cp assets/app-icons/32x32.png stage/usr/share/icons/hicolor/32x32/apps/firmium.png
+
+            cat > +MANIFEST << EOF
+            name: firmium
+            version: "${{ env.VERSION }}"
+            origin: audio/firmium
+            comment: "OpenSubsonic music streaming desktop client"
+            desc: "Firmium is a low-latency native iced/Rust music streaming client."
+            maintainer: fossisawesome
+            www: https://github.com/fossisawesome/firmium
+            prefix: /usr
+            deps:
+              alsa-lib: {origin: audio/alsa-lib}
+              dbus: {origin: devel/dbus}
+              libxkbcommon: {origin: x11/libxkbcommon}
+            EOF
+
+            pkg create -m . -r stage -o .
+            mv firmium-${{ env.VERSION }}.pkg firmium-${{ env.VERSION }}-freebsd.pkg
+
+      - name: Upload FreeBSD package
+        uses: actions/github-script@v9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ env.VERSION }}
+        with:
+          script: |
+            const fs = require('fs')
+            const file = `firmium-${process.env.VERSION}-freebsd.pkg`
+            if (!fs.existsSync(file)) throw new Error(`Artifact not found: ${file}`)
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              name: file,
+              data: fs.readFileSync(file),
+            })
+
   build-android:
     needs: create-release
     runs-on: ubuntu-latest
@@ -304,7 +436,7 @@ jobs:
             })
 
   publish-release:
-    needs: [create-release, build-linux, build-windows, build-android]
+    needs: [create-release, build-linux, build-windows, build-macos, build-android]
     runs-on: ubuntu-latest
     steps:
       - name: Publish release

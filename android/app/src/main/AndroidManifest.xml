@@ -15,12 +15,14 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <application
         android:name=".FirmiumApplication"
         android:label="Firmium"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:banner="@drawable/ic_launcher_banner"
         android:theme="@style/Theme.Firmium"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:networkSecurityConfig="@xml/network_security_config"
@@ -36,6 +38,21 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Android TV entry point: separate leanback-launcher activity, own Compose screens
+             under ui/tv/, reusing the same ViewModels/data/audio layer as MainActivity. -->
+        <activity
+            android:name=".TvMainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:banner="@drawable/ic_launcher_banner"
+            android:theme="@style/Theme.Firmium">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
 

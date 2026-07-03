@@ -12,17 +12,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::commands::mappers::Song;
 use crate::state::AppState;
 
-#[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos", target_os = "freebsd"))]
 use keyring::Entry;
 
-#[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos", target_os = "freebsd"))]
 const SERVICE: &str = "firmium-desktop";
 const LB_TOKEN_KEY: &str = "listenbrainz_token";
 const LB_SUBMIT_URL: &str = "https://api.listenbrainz.org/1/submit-listens";
 
 /// Reads the stored ListenBrainz token from the keyring, or `None` if unset/empty.
 fn load_token() -> Option<String> {
-    #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos", target_os = "freebsd"))]
     {
         if let Ok(entry) = Entry::new(SERVICE, LB_TOKEN_KEY) {
             if let Ok(token) = entry.get_password() {

@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Install tools
-        run: dnf install -y rpm-build rpmdevtools copr-cli gh git curl
+        run: dnf install -y rpm-build rpmdevtools copr-cli gh git curl cargo rust
 
       # Containers run as root; mark all directories safe so git/gh work.
       - name: Fix git safe directory
@@ -79,6 +79,9 @@ jobs:
             packaging/firmium.spec > ~/rpmbuild/SPECS/firmium.spec
           curl -fsSL "https://github.com/fossisawesome/firmium/archive/${TAG}.tar.gz" \
             -o ~/rpmbuild/SOURCES/${TAG}.tar.gz
+          tar xzf ~/rpmbuild/SOURCES/${TAG}.tar.gz
+          ( cd firmium-"$VERSION" && cargo vendor ../vendor )
+          tar cJf ~/rpmbuild/SOURCES/firmium-"$VERSION"-vendor.tar.xz vendor
           rpmbuild -bs ~/rpmbuild/SPECS/firmium.spec
 
       - name: Submit to COPR
