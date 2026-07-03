@@ -6,6 +6,7 @@ import com.fossisawesome.firmium.audio.WatchNowPlayingNotifier
 import com.fossisawesome.firmium.audio.WatchPlaybackController
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.WatchAuthManager
+import com.fossisawesome.firmium.data.download.WatchDownloadManager
 import com.fossisawesome.firmium.data.storage.WatchPreferences
 
 // Watch module's DI container — mirrors the phone app's FirmiumApplication. Needed because
@@ -17,7 +18,8 @@ class FirmiumWearApplication : Application() {
     val api by lazy { ApiClient(authManager) }
     val watchPreferences by lazy { WatchPreferences(this) }
     val notifier by lazy { WatchNowPlayingNotifier(this) }
+    val downloadManager by lazy { WatchDownloadManager(this, authManager) }
     val playbackController by lazy {
-        WatchPlaybackController(AudioPlayer(this), notifier, api, authManager, watchPreferences)
+        WatchPlaybackController(AudioPlayer(this), notifier, api, authManager, watchPreferences, downloadManager)
     }
 }

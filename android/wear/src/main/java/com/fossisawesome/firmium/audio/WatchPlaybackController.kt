@@ -2,6 +2,7 @@ package com.fossisawesome.firmium.audio
 
 import com.fossisawesome.firmium.data.api.ApiClient
 import com.fossisawesome.firmium.data.api.WatchAuthManager
+import com.fossisawesome.firmium.data.download.WatchDownloadManager
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.data.storage.WatchPreferences
 import kotlinx.coroutines.*
@@ -40,6 +41,7 @@ class WatchPlaybackController(
     private val api: ApiClient,
     private val auth: WatchAuthManager,
     private val prefs: WatchPreferences,
+    private val downloadManager: WatchDownloadManager,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -112,9 +114,12 @@ class WatchPlaybackController(
 
     // ── Queue management ───────────────────────────────────────────────────────
 
-    // Always streams — no local-library/downloaded-file preference (sub-project 5 hasn't
-    // shipped downloads yet, nothing to check).
-    private fun streamUrlFor(song: Song): String = auth.streamUrl(song.id)
+    // Prefers a downloaded local file over streaming; falls back to auth.streamUrl if the
+    // track hasn't been downloaded.
+    private suspend fun streamUrlFor(song: Song): String {
+        val local = downloadManager.localPathFor(song.id)
+        return if (local != null) "file://$local" else auth.streamUrl(song.id)
+    }
 
     fun playAt(songs: List<Song>, startIndex: Int) {
         scope.launch {
