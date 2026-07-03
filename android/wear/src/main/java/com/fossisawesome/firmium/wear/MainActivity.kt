@@ -8,9 +8,8 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.lifecycle.lifecycleScope
 import com.fossisawesome.firmium.audio.WatchNowPlayingNotifier
-import kotlinx.coroutines.launch
+import com.fossisawesome.firmium.wear.ui.WearNavGraph
 
 class MainActivity : ComponentActivity() {
 
@@ -39,7 +38,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FirmiumWearTheme {
-                RemoteScreen(client)
+                WearNavGraph(client)
             }
         }
     }
@@ -49,25 +48,6 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         client.start()
         authClient.start()
-        // Temporary verification hook for the watch playback engine (sub-project 3) — plays the
-        // first track of the first album from the first artist, confirming
-        // WatchPlaybackController -> AudioPlayer -> ExoPlayer -> WatchNowPlayingNotifier works
-        // end-to-end against a real server. Remove once sub-project 4 (browse UI) gives the
-        // watch a real playback entry point.
-        lifecycleScope.launch {
-            val app = application as FirmiumWearApplication
-            try {
-                val artist = app.api.getArtists().firstOrNull() ?: return@launch
-                val album = app.api.getArtistDetail(artist.id).albums.firstOrNull() ?: return@launch
-                val tracks = app.api.getAlbumDetail(album.id).tracks
-                if (tracks.isNotEmpty()) {
-                    android.util.Log.d("FirmiumWear", "playing ${tracks.first().title} from ${album.name}")
-                    app.playbackController.playAt(tracks, 0)
-                }
-            } catch (e: Exception) {
-                android.util.Log.d("FirmiumWear", "playback verification failed", e)
-            }
-        }
     }
 
     override fun onStop() {
