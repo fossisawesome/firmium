@@ -191,6 +191,9 @@ class ApiClient(private val auth: WatchAuthManager) {
         ArtistDetail(artist, albums, bio, imageUrl)
     }
 
+    // Flattened view of ArtistDetail for the watch's artist-detail screen (name + albums only).
+    data class ArtistDetailResult(val artistName: String, val albums: List<Album>)
+
     // ── Search ─────────────────────────────────────────────────────────────────
 
     data class SearchResults(val songs: List<Song>, val albums: List<Album>)
