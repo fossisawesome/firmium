@@ -206,6 +206,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Browse artists, albums, and playlists on the watch | ✅ |
 | Search your library from the watch | ✅ |
 | Crossfade, gapless playback, ReplayGain, shuffle, and repeat on watch playback | ✅ |
+| Download albums, playlists, or individual tracks to the watch for offline playback | ✅ |
 
 ---
 
