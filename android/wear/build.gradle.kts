@@ -97,4 +97,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
     implementation("com.squareup.okhttp3:logging-interceptor:5.4.0")
     implementation("com.google.code.gson:gson:2.14.0")
+
+    // Playback engine (Task 5) — same versions as the phone app's build.gradle.kts
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-common:1.4.1")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 }
