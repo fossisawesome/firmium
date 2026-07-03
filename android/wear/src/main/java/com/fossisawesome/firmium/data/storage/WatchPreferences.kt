@@ -24,6 +24,7 @@ class WatchPreferences(context: Context) {
         val CROSSFADE_CURVE = stringPreferencesKey("crossfade_curve")
         val GAPLESS_ENABLED = booleanPreferencesKey("gapless_enabled")
         val REPLAY_GAIN_ENABLED = booleanPreferencesKey("replay_gain_enabled")
+        val LAST_MODE = stringPreferencesKey("last_mode")
     }
 
     val volume: Flow<Float> = store.data.map { it[VOLUME] ?: 1f }
@@ -34,6 +35,7 @@ class WatchPreferences(context: Context) {
     val crossfadeCurve: Flow<String> = store.data.map { it[CROSSFADE_CURVE] ?: "linear" }
     val gaplessEnabled: Flow<Boolean> = store.data.map { it[GAPLESS_ENABLED] ?: true }
     val replayGainEnabled: Flow<Boolean> = store.data.map { it[REPLAY_GAIN_ENABLED] ?: true }
+    val lastMode: Flow<String> = store.data.map { it[LAST_MODE] ?: "standalone" }
 
     suspend fun setVolume(v: Float) = store.edit { it[VOLUME] = v }
     suspend fun setRepeatMode(mode: String) = store.edit { it[REPEAT_MODE] = mode }
@@ -43,4 +45,5 @@ class WatchPreferences(context: Context) {
     suspend fun setCrossfadeCurve(curve: String) = store.edit { it[CROSSFADE_CURVE] = curve }
     suspend fun setGaplessEnabled(v: Boolean) = store.edit { it[GAPLESS_ENABLED] = v }
     suspend fun setReplayGainEnabled(v: Boolean) = store.edit { it[REPLAY_GAIN_ENABLED] = v }
+    suspend fun setLastMode(mode: String) = store.edit { it[LAST_MODE] = mode }
 }
