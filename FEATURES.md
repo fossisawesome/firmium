@@ -202,6 +202,10 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Now-playing display on the watch (title, artist, cover art) | ✅ |
 | Transport controls from the wrist (play/pause, next, previous) | ✅ |
 | Volume control via the rotating crown/bezel or on-screen buttons | ✅ |
+| Standalone playback — browse and play your library directly on the watch, no phone needed | ✅ |
+| Browse artists, albums, and playlists on the watch | ✅ |
+| Search your library from the watch | ✅ |
+| Crossfade, gapless playback, ReplayGain, shuffle, and repeat on watch playback | ✅ |
 
 ---
 
