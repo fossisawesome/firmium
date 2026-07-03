@@ -28,7 +28,7 @@ lofty = "0.24"
 rustfft = "6.4.1"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 # Local play-history store. `bundled` compiles SQLite from source so no system libsqlite is needed.
-rusqlite = { version = "0.40.1", features = ["bundled"] }
+rusqlite = { version = "=0.36.0", features = ["bundled"] }
 # Podcast RSS/Atom feed parsing (client-side; Navidrome has no server-side podcast API).
 feed-rs = "2.3.1"
 iced = { version = "0.14.0", features = ["canvas", "image", "svg", "tokio", "advanced", "wgpu"] }
