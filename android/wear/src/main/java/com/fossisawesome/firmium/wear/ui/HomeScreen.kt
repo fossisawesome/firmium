@@ -3,6 +3,7 @@ package com.fossisawesome.firmium.wear.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Search
@@ -59,6 +60,15 @@ fun HomeScreen(app: FirmiumWearApplication, navController: NavController) {
                 onClick = { navController.navigate("search") },
                 label = { Text("Search") },
                 icon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                colors = ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            Chip(
+                onClick = { navController.navigate("downloads") },
+                label = { Text("Downloads") },
+                icon = { Icon(Icons.Filled.Download, contentDescription = null) },
                 colors = ChipDefaults.secondaryChipColors(),
                 modifier = Modifier.fillMaxWidth(),
             )

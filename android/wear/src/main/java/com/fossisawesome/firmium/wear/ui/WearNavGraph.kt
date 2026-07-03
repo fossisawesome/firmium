@@ -82,6 +82,7 @@ fun WearNavGraph(client: WearPlaybackClient) {
             PlaylistDetailScreen(app, navController, playlistId)
         }
         composable("search") { SearchScreen(app, navController) }
+        composable("downloads") { DownloadsScreen(app) }
         composable("nowPlaying") { NowPlayingScreen(app) }
         composable("remote") { RemoteScreen(client) }
     }
