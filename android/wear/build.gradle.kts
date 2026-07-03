@@ -74,8 +74,8 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Compose for Wear OS (classic Material — stable; Material 3 for Wear is still alpha)
-    implementation("androidx.wear.compose:compose-material:1.4.1")
-    implementation("androidx.wear.compose:compose-foundation:1.4.1")
+    implementation("androidx.wear.compose:compose-material:1.6.2")
+    implementation("androidx.wear.compose:compose-foundation:1.6.2")
 
     // Phone <-> watch communication (Wearable Data Layer)
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
