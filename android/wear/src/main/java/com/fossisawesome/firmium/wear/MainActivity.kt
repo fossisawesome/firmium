@@ -15,6 +15,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var client: WearPlaybackClient
     private lateinit var authClient: WearAuthClient
+    private lateinit var settingsClient: WearSettingsClient
 
     private val playPauseReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
         val app = application as FirmiumWearApplication
         client = WearPlaybackClient(applicationContext)
         authClient = WearAuthClient(applicationContext, app.secureStorage, app.authManager)
+        settingsClient = WearSettingsClient(applicationContext, app.watchPreferences)
 
         val filter = IntentFilter(WatchNowPlayingNotifier.actionTogglePlayPause(packageName))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -48,11 +50,13 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         client.start()
         authClient.start()
+        settingsClient.start()
     }
 
     override fun onStop() {
         client.stop()
         authClient.stop()
+        settingsClient.stop()
         super.onStop()
     }
 
