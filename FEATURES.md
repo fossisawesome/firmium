@@ -207,6 +207,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Search your library from the watch | ✅ |
 | Crossfade, gapless playback, ReplayGain, shuffle, and repeat on watch playback | ✅ |
 | Download albums, playlists, or individual tracks to the watch for offline playback | ✅ |
+| Watch automatically matches your phone's theme, crossfade/gapless/ReplayGain settings, and download format | ✅ |
 
 ---
 
