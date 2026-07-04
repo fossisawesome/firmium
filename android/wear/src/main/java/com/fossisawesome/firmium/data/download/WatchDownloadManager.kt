@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.fossisawesome.firmium.data.api.WatchAuthManager
 import com.fossisawesome.firmium.data.model.Song
+import com.fossisawesome.firmium.data.storage.WatchPreferences
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +25,7 @@ private val Context.watchDownloadsDataStore: DataStore<Preferences> by preferenc
 // Song objects, not just ids) is persisted as Gson JSON in its own DataStore file — storing full
 // Song objects means the Downloads screen can render titles/artists without a network round trip,
 // which matters since offline playback is the whole point of this feature.
-class WatchDownloadManager(context: Context, private val auth: WatchAuthManager) {
+class WatchDownloadManager(context: Context, private val auth: WatchAuthManager, private val prefs: WatchPreferences) {
 
     private val downloadsDir = File(context.filesDir, "downloads").apply { mkdirs() }
     private val store = context.watchDownloadsDataStore
@@ -53,7 +54,8 @@ class WatchDownloadManager(context: Context, private val auth: WatchAuthManager)
 
     suspend fun downloadTrack(song: Song): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val url = auth.downloadUrl(song.id, "original")
+            val format = prefs.downloadFormat.first()
+            val url = auth.downloadUrl(song.id, format)
             val request = Request.Builder().url(url).build()
             http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext Result.failure(IOException("HTTP ${response.code}"))

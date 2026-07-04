@@ -18,7 +18,7 @@ class FirmiumWearApplication : Application() {
     val api by lazy { ApiClient(authManager) }
     val watchPreferences by lazy { WatchPreferences(this) }
     val notifier by lazy { WatchNowPlayingNotifier(this) }
-    val downloadManager by lazy { WatchDownloadManager(this, authManager) }
+    val downloadManager by lazy { WatchDownloadManager(this, authManager, watchPreferences) }
     val playbackController by lazy {
         WatchPlaybackController(AudioPlayer(this), notifier, api, authManager, watchPreferences, downloadManager)
     }
