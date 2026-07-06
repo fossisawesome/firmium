@@ -1,3 +1,46 @@
+# v8.0.0
+
+## Wear OS
+
+> **New platform.** Firmium now has a full Wear OS companion app, in `wear/`.
+
+- **Standalone playback** — browse and play your library directly on the watch, no phone needed. Full OpenSubsonic API client ported to the watch (`WatchAuthManager`, API models, `HttpStatusException`), own ExoPlayer-based audio engine (`WatchPlaybackController`) minus EQ.
+- **Browse UI** — `HomeScreen`, `ArtistListScreen`/`ArtistDetailScreen`, `AlbumDetailScreen`, `PlaylistListScreen`/`PlaylistDetailScreen` (read-only), and `SearchScreen` with voice/text input.
+- **NowPlayingScreen** — full transport controls, volume via rotating crown/bezel or on-screen buttons.
+- **Offline downloads** — bulk and per-track download buttons on Album/Playlist detail; `WatchDownloadManager` stores tracks locally; playback prefers downloaded files over streaming.
+- **Settings sync from phone** — theme, crossfade/gapless/ReplayGain settings, and download format push from the phone app to the watch over a Data Layer `SETTINGS_PATH` contract and apply live (`FirmiumWearTheme` reactive to synced colors).
+- **Remembers last-used mode** (standalone vs remote-control) across restarts.
+- Credentials for the active account sync to the paired watch automatically on phone login.
+
+## Desktop
+
+- **UI theme** — new axis independent of color theme: choose Default or Spotify-style layout (nav, player bar, and browsing screens restyled).
+- **Spotify color theme** — new built-in theme to pair with the Spotify layout.
+- **Visualizer particle count** — configurable in Settings (in-progress, bundled with the theme work).
+- **FreeBSD support** — desktop now builds and packages for FreeBSD (`.pkg` via `pkg create`), built/tested via a `cross-platform-actions` qemu VM in CI (no native FreeBSD GitHub Actions runner). Requires `alsa-lib`, `dbus`, `libxkbcommon` + a Mesa/Vulkan driver.
+- Pinned `rusqlite` to 0.36.0 to fix FreeBSD CI build; installed `pkgconf` on FreeBSD runners.
+
+## Android TV
+
+> **New platform.** Firmium now runs as a proper Android TV app — separate `Tv*` screens and nav graph (`TvMainActivity.kt`, `ui/tv/`) for D-pad/leanback navigation, reusing the existing phone data layer (API client, view models, playback engine).
+
+- Browse the library on the big screen: Home, Albums, Artists, Playlists (`TvHomeScreen.kt`, `TvAlbumListScreen.kt`, `TvArtistListScreen.kt`, `TvPlaylistListScreen.kt`), plus album/artist/playlist detail pages.
+- Search (`TvSearchScreen.kt`).
+- Full-screen Now Playing (`TvNowPlayingScreen.kt`) with cover art, transport controls, queue panel, synced lyrics panel (line highlighting, no word-fill animation), and Similar Tracks panel.
+- Smart Mix — energy + genre picker (`TvMixScreen.kt`).
+- Equalizer — enable/select profile, adjust the 10 graphic bands; parametric editing and `.toml` import remain phone/desktop-only (`TvEqualizerScreen.kt`).
+- Recap & listening stats (`TvRecapScreen.kt`).
+- Settings — theme, font, crossfade, gapless, ReplayGain, visualizer, logout; Last.fm setup and cache/reset actions remain phone/desktop-only (`TvSettingsScreen.kt`).
+- Login screen adapted for remote-control input (`TvLoginScreen.kt`).
+
+## Android
+
+- **UI theme** — Spotify-style layout mirrors desktop, independent of color theme: `AppNavGraph.kt`, `PlayerBar.kt`, `HomeScreen.kt`, `PlaylistsScreen.kt`, `PodcastsScreen.kt`, `ArtistListScreen.kt`, `AlbumListScreen.kt`.
+- **Spotify color theme** — new built-in theme.
+- **Visualizer rework** — new `VisualizerAudioProcessor.kt` backing the particle-count-configurable visualizer; `Visualizers.kt` and `MusicOrb.kt` updated to match.
+
+---
+
 # v7.1.0
 
 ## Desktop
