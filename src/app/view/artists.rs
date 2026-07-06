@@ -59,7 +59,7 @@ impl App {
         .width(Length::Fill)
         .padding(if spotify { 10 } else { 8 })
         .on_press(Message::Navigate(View::ArtistDetail(artist.id.clone())))
-        .style(list_row_style(t))
+        .style(list_row_style(t, spotify))
         .into()
     }
 

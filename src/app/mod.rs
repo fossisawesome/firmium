@@ -640,8 +640,9 @@ impl App {
 
     pub(crate) fn toast_host(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let cards: Vec<Element<Message>> = self.toasts.iter().map(|toast| {
-            let close = icon_button(icons::CLOSE, 14.0, t.muted, t, Message::DismissToast(toast.id));
+            let close = icon_button(icons::CLOSE, 14.0, t.muted, t, spotify, Message::DismissToast(toast.id));
             container(
                 row![text(toast.text.clone()).size(14), close]
                     .spacing(12)
@@ -711,10 +712,11 @@ impl App {
 impl App {
     pub(crate) fn sidebar_default(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
 
         let brand = container(
             row![
-                icon_button(icons::USER, 16.0, t.muted, t, Message::ToggleAccountSwitcher),
+                icon_button(icons::USER, 16.0, t.muted, t, spotify, Message::ToggleAccountSwitcher),
             ]
             .spacing(10)
             .align_y(Alignment::Center),
@@ -741,28 +743,29 @@ impl App {
             .into()
     }
 
-    /// Spotify-style sidebar: compact top nav + a scrollable "Your Library" playlist
-    /// list, replacing the default's flat icon+label nav column.
+    /// Spotify-style sidebar: a small top card (account + fixed nav) and a separate,
+    /// taller "Your Library" card below it, both inset from a pure-black shell —
+    /// replacing the default's single flat nav column.
     pub(crate) fn sidebar_spotify(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
+
+        let card_style = move |_theme: &Theme| container::Style {
+            background: Some(Background::Color(t.surface)),
+            border: Border { radius: 8.0.into(), ..Border::default() },
+            ..container::Style::default()
+        };
 
         let brand = container(
-            row![
-                icon_button(icons::USER, 16.0, t.muted, t, Message::ToggleAccountSwitcher),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
+            row![icon_button(icons::USER, 16.0, t.muted, t, spotify, Message::ToggleAccountSwitcher)]
+                .spacing(10)
+                .align_y(Alignment::Center),
         )
-        .padding(20);
+        .padding(iced::Padding { top: 12.0, right: 12.0, bottom: 0.0, left: 12.0 });
 
-        let top_nav = column![
+        let fixed_nav = column![
             self.nav_button(icons::HOME, "Home", View::Home),
             self.nav_button(icons::SEARCH, "Search", View::Search),
-        ]
-        .spacing(4)
-        .padding([0, 8]);
-
-        let fixed_entries = column![
             self.nav_button(icons::DISC, "Albums", View::Albums),
             self.nav_button(icons::USER, "Artists", View::Artists),
             self.nav_button(icons::PODCAST, "Podcasts", View::Podcasts),
@@ -770,10 +773,38 @@ impl App {
             self.nav_button(icons::SETTINGS, "Settings", View::Settings),
         ]
         .spacing(4)
-        .padding([0, 8]);
+        .padding(iced::Padding { top: 4.0, right: 8.0, bottom: 12.0, left: 8.0 });
 
-        let library_header = container(text("Your Library").size(12).style(tstyle(t.muted)))
-            .padding(iced::Padding { top: 16.0, right: 12.0, bottom: 6.0, left: 12.0 });
+        let top_card = container(column![brand, fixed_nav].spacing(0))
+            .width(Length::Fill)
+            .style(card_style);
+
+        let library_header = container(
+            row![
+                icons::icon(icons::LIST, 16.0, t.text),
+                text("Your Library").size(13).style(tstyle(t.text)).font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..iced::Font::with_name("Inter")
+                }),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        )
+        .padding(iced::Padding { top: 14.0, right: 12.0, bottom: 8.0, left: 12.0 });
+
+        let filter_pill = move |label: &'static str, active: bool| -> Element<'static, Message> {
+            container(text(label).size(12).style(tstyle(if active { t.bg } else { t.text })))
+                .padding([6, 14])
+                .style(move |_theme: &Theme| container::Style {
+                    background: Some(Background::Color(if active { t.text } else { t.surface2 })),
+                    border: Border { radius: 500.0.into(), ..Border::default() },
+                    ..container::Style::default()
+                })
+                .into()
+        };
+        let filters = row![filter_pill("Playlists", true), filter_pill("Artists", false)]
+            .spacing(8)
+            .padding(iced::Padding { top: 0.0, right: 12.0, bottom: 8.0, left: 12.0 });
 
         let mut lib_list = column![].spacing(2).padding([4, 8]);
         for item in &self.playlist_items {
@@ -784,48 +815,61 @@ impl App {
             .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
             .style(thin_scroll_style(t));
 
-        container(column![brand, top_nav, fixed_entries, library_header, library_scroll].spacing(0))
+        let library_card = container(column![library_header, filters, library_scroll].spacing(0))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(card_style);
+
+        container(column![top_card, library_card].spacing(8).padding(8))
             .width(Length::Fixed(260.0))
             .height(Length::Fill)
-            .style(fill_bg(t.surface))
+            .style(fill_bg(t.bg))
             .into()
     }
 
-    /// A single playlist row in the Spotify sidebar's library list: icon + name only
-    /// (no cover art / drag handles — this is a compact nav shortcut, not the full
-    /// playlist-management row used on the Playlists screen).
+    /// A single playlist row in the Spotify sidebar's library list: small square
+    /// cover-art thumbnail + name (no drag handles — this is a compact nav
+    /// shortcut, not the full playlist-management row used on the Playlists screen).
     pub(crate) fn spotify_library_row(&self, item: &PlaylistListItem) -> Element<'_, Message> {
         let t = self.tokens;
-        let (nav_id, name): (String, String) = match item {
+        let spotify = self.ui_theme_id == "spotify";
+        let (nav_id, name, cover_id): (String, String, Option<String>) = match item {
             PlaylistListItem::Local(i) => {
                 let p = &self.playlists[*i];
-                (p.id.clone(), p.name.clone())
+                let cover = p.tracks.iter().find_map(|s| s.cover_art_id.clone());
+                (p.id.clone(), p.name.clone(), cover)
             }
             PlaylistListItem::ServerOnly(i) => {
                 let sp = &self.server_playlists[*i];
                 let sid = sp.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let nm = sp.get("name").and_then(|v| v.as_str()).unwrap_or("Untitled").to_string();
-                (format!("server-{sid}"), nm)
+                let cover = sp.get("coverArt").and_then(|v| v.as_str()).map(|s| s.to_string());
+                (format!("server-{sid}"), nm, cover)
             }
         };
         button(
-            row![icons::icon(icons::LIST, 14.0, t.muted), text(name).size(13).style(tstyle(t.text))]
+            row![self.cover_image(cover_id.as_deref(), 40.0), text(name).size(13).style(tstyle(t.text))]
                 .spacing(10)
                 .align_y(Alignment::Center),
         )
         .width(Length::Fill)
         .padding([6, 8])
         .on_press(Message::Navigate(View::PlaylistDetail(nav_id)))
-        .style(list_row_style(t))
+        .style(list_row_style(t, spotify))
         .into()
     }
 
     pub(crate) fn nav_button(&self, icon_src: &'static str, label: &'static str, target: View) -> Element<'_, Message> {
         let active = self.view == target;
         let t = self.tokens;
-        let color = if active { t.accent } else { t.muted };
+        let spotify = self.ui_theme_id == "spotify";
+        let color = if active {
+            if spotify { t.text } else { t.accent }
+        } else {
+            t.muted
+        };
         let mut label_text = text(label).size(13).style(tstyle(color));
-        if active {
+        if active && !spotify {
             label_text = label_text.font(iced::Font {
                 weight: iced::font::Weight::Bold,
                 ..iced::Font::MONOSPACE

@@ -70,6 +70,7 @@ impl App {
 
     pub(crate) fn album_detail_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let Some(at) = &self.album_detail else {
             return text("Loading…").size(13).style(tstyle(t.muted)).into();
         };
@@ -104,7 +105,7 @@ impl App {
         )
         .padding(8)
         .on_press(Message::PlayAlbumAt(0))
-        .style(primary_button(t));
+        .style(primary_button(t, spotify));
 
         let shuffle_btn = button(
             row![
@@ -180,6 +181,7 @@ impl App {
 
     pub(crate) fn track_row(&self, idx: usize, song: &Song, on_press: Message) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let is_current = self.current_song_id() == Some(song.id.as_str());
         let title_color = if is_current { t.accent } else { t.text };
         let num = song
@@ -223,8 +225,8 @@ impl App {
             play_area,
             self.star_rating(song),
             self.avg_rating_badge(song),
-            icon_button(icons::PLUS, 14.0, t.muted, t, Message::OpenAddToPlaylist(song.clone())),
-            icon_button(icons::DOWNLOAD, 14.0, t.muted, t, Message::DownloadTrack(song.clone())),
+            icon_button(icons::PLUS, 14.0, t.muted, t, spotify, Message::OpenAddToPlaylist(song.clone())),
+            icon_button(icons::DOWNLOAD, 14.0, t.muted, t, spotify, Message::DownloadTrack(song.clone())),
             text(fmt_time(song.duration)).size(11).style(tstyle(t.muted)).width(Length::Fixed(44.0)),
         ]
         .spacing(8)

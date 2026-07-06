@@ -23,7 +23,7 @@ impl App {
             )
             .padding([6, 14])
             .on_press(Message::OpenAddPodcastModal)
-            .style(list_row_style(t)),
+            .style(list_row_style(t, spotify)),
         ]
         .align_y(Alignment::Center);
 
@@ -53,7 +53,7 @@ impl App {
                 .width(Length::Fill)
                 .padding(if spotify { 12 } else { 10 })
                 .on_press(Message::Navigate(View::PodcastDetail(channel.id.clone())))
-                .style(list_row_style(t)),
+                .style(list_row_style(t, spotify)),
             );
         }
 
@@ -70,6 +70,7 @@ impl App {
 
     pub(crate) fn podcast_detail_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let View::PodcastDetail(channel_id) = self.view.clone() else {
             return text("No channel selected").size(13).style(tstyle(t.muted)).into();
         };
@@ -83,11 +84,11 @@ impl App {
             button(text("Refresh").size(12).style(tstyle(t.text)))
                 .padding([6, 12])
                 .on_press(Message::RefreshPodcastChannel(channel_id.clone(), feed_url))
-                .style(list_row_style(t)),
+                .style(list_row_style(t, spotify)),
             button(text("Unsubscribe").size(12).style(tstyle(t.text)))
                 .padding([6, 12])
                 .on_press(Message::UnsubscribePodcastChannel(channel_id.clone()))
-                .style(list_row_style(t)),
+                .style(list_row_style(t, spotify)),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
@@ -115,7 +116,7 @@ impl App {
                     button(icons::icon(icons::PLAY, 14.0, t.accent))
                         .padding(8)
                         .on_press(Message::PlayPodcastEpisode(episode.clone()))
-                        .style(list_row_style(t)),
+                        .style(list_row_style(t, spotify)),
                 ]
                 .spacing(12)
                 .padding(10)
@@ -136,6 +137,7 @@ impl App {
 
     pub(crate) fn add_podcast_overlay(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let can_add = !self.podcast_add_url_input.trim().is_empty();
 
         let backdrop = button(container(text("")).width(Length::Fill).height(Length::Fill))
@@ -155,7 +157,7 @@ impl App {
                 .on_submit(Message::SubmitAddPodcastChannel)
                 .padding(10)
                 .size(13)
-                .style(text_input_style(t)),
+                .style(text_input_style(t, spotify)),
         ]
         .spacing(16);
 
@@ -168,11 +170,11 @@ impl App {
                 button(text("Cancel").size(13).style(tstyle(t.muted)))
                     .padding(8)
                     .on_press(Message::CloseAddPodcastModal)
-                    .style(list_row_style(t)),
+                    .style(list_row_style(t, spotify)),
                 button(text("Add").size(13).style(tstyle(if can_add { t.bg } else { t.muted })))
                     .padding([8, 16])
                     .on_press_maybe(add_msg)
-                    .style(primary_button(t)),
+                    .style(primary_button(t, spotify)),
             ]
             .spacing(12)
             .align_y(Alignment::Center),

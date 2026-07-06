@@ -18,7 +18,8 @@ pub(crate) fn fill_bg(c: Color) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-pub(crate) fn primary_button(t: Tokens) -> impl Fn(&Theme, button::Status) -> button::Style {
+pub(crate) fn primary_button(t: Tokens, spotify: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let radius = if spotify { 500.0 } else { 2.0 };
     move |_theme, status| {
         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
         button::Style {
@@ -28,7 +29,7 @@ pub(crate) fn primary_button(t: Tokens) -> impl Fn(&Theme, button::Status) -> bu
                 t.accent
             })),
             text_color: t.bg,
-            border: Border { radius: 2.0.into(), ..Border::default() },
+            border: Border { radius: radius.into(), ..Border::default() },
             ..button::Style::default()
         }
     }
@@ -44,7 +45,7 @@ pub(crate) fn page_header(label: impl Into<String>, t: Tokens, spotify: bool) ->
     if spotify {
         text(label.into()).size(28).style(tstyle(t.text)).font(iced::Font {
             weight: iced::font::Weight::Bold,
-            ..iced::Font::MONOSPACE
+            ..iced::Font::with_name("Inter")
         }).into()
     } else {
         text(label.into()).size(22).style(tstyle(t.text)).into()
@@ -57,7 +58,7 @@ pub(crate) fn shelf_label(label: &'static str, t: Tokens, spotify: bool) -> Elem
     if spotify {
         text(label).size(18).style(tstyle(t.text)).font(iced::Font {
             weight: iced::font::Weight::Bold,
-            ..iced::Font::MONOSPACE
+            ..iced::Font::with_name("Inter")
         }).into()
     } else {
         text(label).size(11).style(tstyle(t.muted)).into()
@@ -108,13 +109,14 @@ pub(crate) fn sett_panel_title<'a>(title: impl Into<String>, t: Tokens) -> Eleme
     .into()
 }
 
-pub(crate) fn list_row_style(t: Tokens) -> impl Fn(&Theme, button::Status) -> button::Style {
+pub(crate) fn list_row_style(t: Tokens, spotify: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let radius = if spotify { 6.0 } else { 2.0 };
     move |_theme, status| {
         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
         button::Style {
             background: if hovered { Some(Background::Color(t.surface)) } else { None },
             text_color: t.text,
-            border: Border { radius: 2.0.into(), ..Border::default() },
+            border: Border { radius: radius.into(), ..Border::default() },
             ..button::Style::default()
         }
     }
@@ -152,7 +154,8 @@ pub(crate) fn setting_toggle<'a>(label: &'a str, on: bool, on_toggle: fn(bool) -
     .into()
 }
 
-pub(crate) fn icon_button<'a>(src: &'static str, size: f32, color: Color, t: Tokens, msg: Message) -> Element<'a, Message> {
+pub(crate) fn icon_button<'a>(src: &'static str, size: f32, color: Color, t: Tokens, spotify: bool, msg: Message) -> Element<'a, Message> {
+    let radius = if spotify { 500.0 } else { 4.0 };
     button(icons::icon(src, size, color))
         .padding(8)
         .on_press(msg)
@@ -161,7 +164,7 @@ pub(crate) fn icon_button<'a>(src: &'static str, size: f32, color: Color, t: Tok
             button::Style {
                 background: if hovered { Some(Background::Color(t.surface2)) } else { None },
                 text_color: color,
-                border: Border { radius: 4.0.into(), ..Border::default() },
+                border: Border { radius: radius.into(), ..Border::default() },
                 ..button::Style::default()
             }
         })
@@ -186,12 +189,23 @@ pub(crate) fn ctrl_button<'a>(src: &'static str, size: f32, color: Color, t: Tok
 }
 
 /// Main play/pause button — always shows a circle background, accent on hover.
-pub(crate) fn main_ctrl_button<'a>(src: &'static str, size: f32, t: Tokens, msg: Message) -> Element<'a, Message> {
-    button(icons::icon(src, size, t.text))
+/// In Spotify mode it's a solid white filled pill instead (real Spotify reserves
+/// the accent green for "liked" affordances, not the play button).
+pub(crate) fn main_ctrl_button<'a>(src: &'static str, size: f32, t: Tokens, spotify: bool, msg: Message) -> Element<'a, Message> {
+    let icon_color = if spotify { t.bg } else { t.text };
+    button(icons::icon(src, size, icon_color))
         .padding(10)
         .on_press(msg)
         .style(move |_theme, status| {
             let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            if spotify {
+                return button::Style {
+                    background: Some(Background::Color(if hovered { Color { a: 0.85, ..t.text } } else { t.text })),
+                    text_color: t.bg,
+                    border: Border { radius: 100.0.into(), ..Border::default() },
+                    ..button::Style::default()
+                };
+            }
             button::Style {
                 background: Some(Background::Color(if hovered { t.accent } else { t.surface2 })),
                 text_color: if hovered { t.bg } else { t.text },
@@ -201,7 +215,8 @@ pub(crate) fn main_ctrl_button<'a>(src: &'static str, size: f32, t: Tokens, msg:
         })
         .into()
 }
-pub(crate) fn text_input_style(t: Tokens) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+pub(crate) fn text_input_style(t: Tokens, spotify: bool) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    let radius = if spotify { 8.0 } else { 2.0 };
     move |_theme, status| {
         let focused = matches!(status, text_input::Status::Focused { .. });
         text_input::Style {
@@ -209,7 +224,7 @@ pub(crate) fn text_input_style(t: Tokens) -> impl Fn(&Theme, text_input::Status)
             border: Border {
                 color: if focused { t.accent } else { t.border },
                 width: 1.0,
-                radius: 2.0.into(),
+                radius: radius.into(),
             },
             icon: t.muted,
             placeholder: t.muted,

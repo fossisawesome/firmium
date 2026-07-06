@@ -1,5 +1,5 @@
 use iced::widget::{button, column, responsive, row, scrollable, text};
-use iced::{Background, Border, Element, Length};
+use iced::{Alignment, Background, Border, Element, Length};
 
 use crate::commands::mappers::Album;
 
@@ -12,35 +12,75 @@ use super::super::App;
 impl App {
     pub(crate) fn home_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let username = {
             let conn = self.backend.app_state.connection.read();
             conn.username.clone().unwrap_or_default()
         };
-        scrollable(
-            column![
-                column![
-                    text(format!("GOOD {},", time_of_day().to_uppercase()))
-                        .size(13)
-                        .style(tstyle(t.muted)),
-                    text(username).size(36).style(tstyle(t.accent)).font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..iced::Font::MONOSPACE
-                    }),
-                ]
-                .spacing(4),
-                self.home_recent_songs_view(),
-                self.home_recent_artists(),
-                self.home_section("RANDOM PICKS", &self.home_random),
-                self.home_genres(),
-            ]
-            .spacing(28)
-            .padding(iced::Padding { right: 16.0, ..iced::Padding::ZERO }),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
-        .style(thin_scroll_style(t))
-        .into()
+        let mut sections = column![
+            text(format!("GOOD {},", time_of_day().to_uppercase()))
+                .size(13)
+                .style(tstyle(t.muted)),
+            text(username).size(36).style(tstyle(t.accent)).font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..iced::Font::MONOSPACE
+            }),
+        ]
+        .spacing(4);
+        if spotify {
+            sections = sections.push(self.home_quick_access());
+        }
+        sections = sections
+            .push(self.home_recent_songs_view())
+            .push(self.home_recent_artists())
+            .push(self.home_section("RANDOM PICKS", &self.home_random))
+            .push(self.home_genres());
+        scrollable(sections.spacing(28).padding(iced::Padding { right: 16.0, ..iced::Padding::ZERO }))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
+            .style(thin_scroll_style(t))
+            .into()
+    }
+
+    /// Spotify home's "quick access" grid: a 2–3 column grid of small horizontal
+    /// cards (square art + bold label) for the most recently played tracks,
+    /// shown above the shelves — Spotify's most recognizable home pattern.
+    pub(crate) fn home_quick_access(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+        if self.home_recent_plays.is_empty() {
+            return column![].into();
+        }
+        let items: Vec<_> = self.home_recent_plays.iter().take(6).collect();
+        let mut grid = column![].spacing(8);
+        for chunk in items.chunks(3) {
+            let mut line = row![].spacing(8);
+            for play in chunk {
+                let cover = self.cover_image(play.cover_art_id.as_deref(), 56.0);
+                let title = text(play.track_title.clone()).size(13).style(tstyle(t.text)).font(iced::Font {
+                    weight: iced::font::Weight::Bold,
+                    ..iced::Font::with_name("Inter")
+                });
+                let mut card = button(row![cover, title].spacing(12).align_y(Alignment::Center))
+                    .width(Length::Fill)
+                    .padding(0)
+                    .style(move |_th, status| {
+                        let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                        button::Style {
+                            background: Some(Background::Color(if h { t.surface2 } else { t.surface })),
+                            text_color: t.text,
+                            border: Border { radius: 6.0.into(), ..Border::default() },
+                            ..button::Style::default()
+                        }
+                    });
+                if let Some(aid) = play.album_id.clone() {
+                    card = card.on_press(Message::Navigate(View::AlbumDetail(aid)));
+                }
+                line = line.push(card);
+            }
+            grid = grid.push(line);
+        }
+        grid.into()
     }
 
     pub(crate) fn home_recent_songs_view(&self) -> Element<'_, Message> {

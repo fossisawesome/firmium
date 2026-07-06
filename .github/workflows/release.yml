@@ -338,9 +338,9 @@ jobs:
             www: https://github.com/fossisawesome/firmium
             prefix: /usr
             deps:
-              alsa-lib: {origin: audio/alsa-lib}
-              dbus: {origin: devel/dbus}
-              libxkbcommon: {origin: x11/libxkbcommon}
+              alsa-lib: {origin: audio/alsa-lib, version: "1"}
+              dbus: {origin: devel/dbus, version: "1"}
+              libxkbcommon: {origin: x11/libxkbcommon, version: "1"}
             EOF
 
             pkg create -m . -r stage -o .

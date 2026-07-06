@@ -12,6 +12,7 @@ use super::super::App;
 impl App {
     pub(crate) fn recap_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let mut ranges = row![].spacing(6);
         for r in [
             RecapRange::Week,
@@ -76,9 +77,9 @@ impl App {
                     );
                 }
                 let nav = row![
-                    icon_button(icons::BACK, 16.0, t.text, t, Message::RecapPrev),
+                    icon_button(icons::BACK, 16.0, t.text, t, spotify, Message::RecapPrev),
                     container(dots).center_x(Length::Fill),
-                    icon_button(icons::CHEVRON_RIGHT, 16.0, t.text, t, Message::RecapNext),
+                    icon_button(icons::CHEVRON_RIGHT, 16.0, t.text, t, spotify, Message::RecapNext),
                 ]
                 .align_y(Alignment::Center);
 

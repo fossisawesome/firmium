@@ -625,6 +625,7 @@ impl App {
     }
 
     pub(crate) fn settings_services(&self, t: Tokens) -> Element<'_, Message> {
+        let spotify = self.ui_theme_id == "spotify";
         let mut col = column![sett_panel_title("Services", t)].spacing(0);
         col = col.push(sett_row(
             "Last.fm Integration",
@@ -641,7 +642,7 @@ impl App {
                     .on_input(Message::SetLastfmKey)
                     .padding([6, 10])
                     .width(Length::Fixed(220.0))
-                    .style(text_input_style(t))
+                    .style(text_input_style(t, spotify))
                     .into(),
             ));
             col = col.push(sett_row(
@@ -653,7 +654,7 @@ impl App {
                     .secure(true)
                     .padding([6, 10])
                     .width(Length::Fixed(220.0))
-                    .style(text_input_style(t))
+                    .style(text_input_style(t, spotify))
                     .into(),
             ));
         }
@@ -673,7 +674,7 @@ impl App {
                     .secure(true)
                     .padding([6, 10])
                     .width(Length::Fixed(220.0))
-                    .style(text_input_style(t))
+                    .style(text_input_style(t, spotify))
                     .into(),
             ));
         }

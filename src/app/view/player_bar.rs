@@ -68,7 +68,7 @@ impl App {
         let controls = row![
             ctrl_button(icons::SHUFFLE, 15.0, shuffle_color, t, Message::ToggleShuffle),
             ctrl_button(icons::PREV, 15.0, t.text, t, Message::Prev),
-            main_ctrl_button(pp_icon, 20.0, t, Message::TogglePlay),
+            main_ctrl_button(pp_icon, 20.0, t, false, Message::TogglePlay),
             ctrl_button(icons::NEXT, 15.0, t.text, t, Message::Next),
             ctrl_button(icons::REPEAT, 16.0, repeat_color, t, Message::CycleRepeat),
             ctrl_button(icons::LYRICS, 16.0, lyr_color, t, Message::TogglePanel(Panel::Lyrics)),
@@ -105,9 +105,25 @@ impl App {
         let cover = self.cover_image(song.and_then(|s| s.cover_art_id.as_deref()), 56.0);
         let title_text = song.map(|s| s.title.clone()).unwrap_or_else(|| "No track selected".to_string());
         let artist_text = song.map(|s| s.artist.clone()).unwrap_or_default();
+        let liked = song.is_some_and(|s| s.user_rating.unwrap_or(0) > 0);
+        let heart = if let Some(s) = song {
+            let id = s.id.clone();
+            icon_button(
+                if liked { icons::HEART_FILLED } else { icons::HEART_OUTLINE },
+                15.0,
+                if liked { t.accent } else { t.muted },
+                t,
+                true,
+                Message::SetRating(id, if liked { 0 } else { 5 }),
+            )
+        } else {
+            icons::icon(icons::HEART_OUTLINE, 15.0, t.muted)
+        };
         let title_col = column![
             text(title_text).size(14).style(tstyle(t.text)),
-            text(artist_text).size(12).style(tstyle(t.muted)),
+            row![text(artist_text).size(12).style(tstyle(t.muted)), heart]
+                .spacing(10)
+                .align_y(Alignment::Center),
         ]
         .spacing(2)
         .width(Length::Fixed(170.0));
@@ -122,7 +138,7 @@ impl App {
         let transport = row![
             ctrl_button(icons::SHUFFLE, 15.0, shuffle_color, t, Message::ToggleShuffle),
             ctrl_button(icons::PREV, 15.0, t.text, t, Message::Prev),
-            main_ctrl_button(pp_icon, 20.0, t, Message::TogglePlay),
+            main_ctrl_button(pp_icon, 20.0, t, true, Message::TogglePlay),
             ctrl_button(icons::NEXT, 15.0, t.text, t, Message::Next),
             ctrl_button(icons::REPEAT, 16.0, repeat_color, t, Message::CycleRepeat),
         ]

@@ -79,6 +79,9 @@ val ALL_THEMES: List<FirmiumTheme> = listOf(
     FirmiumTheme("svalbard", "Svalbard", true,
         bg = hex("0b1117"), surface = hex("121d27"), surface2 = hex("1c2c39"),
         text = hex("e8f1f7"), muted = hex("7e9bb0"), accent = hex("6cc8e0"), error = hex("e06c75")),
+    FirmiumTheme("spotify", "Spotify", true,
+        bg = hex("121212"), surface = hex("181818"), surface2 = hex("282828"),
+        text = hex("ffffff"), muted = hex("b3b3b3"), accent = hex("1ed760"), error = hex("f15e6c")),
     // Light themes
     FirmiumTheme("adwaita", "Adwaita", false,
         bg = hex("fafafa"), surface = hex("ffffff"), surface2 = hex("f0f0f0"),

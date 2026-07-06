@@ -14,6 +14,7 @@ use super::super::App;
 impl App {
     pub(crate) fn playlists_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let header = row![
             container(page_header(format!("Playlists ({})", self.playlist_items.len()), t, self.ui_theme_id == "spotify"))
                 .width(Length::Fill),
@@ -24,7 +25,7 @@ impl App {
             )
             .padding([6, 14])
             .on_press(Message::OpenCreatePlaylist)
-            .style(list_row_style(t)),
+            .style(list_row_style(t, spotify)),
         ]
         .align_y(Alignment::Center);
 
@@ -167,17 +168,17 @@ impl App {
         .width(Length::Fill)
         .padding(if spotify { 10 } else { 8 })
         .on_press(Message::Navigate(View::PlaylistDetail(nav_id)))
-        .style(list_row_style(t));
+        .style(list_row_style(t, spotify));
 
         let mut trailing = row![].spacing(4).align_y(Alignment::Center);
         if let Some(lid) = &local_id {
             if !synced {
                 trailing = trailing.push(icon_button(
-                    icons::CLOUD, 16.0, t.accent, t, Message::SyncPlaylistNow(lid.clone()),
+                    icons::CLOUD, 16.0, t.accent, t, spotify, Message::SyncPlaylistNow(lid.clone()),
                 ));
             }
             trailing = trailing.push(icon_button(
-                icons::TRASH, 16.0, t.error, t, Message::DeleteLocalPlaylist(lid.clone()),
+                icons::TRASH, 16.0, t.error, t, spotify, Message::DeleteLocalPlaylist(lid.clone()),
             ));
         }
 
@@ -193,6 +194,7 @@ impl App {
         server_id: &Option<String>,
     ) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let base = self.track_row(idx, song, Message::PlayPlaylistAt(idx));
 
         let up_msg = match (local_id, server_id) {
@@ -214,21 +216,22 @@ impl App {
         let up = button(icons::icon(icons::CHEVRON_UP, 14.0, t.muted))
             .padding(4)
             .on_press_maybe((idx > 0).then_some(up_msg).flatten())
-            .style(list_row_style(t));
+            .style(list_row_style(t, spotify));
         let down = button(icons::icon(icons::CHEVRON_DOWN, 14.0, t.muted))
             .padding(4)
             .on_press_maybe((idx + 1 < total).then_some(down_msg).flatten())
-            .style(list_row_style(t));
+            .style(list_row_style(t, spotify));
         let remove = button(icons::icon(icons::CLOSE, 14.0, t.error))
             .padding(4)
             .on_press_maybe(remove_msg)
-            .style(list_row_style(t));
+            .style(list_row_style(t, spotify));
 
         row![base, up, down, remove].spacing(6).align_y(Alignment::Center).into()
     }
 
     pub(crate) fn playlist_detail_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let Some(pt) = &self.playlist_detail else {
             return text("Loading…").size(13).style(tstyle(t.muted)).into();
         };
@@ -246,7 +249,7 @@ impl App {
         )
         .padding(8)
         .on_press(Message::PlayPlaylistAt(0))
-        .style(primary_button(t));
+        .style(primary_button(t, spotify));
 
         // Title row: editable for local playlists when renaming.
         let renaming = local_id
@@ -261,8 +264,8 @@ impl App {
                     .padding(8)
                     .size(20)
                     .width(Length::Fixed(360.0))
-                    .style(text_input_style(t)),
-                icon_button(icons::PLAY, 16.0, t.accent, t, Message::CommitRenamePlaylist),
+                    .style(text_input_style(t, spotify)),
+                icon_button(icons::PLAY, 16.0, t.accent, t, spotify, Message::CommitRenamePlaylist),
             ]
             .spacing(8)
             .align_y(Alignment::Center)
@@ -272,7 +275,7 @@ impl App {
                 .spacing(10)
                 .align_y(Alignment::Center);
             if let Some(id) = &local_id {
-                tr = tr.push(icon_button(icons::PENCIL, 16.0, t.muted, t, Message::StartRenamePlaylist(id.clone())));
+                tr = tr.push(icon_button(icons::PENCIL, 16.0, t.muted, t, spotify, Message::StartRenamePlaylist(id.clone())));
             }
             tr.into()
         };
