@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Artist
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.ArtistListState
 
 @Composable
@@ -60,9 +61,11 @@ fun ArtistListScreen(
 @Composable
 private fun ArtistRow(artist: Artist, coverUrl: String?, onArtistClick: (String) -> Unit) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
+    val avatarSize = if (spotify) 56.dp else 44.dp
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onArtistClick(artist.id) }
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = if (spotify) 12.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -70,11 +73,11 @@ private fun ArtistRow(artist: Artist, coverUrl: String?, onArtistClick: (String)
         CoverImage(
             url = coverUrl,
             contentDescription = artist.name,
-            modifier = Modifier.size(44.dp).clip(CircleShape),
+            modifier = Modifier.size(avatarSize).clip(CircleShape),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                artist.name, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                artist.name, fontSize = if (spotify) 15.sp else 14.sp, fontWeight = FontWeight.Bold,
                 fontFamily = LocalAppFontFamily.current, color = colors.text,
             )
             Text(

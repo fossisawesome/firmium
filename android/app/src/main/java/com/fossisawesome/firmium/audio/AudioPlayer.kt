@@ -8,7 +8,10 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import kotlinx.coroutines.*
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -42,10 +45,27 @@ class AudioPlayer(private val context: Context) {
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
 
-    private fun buildPlayer(): ExoPlayer =
-        ExoPlayer.Builder(context)
+    // Each player gets its own tap so multiple concurrent sessions (crossfade, multi-device)
+    // don't cross-contaminate each other's visualizer data.
+    private fun buildPlayer(): Pair<ExoPlayer, VisualizerAudioProcessor> {
+        val processor = VisualizerAudioProcessor()
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink =
+                DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(processor))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+        }
+        val player = ExoPlayer.Builder(context, renderersFactory)
             .setAudioAttributes(audioAttrs, true)
             .build()
+        return player to processor
+    }
 
     /** Assign a known audio session id and attach EQ effects so they're live before playback. */
     private fun setupEq(player: ExoPlayer): Int {
@@ -130,11 +150,11 @@ class AudioPlayer(private val context: Context) {
 
     fun play(streamUrl: String, trackId: String, replayGainDb: Float? = null): String {
         val playerId = UUID.randomUUID().toString()
-        val player = buildPlayer()
+        val (player, visualizerProcessor) = buildPlayer()
         val sessionId = setupEq(player)
         val gain = gainFactor(replayGainDb)
         player.volume = gain
-        val session = AudioSession(player, trackId, 1.0f, gain, audioSessionId = sessionId)
+        val session = AudioSession(player, trackId, 1.0f, gain, audioSessionId = sessionId, visualizerProcessor = visualizerProcessor)
         sessions[playerId] = session
         attachListeners(playerId, session)
         player.setMediaItem(MediaItem.fromUri(streamUrl))
@@ -219,6 +239,9 @@ class AudioPlayer(private val context: Context) {
     fun getAudioSessionId(playerId: String): Int =
         sessions[playerId]?.player?.audioSessionId ?: 0
 
+    fun getVisualizerProcessor(playerId: String): VisualizerAudioProcessor? =
+        sessions[playerId]?.visualizerProcessor
+
     fun isFinished(playerId: String): Boolean {
         val session = sessions[playerId] ?: return true
         return session.player.playbackState == Player.STATE_ENDED
@@ -233,7 +256,7 @@ class AudioPlayer(private val context: Context) {
     ): String {
         sessions.keys.toList().forEach { releaseSession(it) }
         val playerId = UUID.randomUUID().toString()
-        val player = buildPlayer()
+        val (player, visualizerProcessor) = buildPlayer()
         val sessionId = setupEq(player)
         val gainFactors = tracks.map { gainFactor(it.replayGainDb) }
         val idx = startIndex.coerceIn(0, (tracks.size - 1).coerceAtLeast(0))
@@ -249,6 +272,7 @@ class AudioPlayer(private val context: Context) {
             queueReplayGainFactors = gainFactors,
             currentQueueIndex = idx,
             audioSessionId = sessionId,
+            visualizerProcessor = visualizerProcessor,
         )
         sessions[playerId] = session
         attachListeners(playerId, session)
@@ -299,11 +323,11 @@ class AudioPlayer(private val context: Context) {
         curve: String = "linear",
     ): String {
         val newPlayerId = UUID.randomUUID().toString()
-        val newPlayer = buildPlayer()
+        val (newPlayer, visualizerProcessor) = buildPlayer()
         val sessionId = setupEq(newPlayer)
         val gain = gainFactor(replayGainDb)
         newPlayer.volume = 0f
-        val newSession = AudioSession(newPlayer, trackId, targetVolume, gain, audioSessionId = sessionId)
+        val newSession = AudioSession(newPlayer, trackId, targetVolume, gain, audioSessionId = sessionId, visualizerProcessor = visualizerProcessor)
         sessions[newPlayerId] = newSession
         attachListeners(newPlayerId, newSession)
         newPlayer.setMediaItem(MediaItem.fromUri(streamUrl))
@@ -347,4 +371,5 @@ private data class AudioSession(
     var queueReplayGainFactors: List<Float>? = null,
     var currentQueueIndex: Int = 0,
     val audioSessionId: Int = 0,
+    val visualizerProcessor: VisualizerAudioProcessor? = null,
 )

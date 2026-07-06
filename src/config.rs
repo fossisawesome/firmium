@@ -19,6 +19,8 @@ pub struct Config {
     pub server: Option<String>,
     pub username: Option<String>,
     pub theme_id: Option<String>,
+    #[serde(default)]
+    pub ui_theme_id: Option<String>,
     pub volume: Option<f32>,
     #[serde(default)]
     pub accounts: Vec<SavedAccount>,
@@ -36,6 +38,106 @@ pub struct Config {
     pub font_family: Option<String>,
     #[serde(default)]
     pub scrollbar_width: Option<u32>,
+
+    // ── Visualizer: Bars ──────────────────────────────────────────────────────
+    #[serde(default)]
+    pub bars_monstercat: Option<f32>,
+    #[serde(default)]
+    pub bars_waves: Option<bool>,
+    #[serde(default)]
+    pub bars_waves_smoothing: Option<u32>,
+    #[serde(default)]
+    pub bars_gradient_mode: Option<crate::viz::config::BarsGradientMode>,
+    #[serde(default)]
+    pub bars_gradient_orientation: Option<crate::viz::config::BarsGradientOrientation>,
+    #[serde(default)]
+    pub bars_peak_gradient_mode: Option<crate::viz::config::BarsPeakGradientMode>,
+    #[serde(default)]
+    pub bars_peak_mode: Option<crate::viz::config::BarsPeakMode>,
+    #[serde(default)]
+    pub bars_peak_hold_time: Option<f32>,
+    #[serde(default)]
+    pub bars_peak_fade_time: Option<f32>,
+    #[serde(default)]
+    pub bars_peak_height: Option<f32>,
+    #[serde(default)]
+    pub bars_border_width: Option<f32>,
+    #[serde(default)]
+    pub bars_led_bars: Option<bool>,
+    #[serde(default)]
+    pub bars_led_segment_height: Option<f32>,
+    #[serde(default)]
+    pub bars_depth_3d: Option<f32>,
+    #[serde(default)]
+    pub bars_flash_intensity: Option<f32>,
+    #[serde(default)]
+    pub bars_max_bars: Option<u32>,
+    #[serde(default)]
+    pub bars_trails: Option<f32>,
+    #[serde(default)]
+    pub bars_echo: Option<f32>,
+
+    // ── Visualizer: Lines ─────────────────────────────────────────────────────
+    #[serde(default)]
+    pub lines_point_count: Option<u32>,
+    #[serde(default)]
+    pub lines_line_thickness: Option<f32>,
+    #[serde(default)]
+    pub lines_outline_thickness: Option<f32>,
+    #[serde(default)]
+    pub lines_outline_opacity: Option<f32>,
+    #[serde(default)]
+    pub lines_animation_speed: Option<f32>,
+    #[serde(default)]
+    pub lines_gradient_mode: Option<crate::viz::config::GradientMode>,
+    #[serde(default)]
+    pub lines_fill_opacity: Option<f32>,
+    #[serde(default)]
+    pub lines_glow_intensity: Option<f32>,
+    #[serde(default)]
+    pub lines_mirror: Option<bool>,
+    #[serde(default)]
+    pub lines_style: Option<crate::viz::config::LineStyle>,
+    #[serde(default)]
+    pub lines_trails: Option<f32>,
+    #[serde(default)]
+    pub lines_echo: Option<f32>,
+
+    // ── Visualizer: Scope ─────────────────────────────────────────────────────
+    #[serde(default)]
+    pub scope_radius: Option<f32>,
+    #[serde(default)]
+    pub scope_sensitivity: Option<f32>,
+    #[serde(default)]
+    pub scope_point_count: Option<u32>,
+    #[serde(default)]
+    pub scope_line_thickness: Option<f32>,
+    #[serde(default)]
+    pub scope_fill_opacity: Option<f32>,
+    #[serde(default)]
+    pub scope_glow_intensity: Option<f32>,
+    #[serde(default)]
+    pub scope_outline_thickness: Option<f32>,
+    #[serde(default)]
+    pub scope_outline_opacity: Option<f32>,
+    #[serde(default)]
+    pub scope_gradient_mode: Option<crate::viz::config::GradientMode>,
+    #[serde(default)]
+    pub scope_animation_speed: Option<f32>,
+    #[serde(default)]
+    pub scope_style: Option<crate::viz::config::LineStyle>,
+    #[serde(default)]
+    pub scope_particles: Option<bool>,
+    #[serde(default)]
+    pub scope_particle_count: Option<u32>,
+    #[serde(default)]
+    pub scope_particle_speed: Option<f32>,
+    #[serde(default)]
+    pub scope_beam: Option<bool>,
+    #[serde(default)]
+    pub scope_trails: Option<f32>,
+    #[serde(default)]
+    pub scope_echo: Option<f32>,
 }
 
 fn config_path() -> PathBuf {

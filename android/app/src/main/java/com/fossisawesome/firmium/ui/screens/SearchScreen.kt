@@ -33,6 +33,7 @@ import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 import com.fossisawesome.firmium.viewmodel.SearchState
 
@@ -56,6 +57,7 @@ fun SearchScreen(
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
 ) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
     val border = colors.surface2.copy(alpha = 0.4f)
     var pendingSong by remember { mutableStateOf<Song?>(null) }
     val focusRequester = remember { FocusRequester() }
@@ -176,11 +178,18 @@ fun SearchScreen(
             else -> LazyColumn(modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp)) {
                 if (visibleSongs.isNotEmpty()) {
-                    // .section-header: 12sp uppercase, muted, letterSpacing 1, margin 10/12dp
+                    // .section-header: 12sp uppercase, muted, letterSpacing 1, margin 10/12dp.
+                    // Spotify UI theme uses a bigger bold label instead.
                     item {
-                        Text("SONGS", fontSize = 12.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
+                        if (spotify) {
+                            Text("Songs", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.text,
+                                fontFamily = LocalAppFontFamily.current,
+                                modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
+                        } else {
+                            Text("SONGS", fontSize = 12.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current,
+                                letterSpacing = 1.sp,
+                                modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
+                        }
                     }
                     itemsIndexed(visibleSongs, key = { _, s -> "song_${s.id}" }) { index, song ->
                         SearchTrackRow(
@@ -198,9 +207,15 @@ fun SearchScreen(
                 }
                 if (state.albums.isNotEmpty()) {
                     item {
-                        Text("ALBUMS", fontSize = 12.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
+                        if (spotify) {
+                            Text("Albums", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.text,
+                                fontFamily = LocalAppFontFamily.current,
+                                modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
+                        } else {
+                            Text("ALBUMS", fontSize = 12.sp, color = colors.muted, fontFamily = LocalAppFontFamily.current,
+                                letterSpacing = 1.sp,
+                                modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 12.dp))
+                        }
                     }
                     itemsIndexed(state.albums, key = { _, a -> "album_${a.id}" }) { _, album ->
                         AlbumRow(
@@ -209,8 +224,8 @@ fun SearchScreen(
                             onAlbumClick = onAlbumClick,
                             onAddClick = { onAddAlbum(album.id) },
                             onDownloadClick = onDownloadAlbum?.invoke(album),
-                            coverSize = 40.dp,
-                            coverRadius = 8.dp,
+                            coverSize = if (spotify) 52.dp else 40.dp,
+                            coverRadius = if (spotify) 10.dp else 8.dp,
                         )
                         FirmiumDivider()
                     }

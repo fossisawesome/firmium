@@ -6,6 +6,10 @@ use crate::errors::UserError;
 use crate::events::BackendEvent;
 use crate::podcasts::{PodcastChannel, PodcastEpisode};
 use crate::viz::VizMode;
+use crate::viz::config::{
+    BarsGradientMode, BarsGradientOrientation, BarsPeakGradientMode, BarsPeakMode, GradientMode,
+    LineStyle,
+};
 
 use super::types::{Energy, HomeSection, Panel, RecapRange, SettingsCategory, View};
 
@@ -85,6 +89,7 @@ pub enum Message {
 
     // ── Settings ──────────────────────────────────────────────────────────────
     SelectTheme(String),
+    SelectUiTheme(String),
     SelectFont(String),
     SetCrossfadeEnabled(bool),
     SetCrossfadeDuration(f32),
@@ -131,6 +136,59 @@ pub enum Message {
     TogglePanel(Panel),
     SetVizMode(VizMode),
     SetVizCoverColors(bool),
+
+    // ── Visualizer: Bars ──────────────────────────────────────────────────────
+    SetBarsMonstercat(f32),
+    SetBarsWaves(bool),
+    SetBarsWavesSmoothing(u32),
+    SetBarsGradientMode(BarsGradientMode),
+    SetBarsGradientOrientation(BarsGradientOrientation),
+    SetBarsPeakGradientMode(BarsPeakGradientMode),
+    SetBarsPeakMode(BarsPeakMode),
+    SetBarsPeakHoldTime(f32),
+    SetBarsPeakFadeTime(f32),
+    SetBarsPeakHeight(f32),
+    SetBarsBorderWidth(f32),
+    SetBarsLedBars(bool),
+    SetBarsLedSegmentHeight(f32),
+    SetBarsDepth3d(f32),
+    SetBarsFlashIntensity(f32),
+    SetBarsMaxBars(u32),
+    SetBarsTrails(f32),
+    SetBarsEcho(f32),
+
+    // ── Visualizer: Lines ─────────────────────────────────────────────────────
+    SetLinesPointCount(u32),
+    SetLinesLineThickness(f32),
+    SetLinesOutlineThickness(f32),
+    SetLinesOutlineOpacity(f32),
+    SetLinesAnimationSpeed(f32),
+    SetLinesGradientMode(GradientMode),
+    SetLinesFillOpacity(f32),
+    SetLinesGlowIntensity(f32),
+    SetLinesMirror(bool),
+    SetLinesStyle(LineStyle),
+    SetLinesTrails(f32),
+    SetLinesEcho(f32),
+
+    // ── Visualizer: Scope ─────────────────────────────────────────────────────
+    SetScopeRadius(f32),
+    SetScopeSensitivity(f32),
+    SetScopePointCount(u32),
+    SetScopeLineThickness(f32),
+    SetScopeFillOpacity(f32),
+    SetScopeGlowIntensity(f32),
+    SetScopeOutlineThickness(f32),
+    SetScopeOutlineOpacity(f32),
+    SetScopeGradientMode(GradientMode),
+    SetScopeAnimationSpeed(f32),
+    SetScopeStyle(LineStyle),
+    SetScopeParticles(bool),
+    SetScopeParticleCount(u32),
+    SetScopeParticleSpeed(f32),
+    SetScopeBeam(bool),
+    SetScopeTrails(f32),
+    SetScopeEcho(f32),
     VizColorsLoaded(String, Result<crate::commands::cover_colors::CoverColorsResult, String>),
     LyricsLoaded(String, Result<Option<LyricsResult>, UserError>),
     SimilarLoaded(String, Result<Vec<SimilarMatch>, UserError>),

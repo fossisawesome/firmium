@@ -17,7 +17,57 @@ impl App {
             ),
             _ => self.theme_gradient(),
         };
-        crate::viz::VizConfig { gradient_colors, ..crate::viz::VizConfig::default() }
+        crate::viz::VizConfig {
+            gradient_colors,
+            gradient_mode: self.bars_gradient_mode.as_u32(),
+            gradient_orientation: self.bars_gradient_orientation.as_u32(),
+            peak_gradient_mode: self.bars_peak_gradient_mode.as_u32(),
+            peak_mode: self.bars_peak_mode.as_u32(),
+            peak_hold_time: self.bars_peak_hold_time,
+            peak_fade_time: self.bars_peak_fade_time,
+            peak_thickness: self.bars_peak_height,
+            border_width: self.bars_border_width,
+            led_bars: self.bars_led_bars,
+            led_segment_height: self.bars_led_segment_height,
+            bar_depth_3d: self.bars_depth_3d,
+            bars_flash_intensity: self.bars_flash_intensity,
+            bars_max_bars: self.bars_max_bars,
+            bars_trails: self.bars_trails,
+            bars_echo: self.bars_echo,
+
+            lines_point_count: self.lines_point_count,
+            line_thickness: self.lines_line_thickness,
+            lines_outline_thickness: self.lines_outline_thickness,
+            lines_outline_opacity: self.lines_outline_opacity,
+            lines_animation_speed: self.lines_animation_speed,
+            lines_gradient_mode: self.lines_gradient_mode.as_u32(),
+            lines_fill_opacity: self.lines_fill_opacity,
+            lines_glow_intensity: self.lines_glow_intensity,
+            lines_mirror: self.lines_mirror,
+            lines_style: self.lines_style.as_u32(),
+            lines_trails: self.lines_trails,
+            lines_echo: self.lines_echo,
+
+            scope_radius: self.scope_radius,
+            scope_sensitivity: self.scope_sensitivity,
+            scope_point_count: self.scope_point_count,
+            scope_line_thickness: self.scope_line_thickness,
+            scope_fill_opacity: self.scope_fill_opacity,
+            scope_glow_intensity: self.scope_glow_intensity,
+            scope_outline_thickness: self.scope_outline_thickness,
+            scope_outline_opacity: self.scope_outline_opacity,
+            scope_gradient_mode: self.scope_gradient_mode.as_u32(),
+            scope_animation_speed: self.scope_animation_speed,
+            scope_style: self.scope_style.as_u32(),
+            scope_particles: self.scope_particles,
+            scope_particle_count: self.scope_particle_count,
+            scope_particle_speed: self.scope_particle_speed,
+            scope_beam: self.scope_beam,
+            scope_trails: self.scope_trails,
+            scope_echo: self.scope_echo,
+
+            ..crate::viz::VizConfig::default()
+        }
     }
 
     /// An 8-stop gradient derived from the active theme's accent colors, used

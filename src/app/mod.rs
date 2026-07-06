@@ -41,6 +41,8 @@ pub struct App {
     #[allow(dead_code)]
     theme_id: String,
     tokens: Tokens,
+    // Layout/structure axis, independent of `theme_id` (colors): "default" or "spotify".
+    ui_theme_id: String,
 
     // ── Auth / onboarding ─────────────────────────────────────────────────────
     authed: bool,
@@ -103,6 +105,60 @@ pub struct App {
     // When true, the visualizer gradient is derived from the current track's
     // cover art; otherwise it follows the active theme's colors.
     viz_cover_colors: bool,
+
+    // ── Visualizer: Bars ──────────────────────────────────────────────────────
+    bars_monstercat: f32,
+    bars_waves: bool,
+    bars_waves_smoothing: u32,
+    bars_gradient_mode: crate::viz::config::BarsGradientMode,
+    bars_gradient_orientation: crate::viz::config::BarsGradientOrientation,
+    bars_peak_gradient_mode: crate::viz::config::BarsPeakGradientMode,
+    bars_peak_mode: crate::viz::config::BarsPeakMode,
+    bars_peak_hold_time: f32,
+    bars_peak_fade_time: f32,
+    bars_peak_height: f32,
+    bars_border_width: f32,
+    bars_led_bars: bool,
+    bars_led_segment_height: f32,
+    bars_depth_3d: f32,
+    bars_flash_intensity: f32,
+    bars_max_bars: u32,
+    bars_trails: f32,
+    bars_echo: f32,
+
+    // ── Visualizer: Lines ─────────────────────────────────────────────────────
+    lines_point_count: u32,
+    lines_line_thickness: f32,
+    lines_outline_thickness: f32,
+    lines_outline_opacity: f32,
+    lines_animation_speed: f32,
+    lines_gradient_mode: crate::viz::config::GradientMode,
+    lines_fill_opacity: f32,
+    lines_glow_intensity: f32,
+    lines_mirror: bool,
+    lines_style: crate::viz::config::LineStyle,
+    lines_trails: f32,
+    lines_echo: f32,
+
+    // ── Visualizer: Scope ─────────────────────────────────────────────────────
+    scope_radius: f32,
+    scope_sensitivity: f32,
+    scope_point_count: u32,
+    scope_line_thickness: f32,
+    scope_fill_opacity: f32,
+    scope_glow_intensity: f32,
+    scope_outline_thickness: f32,
+    scope_outline_opacity: f32,
+    scope_gradient_mode: crate::viz::config::GradientMode,
+    scope_animation_speed: f32,
+    scope_style: crate::viz::config::LineStyle,
+    scope_particles: bool,
+    scope_particle_count: u32,
+    scope_particle_speed: f32,
+    scope_beam: bool,
+    scope_trails: f32,
+    scope_echo: f32,
+
     viz_palette: Option<crate::commands::cover_colors::OrbPalette>,
     // Track id the current viz_palette was extracted for, so it's fetched once per track.
     viz_palette_track: Option<String>,
@@ -195,6 +251,7 @@ impl App {
             .map(Tokens::from_entry)
             .unwrap_or_default();
         let volume = cfg.volume.unwrap_or(0.8).clamp(0.0, 1.0);
+        let vdef = crate::viz::config::VizConfig::default();
 
         // Push persisted playback settings into the backend queue state.
         crate::commands::queue::init_playback_settings(
@@ -219,6 +276,7 @@ impl App {
             themes,
             theme_id,
             tokens,
+            ui_theme_id: cfg.ui_theme_id.clone().unwrap_or_else(|| "default".to_string()),
             authed: false,
             connecting,
             save_password: true,
@@ -266,6 +324,81 @@ impl App {
             right_panel: None,
             visualizer_mode: VizMode::Bars,
             viz_cover_colors: cfg.viz_cover_colors.unwrap_or(true),
+
+            bars_monstercat: cfg.bars_monstercat.unwrap_or(1.0),
+            bars_waves: cfg.bars_waves.unwrap_or(false),
+            bars_waves_smoothing: cfg.bars_waves_smoothing.unwrap_or(5),
+            bars_gradient_mode: cfg
+                .bars_gradient_mode
+                .unwrap_or(crate::viz::config::BarsGradientMode::Static),
+            bars_gradient_orientation: cfg
+                .bars_gradient_orientation
+                .unwrap_or(crate::viz::config::BarsGradientOrientation::Vertical),
+            bars_peak_gradient_mode: cfg
+                .bars_peak_gradient_mode
+                .unwrap_or(crate::viz::config::BarsPeakGradientMode::Static),
+            bars_peak_mode: cfg.bars_peak_mode.unwrap_or(crate::viz::config::BarsPeakMode::Fall),
+            bars_peak_hold_time: cfg.bars_peak_hold_time.unwrap_or(vdef.peak_hold_time),
+            bars_peak_fade_time: cfg.bars_peak_fade_time.unwrap_or(vdef.peak_fade_time),
+            bars_peak_height: cfg.bars_peak_height.unwrap_or(vdef.peak_thickness),
+            bars_border_width: cfg.bars_border_width.unwrap_or(vdef.border_width),
+            bars_led_bars: cfg.bars_led_bars.unwrap_or(vdef.led_bars),
+            bars_led_segment_height: cfg
+                .bars_led_segment_height
+                .unwrap_or(vdef.led_segment_height),
+            bars_depth_3d: cfg.bars_depth_3d.unwrap_or(vdef.bar_depth_3d),
+            bars_flash_intensity: cfg.bars_flash_intensity.unwrap_or(vdef.bars_flash_intensity),
+            bars_max_bars: cfg.bars_max_bars.unwrap_or(vdef.bars_max_bars),
+            bars_trails: cfg.bars_trails.unwrap_or(vdef.bars_trails),
+            bars_echo: cfg.bars_echo.unwrap_or(vdef.bars_echo),
+
+            lines_point_count: cfg.lines_point_count.unwrap_or(vdef.lines_point_count),
+            lines_line_thickness: cfg.lines_line_thickness.unwrap_or(vdef.line_thickness),
+            lines_outline_thickness: cfg
+                .lines_outline_thickness
+                .unwrap_or(vdef.lines_outline_thickness),
+            lines_outline_opacity: cfg
+                .lines_outline_opacity
+                .unwrap_or(vdef.lines_outline_opacity),
+            lines_animation_speed: cfg
+                .lines_animation_speed
+                .unwrap_or(vdef.lines_animation_speed),
+            lines_gradient_mode: cfg
+                .lines_gradient_mode
+                .unwrap_or(crate::viz::config::GradientMode::Static),
+            lines_fill_opacity: cfg.lines_fill_opacity.unwrap_or(vdef.lines_fill_opacity),
+            lines_glow_intensity: cfg.lines_glow_intensity.unwrap_or(vdef.lines_glow_intensity),
+            lines_mirror: cfg.lines_mirror.unwrap_or(vdef.lines_mirror),
+            lines_style: cfg.lines_style.unwrap_or(crate::viz::config::LineStyle::Smooth),
+            lines_trails: cfg.lines_trails.unwrap_or(vdef.lines_trails),
+            lines_echo: cfg.lines_echo.unwrap_or(vdef.lines_echo),
+
+            scope_radius: cfg.scope_radius.unwrap_or(vdef.scope_radius),
+            scope_sensitivity: cfg.scope_sensitivity.unwrap_or(vdef.scope_sensitivity),
+            scope_point_count: cfg.scope_point_count.unwrap_or(vdef.scope_point_count),
+            scope_line_thickness: cfg.scope_line_thickness.unwrap_or(vdef.scope_line_thickness),
+            scope_fill_opacity: cfg.scope_fill_opacity.unwrap_or(vdef.scope_fill_opacity),
+            scope_glow_intensity: cfg.scope_glow_intensity.unwrap_or(vdef.scope_glow_intensity),
+            scope_outline_thickness: cfg
+                .scope_outline_thickness
+                .unwrap_or(vdef.scope_outline_thickness),
+            scope_outline_opacity: cfg
+                .scope_outline_opacity
+                .unwrap_or(vdef.scope_outline_opacity),
+            scope_gradient_mode: cfg
+                .scope_gradient_mode
+                .unwrap_or(crate::viz::config::GradientMode::Static),
+            scope_animation_speed: cfg
+                .scope_animation_speed
+                .unwrap_or(vdef.scope_animation_speed),
+            scope_style: cfg.scope_style.unwrap_or(crate::viz::config::LineStyle::Smooth),
+            scope_particles: cfg.scope_particles.unwrap_or(vdef.scope_particles),
+            scope_particle_count: cfg.scope_particle_count.unwrap_or(vdef.scope_particle_count),
+            scope_particle_speed: cfg.scope_particle_speed.unwrap_or(vdef.scope_particle_speed),
+            scope_beam: cfg.scope_beam.unwrap_or(vdef.scope_beam),
+            scope_trails: cfg.scope_trails.unwrap_or(vdef.scope_trails),
+            scope_echo: cfg.scope_echo.unwrap_or(vdef.scope_echo),
+
             viz_palette: None,
             viz_palette_track: None,
             lyrics: None,
@@ -318,6 +451,12 @@ impl App {
             current_podcast_episode: None,
         };
         app.rebuild_playlist_items();
+        let backend_viz = app.backend.audio_player.visualizer();
+        if app.bars_waves {
+            backend_viz.set_waves(true, app.bars_waves_smoothing);
+        } else {
+            backend_viz.set_monstercat(app.bars_monstercat);
+        }
         if !app.authed {
             app.populate_offline_library();
         }
@@ -379,6 +518,7 @@ impl App {
             server,
             username,
             theme_id: Some(self.theme_id.clone()),
+            ui_theme_id: Some(self.ui_theme_id.clone()),
             volume: Some(self.volume),
             accounts: self.accounts.clone(),
             download_format: Some(self.download_format.clone()),
@@ -388,6 +528,56 @@ impl App {
             viz_cover_colors: Some(self.viz_cover_colors),
             font_family: Some(self.font_family.clone()),
             scrollbar_width: Some(self.scrollbar_width),
+
+            bars_monstercat: Some(self.bars_monstercat),
+            bars_waves: Some(self.bars_waves),
+            bars_waves_smoothing: Some(self.bars_waves_smoothing),
+            bars_gradient_mode: Some(self.bars_gradient_mode),
+            bars_gradient_orientation: Some(self.bars_gradient_orientation),
+            bars_peak_gradient_mode: Some(self.bars_peak_gradient_mode),
+            bars_peak_mode: Some(self.bars_peak_mode),
+            bars_peak_hold_time: Some(self.bars_peak_hold_time),
+            bars_peak_fade_time: Some(self.bars_peak_fade_time),
+            bars_peak_height: Some(self.bars_peak_height),
+            bars_border_width: Some(self.bars_border_width),
+            bars_led_bars: Some(self.bars_led_bars),
+            bars_led_segment_height: Some(self.bars_led_segment_height),
+            bars_depth_3d: Some(self.bars_depth_3d),
+            bars_flash_intensity: Some(self.bars_flash_intensity),
+            bars_max_bars: Some(self.bars_max_bars),
+            bars_trails: Some(self.bars_trails),
+            bars_echo: Some(self.bars_echo),
+
+            lines_point_count: Some(self.lines_point_count),
+            lines_line_thickness: Some(self.lines_line_thickness),
+            lines_outline_thickness: Some(self.lines_outline_thickness),
+            lines_outline_opacity: Some(self.lines_outline_opacity),
+            lines_animation_speed: Some(self.lines_animation_speed),
+            lines_gradient_mode: Some(self.lines_gradient_mode),
+            lines_fill_opacity: Some(self.lines_fill_opacity),
+            lines_glow_intensity: Some(self.lines_glow_intensity),
+            lines_mirror: Some(self.lines_mirror),
+            lines_style: Some(self.lines_style),
+            lines_trails: Some(self.lines_trails),
+            lines_echo: Some(self.lines_echo),
+
+            scope_radius: Some(self.scope_radius),
+            scope_sensitivity: Some(self.scope_sensitivity),
+            scope_point_count: Some(self.scope_point_count),
+            scope_line_thickness: Some(self.scope_line_thickness),
+            scope_fill_opacity: Some(self.scope_fill_opacity),
+            scope_glow_intensity: Some(self.scope_glow_intensity),
+            scope_outline_thickness: Some(self.scope_outline_thickness),
+            scope_outline_opacity: Some(self.scope_outline_opacity),
+            scope_gradient_mode: Some(self.scope_gradient_mode),
+            scope_animation_speed: Some(self.scope_animation_speed),
+            scope_style: Some(self.scope_style),
+            scope_particles: Some(self.scope_particles),
+            scope_particle_count: Some(self.scope_particle_count),
+            scope_particle_speed: Some(self.scope_particle_speed),
+            scope_beam: Some(self.scope_beam),
+            scope_trails: Some(self.scope_trails),
+            scope_echo: Some(self.scope_echo),
         }
         .save();
     }
@@ -473,32 +663,11 @@ impl App {
     pub(crate) fn shell(&self) -> Element<'_, Message> {
         let t = self.tokens;
 
-        let brand = container(
-            row![
-                icon_button(icons::USER, 16.0, t.muted, t, Message::ToggleAccountSwitcher),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center),
-        )
-        .padding(20);
-
-        let nav = column![
-            self.nav_button(icons::HOME, "Home", View::Home),
-            self.nav_button(icons::DISC, "Albums", View::Albums),
-            self.nav_button(icons::USER, "Artists", View::Artists),
-            self.nav_button(icons::LIST, "Playlists", View::Playlists),
-            self.nav_button(icons::PODCAST, "Podcasts", View::Podcasts),
-            self.nav_button(icons::SEARCH, "Search", View::Search),
-            self.nav_button(icons::MUSIC, "Mix", View::Mix),
-            self.nav_button(icons::SETTINGS, "Settings", View::Settings),
-        ]
-        .spacing(4)
-        .padding(8);
-
-        let sidebar = container(column![brand, nav])
-            .width(Length::Fixed(220.0))
-            .height(Length::Fill)
-            .style(fill_bg(t.surface));
+        let sidebar = if self.ui_theme_id == "spotify" {
+            self.sidebar_spotify()
+        } else {
+            self.sidebar_default()
+        };
 
         let sep = container(text(""))
             .width(Length::Fixed(1.0))
@@ -540,6 +709,117 @@ impl App {
 }
 
 impl App {
+    pub(crate) fn sidebar_default(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+
+        let brand = container(
+            row![
+                icon_button(icons::USER, 16.0, t.muted, t, Message::ToggleAccountSwitcher),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        )
+        .padding(20);
+
+        let nav = column![
+            self.nav_button(icons::HOME, "Home", View::Home),
+            self.nav_button(icons::DISC, "Albums", View::Albums),
+            self.nav_button(icons::USER, "Artists", View::Artists),
+            self.nav_button(icons::LIST, "Playlists", View::Playlists),
+            self.nav_button(icons::PODCAST, "Podcasts", View::Podcasts),
+            self.nav_button(icons::SEARCH, "Search", View::Search),
+            self.nav_button(icons::MUSIC, "Mix", View::Mix),
+            self.nav_button(icons::SETTINGS, "Settings", View::Settings),
+        ]
+        .spacing(4)
+        .padding(8);
+
+        container(column![brand, nav])
+            .width(Length::Fixed(220.0))
+            .height(Length::Fill)
+            .style(fill_bg(t.surface))
+            .into()
+    }
+
+    /// Spotify-style sidebar: compact top nav + a scrollable "Your Library" playlist
+    /// list, replacing the default's flat icon+label nav column.
+    pub(crate) fn sidebar_spotify(&self) -> Element<'_, Message> {
+        let t = self.tokens;
+
+        let brand = container(
+            row![
+                icon_button(icons::USER, 16.0, t.muted, t, Message::ToggleAccountSwitcher),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        )
+        .padding(20);
+
+        let top_nav = column![
+            self.nav_button(icons::HOME, "Home", View::Home),
+            self.nav_button(icons::SEARCH, "Search", View::Search),
+        ]
+        .spacing(4)
+        .padding([0, 8]);
+
+        let fixed_entries = column![
+            self.nav_button(icons::DISC, "Albums", View::Albums),
+            self.nav_button(icons::USER, "Artists", View::Artists),
+            self.nav_button(icons::PODCAST, "Podcasts", View::Podcasts),
+            self.nav_button(icons::MUSIC, "Mix", View::Mix),
+            self.nav_button(icons::SETTINGS, "Settings", View::Settings),
+        ]
+        .spacing(4)
+        .padding([0, 8]);
+
+        let library_header = container(text("Your Library").size(12).style(tstyle(t.muted)))
+            .padding(iced::Padding { top: 16.0, right: 12.0, bottom: 6.0, left: 12.0 });
+
+        let mut lib_list = column![].spacing(2).padding([4, 8]);
+        for item in &self.playlist_items {
+            lib_list = lib_list.push(self.spotify_library_row(item));
+        }
+        let library_scroll = scrollable(lib_list)
+            .height(Length::Fill)
+            .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
+            .style(thin_scroll_style(t));
+
+        container(column![brand, top_nav, fixed_entries, library_header, library_scroll].spacing(0))
+            .width(Length::Fixed(260.0))
+            .height(Length::Fill)
+            .style(fill_bg(t.surface))
+            .into()
+    }
+
+    /// A single playlist row in the Spotify sidebar's library list: icon + name only
+    /// (no cover art / drag handles — this is a compact nav shortcut, not the full
+    /// playlist-management row used on the Playlists screen).
+    pub(crate) fn spotify_library_row(&self, item: &PlaylistListItem) -> Element<'_, Message> {
+        let t = self.tokens;
+        let (nav_id, name): (String, String) = match item {
+            PlaylistListItem::Local(i) => {
+                let p = &self.playlists[*i];
+                (p.id.clone(), p.name.clone())
+            }
+            PlaylistListItem::ServerOnly(i) => {
+                let sp = &self.server_playlists[*i];
+                let sid = sp.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let nm = sp.get("name").and_then(|v| v.as_str()).unwrap_or("Untitled").to_string();
+                (format!("server-{sid}"), nm)
+            }
+        };
+        button(
+            row![icons::icon(icons::LIST, 14.0, t.muted), text(name).size(13).style(tstyle(t.text))]
+                .spacing(10)
+                .align_y(Alignment::Center),
+        )
+        .width(Length::Fill)
+        .padding([6, 8])
+        .on_press(Message::Navigate(View::PlaylistDetail(nav_id)))
+        .style(list_row_style(t))
+        .into()
+    }
+
     pub(crate) fn nav_button(&self, icon_src: &'static str, label: &'static str, target: View) -> Element<'_, Message> {
         let active = self.view == target;
         let t = self.tokens;

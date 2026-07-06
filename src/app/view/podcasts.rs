@@ -12,10 +12,9 @@ use super::super::App;
 impl App {
     pub(crate) fn podcasts_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let header = row![
-            text(format!("Podcasts ({})", self.podcast_channels.len()))
-                .size(22)
-                .style(tstyle(t.text))
+            container(page_header(format!("Podcasts ({})", self.podcast_channels.len()), t, spotify))
                 .width(Length::Fill),
             button(
                 row![icons::icon(icons::PLUS, 12.0, t.accent), text("Add podcast").size(12).style(tstyle(t.accent))]
@@ -39,16 +38,20 @@ impl App {
 
         let mut list = column![].spacing(2);
         for channel in &self.podcast_channels {
+            let mut title_text = text(&channel.title).size(if spotify { 15 } else { 14 }).style(tstyle(t.text));
+            if spotify {
+                title_text = title_text.font(iced::Font { weight: iced::font::Weight::Bold, ..iced::Font::MONOSPACE });
+            }
             list = list.push(
                 button(
                     column![
-                        text(&channel.title).size(14).style(tstyle(t.text)),
+                        title_text,
                         text(channel.description.clone().unwrap_or_default()).size(12).style(tstyle(t.muted)),
                     ]
                     .spacing(4),
                 )
                 .width(Length::Fill)
-                .padding(10)
+                .padding(if spotify { 12 } else { 10 })
                 .on_press(Message::Navigate(View::PodcastDetail(channel.id.clone())))
                 .style(list_row_style(t)),
             );

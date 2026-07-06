@@ -98,6 +98,9 @@ fun themeById(id: String): FirmiumTheme =
 
 val LocalAppFontFamily = compositionLocalOf<FontFamily> { FontFamily.Monospace }
 
+// Layout/structure axis, independent of color theme: "default" or "spotify".
+val LocalUiTheme = compositionLocalOf { "default" }
+
 fun AppFontKey.toFontFamilyPublic(): FontFamily = when (this) {
     AppFontKey.INTER -> FontFamily(Font(R.font.inter))
     AppFontKey.LIBERATION_MONO -> FontFamily(Font(R.font.liberation_mono))
@@ -117,6 +120,7 @@ fun AppFontKey.toFontFamilyPublic(): FontFamily = when (this) {
 fun FirmiumTheme(
     themeId: String = DEFAULT_THEME_ID,
     fontFamily: String = "Liberation Mono",
+    uiThemeId: String = "default",
     content: @Composable () -> Unit,
 ) {
     // Resolve against built-ins plus any imported themes on disk so a saved
@@ -129,6 +133,7 @@ fun FirmiumTheme(
         LocalFirmiumColors provides remember(theme) { theme.toFirmiumColors() },
         LocalFirmiumIsDark provides theme.isDark,
         LocalAppFontFamily provides remember(fontFamily) { fontKeyFor(fontFamily).toFontFamilyPublic() },
+        LocalUiTheme provides uiThemeId,
         content = content,
     )
 }

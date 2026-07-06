@@ -1,4 +1,5 @@
 package com.fossisawesome.firmium.ui.components
+import com.fossisawesome.firmium.audio.VisualizerAudioProcessor
 import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.activity.compose.BackHandler
@@ -63,7 +64,7 @@ import kotlin.math.roundToInt
 fun FullScreenPlayer(
     state: PlayerState,
     coverUrl: String?,
-    audioSessionId: Int = 0,
+    visualizerProcessor: VisualizerAudioProcessor? = null,
     playlistItems: List<PlaylistListItem>,
     lyricsState: LyricsState,
     wordFillEnabled: Boolean,
@@ -172,7 +173,7 @@ fun FullScreenPlayer(
             onCycleViz = cycleViz,
             coverUrl = coverUrl,
             track = track,
-            audioSessionId = audioSessionId,
+            visualizerProcessor = visualizerProcessor,
             orbPalette = orbPalette,
             isPlayingArt = state.playbackState == "playing",
             onTapArt = openLyrics,
@@ -576,7 +577,7 @@ private fun ArtOrLyrics(
     onCycleViz: () -> Unit,
     coverUrl: String?,
     track: Song,
-    audioSessionId: Int,
+    visualizerProcessor: VisualizerAudioProcessor?,
     orbPalette: OrbPalette,
     isPlayingArt: Boolean,
     onTapArt: () -> Unit,
@@ -623,7 +624,7 @@ private fun ArtOrLyrics(
                 onCycleType = onCycleViz,
                 coverUrl = coverUrl,
                 albumDescription = track.album,
-                audioSessionId = audioSessionId,
+                visualizerProcessor = visualizerProcessor,
                 palette = orbPalette,
                 isPlaying = isPlayingArt,
                 onTap = onTapArt,
@@ -686,7 +687,7 @@ private fun ArtOrOrb(
     onCycleType: () -> Unit,
     coverUrl: String?,
     albumDescription: String,
-    audioSessionId: Int,
+    visualizerProcessor: VisualizerAudioProcessor?,
     palette: OrbPalette,
     isPlaying: Boolean,
     onTap: () -> Unit,
@@ -710,7 +711,7 @@ private fun ArtOrOrb(
             ) {
                 VisualizerView(
                     type = vizType,
-                    audioSessionId = audioSessionId,
+                    visualizerProcessor = visualizerProcessor,
                     palette = palette,
                     isPlaying = isPlaying,
                     modifier = Modifier.fillMaxSize(),

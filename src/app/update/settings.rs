@@ -16,6 +16,11 @@ impl App {
                 }
                 Task::none()
             }
+            Message::SelectUiTheme(id) => {
+                self.ui_theme_id = id;
+                self.save_config();
+                Task::none()
+            }
             Message::SelectFont(name) => {
                 self.font_family = name;
                 self.save_config();

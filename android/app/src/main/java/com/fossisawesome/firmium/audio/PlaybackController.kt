@@ -32,7 +32,7 @@ data class PlayerState(
     val gaplessEnabled: Boolean = true,
     val replayGainEnabled: Boolean = true,
     val isSeeking: Boolean = false,
-    val audioSessionId: Int = 0,
+    val visualizerProcessor: VisualizerAudioProcessor? = null,
     val visualizerEnabled: Boolean = false,
     val visualizerType: String = "orb",
 ) {
@@ -216,7 +216,7 @@ class PlaybackController(
                 _state.update { it.copy(
                     queue = songs, queueIndex = actualIndex,
                     playbackState = "loading", currentPosition = 0.0,
-                    audioSessionId = audioPlayer.getAudioSessionId(playerId),
+                    visualizerProcessor = audioPlayer.getVisualizerProcessor(playerId),
                 ) }
                 updateNowPlayingNotification()
                 scrobbleCurrent(false)
@@ -465,7 +465,7 @@ class PlaybackController(
             currentPlayerId = newPid
             _state.update { it.copy(
                 queueIndex = nextIdx, currentPosition = 0.0,
-                audioSessionId = audioPlayer.getAudioSessionId(newPid),
+                visualizerProcessor = audioPlayer.getVisualizerProcessor(newPid),
             ) }
             updateNowPlayingNotification()
             scrobbleCurrent(false)

@@ -131,6 +131,8 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Toggle visualizer on/off | ✅ | ✅ |
 | Switch visualizer mode from the panel header | ✅ | ✅ |
 | Visualizer colors follow the album artwork (desktop: toggle in Settings, falls back to theme colors; Android: always-on) | ✅ | ✅ |
+| Bar smoothing — Monstercat (adjustable spread intensity) or Waves (spline smoothing), mutually exclusive, adjustable in Settings | ✅ | ❌ |
+| Full visualizer customization in Settings — dozens of knobs per mode (gradient/peak behavior, glow, outline, fill, point/bar count, particles, motion trails, echo, and more) | ✅ | ❌ |
 
 ---
 
@@ -172,6 +174,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Import custom themes from a `.toml` file (desktop: `themes/` drop folder; Android: file picker) | ✅ | ✅ |
 | Choose the interface font from a curated list of 11 fonts | ✅ | ✅ |
 | Responsive sidebar (collapses to icons, then a bottom tab bar on narrow windows) | ✅ | — |
+| UI theme — independent of color theme: choose Default or Spotify-style layout (nav, player bar, and browsing screens restyled) | ✅ | ✅ |
 
 **Built-in themes include:** Firmium, Gruvbox, Tokyo Night, Dracula, Catppuccin Mocha / Macchiato / Frappé / Latte, Monokai Classic, Monokai Pro, Adwaita, Adwaita Dark, ayu, ayu Light, GitHub Dark, Nordfox, Synthwave '84, Svalbard.
 

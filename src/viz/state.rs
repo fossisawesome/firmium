@@ -5,7 +5,6 @@ use crate::visualizer::VisualizerState as BackendState;
 use super::particles::ParticleSystem;
 
 const BAR_COUNT: usize = crate::visualizer::BAR_COUNT;
-const PARTICLE_COUNT: usize = 256;
 
 pub struct VizState {
     pub backend: Arc<BackendState>,
@@ -21,9 +20,12 @@ pub struct VizState {
 }
 
 impl VizState {
-    pub fn new(backend: Arc<BackendState>) -> Self {
+    /// `particle_count` sizes the particle pool at construction time (not
+    /// live-resizable — the widget re-creates `VizState` when the shader
+    /// primitive's `State` is reset, e.g. panel close/reopen).
+    pub fn new(backend: Arc<BackendState>, particle_count: usize) -> Self {
         Self {
-            particles: ParticleSystem::new(PARTICLE_COUNT, 0.55, 12345),
+            particles: ParticleSystem::new(particle_count, 0.55, 12345),
             backend,
             peak_bars: vec![0.0; BAR_COUNT],
             peak_vel: vec![0.0; BAR_COUNT],
@@ -45,6 +47,7 @@ impl VizState {
         scope_radius: f32,
         scope_sensitivity: f32,
         scope_particles: bool,
+        scope_particle_speed: f32,
     ) {
         let bars = self.backend.bars();
         let bass = self.backend.bass();
@@ -97,7 +100,7 @@ impl VizState {
                 scope_radius,
                 energy,
                 self.beat_pulse,
-                1.0,
+                scope_particle_speed,
                 &wave,
                 scope_sensitivity,
             );

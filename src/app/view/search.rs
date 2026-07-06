@@ -57,7 +57,7 @@ impl App {
             text("Type a query and press Enter").size(12).style(tstyle(t.muted)).into()
         };
 
-        column![text("Search").size(22).style(tstyle(t.text)), bar, results]
+        column![page_header("Search", t, self.ui_theme_id == "spotify"), bar, results]
             .spacing(16)
             .into()
     }

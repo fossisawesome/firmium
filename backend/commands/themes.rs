@@ -1,6 +1,6 @@
 use include_dir::{include_dir, Dir};
 
-/// The 19 built-in theme TOMLs, embedded into the binary at compile time. A
+/// The 20 built-in theme TOMLs, embedded into the binary at compile time. A
 /// native single-binary app has no resource-bundling step, so the built-ins
 /// must be compiled in. User themes on disk still override these.
 static BUILTIN_THEMES: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/themes");

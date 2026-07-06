@@ -15,9 +15,7 @@ impl App {
     pub(crate) fn playlists_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
         let header = row![
-            text(format!("Playlists ({})", self.playlist_items.len()))
-                .size(22)
-                .style(tstyle(t.text))
+            container(page_header(format!("Playlists ({})", self.playlist_items.len()), t, self.ui_theme_id == "spotify"))
                 .width(Length::Fill),
             button(
                 row![icons::icon(icons::PLUS, 12.0, t.accent), text("New").size(12).style(tstyle(t.accent))]
@@ -146,7 +144,12 @@ impl App {
                 }
             };
 
-        let mut name_row = row![text(name).size(13).style(tstyle(t.text))]
+        let spotify = self.ui_theme_id == "spotify";
+        let mut name_text = text(name).size(if spotify { 14 } else { 13 }).style(tstyle(t.text));
+        if spotify {
+            name_text = name_text.font(iced::Font { weight: iced::font::Weight::Bold, ..iced::Font::MONOSPACE });
+        }
+        let mut name_row = row![name_text]
             .spacing(6)
             .align_y(Alignment::Center);
         if synced {
@@ -162,7 +165,7 @@ impl App {
             .align_y(Alignment::Center),
         )
         .width(Length::Fill)
-        .padding(8)
+        .padding(if spotify { 10 } else { 8 })
         .on_press(Message::Navigate(View::PlaylistDetail(nav_id)))
         .style(list_row_style(t));
 

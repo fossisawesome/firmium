@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.HomeState
 import com.fossisawesome.firmium.viewmodel.RecentArtist
 import java.util.Calendar
@@ -38,6 +39,8 @@ fun HomeScreen(
     LaunchedEffect(Unit) { onRefresh() }
 
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
+    val cardWidth = if (spotify) 150.dp else 130.dp
 
     Column(
         modifier = Modifier
@@ -62,7 +65,7 @@ fun HomeScreen(
                 if (state.recentAlbums.isNotEmpty()) {
                     HomeSectionTitle("Recently Played")
                     Spacer(Modifier.height(14.dp))
-                    AlbumRow(state.recentAlbums, coverUrlFor, onAlbumClick, cardWidth = 130.dp)
+                    AlbumRow(state.recentAlbums, coverUrlFor, onAlbumClick, cardWidth = cardWidth)
                     Spacer(Modifier.height(28.dp))
                 }
 
@@ -76,7 +79,7 @@ fun HomeScreen(
                 if (state.randomAlbums.isNotEmpty()) {
                     HomeSectionTitle("Random Picks")
                     Spacer(Modifier.height(14.dp))
-                    AlbumRow(state.randomAlbums, coverUrlFor, onAlbumClick, cardWidth = 130.dp)
+                    AlbumRow(state.randomAlbums, coverUrlFor, onAlbumClick, cardWidth = cardWidth)
                     Spacer(Modifier.height(16.dp))
                 }
             }
@@ -114,16 +117,28 @@ private fun HomeGreeting(username: String) {
     }
 }
 
-// Section header — 11sp uppercase letter-spaced muted monospace, matches .home-section-title
+// Section header — 11sp uppercase letter-spaced muted monospace, matches .home-section-title.
+// Spotify UI theme uses a bigger bold title instead, matching Spotify's shelf headers.
 @Composable
 private fun HomeSectionTitle(title: String) {
-    Text(
-        text = title.uppercase(),
-        fontSize = 11.sp,
-        fontFamily = LocalAppFontFamily.current,
-        color = LocalFirmiumColors.current.muted,
-        letterSpacing = 1.sp,
-    )
+    val spotify = LocalUiTheme.current == "spotify"
+    if (spotify) {
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = LocalAppFontFamily.current,
+            color = LocalFirmiumColors.current.text,
+        )
+    } else {
+        Text(
+            text = title.uppercase(),
+            fontSize = 11.sp,
+            fontFamily = LocalAppFontFamily.current,
+            color = LocalFirmiumColors.current.muted,
+            letterSpacing = 1.sp,
+        )
+    }
 }
 
 @Composable

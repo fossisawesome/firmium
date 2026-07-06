@@ -48,52 +48,45 @@ impl App {
         if self.home_recent_plays.is_empty() {
             return column![].into();
         }
-        let mut cards = row![].spacing(12);
+        let spotify = self.ui_theme_id == "spotify";
+        let mut cards = row![].spacing(if spotify { 16 } else { 12 });
         for play in self.home_recent_plays.iter().take(5) {
             let artist = play.artist_name.clone().unwrap_or_default();
+            let mut title_text = text(play.track_title.clone()).size(if spotify { 13 } else { 12 }).style(tstyle(t.text));
+            title_text = title_text.font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..iced::Font::MONOSPACE
+            });
             let card_content = column![
-                self.cover_image(play.cover_art_id.as_deref(), 130.0),
-                text(play.track_title.clone()).size(12).style(tstyle(t.text)).font(iced::Font {
-                    weight: iced::font::Weight::Bold,
-                    ..iced::Font::MONOSPACE
-                }),
+                self.cover_image(play.cover_art_id.as_deref(), if spotify { 150.0 } else { 130.0 }),
+                title_text,
                 text(artist).size(11).style(tstyle(t.muted)),
             ]
-            .spacing(6)
-            .width(Length::Fixed(130.0));
+            .spacing(if spotify { 8 } else { 6 })
+            .width(Length::Fixed(if spotify { 150.0 } else { 130.0 }));
 
-            let card: Element<'_, Message> = if let Some(aid) = play.album_id.clone() {
-                button(card_content)
-                    .padding(4)
-                    .on_press(Message::Navigate(View::AlbumDetail(aid)))
-                    .style(move |_th, status| {
-                        let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
-                        button::Style {
-                            background: if h { Some(Background::Color(t.surface)) } else { None },
-                            text_color: t.text,
-                            border: Border { radius: 4.0.into(), ..Border::default() },
-                            ..button::Style::default()
-                        }
-                    })
-                    .into()
-            } else {
-                button(card_content)
-                    .padding(4)
-                    .style(move |_th, status| {
-                        let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
-                        button::Style {
-                            background: if h { Some(Background::Color(t.surface)) } else { None },
-                            text_color: t.text,
-                            border: Border { radius: 4.0.into(), ..Border::default() },
-                            ..button::Style::default()
-                        }
-                    })
-                    .into()
-            };
+            let mut card = button(card_content).padding(if spotify { 10 } else { 4 }).style(move |_th, status| {
+                let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                button::Style {
+                    background: if spotify {
+                        Some(Background::Color(if h { t.surface2 } else { t.surface }))
+                    } else if h {
+                        Some(Background::Color(t.surface))
+                    } else {
+                        None
+                    },
+                    text_color: t.text,
+                    border: Border { radius: if spotify { 8.0 } else { 4.0 }.into(), ..Border::default() },
+                    ..button::Style::default()
+                }
+            });
+            if let Some(aid) = play.album_id.clone() {
+                card = card.on_press(Message::Navigate(View::AlbumDetail(aid)));
+            }
             cards = cards.push(card);
         }
         column![
-            text("RECENTLY PLAYED").size(11).style(tstyle(t.muted)),
+            shelf_label("RECENTLY PLAYED", t, spotify),
             cards,
         ]
         .spacing(12)
@@ -105,30 +98,38 @@ impl App {
         if self.home_recent_artists_cache.is_empty() {
             return column![].into();
         }
+        let spotify = self.ui_theme_id == "spotify";
 
-        let mut cards = row![].spacing(12);
+        let mut cards = row![].spacing(if spotify { 16 } else { 12 });
         for (id, name, cover_art_id) in self.home_recent_artists_cache.iter().take(5) {
             let (id, name, cover_art_id) = (id.clone(), name.clone(), cover_art_id.clone());
+            let size = if spotify { 150.0 } else { 130.0 };
             cards = cards.push(
                 button(
                     column![
-                        self.cover_image(cover_art_id.as_deref(), 130.0),
-                        text(name).size(12).style(tstyle(t.text)).font(iced::Font {
+                        self.cover_image(cover_art_id.as_deref(), size),
+                        text(name).size(if spotify { 13 } else { 12 }).style(tstyle(t.text)).font(iced::Font {
                             weight: iced::font::Weight::Bold,
                             ..iced::Font::MONOSPACE
                         }),
                     ]
-                    .spacing(6)
-                    .width(Length::Fixed(130.0)),
+                    .spacing(if spotify { 8 } else { 6 })
+                    .width(Length::Fixed(size)),
                 )
-                .padding(4)
+                .padding(if spotify { 10 } else { 4 })
                 .on_press(Message::Navigate(View::ArtistDetail(id)))
                 .style(move |_th, status| {
                     let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
                     button::Style {
-                        background: if h { Some(Background::Color(t.surface)) } else { None },
+                        background: if spotify {
+                            Some(Background::Color(if h { t.surface2 } else { t.surface }))
+                        } else if h {
+                            Some(Background::Color(t.surface))
+                        } else {
+                            None
+                        },
                         text_color: t.text,
-                        border: Border { radius: 4.0.into(), ..Border::default() },
+                        border: Border { radius: if spotify { 8.0 } else { 4.0 }.into(), ..Border::default() },
                         ..button::Style::default()
                     }
                 }),
@@ -136,7 +137,7 @@ impl App {
         }
 
         column![
-            text("RECENTLY PLAYED ARTISTS").size(11).style(tstyle(t.muted)),
+            shelf_label("RECENTLY PLAYED ARTISTS", t, spotify),
             cards,
         ]
         .spacing(12)
@@ -150,7 +151,7 @@ impl App {
         }
         let names: Vec<String> = self.genres.iter().take(30).map(|g| g.name.clone()).collect();
         column![
-            text("GENRES").size(11).style(tstyle(t.muted)),
+            shelf_label("GENRES", t, self.ui_theme_id == "spotify"),
             responsive(move |size| self.genre_chip_rows(&names, size.width)),
         ]
         .spacing(10)
@@ -203,12 +204,13 @@ impl App {
         if albums.is_empty() {
             return column![].into();
         }
-        let mut cards = row![].spacing(12);
+        let spotify = self.ui_theme_id == "spotify";
+        let mut cards = row![].spacing(if spotify { 16 } else { 12 });
         for a in albums.iter().take(5) {
             cards = cards.push(self.album_card(a));
         }
         column![
-            text(title).size(11).style(tstyle(t.muted)),
+            shelf_label(title, t, spotify),
             cards,
         ]
         .spacing(12)
@@ -217,26 +219,34 @@ impl App {
 
     pub(crate) fn album_card(&self, album: &Album) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
+        let size = if spotify { 150.0 } else { 130.0 };
         button(
             column![
-                self.cover_image(album.cover_art_id.as_deref(), 130.0),
-                text(album.name.clone()).size(12).style(tstyle(t.text)).font(iced::Font {
+                self.cover_image(album.cover_art_id.as_deref(), size),
+                text(album.name.clone()).size(if spotify { 13 } else { 12 }).style(tstyle(t.text)).font(iced::Font {
                     weight: iced::font::Weight::Bold,
                     ..iced::Font::MONOSPACE
                 }),
                 text(album.album_artist.clone()).size(11).style(tstyle(t.muted)),
             ]
-            .spacing(6)
-            .width(Length::Fixed(130.0)),
+            .spacing(if spotify { 8 } else { 6 })
+            .width(Length::Fixed(size)),
         )
-        .padding(4)
+        .padding(if spotify { 10 } else { 4 })
         .on_press(Message::Navigate(View::AlbumDetail(album.id.clone())))
         .style(move |_th, status| {
             let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
             button::Style {
-                background: if h { Some(Background::Color(t.surface)) } else { None },
+                background: if spotify {
+                    Some(Background::Color(if h { t.surface2 } else { t.surface }))
+                } else if h {
+                    Some(Background::Color(t.surface))
+                } else {
+                    None
+                },
                 text_color: t.text,
-                border: Border { radius: 4.0.into(), ..Border::default() },
+                border: Border { radius: if spotify { 8.0 } else { 4.0 }.into(), ..Border::default() },
                 ..button::Style::default()
             }
         })

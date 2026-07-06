@@ -103,6 +103,7 @@ pub(crate) enum Panel {
 pub(crate) enum SettingsCategory {
     Appearance,
     Playback,
+    Visualizer,
     Equalizer,
     Downloads,
     Services,

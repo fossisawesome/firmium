@@ -14,7 +14,7 @@ use super::super::App;
 impl App {
     pub(crate) fn album_list_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let header = text(format!("Albums ({})", self.albums.len())).size(22).style(tstyle(t.text));
+        let header = page_header(format!("Albums ({})", self.albums.len()), t, self.ui_theme_id == "spotify");
 
         // Windowed (virtual) rendering: only the visible rows are built; the
         // scrolled-past and remaining heights are filled with spacers so the
@@ -40,16 +40,21 @@ impl App {
 
     pub(crate) fn album_row(&self, album: &Album) -> Element<'_, Message> {
         let t = self.tokens;
-        let cover = self.cover_image(album.cover_art_id.as_deref(), 44.0);
+        let spotify = self.ui_theme_id == "spotify";
+        let cover = self.cover_image(album.cover_art_id.as_deref(), if spotify { 56.0 } else { 44.0 });
+        let mut name_text = text(album.name.clone()).size(if spotify { 14 } else { 13 }).style(tstyle(t.text));
+        if spotify {
+            name_text = name_text.font(iced::Font { weight: iced::font::Weight::Bold, ..iced::Font::MONOSPACE });
+        }
         let info = column![
-            text(album.name.clone()).size(13).style(tstyle(t.text)),
+            name_text,
             text(album.album_artist.clone()).size(11).style(tstyle(t.muted)),
         ]
         .spacing(2);
 
         button(row![cover, info].spacing(12).align_y(Alignment::Center))
             .width(Length::Fill)
-            .padding(8)
+            .padding(if spotify { 10 } else { 8 })
             .on_press(Message::Navigate(View::AlbumDetail(album.id.clone())))
             .style(move |_theme, status| {
                 let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);

@@ -37,6 +37,32 @@ pub(crate) fn primary_button(t: Tokens) -> impl Fn(&Theme, button::Status) -> bu
 pub(crate) fn section_label(label: &'static str, t: Tokens) -> Element<'static, Message> {
     text(label).size(11).style(tstyle(t.muted)).into()
 }
+
+/// Screen title: default is a plain size-22 label; the Spotify UI theme uses a
+/// larger bold title, matching Spotify's oversized page headers.
+pub(crate) fn page_header(label: impl Into<String>, t: Tokens, spotify: bool) -> Element<'static, Message> {
+    if spotify {
+        text(label.into()).size(28).style(tstyle(t.text)).font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..iced::Font::MONOSPACE
+        }).into()
+    } else {
+        text(label.into()).size(22).style(tstyle(t.text)).into()
+    }
+}
+
+/// Section label above a home shelf / row group: default is a small muted caps
+/// label; Spotify UI theme uses a larger bold title, matching Spotify's shelves.
+pub(crate) fn shelf_label(label: &'static str, t: Tokens, spotify: bool) -> Element<'static, Message> {
+    if spotify {
+        text(label).size(18).style(tstyle(t.text)).font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..iced::Font::MONOSPACE
+        }).into()
+    } else {
+        text(label).size(11).style(tstyle(t.muted)).into()
+    }
+}
 /// One settings row: bold title + muted description on the left, control on the right.
 pub(crate) fn sett_row<'a>(
     title: impl Into<String>,
@@ -281,10 +307,19 @@ pub(crate) fn stat_row(label: &'static str, val: String, t: Tokens) -> Element<'
     .into()
 }
 
-pub(crate) fn mix_button<'a>(label: &'static str, e: Energy, t: Tokens) -> Element<'a, Message> {
-    button(text(label).size(14).style(tstyle(t.bg)))
-        .padding(14)
+pub(crate) fn mix_button<'a>(label: &'static str, e: Energy, t: Tokens, spotify: bool) -> Element<'a, Message> {
+    let (size, padding, radius) = if spotify { (15, 18, 24.0) } else { (14, 14, 2.0) };
+    button(text(label).size(size).style(tstyle(t.bg)))
+        .padding(padding)
         .on_press(Message::GenerateMix(e))
-        .style(primary_button(t))
+        .style(move |_theme, status| {
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            button::Style {
+                background: Some(Background::Color(if hovered { Color { a: 0.85, ..t.accent } } else { t.accent })),
+                text_color: t.bg,
+                border: Border { radius: radius.into(), ..Border::default() },
+                ..button::Style::default()
+            }
+        })
         .into()
 }

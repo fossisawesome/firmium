@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.AlbumListState
 import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 
@@ -51,6 +52,7 @@ fun AlbumListScreen(
     LaunchedEffect(Unit) { onLoad() }
 
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
     var pendingAlbumId by remember { mutableStateOf<String?>(null) }
     var selectedGenres by remember { mutableStateOf(emptySet<String>()) }
     var selectedDecades by remember { mutableStateOf(emptySet<String>()) }
@@ -159,6 +161,8 @@ fun AlbumListScreen(
                             onAlbumClick = onAlbumClick,
                             onAddClick = { pendingAlbumId = album.id },
                             onDownloadClick = onDownloadAlbum?.invoke(album),
+                            coverSize = if (spotify) 56.dp else 44.dp,
+                            coverRadius = if (spotify) 8.dp else 6.dp,
                         )
                         FirmiumDivider()
                     }
