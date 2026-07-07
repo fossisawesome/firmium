@@ -10,6 +10,7 @@ use super::super::App;
 impl App {
     pub(crate) fn genre_detail_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let name = self.genre_detail_name.clone().unwrap_or_default();
         if self.genre_songs.is_empty() {
             return column![back_button(t), text("Loading…").size(13).style(tstyle(t.muted))]
@@ -26,7 +27,7 @@ impl App {
         )
         .padding(8)
         .on_press(Message::PlayGenreAt(0))
-        .style(primary_button(t));
+        .style(primary_button(t, spotify));
 
         let mut list = column![].spacing(2);
         for (i, song) in self.genre_songs.iter().enumerate() {
@@ -38,7 +39,7 @@ impl App {
             text(name).size(24).style(tstyle(t.text)),
             text(format!("{} songs", self.genre_songs.len())).size(11).style(tstyle(t.muted)),
             play,
-            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)),
         ]
         .spacing(12)
         .into()

@@ -13,8 +13,8 @@ android {
         applicationId = "com.fossisawesome.firmium"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "7.0.0"
+        versionCode = 32
+        versionName = "8.0.1"
         manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
@@ -57,6 +57,10 @@ android {
 
     lint {
         disable += "InvalidFragmentVersionForActivityResult"
+        // Voice search ("play some jazz" from the Google Assistant remote) needs a real
+        // MEDIA_PLAY_FROM_SEARCH handler wired to playback — out of scope for TV Phase 1
+        // (browse + playback only). Revisit when voice search is actually implemented.
+        disable += "MissingIntentFilterForMediaSearch"
     }
 
     packaging {
@@ -87,6 +91,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // Android TV: D-pad-focusable Compose components for the leanback UI
+    implementation("androidx.tv:tv-foundation:1.0.0")
+    implementation("androidx.tv:tv-material:1.1.0")
 
     // HTTP + JSON
     implementation("com.squareup.okhttp3:okhttp:5.4.0")

@@ -14,7 +14,7 @@ use super::super::App;
 impl App {
     pub(crate) fn album_list_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let header = text(format!("Albums ({})", self.albums.len())).size(22).style(tstyle(t.text));
+        let header = page_header(format!("Albums ({})", self.albums.len()), t, self.ui_theme_id == "spotify");
 
         // Windowed (virtual) rendering: only the visible rows are built; the
         // scrolled-past and remaining heights are filled with spacers so the
@@ -40,16 +40,21 @@ impl App {
 
     pub(crate) fn album_row(&self, album: &Album) -> Element<'_, Message> {
         let t = self.tokens;
-        let cover = self.cover_image(album.cover_art_id.as_deref(), 44.0);
+        let spotify = self.ui_theme_id == "spotify";
+        let cover = self.cover_image(album.cover_art_id.as_deref(), if spotify { 56.0 } else { 44.0 });
+        let mut name_text = text(album.name.clone()).size(if spotify { 14 } else { 13 }).style(tstyle(t.text));
+        if spotify {
+            name_text = name_text.font(iced::Font { weight: iced::font::Weight::Bold, ..iced::Font::MONOSPACE });
+        }
         let info = column![
-            text(album.name.clone()).size(13).style(tstyle(t.text)),
+            name_text,
             text(album.album_artist.clone()).size(11).style(tstyle(t.muted)),
         ]
         .spacing(2);
 
         button(row![cover, info].spacing(12).align_y(Alignment::Center))
             .width(Length::Fill)
-            .padding(8)
+            .padding(if spotify { 10 } else { 8 })
             .on_press(Message::Navigate(View::AlbumDetail(album.id.clone())))
             .style(move |_theme, status| {
                 let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -65,6 +70,7 @@ impl App {
 
     pub(crate) fn album_detail_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let Some(at) = &self.album_detail else {
             return text("Loading…").size(13).style(tstyle(t.muted)).into();
         };
@@ -99,7 +105,7 @@ impl App {
         )
         .padding(8)
         .on_press(Message::PlayAlbumAt(0))
-        .style(primary_button(t));
+        .style(primary_button(t, spotify));
 
         let shuffle_btn = button(
             row![
@@ -168,13 +174,14 @@ impl App {
             list = list.push(container(text("")).height(Length::Fixed(bottom)));
         }
 
-        column![back, header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::AlbumTracksScrolled(v.absolute_offset().y))]
+        column![back, header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::AlbumTracksScrolled(v.absolute_offset().y))]
             .spacing(16)
             .into()
     }
 
     pub(crate) fn track_row(&self, idx: usize, song: &Song, on_press: Message) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let is_current = self.current_song_id() == Some(song.id.as_str());
         let title_color = if is_current { t.accent } else { t.text };
         let num = song
@@ -218,8 +225,8 @@ impl App {
             play_area,
             self.star_rating(song),
             self.avg_rating_badge(song),
-            icon_button(icons::PLUS, 14.0, t.muted, t, Message::OpenAddToPlaylist(song.clone())),
-            icon_button(icons::DOWNLOAD, 14.0, t.muted, t, Message::DownloadTrack(song.clone())),
+            icon_button(icons::PLUS, 14.0, t.muted, t, spotify, Message::OpenAddToPlaylist(song.clone())),
+            icon_button(icons::DOWNLOAD, 14.0, t.muted, t, spotify, Message::DownloadTrack(song.clone())),
             text(fmt_time(song.duration)).size(11).style(tstyle(t.muted)).width(Length::Fixed(44.0)),
         ]
         .spacing(8)

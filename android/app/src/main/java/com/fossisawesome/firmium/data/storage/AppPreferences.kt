@@ -70,8 +70,9 @@ class AppPreferences(context: Context) {
     val repeatMode: Flow<String> = store.data.map { it[REPEAT_MODE] ?: "none" }
     val shuffleEnabled: Flow<Boolean> = store.data.map { it[SHUFFLE_ENABLED] ?: false }
     val themeId: Flow<String> = store.data.map { it[THEME_ID] ?: "firmium" }
-    // "firmium" = icon-only bottom nav with monospace player; "material3" = standard M3 components
-    val uiThemeId: Flow<String> = store.data.map { it[UI_THEME_ID] ?: "material3" }
+    // "default" = icon-only bottom nav with compact mini player; "spotify" = labeled bottom
+    // nav + a Spotify-style player bar (thin top progress line, larger cover, play/next only).
+    val uiThemeId: Flow<String> = store.data.map { it[UI_THEME_ID] ?: "default" }
     val fontFamily: Flow<String> = store.data.map { it[FONT_FAMILY] ?: "Liberation Mono" }
     val lrclibEnabled: Flow<Boolean> = store.data.map { it[LRCLIB_ENABLED] ?: true }
     val lyricsWordFillEnabled: Flow<Boolean> = store.data.map { it[LYRICS_WORD_FILL_ENABLED] ?: true }

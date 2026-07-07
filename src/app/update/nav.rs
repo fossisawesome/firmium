@@ -142,7 +142,13 @@ impl App {
             }
             Message::Backend(event) => {
                 self.handle_backend(event);
-                Task::batch([self.maybe_fetch_lyrics(), self.maybe_fetch_similar(), self.maybe_fetch_viz_colors()])
+                let queue_cover_ids = self.queue.iter().filter_map(|s| s.cover_art_id.clone()).collect();
+                Task::batch([
+                    self.load_cover_ids(queue_cover_ids),
+                    self.maybe_fetch_lyrics(),
+                    self.maybe_fetch_similar(),
+                    self.maybe_fetch_viz_colors(),
+                ])
             }
             Message::VisualizerTick => Task::none(),
             Message::ShowToast(err) => { self.show_toast(err); Task::none() }

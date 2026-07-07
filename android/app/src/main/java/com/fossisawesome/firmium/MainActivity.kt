@@ -83,14 +83,13 @@ class MainActivity : ComponentActivity() {
 
     private var permissionsRequested = false
 
-    // Notifications (media controls), microphone (visualizer), and audio storage (local library).
+    // Notifications (media controls) and audio storage (local library).
     private fun permissionsToRequest(): List<String> {
         val perms = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         perms.add(storagePermission)
-        perms.add(Manifest.permission.RECORD_AUDIO)
         return perms
     }
 
@@ -117,8 +116,9 @@ class MainActivity : ComponentActivity() {
             // Observe theme and UI theme from DataStore — recompose the entire tree when they change.
             val themeId by app.prefs.themeId.collectAsStateWithLifecycle(initialValue = "firmium")
             val fontFamily by app.prefs.fontFamily.collectAsStateWithLifecycle(initialValue = "Liberation Mono")
+            val uiThemeId by app.prefs.uiThemeId.collectAsStateWithLifecycle(initialValue = "default")
 
-            FirmiumTheme(themeId = themeId, fontFamily = fontFamily) {
+            FirmiumTheme(themeId = themeId, fontFamily = fontFamily, uiThemeId = uiThemeId) {
                 val authViewModel: AuthViewModel = viewModel()
                 val authState by authViewModel.state.collectAsStateWithLifecycle()
                 val onboarded by app.prefs.onboarded.collectAsStateWithLifecycle(initialValue = true)
@@ -176,6 +176,8 @@ class MainActivity : ComponentActivity() {
                             podcastsViewModel = podcastsViewModel,
                             currentThemeId = themeId,
                             onThemeSelected = { id -> scope.launch { app.prefs.setThemeId(id) } },
+                            currentUiThemeId = uiThemeId,
+                            onUiThemeSelected = { id -> scope.launch { app.prefs.setUiThemeId(id) } },
                             currentFontFamily = fontFamily,
                             onFontSelected = { name -> scope.launch { app.prefs.setFontFamily(name) } },
                             onAccountClick = { showAccountDialog = true },

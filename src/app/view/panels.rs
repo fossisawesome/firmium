@@ -75,9 +75,10 @@ impl App {
 
     pub(crate) fn queue_panel(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let header = row![
             text("QUEUE").size(11).style(tstyle(t.muted)).width(Length::Fill),
-            icon_button(icons::CLOSE, 14.0, t.muted, t, Message::TogglePanel(Panel::Queue)),
+            icon_button(icons::CLOSE, 14.0, t.muted, t, spotify, Message::TogglePanel(Panel::Queue)),
         ]
         .align_y(Alignment::Center);
 
@@ -122,7 +123,7 @@ impl App {
                     }),
                 );
             }
-            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
         };
 
         container(column![header, body].spacing(12))
@@ -135,9 +136,10 @@ impl App {
 
     pub(crate) fn lyrics_panel(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let header = row![
             text("LYRICS").size(11).style(tstyle(t.muted)).width(Length::Fill),
-            icon_button(icons::CLOSE, 14.0, t.muted, t, Message::TogglePanel(Panel::Lyrics)),
+            icon_button(icons::CLOSE, 14.0, t.muted, t, spotify, Message::TogglePanel(Panel::Lyrics)),
         ]
         .align_y(Alignment::Center);
 
@@ -177,7 +179,7 @@ impl App {
                         col = col.push(text(value).size(sz).style(tstyle(c)));
                     }
                 }
-                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
             }
         };
 
@@ -191,9 +193,10 @@ impl App {
 
     pub(crate) fn similar_panel(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let header = row![
             text("SIMILAR TRACKS").size(11).style(tstyle(t.muted)).width(Length::Fill),
-            icon_button(icons::CLOSE, 14.0, t.muted, t, Message::TogglePanel(Panel::Similar)),
+            icon_button(icons::CLOSE, 14.0, t.muted, t, spotify, Message::TogglePanel(Panel::Similar)),
         ]
         .align_y(Alignment::Center);
 
@@ -204,7 +207,7 @@ impl App {
             for m in &self.similar_results {
                 col = col.push(self.song_row(&m.song));
             }
-            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
         };
 
         container(column![header, body].spacing(12))
@@ -217,9 +220,10 @@ impl App {
 
     pub(crate) fn audio_stats_panel(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let header = row![
             text("AUDIO STATS").size(11).style(tstyle(t.muted)).width(Length::Fill),
-            icon_button(icons::CLOSE, 14.0, t.muted, t, Message::TogglePanel(Panel::AudioStats)),
+            icon_button(icons::CLOSE, 14.0, t.muted, t, spotify, Message::TogglePanel(Panel::AudioStats)),
         ]
         .align_y(Alignment::Center);
 
@@ -250,7 +254,7 @@ impl App {
                         col = col.push(stat_row("Track peak", format!("{v:.3}"), t));
                     }
                 }
-                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+                scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
             }
         };
 
@@ -264,9 +268,10 @@ impl App {
 
     pub(crate) fn eq_panel(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let header = row![
             text("EQUALIZER").size(11).style(tstyle(t.muted)).width(Length::Fill),
-            icon_button(icons::CLOSE, 14.0, t.muted, t, Message::TogglePanel(Panel::Equalizer)),
+            icon_button(icons::CLOSE, 14.0, t.muted, t, spotify, Message::TogglePanel(Panel::Equalizer)),
         ]
         .align_y(Alignment::Center);
 
@@ -338,11 +343,11 @@ impl App {
                         .padding(6)
                         .size(12)
                         .width(Length::Fill)
-                        .style(text_input_style(t)),
+                        .style(text_input_style(t, spotify)),
                     button(text("Save").size(12).style(tstyle(t.bg)))
                         .padding(6)
                         .on_press(Message::SaveEqProfile)
-                        .style(primary_button(t)),
+                        .style(primary_button(t, spotify)),
                 ]
                 .spacing(6)
                 .align_y(Alignment::Center);
@@ -385,7 +390,7 @@ impl App {
             }
         };
 
-        container(column![header, scrollable(body).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))].spacing(12))
+        container(column![header, scrollable(body).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t))].spacing(12))
             .width(Length::Fixed(340.0))
             .height(Length::Fill)
             .padding(16)

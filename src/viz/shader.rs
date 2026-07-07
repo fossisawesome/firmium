@@ -38,6 +38,28 @@ const ECHO_BASE_ROT: f32 = 0.005;
 const ECHO_BEAT_ROT: f32 = 0.02;
 const SCOPE_SAMPLES_PER_SEGMENT: u32 = 12;
 
+/// Linearly resamples `data` to exactly `target` points. Used so each mode's
+/// independent point/bar-count knob can shrink (or gently interpolate-expand)
+/// the backend's fixed-resolution bar/waveform array.
+fn resample(data: &[f32], target: usize) -> Vec<f32> {
+    let n = data.len();
+    if n == 0 || target == 0 {
+        return Vec::new();
+    }
+    if target == n {
+        return data.to_vec();
+    }
+    (0..target)
+        .map(|i| {
+            let pos = i as f32 / (target - 1).max(1) as f32 * (n - 1) as f32;
+            let lo = pos.floor() as usize;
+            let hi = (lo + 1).min(n - 1);
+            let t = pos - lo as f32;
+            data[lo] * (1.0 - t) + data[hi] * t
+        })
+        .collect()
+}
+
 // --- GPU uniform types ---
 
 #[derive(Debug, Clone, Copy)]
@@ -201,7 +223,62 @@ impl VisualizerPrimitive {
             flash_data[i / 4][i % 4] = intensity;
         }
 
-        let bars = state.get_bars();
+        let is_scope = mode == VizMode::Scope;
+
+        // Scope reuses the Lines uniform slots for outline/gradient/animation/
+        // fill/glow/style (only one of Lines/Scope ever renders at a time),
+        // selecting its own independent config values instead of Lines'.
+        let (
+            stroke_outline_thickness,
+            stroke_outline_opacity,
+            stroke_animation_speed,
+            stroke_gradient_mode,
+            stroke_fill_opacity,
+            stroke_mirror,
+            stroke_glow_intensity,
+            stroke_style,
+        ) = if is_scope {
+            (
+                cfg.scope_outline_thickness,
+                cfg.scope_outline_opacity,
+                cfg.scope_animation_speed,
+                cfg.scope_gradient_mode,
+                cfg.scope_fill_opacity,
+                false,
+                cfg.scope_glow_intensity,
+                cfg.scope_style,
+            )
+        } else {
+            (
+                cfg.lines_outline_thickness,
+                cfg.lines_outline_opacity,
+                cfg.lines_animation_speed,
+                cfg.lines_gradient_mode,
+                cfg.lines_fill_opacity,
+                cfg.lines_mirror,
+                cfg.lines_glow_intensity,
+                cfg.lines_style,
+            )
+        };
+
+        // Each mode's motion-trail/echo knob is independent.
+        let (mode_trails, mode_echo) = match mode {
+            VizMode::Bars => (cfg.bars_trails, cfg.bars_echo),
+            VizMode::Lines => (cfg.lines_trails, cfg.lines_echo),
+            VizMode::Scope => (cfg.scope_trails, cfg.scope_echo),
+        };
+
+        // Point/bar count is independent per mode; the backend always
+        // produces a fixed BAR_COUNT-length array, so a lower target count
+        // downsamples it (a higher one just interpolates — no extra detail
+        // beyond the backend's native resolution).
+        let target_points = match mode {
+            VizMode::Bars => cfg.bars_max_bars,
+            VizMode::Lines => cfg.lines_point_count,
+            VizMode::Scope => cfg.scope_point_count,
+        } as usize;
+
+        let bars = resample(&state.get_bars(), target_points);
         let bar_count_val = bars.len();
         let average_energy = if bar_count_val > 0 {
             bars.iter().sum::<f32>() / bar_count_val as f32
@@ -239,14 +316,14 @@ impl VisualizerPrimitive {
             gradient_orientation: cfg.gradient_orientation,
             average_energy,
             global_opacity: cfg.global_opacity,
-            lines_outline_thickness: cfg.lines_outline_thickness,
-            lines_outline_opacity: cfg.lines_outline_opacity,
-            lines_animation_speed: cfg.lines_animation_speed,
-            lines_gradient_mode: cfg.lines_gradient_mode,
-            lines_fill_opacity: cfg.lines_fill_opacity,
-            lines_mirror: u32::from(cfg.lines_mirror),
-            lines_glow_intensity: cfg.lines_glow_intensity,
-            lines_style: cfg.lines_style,
+            lines_outline_thickness: stroke_outline_thickness,
+            lines_outline_opacity: stroke_outline_opacity,
+            lines_animation_speed: stroke_animation_speed,
+            lines_gradient_mode: stroke_gradient_mode,
+            lines_fill_opacity: stroke_fill_opacity,
+            lines_mirror: u32::from(stroke_mirror),
+            lines_glow_intensity: stroke_glow_intensity,
+            lines_style: stroke_style,
             bars_flash_intensity: cfg.bars_flash_intensity,
             scope_radius: cfg.scope_radius,
             scope_sensitivity: cfg.scope_sensitivity,
@@ -256,9 +333,9 @@ impl VisualizerPrimitive {
         let has_perspective = cfg.bar_depth_3d > 0.001;
         let effect_bloom = cfg.bloom_enabled && cfg.bloom_intensity > 0.001;
         let stroke_glow = matches!(mode, VizMode::Lines | VizMode::Scope)
-            && cfg.lines_glow_intensity > 0.001;
+            && stroke_glow_intensity > 0.001;
         let stroke_bloom_intensity = if stroke_glow {
-            LINES_GLOW_BLOOM_GAIN * cfg.lines_glow_intensity
+            LINES_GLOW_BLOOM_GAIN * stroke_glow_intensity
         } else {
             0.0
         };
@@ -273,13 +350,13 @@ impl VisualizerPrimitive {
         let bloom_threshold =
             if stroke_glow { LINES_GLOW_BLOOM_THRESHOLD } else { BLOOM_THRESHOLD };
 
-        let trails_enabled = cfg.trails > 0.001;
+        let trails_enabled = mode_trails > 0.001;
         let trails_decay = if trails_enabled {
-            0.6 + 0.32 * cfg.trails.clamp(0.0, 1.0)
+            0.6 + 0.32 * mode_trails.clamp(0.0, 1.0)
         } else {
             0.0
         };
-        let echo_enabled = cfg.echo > 0.001;
+        let echo_enabled = mode_echo > 0.001;
         let crt_enabled = cfg.crt > 0.001;
 
         let particle_data = if mode == VizMode::Scope && cfg.scope_particles {
@@ -296,14 +373,13 @@ impl VisualizerPrimitive {
         let particle_count = particle_data.len() as u32;
 
         // Snapshot bar/peak/waveform data
-        let raw_bars = state.get_bars();
         let bar_data: Vec<f32> = if viz_config.mode == 2 {
-            state.get_waveform()
+            resample(&state.get_waveform(), target_points)
         } else {
-            raw_bars
+            bars
         };
-        let peak_data: Vec<f32> = state.get_peak_bars();
-        let peak_alpha_data: Vec<f32> = state.get_peak_alphas();
+        let peak_data: Vec<f32> = resample(&state.get_peak_bars(), target_points);
+        let peak_alpha_data: Vec<f32> = resample(&state.get_peak_alphas(), target_points);
 
         let (bass, mid, treble) = state.current_bands();
         let beat = state.current_beat_pulse() * cfg.beat_reactivity;
@@ -330,7 +406,7 @@ impl VisualizerPrimitive {
             trails_enabled,
             trails_decay,
             echo_enabled,
-            echo: cfg.echo,
+            echo: mode_echo,
             crt_enabled,
             crt: cfg.crt,
             scope_beam: cfg.scope_beam,
@@ -1274,7 +1350,9 @@ impl<Message: Clone + Send + 'static> shader::Program<Message> for ShaderVisuali
         _bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Option<shader::Action<Message>> {
-        let s = state.get_or_insert_with(|| VizState::new(self.backend.clone()));
+        let s = state.get_or_insert_with(|| {
+            VizState::new(self.backend.clone(), self.config.scope_particle_count as usize)
+        });
 
         // Tick peak/beat/particle state each time an event arrives.
         // The 16ms VisualizerTick subscription in app.rs drives repaint cadence,
@@ -1285,11 +1363,15 @@ impl<Message: Clone + Send + 'static> shader::Program<Message> for ShaderVisuali
             self.config.scope_radius,
             self.config.scope_sensitivity,
             self.config.scope_particles,
+            self.config.scope_particle_speed,
         );
 
-        let feedback_draining =
-            (self.config.trails > 0.001 || self.config.echo > 0.001)
-                && s.trail_draining();
+        let (mode_trails, mode_echo) = match self.mode {
+            VizMode::Bars => (self.config.bars_trails, self.config.bars_echo),
+            VizMode::Lines => (self.config.lines_trails, self.config.lines_echo),
+            VizMode::Scope => (self.config.scope_trails, self.config.scope_echo),
+        };
+        let feedback_draining = (mode_trails > 0.001 || mode_echo > 0.001) && s.trail_draining();
 
         if s.is_dirty() || feedback_draining {
             Some(shader::Action::request_redraw())
@@ -1307,7 +1389,7 @@ impl<Message: Clone + Send + 'static> shader::Program<Message> for ShaderVisuali
         let mut cfg = self.config.clone();
         // Auto-compute bar sizing from canvas width when not set.
         if cfg.bar_width <= 0.001 {
-            let bar_count = crate::visualizer::BAR_COUNT as f32;
+            let bar_count = cfg.bars_max_bars.max(1) as f32;
             let slot = bounds.width / bar_count;
             cfg.bar_spacing = (slot * 0.12_f32).max(0.5);
             cfg.bar_width = (slot - cfg.bar_spacing).max(1.0);
@@ -1316,7 +1398,7 @@ impl<Message: Clone + Send + 'static> shader::Program<Message> for ShaderVisuali
         match state {
             Some(s) => VisualizerPrimitive::new(s, self.mode, &cfg),
             None => VisualizerPrimitive::new(
-                &VizState::new(self.backend.clone()),
+                &VizState::new(self.backend.clone(), cfg.scope_particle_count as usize),
                 self.mode,
                 &cfg,
             ),

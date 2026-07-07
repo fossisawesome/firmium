@@ -25,8 +25,18 @@ pub const BAR_COUNT: usize = 120;
 pub const WAVE_POINTS: usize = 120;
 const ANALYSIS_INTERVAL: Duration = Duration::from_millis(16);
 
+/// Below this, monstercat's exponential spread inverts (`strength * 1.5 < 1.0`
+/// grows outward instead of decaying) — snap to disabled instead.
+const MONSTERCAT_MIN_EFFECTIVE: f32 = 0.7;
+
 pub struct VisualizerState {
     pub(crate) enabled: AtomicBool,
+    /// Monstercat spread intensity; 0.0 = disabled. Mutually exclusive with
+    /// `waves` (enabling one via `set_monstercat`/`set_waves` disables the
+    /// other, enforced by the caller in `update/transport.rs`).
+    monstercat: Mutex<f32>,
+    waves: AtomicBool,
+    waves_smoothing: AtomicU32,
     sample_rate: AtomicU32,
     buffer: Mutex<VecDeque<f32>>,
     smooth_bars: Mutex<Vec<f32>>,
@@ -47,6 +57,9 @@ impl VisualizerState {
     pub fn new() -> Self {
         VisualizerState {
             enabled: AtomicBool::new(false),
+            monstercat: Mutex::new(1.0),
+            waves: AtomicBool::new(false),
+            waves_smoothing: AtomicU32::new(5),
             sample_rate: AtomicU32::new(44100),
             buffer: Mutex::new(VecDeque::with_capacity(BUFFER_CAPACITY)),
             smooth_bars: Mutex::new(vec![0.0; BAR_COUNT]),
@@ -77,6 +90,27 @@ impl VisualizerState {
             *self.last_treble.lock() = 0.0;
             self.dirty.store(false, Ordering::Relaxed);
         }
+    }
+
+    /// Set Monstercat-style bar smoothing intensity (spatial spread across
+    /// neighboring bars, cava-style). Lower intensity spreads energy wider
+    /// (smoother, blobbier); higher intensity decays faster (sharper,
+    /// narrower peaks). Values below [`MONSTERCAT_MIN_EFFECTIVE`] snap to 0.0
+    /// (disabled) since the spread math inverts below that threshold.
+    /// Mutually exclusive with `waves` — the caller is responsible for
+    /// disabling the other mode.
+    pub fn set_monstercat(&self, intensity: f32) {
+        let intensity = if intensity < MONSTERCAT_MIN_EFFECTIVE { 0.0 } else { intensity };
+        *self.monstercat.lock() = intensity;
+    }
+
+    /// Toggle Waves-style bar smoothing (Catmull-Rom spline across sparse
+    /// control points spaced `smoothing` bars apart, clamped 2-16). Mutually
+    /// exclusive with `monstercat` — the caller is responsible for disabling
+    /// the other mode.
+    pub fn set_waves(&self, enabled: bool, smoothing: u32) {
+        self.waves.store(enabled, Ordering::Relaxed);
+        self.waves_smoothing.store(smoothing.clamp(2, 16), Ordering::Relaxed);
     }
 
     // --- Getters used by the shader widget ---
@@ -209,7 +243,15 @@ pub fn spawn_analysis_task(state: Arc<VisualizerState>) {
                 *st
             };
 
-            let raw_bars = compute_bars(&magnitudes, sample_rate);
+            let mut raw_bars = compute_bars(&magnitudes, sample_rate);
+            if state.waves.load(Ordering::Relaxed) {
+                waves_smooth(&mut raw_bars, state.waves_smoothing.load(Ordering::Relaxed) as usize);
+            } else {
+                let intensity = *state.monstercat.lock();
+                if intensity > 0.0 {
+                    monstercat_filter(&mut raw_bars, intensity);
+                }
+            }
 
             let bars_out: Vec<f32> = {
                 let mut smooth_b = state.smooth_bars.lock();
@@ -243,6 +285,91 @@ pub fn spawn_analysis_task(state: Arc<VisualizerState>) {
     });
 }
 
+/// Monstercat-style bar smoothing: spreads each bar's energy into its
+/// neighbors via exponential decay (`intensity` sets the decay base, so lower
+/// = wider/smoother spread, higher = sharper/narrower peaks), then a light
+/// Catmull-Rom pass smooths the kinks where overlapping decays meet. Caller
+/// must ensure `intensity` is either 0.0 or >= [`MONSTERCAT_MIN_EFFECTIVE`]
+/// (see `set_monstercat`).
+#[allow(clippy::needless_range_loop)]
+fn monstercat_filter(bars: &mut [f32], intensity: f32) {
+    let n = bars.len();
+    if n == 0 {
+        return;
+    }
+
+    for z in 0..n {
+        let bar_value = bars[z];
+
+        for m_y in (0..z).rev() {
+            let de = (z - m_y) as f32;
+            let spread = bar_value / (intensity * 1.5).powf(de);
+            if spread > bars[m_y] {
+                bars[m_y] = spread;
+            }
+        }
+
+        for m_y in (z + 1)..n {
+            let de = (m_y - z) as f32;
+            let spread = bar_value / (intensity * 1.5).powf(de);
+            if spread > bars[m_y] {
+                bars[m_y] = spread;
+            }
+        }
+    }
+
+    waves_smooth(bars, 2);
+}
+
+/// Catmull-Rom spline interpolation for a single dimension.
+fn catmull_rom_1d(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
+    let t2 = t * t;
+    let t3 = t2 * t;
+    0.5 * ((2.0 * p1)
+        + (-p0 + p2) * t
+        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+        + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+}
+
+/// Subsamples bars into sparse control points every `step` bars, then
+/// interpolates a smooth C1-continuous curve back over the full bar count.
+fn waves_smooth(bars: &mut [f32], step: usize) {
+    let n = bars.len();
+    if n < 4 {
+        return;
+    }
+    let step = step.clamp(2, 16);
+
+    let mut control_points: Vec<f32> = Vec::new();
+    let mut i = 0;
+    while i < n {
+        control_points.push(bars[i]);
+        i += step;
+    }
+    if !(n - 1).is_multiple_of(step) {
+        control_points.push(bars[n - 1]);
+    }
+
+    let cp_count = control_points.len();
+    if cp_count < 2 {
+        return;
+    }
+
+    let last_cp = (cp_count - 1) as f32;
+    for (i, bar) in bars.iter_mut().enumerate() {
+        let pos = i as f32 / (n - 1).max(1) as f32 * last_cp;
+        let segment = (pos.floor() as usize).min(cp_count - 2);
+        let t = pos - segment as f32;
+
+        let p0 = control_points[segment.saturating_sub(1)];
+        let p1 = control_points[segment];
+        let p2 = control_points[(segment + 1).min(cp_count - 1)];
+        let p3 = control_points[(segment + 2).min(cp_count - 1)];
+
+        *bar = catmull_rom_1d(p0, p1, p2, p3, t).clamp(0.0, 1.0);
+    }
+}
+
 /// Maps frequency magnitudes into BAR_COUNT log-spaced bars from 40 Hz to 18 kHz.
 fn compute_bars(magnitudes: &[f32], sample_rate: f32) -> Vec<f32> {
     const F_MIN: f32 = 40.0;
@@ -268,4 +395,74 @@ fn compute_bars(magnitudes: &[f32], sample_rate: f32) -> Vec<f32> {
             (peak / (FFT_SIZE as f32 / 32.0)).min(1.0)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn monstercat_filter_spreads_energy_into_neighbors() {
+        let mut bars = vec![0.0f32; 16];
+        bars[8] = 1.0;
+        monstercat_filter(&mut bars, 1.0);
+        assert!(bars[7] > 0.0 && bars[7] < 1.0);
+        assert!(bars[9] > 0.0 && bars[9] < 1.0);
+        assert!(bars[0] < bars[7]);
+    }
+
+    #[test]
+    fn monstercat_filter_stays_in_unit_range() {
+        let mut bars = vec![0.0, 0.3, 1.0, 0.2, 0.0, 0.8, 0.1, 0.0];
+        monstercat_filter(&mut bars, 1.0);
+        for &b in &bars {
+            assert!((0.0..=1.0).contains(&b));
+        }
+    }
+
+    #[test]
+    fn monstercat_filter_no_panic_on_short_input() {
+        let mut bars = vec![0.5, 0.5];
+        monstercat_filter(&mut bars, 1.0);
+        let mut empty: Vec<f32> = vec![];
+        monstercat_filter(&mut empty, 1.0);
+    }
+
+    #[test]
+    fn monstercat_filter_lower_intensity_spreads_wider() {
+        let mut wide = vec![0.0f32; 16];
+        wide[8] = 1.0;
+        monstercat_filter(&mut wide, 0.7);
+
+        let mut narrow = vec![0.0f32; 16];
+        narrow[8] = 1.0;
+        monstercat_filter(&mut narrow, 5.0);
+
+        assert!(wide[0] > narrow[0]);
+    }
+
+    #[test]
+    fn waves_smooth_stays_in_unit_range() {
+        let mut bars = vec![0.0, 0.3, 1.0, 0.2, 0.0, 0.8, 0.1, 0.0];
+        waves_smooth(&mut bars, 5);
+        for &b in &bars {
+            assert!((0.0..=1.0).contains(&b));
+        }
+    }
+
+    #[test]
+    fn waves_smooth_no_panic_on_short_input() {
+        let mut bars = vec![0.5, 0.5];
+        waves_smooth(&mut bars, 5);
+        let mut empty: Vec<f32> = vec![];
+        waves_smooth(&mut empty, 5);
+    }
+
+    #[test]
+    fn waves_smooth_clamps_step() {
+        let mut bars = vec![0.0, 0.3, 1.0, 0.2, 0.0, 0.8, 0.1, 0.0];
+        // step=0 clamps to 2 internally — must not panic or divide by zero.
+        waves_smooth(&mut bars, 0);
+        waves_smooth(&mut bars, 999);
+    }
 }

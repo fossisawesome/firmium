@@ -21,7 +21,7 @@
 
 ---
 
-Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client targeting **Linux desktop, Windows and Android**. The desktop app is a native [iced](https://iced.rs) (Rust) application; Android is native Kotlin/Compose. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
+Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client targeting **Linux desktop, Windows, macOS, FreeBSD and Android**. The desktop app is a native [iced](https://iced.rs) (Rust) application; Android is native Kotlin/Compose. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
 
 > **Note:** Firmium is a *client only* — you need a self-hosted OpenSubsonic-compatible server to use it. [Navidrome](https://www.navidrome.org/) is the most popular choice and is free and open source.
 
@@ -64,9 +64,11 @@ That's it. Your library will load automatically.
 
 ## Install
 
-Firmium is available for **Linux desktop** and **Android**.
+Firmium is available for **Linux desktop, macOS, FreeBSD** and **Android**.
 
 > **Compatibility (Linux):** Tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
+
+> **macOS builds are unsigned.** No Apple Developer account yet, so the app isn't notarized. On first launch, Gatekeeper will block it — right-click the app in Finder, choose **Open**, then confirm. This is only needed once.
 
 ### Android
 
@@ -99,7 +101,15 @@ The "Unknown sources" step is required only because Firmium is not distributed t
 Store; it would not be needed for a Play Store release approved for Android Auto. See the
 [Android Auto guide](https://docs.firmium.app/android-auto) for browsing, voice control, and more.
 
-### System Dependencies
+### macOS
+
+Download the `.dmg` matching your Mac from the [releases page](https://github.com/fossisawesome/firmium/releases/latest) — `firmium-*-Intel.dmg` for Intel Macs, `firmium-*-AppleSilicon.dmg` for Apple Silicon (M1/M2/M3/M4). Open the `.dmg` and drag **Firmium** into **Applications**.
+
+Since the build is unsigned, first launch requires right-click → **Open** in Finder (see note above) instead of a normal double-click.
+
+No extra system libraries are needed — audio (CoreAudio) and credential storage (Keychain) are built into macOS.
+
+### System Dependencies (Linux)
 
 Before running Firmium, install the required system libraries for your distribution.
 
@@ -107,7 +117,7 @@ Before running Firmium, install the required system libraries for your distribut
 <summary><b>Debian / Ubuntu</b></summary>
 
 ```bash
-sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3 libsecret-1-0 libxdo3 libxcb1
+sudo apt update && sudo apt install -y libasound2 libssl3 libsecret-1-0 libxkbcommon0
 ```
 </details>
 
@@ -115,7 +125,7 @@ sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3 li
 <summary><b>Fedora</b></summary>
 
 ```bash
-sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs libsecret libxdo libxcb
+sudo dnf install -y alsa-lib openssl-libs libsecret libxkbcommon
 ```
 </details>
 
@@ -123,13 +133,22 @@ sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs libsecret libxdo libxcb
 <summary><b>Arch Linux</b></summary>
 
 ```bash
-sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl libsecret xdotool libxcb
+sudo pacman -S --needed alsa-lib openssl libsecret libxkbcommon
+```
+</details>
+
+<details>
+<summary><b>FreeBSD</b></summary>
+
+```bash
+pkg install -y alsa-lib dbus libxkbcommon
 ```
 </details>
 
 Firmium also requires:
-- A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments. Without it, passwords won't be saved and you'll need to log in every launch.
+- A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments on Linux and FreeBSD. Without it, passwords won't be saved and you'll need to log in every launch.
 - **PipeWire or PulseAudio** — on modern distros ALSA routes through one of these. Run `aplay -l` to verify audio devices are visible.
+- A **Vulkan or OpenGL driver** for iced's `wgpu` renderer — included with most GPU drivers already.
 
 ### Installing the App
 
@@ -167,7 +186,9 @@ sudo dpkg -i ./firmium_*.deb
 ### Prerequisites
 
 - Rust 1.80 or later (`rustup default stable`)
-- System dependencies for your distribution (see [System Dependencies](#system-dependencies) above) — ALSA, GTK 3, libsecret, and a Vulkan/OpenGL driver
+- On Linux, system dependencies for your distribution (see [System Dependencies (Linux)](#system-dependencies-linux) above) — ALSA, libsecret, libxkbcommon, and a Vulkan/OpenGL driver
+- On macOS, Xcode Command Line Tools (`xcode-select --install`) — no other system libraries needed
+- On FreeBSD, system dependencies via `pkg` (see [System Dependencies (FreeBSD)](#system-dependencies) above) — `alsa-lib`, `dbus`, `libxkbcommon`, and a Mesa/Vulkan driver
 
 ### Steps
 

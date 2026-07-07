@@ -14,6 +14,7 @@ mod queue_resume;
 mod recap;
 mod podcasts;
 mod nav;
+mod visualizer;
 
 impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -80,6 +81,7 @@ impl App {
             | Message::SearchLoaded(..)
             | Message::SetSearchRatingFilter(..) => self.update_search(message),
             Message::SelectTheme(..)
+            | Message::SelectUiTheme(..)
             | Message::SelectFont(..)
             | Message::SetCrossfadeEnabled(..)
             | Message::SetCrossfadeDuration(..)
@@ -97,6 +99,7 @@ impl App {
             | Message::SetLrclibEnabled(..)
             | Message::SetLyricsWordFill(..)
             | Message::SetDecorations(..)
+            | Message::SetScrollbarWidth(..)
             | Message::WipeCoverCache
             | Message::DeleteSettings => self.update_settings(message),
             Message::SetEqEnabled(..)
@@ -122,6 +125,53 @@ impl App {
             | Message::SimilarLoaded(..)
             | Message::PlayQueueIndex(..)
             | Message::PlaybackDone(..) => self.update_transport(message),
+            Message::SetBarsMonstercat(..)
+            | Message::SetBarsWaves(..)
+            | Message::SetBarsWavesSmoothing(..)
+            | Message::SetBarsGradientMode(..)
+            | Message::SetBarsGradientOrientation(..)
+            | Message::SetBarsPeakGradientMode(..)
+            | Message::SetBarsPeakMode(..)
+            | Message::SetBarsPeakHoldTime(..)
+            | Message::SetBarsPeakFadeTime(..)
+            | Message::SetBarsPeakHeight(..)
+            | Message::SetBarsBorderWidth(..)
+            | Message::SetBarsLedBars(..)
+            | Message::SetBarsLedSegmentHeight(..)
+            | Message::SetBarsDepth3d(..)
+            | Message::SetBarsFlashIntensity(..)
+            | Message::SetBarsMaxBars(..)
+            | Message::SetBarsTrails(..)
+            | Message::SetBarsEcho(..)
+            | Message::SetLinesPointCount(..)
+            | Message::SetLinesLineThickness(..)
+            | Message::SetLinesOutlineThickness(..)
+            | Message::SetLinesOutlineOpacity(..)
+            | Message::SetLinesAnimationSpeed(..)
+            | Message::SetLinesGradientMode(..)
+            | Message::SetLinesFillOpacity(..)
+            | Message::SetLinesGlowIntensity(..)
+            | Message::SetLinesMirror(..)
+            | Message::SetLinesStyle(..)
+            | Message::SetLinesTrails(..)
+            | Message::SetLinesEcho(..)
+            | Message::SetScopeRadius(..)
+            | Message::SetScopeSensitivity(..)
+            | Message::SetScopePointCount(..)
+            | Message::SetScopeLineThickness(..)
+            | Message::SetScopeFillOpacity(..)
+            | Message::SetScopeGlowIntensity(..)
+            | Message::SetScopeOutlineThickness(..)
+            | Message::SetScopeOutlineOpacity(..)
+            | Message::SetScopeGradientMode(..)
+            | Message::SetScopeAnimationSpeed(..)
+            | Message::SetScopeStyle(..)
+            | Message::SetScopeParticles(..)
+            | Message::SetScopeParticleCount(..)
+            | Message::SetScopeParticleSpeed(..)
+            | Message::SetScopeBeam(..)
+            | Message::SetScopeTrails(..)
+            | Message::SetScopeEcho(..) => self.update_visualizer(message),
             Message::PlayQueueFetched(..)
             | Message::ResumeQueue
             | Message::DismissResume => self.update_queue_resume(message),

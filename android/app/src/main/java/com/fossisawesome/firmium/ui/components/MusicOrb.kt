@@ -1,5 +1,6 @@
 package com.fossisawesome.firmium.ui.components
 
+import com.fossisawesome.firmium.audio.VisualizerAudioProcessor
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -40,18 +41,18 @@ private fun paletteColor(p: OrbPalette, phase: Float): Color {
 }
 
 // NCS-style audio-reactive orb visualizer.
-// Attaches to ExoPlayer's audio session via android.media.audiofx.Visualizer to get real
-// waveform data; derives a bass amplitude from the low-frequency half of each capture.
-// Falls back to a gentle breathe animation when audioSessionId == 0 or Visualizer fails.
+// Reads real waveform/FFT data tapped from ExoPlayer's audio pipeline by a VisualizerAudioProcessor;
+// derives a bass amplitude from the low-frequency half of each analysis block.
+// Falls back to a gentle breathe animation when visualizerProcessor is null.
 @Composable
 fun MusicOrb(
-    audioSessionId: Int,
+    visualizerProcessor: VisualizerAudioProcessor?,
     palette: OrbPalette,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // Bass comes from the shared FFT capture (real low-frequency bins) so the orb stays on-beat.
-    val data = rememberVisualizerData(audioSessionId, isPlaying)
+    // Bass comes from the shared FFT tap (real low-frequency bins) so the orb stays on-beat.
+    val data = rememberVisualizerData(visualizerProcessor, isPlaying)
     var smoothBass by remember { mutableFloatStateOf(0f) }
 
     val infiniteTransition = rememberInfiniteTransition(label = "orb")

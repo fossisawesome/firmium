@@ -1,0 +1,13 @@
+name = "Spotify"
+color_scheme = "dark"
+
+[colors]
+bg = "#121212"
+surface = "#181818"
+surface2 = "#282828"
+border = "rgba(255,255,255,0.1)"
+text = "#ffffff"
+muted = "#b3b3b3"
+accent = "#1ed760"
+accent_dim = "rgba(30,215,96,0.15)"
+error = "#f15e6c"

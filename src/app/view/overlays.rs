@@ -12,6 +12,7 @@ use super::super::App;
 impl App {
     pub(crate) fn add_to_playlist_overlay(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let Some(song) = &self.add_to_playlist_song else {
             return container(text("")).into();
         };
@@ -26,7 +27,7 @@ impl App {
                 ..button::Style::default()
             });
 
-        let close = icon_button(icons::CLOSE, 16.0, t.muted, t, Message::CloseAddToPlaylist);
+        let close = icon_button(icons::CLOSE, 16.0, t.muted, t, spotify, Message::CloseAddToPlaylist);
         let header = row![
             text("Add to Playlist").size(16).style(tstyle(t.text)).width(Length::Fill),
             close,
@@ -42,11 +43,11 @@ impl App {
                 .padding(8)
                 .size(13)
                 .width(Length::Fill)
-                .style(text_input_style(t)),
+                .style(text_input_style(t, spotify)),
             button(icons::icon(icons::PLUS, 16.0, t.bg))
                 .padding(8)
                 .on_press(Message::CreatePlaylistAndAdd)
-                .style(primary_button(t)),
+                .style(primary_button(t, spotify)),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
@@ -75,7 +76,7 @@ impl App {
                         .width(Length::Fill)
                         .padding(8)
                         .on_press(Message::AddToPlaylist(id))
-                        .style(list_row_style(t)),
+                        .style(list_row_style(t, spotify)),
                 );
             }
         }
@@ -86,7 +87,7 @@ impl App {
                 subtitle,
                 create_row,
                 text("Your playlists").size(11).style(tstyle(t.muted)),
-                scrollable(list).height(Length::Fixed(260.0)).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)),
+                scrollable(list).height(Length::Fixed(260.0)).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)),
             ]
             .spacing(14),
         )
@@ -107,6 +108,7 @@ impl App {
 
     pub(crate) fn create_playlist_overlay(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let can_create = !self.create_playlist_name.trim().is_empty();
 
         let backdrop = button(container(text("")).width(Length::Fill).height(Length::Fill))
@@ -127,16 +129,16 @@ impl App {
                     .on_submit(Message::CreatePlaylist(self.create_playlist_name.clone()))
                     .padding(10)
                     .size(13)
-                    .style(text_input_style(t)),
+                    .style(text_input_style(t, spotify)),
                 row![
                     button(text("Cancel").size(13).style(tstyle(t.muted)))
                         .padding(8)
                         .on_press(Message::CloseCreatePlaylist)
-                        .style(list_row_style(t)),
+                        .style(list_row_style(t, spotify)),
                     button(text("Create").size(13).style(tstyle(if can_create { t.bg } else { t.muted })))
                         .padding([8, 16])
                         .on_press_maybe(create_msg)
-                        .style(primary_button(t)),
+                        .style(primary_button(t, spotify)),
                 ]
                 .spacing(12)
                 .align_y(Alignment::Center),
@@ -160,6 +162,7 @@ impl App {
 
     pub(crate) fn account_switcher_overlay(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
 
         let backdrop = button(container(text("")).width(Length::Fill).height(Length::Fill))
             .width(Length::Fill)
@@ -209,8 +212,15 @@ impl App {
                     }
                 });
 
+            let close = icon_button(icons::CLOSE, 16.0, t.muted, t, spotify, Message::ToggleAccountSwitcher);
+            let header = row![
+                text("Connected").size(26).style(tstyle(t.accent)).width(Length::Fill),
+                close,
+            ]
+            .align_y(Alignment::Center);
+
             let mut card_col = column![
-                text("Connected").size(26).style(tstyle(t.accent)),
+                header,
                 text(server_display).size(13).style(tstyle(t.muted)),
             ]
             .spacing(20)
@@ -269,24 +279,24 @@ impl App {
                     .on_input(Message::ServerInput)
                     .padding(10)
                     .width(Length::Fixed(320.0))
-                    .style(text_input_style(t)),
+                    .style(text_input_style(t, spotify)),
                 text_input("username", &self.username_input)
                     .on_input(Message::UsernameInput)
                     .padding(10)
                     .width(Length::Fixed(320.0))
-                    .style(text_input_style(t)),
+                    .style(text_input_style(t, spotify)),
                 text_input("password", &self.password_input)
                     .on_input(Message::PasswordInput)
                     .secure(true)
                     .padding(10)
                     .width(Length::Fixed(320.0))
-                    .style(text_input_style(t)),
+                    .style(text_input_style(t, spotify)),
                 save_pw_row,
                 button(text("CONNECT").size(13))
                     .on_press(Message::Connect)
                     .padding(14)
                     .width(Length::Fixed(320.0))
-                    .style(primary_button(t)),
+                    .style(primary_button(t, spotify)),
             ]
             .spacing(12)
             .align_x(Alignment::Start);
@@ -312,6 +322,7 @@ impl App {
 
     pub(crate) fn saved_account_row(&self, acct: &SavedAccount) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let server_display = acct
             .server
             .trim_start_matches("https://")
@@ -328,12 +339,13 @@ impl App {
         .width(Length::Fixed(320.0))
         .padding(10)
         .on_press(Message::SwitchAccount(acct.clone()))
-        .style(list_row_style(t))
+        .style(list_row_style(t, spotify))
         .into()
     }
 
     pub(crate) fn resume_banner(&self, q: &RemotePlayQueue) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let track = q
             .current
             .as_deref()
@@ -347,7 +359,7 @@ impl App {
         let resume = button(text("Resume").size(12).style(tstyle(t.bg)))
             .padding([6, 14])
             .on_press(Message::ResumeQueue)
-            .style(primary_button(t));
+            .style(primary_button(t, spotify));
         let dismiss = button(text("Dismiss").size(12).style(tstyle(t.muted)))
             .padding([6, 12])
             .on_press(Message::DismissResume)

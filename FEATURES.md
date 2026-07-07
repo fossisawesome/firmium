@@ -1,6 +1,6 @@
 # Firmium Features
 
-A complete list of what Firmium can do, for both **desktop** (Linux/Windows) and **Android**.
+A complete list of what Firmium can do, for both **desktop** (Linux/Windows/macOS) and **Android**.
 
 Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
@@ -33,6 +33,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Browse albums, artists, and genres | ✅ | ✅ |
 | Home screen — recently played, newest, and random albums | ✅ | ✅ |
 | Artist pages with photos and Last.fm biography | ✅ | ✅ |
+| Play button on artist page — instantly plays that artist's top tracks | ❌ | ✅ |
 | Album detail pages with full track list | ✅ | ✅ |
 | Search across your whole library | ✅ | ✅ |
 | Track ratings — 1-5 star rating on tracks, synced to your server | ✅ | ✅ |
@@ -130,6 +131,8 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Toggle visualizer on/off | ✅ | ✅ |
 | Switch visualizer mode from the panel header | ✅ | ✅ |
 | Visualizer colors follow the album artwork (desktop: toggle in Settings, falls back to theme colors; Android: always-on) | ✅ | ✅ |
+| Bar smoothing — Monstercat (adjustable spread intensity) or Waves (spline smoothing), mutually exclusive, adjustable in Settings | ✅ | ❌ |
+| Full visualizer customization in Settings — dozens of knobs per mode (gradient/peak behavior, glow, outline, fill, point/bar count, particles, motion trails, echo, and more) | ✅ | ❌ |
 
 ---
 
@@ -171,6 +174,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Import custom themes from a `.toml` file (desktop: `themes/` drop folder; Android: file picker) | ✅ | ✅ |
 | Choose the interface font from a curated list of 11 fonts | ✅ | ✅ |
 | Responsive sidebar (collapses to icons, then a bottom tab bar on narrow windows) | ✅ | — |
+| UI theme — independent of color theme: choose Default or Spotify-style layout (nav, player bar, and browsing screens restyled) | ✅ | ✅ |
 
 **Built-in themes include:** Firmium, Gruvbox, Tokyo Night, Dracula, Catppuccin Mocha / Macchiato / Frappé / Latte, Monokai Classic, Monokai Pro, Adwaita, Adwaita Dark, ayu, ayu Light, GitHub Dark, Nordfox, Synthwave '84, Svalbard.
 
@@ -201,6 +205,30 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Now-playing display on the watch (title, artist, cover art) | ✅ |
 | Transport controls from the wrist (play/pause, next, previous) | ✅ |
 | Volume control via the rotating crown/bezel or on-screen buttons | ✅ |
+| Standalone playback — browse and play your library directly on the watch, no phone needed | ✅ |
+| Browse artists, albums, and playlists on the watch | ✅ |
+| Search your library from the watch | ✅ |
+| Crossfade, gapless playback, ReplayGain, shuffle, and repeat on watch playback | ✅ |
+| Download albums, playlists, or individual tracks to the watch for offline playback | ✅ |
+| Watch automatically matches your phone's theme, crossfade/gapless/ReplayGain settings, and download format | ✅ |
+
+---
+
+## Android TV
+
+| Feature | Android |
+|---|:---:|
+| Browse your library on the big screen (Home, Albums, Artists, Playlists) | ✅ |
+| Album, artist, and playlist detail pages | ✅ |
+| Search | ✅ |
+| Full-screen Now Playing with cover art and transport controls | ✅ |
+| Queue panel on the Now Playing screen | ✅ |
+| Synced lyrics panel on the Now Playing screen (line highlighting, no word-fill animation) | ✅ |
+| Similar Tracks panel on the Now Playing screen | ✅ |
+| Smart Mix (energy + genre picker) | ✅ |
+| Equalizer — enable/select profile, adjust the 10 graphic bands (parametric editing, `.toml` import are phone/desktop-only) | ✅ |
+| Recap & listening stats | ✅ |
+| Settings — theme, font, crossfade, gapless, ReplayGain, visualizer, logout (Last.fm setup, cache/reset actions are phone/desktop-only) | ✅ |
 
 ---
 
@@ -215,11 +243,11 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 ## Desktop-Only Features
 
-- **In-app software updater** — check for and install new versions directly (Windows and Linux AppImage)
 - **Bit-perfect audio** — open the output stream at each track's exact native sample rate
 - **Window decorations toggle** — show or hide the native title bar and window borders from Settings
 - **Wipe cover-art cache** — clear cached cover art from Settings → Debug
 - **Reset preferences** — restore all settings to their defaults from Settings → Debug
+- **Command line control** — control a running instance from the terminal (`firmium play-pause`, `next`, `prev`, `volume`, `seek`, `status`, etc.), for scripts and keyboard shortcuts
 
 ---
 

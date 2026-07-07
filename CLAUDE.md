@@ -1,22 +1,22 @@
 # CLAUDE.md
 
-**Version**: 7.0.0
+**Version**: 8.0.1
 
 Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Project Overview
 
-**Firmium** is an OpenSubsonic music streaming client. The desktop app (Linux + Windows) is a native [iced](https://iced.rs) (Rust) application — a single binary, no web view and no JavaScript — providing low-latency audio playback, OS-level credential storage, and integration with OpenSubsonic-compatible servers (e.g. Navidrome). Separate native Android app in `android/`, built with Kotlin + Jetpack Compose.
+**Firmium** is an OpenSubsonic music streaming client. The desktop app (Linux + Windows + macOS + FreeBSD) is a native [iced](https://iced.rs) (Rust) application — a single binary, no web view and no JavaScript — providing low-latency audio playback, OS-level credential storage, and integration with OpenSubsonic-compatible servers (e.g. Navidrome). Separate native Android app in `android/`, built with Kotlin + Jetpack Compose.
 
 ### Tech Stack
 
-**Desktop (Linux, Windows)**
+**Desktop (Linux, Windows, macOS, FreeBSD)**
 - **UI**: [iced](https://iced.rs) 0.14 (pure Rust; `canvas` for the visualizer, `svg` for icons, bundled font)
 - **Language**: Rust 2021 edition — UI and backend in one process, one crate
 - **Audio**: `symphonia` 0.5 (decoding) + `cpal` 0.17 (output device I/O), hand-rolled engine
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
-- **Credentials**: OS keyring via `keyring` crate (libsecret on Linux, Windows Credential Manager on Windows)
-- **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer)
+- **Credentials**: OS keyring via `keyring` crate (libsecret/Secret Service on Linux and FreeBSD, Windows Credential Manager on Windows, Keychain via `apple-native` on macOS)
+- **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer), macOS (`.app` bundle in a `.dmg`, unsigned), FreeBSD (`.pkg` via `pkg create`)
 
 **Android**
 
@@ -120,6 +120,8 @@ Desktop (iced/Rust) and Android (Kotlin/Compose) implement same features indepen
 - Rust 1.80+ (`rustup default stable`)
 - On Linux: ALSA (`libasound2`), `libssl`, `libsecret` (keyring), `libxkbcommon`, plus a Vulkan/OpenGL driver for iced's `wgpu` renderer. Exact package names vary by distro — see `README.md` "System Dependencies".
 - On Windows: no extra system dependencies (rustls handles TLS, Windows Credential Manager built-in)
+- On macOS: Xcode Command Line Tools (`xcode-select --install`) only — CoreAudio and Keychain are built in, rustls handles TLS
+- On FreeBSD: `alsa-lib`, `dbus`, `libxkbcommon` via `pkg install`, plus a Mesa/Vulkan driver. Built and tested only via CI (`cross-platform-actions` qemu VM) — no native FreeBSD runner in GitHub Actions.
 
 ### Commands
 
@@ -200,6 +202,8 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 
 - The desktop build is a single binary: `cargo build --release` → `target/release/firmium`.
 - `PKGBUILD` (Arch), `firmium.spec` / `packaging/firmium.spec` (rpm/COPR), and the `.deb` packaging install that binary plus `packaging/firmium.desktop` and the icons under `assets/app-icons/`.
+- macOS: `release.yml`'s `build-macos` job cross-compiles both `aarch64-apple-darwin` (Apple Silicon) and `x86_64-apple-darwin` (Intel) on a `macos-14` runner, assembles a `Firmium.app` bundle (binary + `assets/app-icons/icon.icns` + `packaging/macos/Info.plist` with the version substituted in), and wraps it into a `.dmg` via `hdiutil`. Builds are unsigned — no Apple Developer account yet, so no codesigning/notarization step.
+- FreeBSD: `release.yml`'s `build-freebsd` job runs inside a FreeBSD VM via `cross-platform-actions/action` (no native FreeBSD GitHub Actions runner exists), builds with `cargo build --release`, and packages the binary + `packaging/firmium.desktop` + icons into a `.pkg` via `pkg create`. Not submitted to the official FreeBSD ports tree (out of scope — that's a separate manual review process).
 - `scripts/bump-version.sh <ver>` updates `Cargo.toml`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, the Android `build.gradle.kts`, and the AUR folders.
 - **In-app updater**: not yet ported to the native build. The old Tauri self-updater (signed AppImage / NSIS via `release.yml`) was removed with the web layer; `.deb`/`.rpm`/COPR/AUR users update through their package manager. A native updater is a future task coupled to a redesign of the release pipeline.
 - Android: no in-app updater (native Kotlin app) — updates via Play Store or manual APK install.
@@ -223,7 +227,7 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 - `Cargo.toml` — single binary crate (iced + backend deps)
 - `themes/` — TOML theme files (embedded at compile time)
 - `assets/` — bundled font and app icons
-- `packaging/` — `firmium.desktop`, rpm spec
+- `packaging/` — `firmium.desktop`, rpm spec, `macos/Info.plist`
 - `android/` — Separate native Kotlin/Compose Android app; see [android/CLAUDE.md](android/CLAUDE.md)
 
 ## OpenSubsonic API Integration

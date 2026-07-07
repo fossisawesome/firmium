@@ -54,6 +54,7 @@ import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.screens.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -108,6 +109,8 @@ fun AppNavGraph(
     podcastsViewModel: PodcastsViewModel,
     currentThemeId: String,
     onThemeSelected: (String) -> Unit,
+    currentUiThemeId: String,
+    onUiThemeSelected: (String) -> Unit,
     currentFontFamily: String,
     onFontSelected: (String) -> Unit,
     onAccountClick: () -> Unit,
@@ -515,6 +518,7 @@ fun AppNavGraph(
                         username = auth.credentials?.username ?: "",
                         appVersion = BuildConfig.VERSION_NAME,
                         currentThemeId = currentThemeId,
+                        currentUiThemeId = currentUiThemeId,
                         currentFontFamily = currentFontFamily,
                         lrclibEnabled = lrclibEnabled,
                         lyricsWordFillEnabled = lyricsWordFillEnabled,
@@ -529,6 +533,7 @@ fun AppNavGraph(
                         onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
                         onReplayGainToggle = { playerViewModel.setReplayGainEnabled(it) },
                         onThemeSelected = onThemeSelected,
+                        onUiThemeSelected = onUiThemeSelected,
                         onFontSelected = onFontSelected,
                         onVisualizerToggle = { playerViewModel.setVisualizerEnabled(it) },
                         onVisualizerTypeSelected = { playerViewModel.setVisualizerType(it) },
@@ -599,11 +604,19 @@ fun AppNavGraph(
 
         // Bottom bar only on narrow screens; wide screens use the rail nav instead.
         if (!useRailNav) {
-            FirmiumBottomBar(
-                currentSection = currentSection,
-                destinations = bottomDests,
-                onNavigate = onNavigate,
-            )
+            if (LocalUiTheme.current == "spotify") {
+                SpotifyBottomBar(
+                    currentSection = currentSection,
+                    destinations = bottomDests,
+                    onNavigate = onNavigate,
+                )
+            } else {
+                FirmiumBottomBar(
+                    currentSection = currentSection,
+                    destinations = bottomDests,
+                    onNavigate = onNavigate,
+                )
+            }
         }
     } // end inner Column
     } // end outer Row
@@ -623,7 +636,7 @@ fun AppNavGraph(
         FullScreenPlayer(
             state = playerState,
             coverUrl = coverUrl(playerState.currentTrack?.coverArt),
-            audioSessionId = playerState.audioSessionId,
+            visualizerProcessor = playerState.visualizerProcessor,
             playlistItems = playlistsState.items,
             lyricsState = lyricsState,
             wordFillEnabled = lyricsWordFillEnabled,
@@ -734,6 +747,7 @@ private fun FirmiumPageHeader(
     onAccountClick: (() -> Unit)?,
 ) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
 
     Column(
         modifier = Modifier
@@ -749,7 +763,7 @@ private fun FirmiumPageHeader(
         ) {
             Text(
                 text = title,
-                fontSize = 18.sp,
+                fontSize = if (spotify) 24.sp else 18.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = LocalAppFontFamily.current,
                 color = colors.text,
@@ -882,6 +896,69 @@ private fun FirmiumBottomBar(
                 }
             }
         }
+    }
+}
+
+// Spotify-style bottom navigation: icon + label per tab, active tab tinted, no underline —
+// mirrors Spotify's mobile tab bar instead of Firmium's icon-only + accent-underline style.
+@Composable
+private fun SpotifyBottomBar(
+    currentSection: String?,
+    destinations: List<NavDest>,
+    onNavigate: (String) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.bg),
+    ) {
+        FirmiumDivider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .height(64.dp),
+        ) {
+            destinations.forEach { dest ->
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    SpotifyNavItem(dest = dest, selected = currentSection == dest.route, onNavigate = onNavigate)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpotifyNavItem(dest: NavDest, selected: Boolean, onNavigate: (String) -> Unit) {
+    val colors = LocalFirmiumColors.current
+    val tint by animateColorAsState(
+        targetValue = if (selected) colors.text else colors.muted,
+        animationSpec = tween(durationMillis = 200),
+        label = "${dest.route}SpotifyTint",
+    )
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(interactionSource = interactionSource, indication = null) { onNavigate(dest.route) },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        FirmiumIcon(
+            imageVector = dest.icon,
+            contentDescription = dest.label,
+            tint = tint,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = dest.label,
+            fontSize = 10.sp,
+            fontFamily = LocalAppFontFamily.current,
+            color = tint,
+            maxLines = 1,
+        )
     }
 }
 

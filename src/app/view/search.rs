@@ -12,17 +12,18 @@ use super::super::App;
 impl App {
     pub(crate) fn search_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let bar = row![
             text_input("Search your library…", &self.search_query)
                 .on_input(Message::SearchInput)
                 .on_submit(Message::SubmitSearch)
                 .padding(10)
                 .width(Length::Fill)
-                .style(text_input_style(t)),
+                .style(text_input_style(t, spotify)),
             button(text("Search").size(13))
                 .on_press(Message::SubmitSearch)
                 .padding(10)
-                .style(primary_button(t)),
+                .style(primary_button(t, spotify)),
         ]
         .spacing(10);
 
@@ -52,18 +53,19 @@ impl App {
                     col = col.push(self.song_row(s));
                 }
             }
-            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).into()
+            scrollable(col).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).into()
         } else {
             text("Type a query and press Enter").size(12).style(tstyle(t.muted)).into()
         };
 
-        column![text("Search").size(22).style(tstyle(t.text)), bar, results]
+        column![page_header("Search", t, self.ui_theme_id == "spotify"), bar, results]
             .spacing(16)
             .into()
     }
 
     pub(crate) fn song_row(&self, song: &Song) -> Element<'_, Message> {
         let t = self.tokens;
+        let spotify = self.ui_theme_id == "spotify";
         let is_current = self.current_song_id() == Some(song.id.as_str());
         let title_color = if is_current { t.accent } else { t.text };
         let play_area = button(
@@ -96,7 +98,7 @@ impl App {
             play_area,
             self.star_rating(song),
             self.avg_rating_badge(song),
-            icon_button(icons::PLUS, 14.0, t.muted, t, Message::OpenAddToPlaylist(song.clone())),
+            icon_button(icons::PLUS, 14.0, t.muted, t, spotify, Message::OpenAddToPlaylist(song.clone())),
         ]
         .spacing(8)
         .align_y(Alignment::Center)

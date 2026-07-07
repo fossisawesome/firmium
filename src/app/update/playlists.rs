@@ -37,6 +37,16 @@ impl App {
                 }
                 crate::playlists::save_playlists(&self.playlists);
                 self.rebuild_playlist_items();
+                let mut cover_ids: Vec<String> = self
+                    .playlists
+                    .iter()
+                    .flat_map(|p| p.tracks.iter().filter_map(|s| s.cover_art_id.clone()))
+                    .collect();
+                cover_ids.extend(
+                    self.server_playlists
+                        .iter()
+                        .filter_map(|sp| sp.get("coverArt").and_then(|v| v.as_str()).map(String::from)),
+                );
                 let tasks = to_retry.into_iter().map(|(local_id, name, ids)| {
                     Task::perform(
                         crate::commands::playlists::sync_create(
@@ -47,7 +57,7 @@ impl App {
                         move |res| Message::PlaylistCreateSynced(local_id.clone(), res),
                     )
                 });
-                Task::batch(tasks)
+                Task::batch(std::iter::once(self.load_cover_ids(cover_ids)).chain(tasks))
             }
             Message::PlaylistsLoaded(Err(e)) => {
                 eprintln!("get_playlists failed: {e:?}");

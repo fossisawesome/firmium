@@ -19,6 +19,8 @@ import com.fossisawesome.firmium.data.podcast.PodcastRepository
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
+import com.fossisawesome.firmium.wear.WearAuthSync
+import com.fossisawesome.firmium.wear.WearSettingsSync
 import com.fossisawesome.firmium.wear.WearStateSync
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +52,12 @@ class FirmiumApplication : Application() {
     val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists, secureStorage, playHistory) }
     // Mirrors now-playing state to a paired Wear OS watch and applies its transport commands.
     val wearSync by lazy { WearStateSync(this) }
+    // Pushes the active account's credentials to a paired Wear OS watch so it can
+    // authenticate standalone. See WearAuthSync for push/clear.
+    val wearAuthSync by lazy { WearAuthSync(this) }
+    // Pushes playback/appearance settings (crossfade, gapless, ReplayGain, download format,
+    // resolved theme colors) to a paired Wear OS watch. See WearSettingsSync.
+    val wearSettingsSync by lazy { WearSettingsSync(this, prefs) }
     // App-lifetime scope for background work (cancelable, unlike GlobalScope).
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -76,6 +84,7 @@ class FirmiumApplication : Application() {
         // Begin mirroring playback state to a paired watch (also forces PlaybackController to
         // initialize so the watch's transport commands have a controller to drive).
         wearSync.start()
+        wearSettingsSync.start()
 
         // Pre-scan local files so PlayerViewModel can prefer downloaded tracks over streaming
         // and DownloadManager can skip already-downloaded songs — even in server mode.

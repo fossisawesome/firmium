@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,8 +115,11 @@ fun ArtistDetailScreen(
                                     .padding(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                OverlayIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
+                                OverlayIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onClick = onBack)
                                 Spacer(Modifier.weight(1f))
+                                OverlayIconButton(Icons.Default.PlayArrow, "Play all", enabled = state.topSongs.isNotEmpty()) {
+                                    onPlaySongs(state.topSongs, 0)
+                                }
                                 OverlayIconButton(Icons.Default.Share, "Share") {
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
@@ -171,20 +173,6 @@ fun ArtistDetailScreen(
                                     }
                                 }
                             }
-                        }
-                    }
-
-                    // Songs preview.
-                    if (state.topSongs.isNotEmpty()) {
-                        item {
-                            SectionHeader("Songs", onArrow = { onPlaySongs(state.topSongs, 0) })
-                        }
-                        itemsIndexed(state.topSongs.take(5)) { index, song ->
-                            ArtistSongRow(
-                                song = song,
-                                coverUrl = coverUrlFor(song.coverArt),
-                                onClick = { onPlaySongs(state.topSongs, index) },
-                            )
                         }
                     }
 
@@ -302,32 +290,18 @@ private fun SectionHeader(title: String, onArrow: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun ArtistSongRow(song: Song, coverUrl: String?, onClick: () -> Unit) {
-    val colors = LocalFirmiumColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        CoverImage(url = coverUrl, contentDescription = null,
-            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(song.title, fontFamily = LocalAppFontFamily.current, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(song.displayArtist ?: song.artist, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
-                color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun OverlayIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, onClick: () -> Unit) {
+private fun OverlayIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    desc: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     Box(
         modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f))
-            .clickable { onClick() },
+            .clickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        FirmiumIcon(icon, contentDescription = desc, tint = Color.White, modifier = Modifier.size(20.dp))
+        FirmiumIcon(icon, contentDescription = desc, tint = Color.White.copy(alpha = if (enabled) 1f else 0.4f), modifier = Modifier.size(20.dp))
     }
 }
 

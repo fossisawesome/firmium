@@ -13,7 +13,7 @@ use super::super::App;
 impl App {
     pub(crate) fn artists_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        let header = text(format!("Artists ({})", self.artists.len())).size(22).style(tstyle(t.text));
+        let header = page_header(format!("Artists ({})", self.artists.len()), t, self.ui_theme_id == "spotify");
         let (first, end, top, bottom) = list_window(self.artists.len(), self.artists_scroll, ARTIST_ROW_H);
         let mut list = column![];
         if top > 0.0 {
@@ -25,24 +25,30 @@ impl App {
         if bottom > 0.0 {
             list = list.push(container(text("")).height(Length::Fixed(bottom)));
         }
-        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::ArtistsScrolled(v.absolute_offset().y))].spacing(16).into()
+        column![header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::ArtistsScrolled(v.absolute_offset().y))].spacing(16).into()
     }
 
     pub(crate) fn artist_row(&self, artist: &Artist) -> Element<'_, Message> {
         let t = self.tokens;
-        let avatar = container(icons::icon(icons::USER, 22.0, t.muted))
-            .center_x(Length::Fixed(44.0))
-            .center_y(Length::Fixed(44.0))
+        let spotify = self.ui_theme_id == "spotify";
+        let avatar_size = if spotify { 56.0 } else { 44.0 };
+        let avatar = container(icons::icon(icons::USER, avatar_size * 0.5, t.muted))
+            .center_x(Length::Fixed(avatar_size))
+            .center_y(Length::Fixed(avatar_size))
             .style(move |_| container::Style {
                 background: Some(Background::Color(t.surface2)),
-                border: Border { radius: 22.0.into(), ..Border::default() },
+                border: Border { radius: (avatar_size / 2.0).into(), ..Border::default() },
                 ..container::Style::default()
             });
+        let mut name_text = text(artist.name.clone()).size(if spotify { 14 } else { 13 }).style(tstyle(t.text));
+        if spotify {
+            name_text = name_text.font(iced::Font { weight: iced::font::Weight::Bold, ..iced::Font::MONOSPACE });
+        }
         button(
             row![
                 avatar,
                 column![
-                    text(artist.name.clone()).size(13).style(tstyle(t.text)),
+                    name_text,
                     text(format!("{} albums", artist.album_count)).size(11).style(tstyle(t.muted)),
                 ]
                 .spacing(2),
@@ -51,9 +57,9 @@ impl App {
             .align_y(Alignment::Center),
         )
         .width(Length::Fill)
-        .padding(8)
+        .padding(if spotify { 10 } else { 8 })
         .on_press(Message::Navigate(View::ArtistDetail(artist.id.clone())))
-        .style(list_row_style(t))
+        .style(list_row_style(t, spotify))
         .into()
     }
 
@@ -102,7 +108,7 @@ impl App {
             );
         }
 
-        column![head, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(thin_scrollbar())).style(thin_scroll_style(t))]
+        column![head, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t))]
             .spacing(12)
             .into()
     }

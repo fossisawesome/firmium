@@ -23,6 +23,7 @@ import androidx.compose.ui.window.Dialog
 import com.fossisawesome.firmium.data.db.PodcastChannelEntity
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 
 @Composable
 fun PodcastsScreen(
@@ -32,6 +33,7 @@ fun PodcastsScreen(
     onAddChannel: (String) -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
     var showAddDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -39,12 +41,21 @@ fun PodcastsScreen(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Podcasts".uppercase(),
-                fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
-                color = colors.muted, letterSpacing = 1.sp,
-                modifier = Modifier.weight(1f),
-            )
+            if (spotify) {
+                Text(
+                    "Podcasts",
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
+                    color = colors.text,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Text(
+                    "Podcasts".uppercase(),
+                    fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
+                    color = colors.muted, letterSpacing = 1.sp,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(3.dp))
@@ -94,22 +105,24 @@ fun PodcastsScreen(
 @Composable
 private fun PodcastChannelRow(channel: PodcastChannelEntity, onClick: () -> Unit) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
+    val artSize = if (spotify) 56.dp else 48.dp
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = if (spotify) 14.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Box(
-            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(colors.surface2),
+            modifier = Modifier.size(artSize).clip(RoundedCornerShape(if (spotify) 10.dp else 8.dp)).background(colors.surface2),
             contentAlignment = Alignment.Center,
         ) {
-            FirmiumIcon(Icons.Default.Mic, contentDescription = null, tint = colors.muted, modifier = Modifier.size(22.dp))
+            FirmiumIcon(Icons.Default.Mic, contentDescription = null, tint = colors.muted, modifier = Modifier.size(if (spotify) 26.dp else 22.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 channel.title, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
-                fontSize = 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                fontSize = if (spotify) 15.sp else 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Text(
                 channel.description.orEmpty(),

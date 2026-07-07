@@ -1,8 +1,6 @@
 package com.fossisawesome.firmium.ui.components
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.media.audiofx.Visualizer
+import com.fossisawesome.firmium.audio.VisualizerAudioProcessor
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -25,11 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -46,74 +41,38 @@ enum class VisualizerType(val id: String, val label: String) {
     }
 }
 
-// Live audio data shared by all visualizers. Populated off the audio thread by a single
-// android.media.audiofx.Visualizer; visualizers read whichever field they need.
+// Live audio data shared by all visualizers. Populated off the audio thread by a
+// VisualizerAudioProcessor tapping ExoPlayer's own PCM pipeline; visualizers read whichever
+// field they need.
 class VisualizerData {
     var waveform by mutableStateOf(FloatArray(0))   // time-domain, normalized to -1..1
     var magnitudes by mutableStateOf(FloatArray(0)) // per-bin FFT magnitude, 0..1
     var bass by mutableFloatStateOf(0f)             // smoothed low-frequency energy, 0..1
 }
 
-// Attaches a Visualizer to ExoPlayer's session and decodes BOTH the waveform and the FFT.
-// Deriving bass from real low-frequency FFT bins (not an arbitrary slice of the waveform) is
-// what keeps the reaction in sync with the music. No-ops without RECORD_AUDIO or while paused.
+// Subscribes to the current player's VisualizerAudioProcessor tap. Deriving bass from real
+// low-frequency FFT bins (not an arbitrary slice of the waveform) is what keeps the reaction in
+// sync with the music. No system Visualizer effect involved, so no RECORD_AUDIO permission and
+// no dependency on session-id timing — the processor sits directly in ExoPlayer's audio pipeline.
 @Composable
-fun rememberVisualizerData(audioSessionId: Int, isPlaying: Boolean): VisualizerData {
-    val context = LocalContext.current
+fun rememberVisualizerData(visualizerProcessor: VisualizerAudioProcessor?, isPlaying: Boolean): VisualizerData {
     val data = remember { VisualizerData() }
 
-    DisposableEffect(audioSessionId, isPlaying) {
-        if (audioSessionId == 0 || !isPlaying) {
+    DisposableEffect(visualizerProcessor, isPlaying) {
+        if (visualizerProcessor == null || !isPlaying) {
             data.bass = 0f
             data.waveform = FloatArray(0)
             data.magnitudes = FloatArray(0)
             return@DisposableEffect onDispose {}
         }
-        val hasRecordAudio = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!hasRecordAudio) return@DisposableEffect onDispose {}
 
-        val viz = try {
-            Visualizer(audioSessionId).apply {
-                // Largest capture size for the best frequency/time resolution.
-                captureSize = Visualizer.getCaptureSizeRange()[1]
-                setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
-                    override fun onWaveFormDataCapture(v: Visualizer, wave: ByteArray, sr: Int) {
-                        val wf = FloatArray(wave.size)
-                        for (i in wave.indices) {
-                            wf[i] = ((wave[i].toInt() and 0xFF) - 128) / 128f
-                        }
-                        data.waveform = wf
-                    }
+        visualizerProcessor.onData = { waveform, magnitudes, bass ->
+            data.waveform = waveform
+            data.magnitudes = magnitudes
+            data.bass = bass
+        }
 
-                    override fun onFftDataCapture(v: Visualizer, fft: ByteArray, sr: Int) {
-                        // Android FFT layout: [Re0, Re(n/2), Re1, Im1, Re2, Im2, ...].
-                        val bins = fft.size / 2
-                        if (bins <= 0) return
-                        val mags = FloatArray(bins)
-                        mags[0] = (kotlin.math.abs(fft[0].toInt()) / 128f).coerceIn(0f, 1f)
-                        var bassSum = 0f
-                        var bassCount = 0
-                        val bassCutoff = max(1, bins / 8)
-                        for (k in 1 until bins) {
-                            val re = fft[2 * k].toFloat()
-                            val im = fft[2 * k + 1].toFloat()
-                            val mag = (hypot(re, im) / 128f).coerceIn(0f, 1f)
-                            mags[k] = mag
-                            if (k <= bassCutoff) { bassSum += mag; bassCount++ }
-                        }
-                        data.magnitudes = mags
-                        val target = if (bassCount > 0) (bassSum / bassCount * 1.8f).coerceIn(0f, 1f) else 0f
-                        // Fast attack, slow decay — reads as "on the beat" rather than mushy.
-                        data.bass = if (target > data.bass) target else data.bass * 0.86f + target * 0.14f
-                    }
-                }, Visualizer.getMaxCaptureRate(), true, true)
-                enabled = true
-            }
-        } catch (_: Exception) { null }
-
-        onDispose { try { viz?.enabled = false; viz?.release() } catch (_: Exception) {} }
+        onDispose { visualizerProcessor.onData = null }
     }
     return data
 }
@@ -132,15 +91,15 @@ internal fun vizPaletteColor(p: OrbPalette, phase: Float): Color {
 @Composable
 fun VisualizerView(
     type: VisualizerType,
-    audioSessionId: Int,
+    visualizerProcessor: VisualizerAudioProcessor?,
     palette: OrbPalette,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
     when (type) {
-        VisualizerType.ORB -> MusicOrb(audioSessionId, palette, isPlaying, modifier)
-        VisualizerType.BARS -> BarVisualizer(audioSessionId, palette, isPlaying, modifier)
-        VisualizerType.OSCILLOSCOPE -> CircularOscilloscope(audioSessionId, palette, isPlaying, modifier)
+        VisualizerType.ORB -> MusicOrb(visualizerProcessor, palette, isPlaying, modifier)
+        VisualizerType.BARS -> BarVisualizer(visualizerProcessor, palette, isPlaying, modifier)
+        VisualizerType.OSCILLOSCOPE -> CircularOscilloscope(visualizerProcessor, palette, isPlaying, modifier)
     }
 }
 
@@ -149,12 +108,12 @@ private const val BAR_COUNT = 10
 // Classic frequency-bar visualizer. Bars use a log-ish band mapping so bass doesn't dominate.
 @Composable
 fun BarVisualizer(
-    audioSessionId: Int,
+    visualizerProcessor: VisualizerAudioProcessor?,
     palette: OrbPalette,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val data = rememberVisualizerData(audioSessionId, isPlaying)
+    val data = rememberVisualizerData(visualizerProcessor, isPlaying)
     val smoothed = remember { FloatArray(BAR_COUNT) }
     val infinite = rememberInfiniteTransition(label = "bars")
     val clock by infinite.animateFloat(
@@ -194,12 +153,12 @@ fun BarVisualizer(
 // Oscilloscope wrapped into a circle: the waveform modulates the radius of a closed ring.
 @Composable
 fun CircularOscilloscope(
-    audioSessionId: Int,
+    visualizerProcessor: VisualizerAudioProcessor?,
     palette: OrbPalette,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val data = rememberVisualizerData(audioSessionId, isPlaying)
+    val data = rememberVisualizerData(visualizerProcessor, isPlaying)
     val infinite = rememberInfiniteTransition(label = "scope")
     val clock by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,

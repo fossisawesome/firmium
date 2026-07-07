@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.PlaylistListItem
 import com.fossisawesome.firmium.viewmodel.PlaylistsUiState
 
@@ -37,6 +38,7 @@ fun PlaylistsScreen(
     onRefreshServer: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
     var showCreateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { onRefreshServer() }
@@ -47,12 +49,21 @@ fun PlaylistsScreen(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Playlists".uppercase(),
-                fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
-                color = colors.muted, letterSpacing = 1.sp,
-                modifier = Modifier.weight(1f),
-            )
+            if (spotify) {
+                Text(
+                    "Playlists",
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
+                    color = colors.text,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Text(
+                    "Playlists".uppercase(),
+                    fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
+                    color = colors.muted, letterSpacing = 1.sp,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             // .pl-new-btn: surface2 bg, 1dp border, accent text, monospace 11sp, 3dp radius
             Box(
                 modifier = Modifier
@@ -110,6 +121,8 @@ private fun PlaylistRow(
     onSync: (() -> Unit)?,
 ) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
+    val artSize = if (spotify) 56.dp else 48.dp
     // Local/synced playlists have their tracks in memory, so build a true mosaic from
     // the first distinct song covers. Server-only playlists only carry a single server
     // cover id (no track list loaded yet), so fall back to that — avoids per-row fetches.
@@ -119,13 +132,13 @@ private fun PlaylistRow(
     }
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = if (spotify) 14.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // .pl-card-art: 48×48dp, surface2 bg, 8dp radius
         Box(
-            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(colors.surface2),
+            modifier = Modifier.size(artSize).clip(RoundedCornerShape(if (spotify) 10.dp else 8.dp)).background(colors.surface2),
             contentAlignment = Alignment.Center,
         ) {
             PlaylistMosaic(coverUrls = coverUrls, modifier = Modifier.fillMaxSize())
@@ -134,7 +147,7 @@ private fun PlaylistRow(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     item.name, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
-                    fontSize = 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontSize = if (spotify) 15.sp else 14.sp, color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 if (item.isSynced) {
                     FirmiumIcon(Icons.Default.Cloud, contentDescription = "Synced to server",

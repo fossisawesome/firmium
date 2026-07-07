@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.RadioSeeder
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 
 private data class EnergyOption(val energy: RadioSeeder.Energy, val label: String, val desc: String)
 
@@ -35,6 +36,7 @@ fun MixScreen(
     onStartMix: (RadioSeeder.Energy, String?) -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
+    val spotify = LocalUiTheme.current == "spotify"
     var energy by remember { mutableStateOf(RadioSeeder.Energy.MID) }
     var genre by remember { mutableStateOf<String?>(null) }
 
@@ -45,7 +47,7 @@ fun MixScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(20.dp),
     ) {
-        Text("Mix", fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current, color = colors.text)
+        Text("Mix", fontSize = if (spotify) 30.sp else 26.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current, color = colors.text)
         Spacer(Modifier.height(4.dp))
         Text("Generate a shuffled queue tuned to an energy level.",
             fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
@@ -59,11 +61,11 @@ fun MixScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, if (selected) colors.accent else colors.border, RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(if (spotify) 12.dp else 8.dp))
+                    .border(1.dp, if (selected) colors.accent else colors.border, RoundedCornerShape(if (spotify) 12.dp else 8.dp))
                     .background(if (selected) colors.surface2 else colors.surface)
                     .clickable { energy = opt.energy }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = if (spotify) 16.dp else 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {

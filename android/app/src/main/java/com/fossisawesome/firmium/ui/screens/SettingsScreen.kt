@@ -1,10 +1,7 @@
 package com.fossisawesome.firmium.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -75,6 +72,7 @@ fun SettingsScreen(
     username: String,
     appVersion: String,
     currentThemeId: String,
+    currentUiThemeId: String,
     currentFontFamily: String,
     lrclibEnabled: Boolean,
     lyricsWordFillEnabled: Boolean,
@@ -89,6 +87,7 @@ fun SettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
+    onUiThemeSelected: (String) -> Unit,
     onFontSelected: (String) -> Unit,
     onVisualizerToggle: (Boolean) -> Unit,
     onVisualizerTypeSelected: (String) -> Unit,
@@ -111,6 +110,7 @@ fun SettingsScreen(
         username = username,
         appVersion = appVersion,
         currentThemeId = currentThemeId,
+        currentUiThemeId = currentUiThemeId,
         currentFontFamily = currentFontFamily,
         lrclibEnabled = lrclibEnabled,
         lyricsWordFillEnabled = lyricsWordFillEnabled,
@@ -125,6 +125,7 @@ fun SettingsScreen(
         onGaplessToggle = onGaplessToggle,
         onReplayGainToggle = onReplayGainToggle,
         onThemeSelected = onThemeSelected,
+        onUiThemeSelected = onUiThemeSelected,
         onFontSelected = onFontSelected,
         onVisualizerToggle = onVisualizerToggle,
         onVisualizerTypeSelected = onVisualizerTypeSelected,
@@ -176,6 +177,7 @@ private fun FirmiumSettingsScreen(
     username: String,
     appVersion: String,
     currentThemeId: String,
+    currentUiThemeId: String,
     currentFontFamily: String,
     lrclibEnabled: Boolean,
     lyricsWordFillEnabled: Boolean,
@@ -190,6 +192,7 @@ private fun FirmiumSettingsScreen(
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
     onThemeSelected: (String) -> Unit,
+    onUiThemeSelected: (String) -> Unit,
     onFontSelected: (String) -> Unit,
     onVisualizerToggle: (Boolean) -> Unit,
     onVisualizerTypeSelected: (String) -> Unit,
@@ -313,6 +316,8 @@ private fun FirmiumSettingsScreen(
                         "appearance" -> FirmiumAppearancePanel(
                             currentThemeId = currentThemeId,
                             onThemeSelected = onThemeSelected,
+                            currentUiThemeId = currentUiThemeId,
+                            onUiThemeSelected = onUiThemeSelected,
                             currentFontFamily = currentFontFamily,
                             onFontSelected = onFontSelected,
                             visualizerEnabled = playerState.visualizerEnabled,
@@ -400,6 +405,8 @@ private fun FirmiumSettingsRow(
 private fun FirmiumAppearancePanel(
     currentThemeId: String,
     onThemeSelected: (String) -> Unit,
+    currentUiThemeId: String,
+    onUiThemeSelected: (String) -> Unit,
     currentFontFamily: String,
     onFontSelected: (String) -> Unit,
     visualizerEnabled: Boolean,
@@ -409,22 +416,6 @@ private fun FirmiumAppearancePanel(
 ) {
     val context = LocalContext.current
     val colors = LocalFirmiumColors.current
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) onVisualizerToggle(true) }
-
-    val handleVisualizerToggle = { enabled: Boolean ->
-        if (!enabled) {
-            onVisualizerToggle(false)
-        } else {
-            val already = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-            if (already) onVisualizerToggle(true)
-            else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
 
     val scope = rememberCoroutineScope()
     // Bumped after import/delete to recompute the theme list from disk.
@@ -465,6 +456,15 @@ private fun FirmiumAppearancePanel(
         Text("Import a .toml theme file. The same format works on desktop and Android.",
             fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
 
+        Text("UI Theme", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
+            color = colors.muted, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+        UiThemeDropdown(
+            currentUiThemeId = currentUiThemeId,
+            onUiThemeSelected = onUiThemeSelected,
+        )
+        Text("Layout style: nav, player bar, and screen structure. Independent of Color Theme.",
+            fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
+
         Text("Font", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
             color = colors.muted, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
         FontDropdown(
@@ -482,7 +482,7 @@ private fun FirmiumAppearancePanel(
                     fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
             }
             Spacer(Modifier.width(12.dp))
-            FirmiumSwitch(checked = visualizerEnabled, onCheckedChange = handleVisualizerToggle)
+            FirmiumSwitch(checked = visualizerEnabled, onCheckedChange = onVisualizerToggle)
         }
         if (visualizerEnabled) {
             VisualizerDropdown(visualizerType = visualizerType, onTypeSelected = onVisualizerTypeSelected)
@@ -1291,6 +1291,71 @@ private fun ThemeDropdown(
                                     .size(16.dp)
                                     .clickable { onDeleteImported(theme) },
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val UI_THEME_OPTIONS = listOf("default" to "Default", "spotify" to "Spotify")
+
+@Composable
+private fun UiThemeDropdown(
+    currentUiThemeId: String,
+    onUiThemeSelected: (String) -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    var expanded by remember { mutableStateOf(false) }
+    val currentLabel = UI_THEME_OPTIONS.find { it.first == currentUiThemeId }?.second ?: "Default"
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(6.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(currentLabel, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
+                color = colors.text, modifier = Modifier.weight(1f))
+            FirmiumIcon(
+                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp),
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
+                    .background(colors.surface),
+            ) {
+                UI_THEME_OPTIONS.forEachIndexed { i, (id, label) ->
+                    if (i > 0) FirmiumDivider(color = colors.border)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onUiThemeSelected(id); expanded = false }
+                            .background(if (id == currentUiThemeId) colors.surface2.copy(alpha = 0.5f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            label, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
+                            color = if (id == currentUiThemeId) colors.accent else colors.text,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (id == currentUiThemeId) {
+                            FirmiumIcon(Icons.Default.Check, contentDescription = null,
+                                tint = colors.accent, modifier = Modifier.size(14.dp))
                         }
                     }
                 }
