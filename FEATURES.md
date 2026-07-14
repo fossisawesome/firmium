@@ -266,6 +266,20 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 ---
 
+## Termium (Terminal Client)
+
+Termium is a lightweight terminal (TUI) client for Firmium, for anyone who prefers to browse and play their library entirely from the keyboard in a terminal window. It shares your login and library with the desktop app: log into a server once in either app and both see it.
+
+- **Library browsing** — recent albums, artists, and playlists, navigable with the keyboard
+- **Search** — search your whole library from the terminal
+- **Playback controls** — play, pause, skip, and volume, plus a persistent now-playing bar
+- **Audio visualizer** — a terminal bar visualizer that reacts to what's playing
+- **Customizable keybindings** — remap any key via a config file; ships with vim-style navigation by default
+
+Deeper panels available on desktop (lyrics, equalizer, recap, similar tracks) aren't in Termium yet.
+
+---
+
 ## Format Support
 
 Firmium can play any audio format your server streams, including MP3, FLAC, OGG Vorbis, Opus, AAC, WAV, and more.

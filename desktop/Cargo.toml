@@ -1,0 +1,22 @@
+[package]
+name = "firmium"
+version.workspace = true
+edition.workspace = true
+description = "Subsonic Desktop Music Streamer"
+authors = ["fossisawesome"]
+
+[[bin]]
+name = "firmium"
+path = "src/main.rs"
+
+[dependencies]
+firmium-backend = { path = "../backend" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+iced = { version = "0.14.0", features = ["canvas", "image", "svg", "tokio", "advanced", "wgpu"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+bytemuck = { version = "1", features = ["derive"] }
+rfd = "0.17.2"
+dirs = "6.0.0"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+uuid = { version = "1.23.3", features = ["v4", "serde"] }
