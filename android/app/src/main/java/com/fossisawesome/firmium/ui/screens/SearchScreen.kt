@@ -324,18 +324,18 @@ private fun SearchTrackRow(
             modifier = Modifier.padding(end = 10.dp),
         )
         if (onDownloadClick != null) {
-            DownloadButton(onDownload = onDownloadClick, buttonSize = 26.dp, iconSize = 16.dp)
+            DownloadButton(onDownload = onDownloadClick, buttonSize = 40.dp, iconSize = 18.dp)
         }
-        // Add-to-playlist button — .track-add-btn: 26x26 circle
+        // Add-to-playlist button — was a 26x26 circle, too small a touch target; matches PlayerBar's 40dp icon buttons.
         Box(
             modifier = Modifier
-                .size(26.dp)
+                .size(40.dp)
                 .clip(RoundedCornerShape(50))
                 .clickable { onAddToPlaylist() },
             contentAlignment = Alignment.Center,
         ) {
             FirmiumIcon(Icons.Default.PlaylistAdd, contentDescription = "Add to playlist",
-                tint = colors.muted, modifier = Modifier.size(16.dp))
+                tint = colors.muted, modifier = Modifier.size(18.dp))
         }
     }
 }

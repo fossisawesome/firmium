@@ -53,6 +53,12 @@ pub struct VisualizerState {
     dirty: AtomicBool,
 }
 
+impl Default for VisualizerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VisualizerState {
     pub fn new() -> Self {
         VisualizerState {

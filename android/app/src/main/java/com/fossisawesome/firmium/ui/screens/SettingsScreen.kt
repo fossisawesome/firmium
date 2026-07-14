@@ -1077,12 +1077,13 @@ private fun FirmiumServicesPanel(
                 label = "Last.fm Secret",
                 visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
-                    Box(modifier = Modifier.size(36.dp).clip(CircleShape)
+                    Box(modifier = Modifier.size(44.dp).clip(CircleShape)
                         .clickable { showSecret = !showSecret },
                         contentAlignment = Alignment.Center) {
                         FirmiumIcon(
                             if (showSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp))
+                            contentDescription = if (showSecret) "Hide secret" else "Show secret",
+                            tint = colors.muted, modifier = Modifier.size(18.dp))
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -1124,12 +1125,13 @@ private fun FirmiumListenBrainzSection() {
                 label = "ListenBrainz Token",
                 visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
-                    Box(modifier = Modifier.size(36.dp).clip(CircleShape)
+                    Box(modifier = Modifier.size(44.dp).clip(CircleShape)
                         .clickable { showToken = !showToken },
                         contentAlignment = Alignment.Center) {
                         FirmiumIcon(
                             if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp))
+                            contentDescription = if (showToken) "Hide token" else "Show token",
+                            tint = colors.muted, modifier = Modifier.size(18.dp))
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

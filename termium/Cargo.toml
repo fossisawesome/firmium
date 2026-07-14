@@ -1,0 +1,18 @@
+[package]
+name = "termium"
+version.workspace = true
+edition.workspace = true
+description = "Subsonic TUI Music Streamer"
+
+[[bin]]
+name = "termium"
+path = "src/main.rs"
+
+[dependencies]
+firmium-backend = { path = "../backend" }
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+toml = "1.1"

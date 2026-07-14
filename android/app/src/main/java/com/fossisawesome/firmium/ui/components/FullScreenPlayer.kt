@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -453,16 +454,22 @@ private fun PlayerControls(
             FirmiumIcon(Icons.Default.SkipPrevious, contentDescription = "Previous",
                 tint = if (state.hasPrev) colors.text else colors.muted, modifier = Modifier.size(28.dp))
         }
+        val playInteractionSource = remember { MutableInteractionSource() }
+        val (_, playScale) = rememberPressAnimations(
+            interactionSource = playInteractionSource,
+            pressedAlpha = 0f,
+            pressedScale = 0.9f,
+            label = "playPause",
+        )
         Box(
             modifier = Modifier
-                .size(playSize).clip(CircleShape).background(colors.accent)
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown()
-                        val up = waitForUpOrCancellation()
-                        if (up != null) onPlayPause()
-                    }
-                },
+                .size(playSize).scale(playScale).clip(CircleShape).background(colors.accent)
+                .clickable(
+                    interactionSource = playInteractionSource,
+                    indication = null,
+                    role = Role.Button,
+                    onClick = onPlayPause,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             FirmiumIcon(
@@ -789,7 +796,9 @@ private fun ArtWithGestures(
 }
 
 // Invisible circle button — sized clickable Box.
-// Fires onClick on pointer UP (not down) to prevent accidental track skips.
+// Uses Modifier.clickable (not raw pointerInput) so TalkBack gets a click action and
+// Role.Button semantics, and reuses FirmiumIconButton's shared press-scale animation
+// so feedback is consistent with the rest of the app.
 @Composable
 private fun FirmiumCircleButton(
     size: Dp,
@@ -798,21 +807,31 @@ private fun FirmiumCircleButton(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
+    val pressColor = LocalFirmiumColors.current.text
+    val interactionSource = remember { MutableInteractionSource() }
+    val (overlayAlpha, scale) = rememberPressAnimations(
+        interactionSource = interactionSource,
+        enabled = enabled,
+        pressedAlpha = 0.12f,
+        pressedScale = 0.88f,
+        label = "circleBtn",
+    )
     Box(
         modifier = Modifier
             .size(size)
+            .scale(scale)
             .clip(CircleShape)
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-                awaitEachGesture {
-                    awaitFirstDown()
-                    val up = waitForUpOrCancellation()
-                    if (up != null) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onClick()
-                    }
-                }
-            },
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick()
+                },
+            )
+            .background(pressColor.copy(alpha = overlayAlpha), shape = CircleShape),
         contentAlignment = Alignment.Center,
         content = content,
     )

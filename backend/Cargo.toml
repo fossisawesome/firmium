@@ -1,0 +1,41 @@
+[package]
+name = "firmium-backend"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "firmium_backend"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.13.4", features = ["json", "stream", "blocking", "rustls"] }
+symphonia = { version = "0.5.5", default-features = false, features = ["aac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
+cpal = "0.17.3"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+uuid = { version = "1.23.3", features = ["v4", "serde"] }
+parking_lot = "0.12.5"
+bytes = "1"
+md5 = "0.8"
+rand = "0.10"
+toml = "1.1"
+lofty = "0.24"
+rustfft = "6.4.1"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+rusqlite = { version = "=0.36.0", features = ["bundled"] }
+feed-rs = "2.3.1"
+dirs = "6.0.0"
+include_dir = "0.7.4"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "freebsd")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }

@@ -79,8 +79,11 @@ fun ErrorHost(
                     .padding(horizontal = 12.dp, vertical = 12.dp),
             )
             FirmiumIconButton(
+                // No end padding on the clickable box itself — padding(end) applied after
+                // .size() shrank the tappable region on that edge instead of just the visuals.
+                // The larger 44dp box (vs. the old 40dp) already gives the icon breathing room.
                 onClick = onDismiss,
-                modifier = Modifier.size(40.dp).padding(end = 4.dp),
+                modifier = Modifier.size(44.dp),
             ) {
                 FirmiumIcon(
                     Icons.Default.Close,

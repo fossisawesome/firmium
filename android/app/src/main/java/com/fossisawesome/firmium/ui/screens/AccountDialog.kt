@@ -202,11 +202,11 @@ private fun AccountConnectForm(
             trailingIcon = {
                 FirmiumIconButton(
                     onClick = { showPassword = !showPassword },
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(44.dp),
                 ) {
                     FirmiumIcon(
                         if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = null,
+                        contentDescription = if (showPassword) "Hide password" else "Show password",
                         tint = colors.muted,
                         modifier = Modifier.size(18.dp),
                     )

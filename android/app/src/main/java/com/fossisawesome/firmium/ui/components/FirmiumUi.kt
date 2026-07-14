@@ -97,8 +97,10 @@ fun FirmiumIcon(
 
 // Shared press-feedback animation: an overlay alpha and a shrink/spring-back scale,
 // driven by an interaction source's pressed state.
+// internal (not private): reused by FullScreenPlayer.kt's circle transport buttons so
+// press feedback stays consistent across the app.
 @Composable
-private fun rememberPressAnimations(
+internal fun rememberPressAnimations(
     interactionSource: MutableInteractionSource,
     enabled: Boolean = true,
     pressedAlpha: Float,
@@ -123,12 +125,20 @@ private fun rememberPressAnimations(
     return overlayAlpha to scale
 }
 
+// Standard icon-button tap target — matches Material's ~48dp touch-target guideline.
+// Use this size for all icon buttons unless a screen is legitimately too dense for it.
+val FirmiumIconButtonSize = 44.dp
+
+// Compact variant for genuinely dense screens (e.g. tightly packed rows) where 44dp
+// doesn't fit. Prefer FirmiumIconButtonSize by default.
+val FirmiumIconButtonCompactSize = 40.dp
+
 // Tap-target Box that wraps icon content — replaces material3 IconButton().
 // Shows a subtle press highlight using the text colour at low alpha.
 @Composable
 fun FirmiumIconButton(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.size(FirmiumIconButtonSize),
     enabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {

@@ -248,6 +248,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 - **Wipe cover-art cache** — clear cached cover art from Settings → Debug
 - **Reset preferences** — restore all settings to their defaults from Settings → Debug
 - **Command line control** — control a running instance from the terminal (`firmium play-pause`, `next`, `prev`, `volume`, `seek`, `status`, etc.), for scripts and keyboard shortcuts
+- **Keyboard shortcuts** — Space toggles play/pause, Escape closes the open modal or dialog
 
 ---
 
@@ -256,13 +257,27 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | Credentials stored in OS keyring — never saved as plaintext | ✅ | ✅ |
-| Multi-server quick switcher — save and switch between multiple servers | ✅ | ✅ |
+| Multi-server quick switcher — save and switch between multiple servers | ❌ | ❌ |
 | Auto-login on startup | ✅ | ✅ |
-| Scrobbling — reports plays to the server (Last.fm via Navidrome, etc.) | ✅ | ✅ |
+| Scrobbling — reports plays to the server (Last.fm via Navidrome, etc.) | ❌ | ❌ |
 | ListenBrainz scrobbling — submits completed tracks to ListenBrainz with your user token | ✅ | ✅ |
 | Playback reporting — keeps server "Now Playing" status accurate | ✅ | ✅ |
 | Warning shown when connecting over plain HTTP to a non-local server | ✅ | ✅ |
 | In-app error notifications: plain-language messages when something goes wrong (server unreachable, login failed, item not found), shown as dismissable notifications instead of failing silently | ✅ | ✅ |
+
+---
+
+## Termium (Terminal Client)
+
+Termium is a lightweight terminal (TUI) client for Firmium, for anyone who prefers to browse and play their library entirely from the keyboard in a terminal window. It shares your login and library with the desktop app: log into a server once in either app and both see it.
+
+- **Library browsing** — recent albums, artists, and playlists, navigable with the keyboard
+- **Search** — search your whole library from the terminal
+- **Playback controls** — play, pause, skip, and volume, plus a persistent now-playing bar
+- **Audio visualizer** — a terminal bar visualizer that reacts to what's playing
+- **Customizable keybindings** — remap any key via a config file; ships with vim-style navigation by default
+
+Deeper panels available on desktop (lyrics, equalizer, recap, similar tracks) aren't in Termium yet.
 
 ---
 

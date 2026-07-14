@@ -287,8 +287,8 @@ private fun AlbumTrackRow(
             DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp,
                 initiallyDownloaded = isDownloaded)
         }
-        FirmiumIconButton(onClick = onAddClick, modifier = Modifier.size(32.dp)) {
-            FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(16.dp))
+        FirmiumIconButton(onClick = onAddClick, modifier = Modifier.size(40.dp)) {
+            FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -340,17 +340,19 @@ fun TrackRow(
                 initiallyDownloaded = isDownloaded)
         }
         if (onMoveUp != null && onMoveDown != null) {
-            FirmiumIconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(32.dp)) {
+            FirmiumIconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(40.dp)) {
                 FirmiumIcon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up",
                     tint = if (canMoveUp) colors.muted else colors.muted.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
             }
-            FirmiumIconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(32.dp)) {
+            Spacer(Modifier.width(4.dp))
+            FirmiumIconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(40.dp)) {
                 FirmiumIcon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down",
                     tint = if (canMoveDown) colors.muted else colors.muted.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
             }
         }
         if (onRemove != null) {
-            FirmiumIconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+            Spacer(Modifier.width(4.dp))
+            FirmiumIconButton(onClick = onRemove, modifier = Modifier.size(40.dp)) {
                 FirmiumIcon(Icons.Default.Close, contentDescription = "Remove from playlist",
                     tint = colors.error, modifier = Modifier.size(18.dp))
             }
