@@ -281,7 +281,7 @@ impl App {
                 t,
                 row![
                     slider(1.0..=12.0, self.crossfade_duration, Message::SetCrossfadeDuration)
-                        .step(1.0)
+                        .step(1.0_f32)
                         .width(Length::Fixed(100.0))
                         .style(slider_style(t)),
                     text(format!("{:.0}s", self.crossfade_duration)).size(12).style(tstyle(t.muted)),

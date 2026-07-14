@@ -35,7 +35,7 @@ impl App {
         let title_col = title_col.width(Length::Fill);
         let volume = row![
             icons::icon(icons::VOLUME, 16.0, t.muted),
-            slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01).width(Length::Fixed(55.0)).style(slider_style(t)),
+            slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01_f32).width(Length::Fixed(55.0)).style(slider_style(t)),
         ]
         .spacing(6)
         .align_y(Alignment::Center);
@@ -47,7 +47,7 @@ impl App {
         let center = container(
             row![
                 text(fmt_time(self.position)).size(11).style(tstyle(t.muted)),
-                slider(0.0..=dur, pos, Message::SeekTo).step(0.5).width(Length::Fill).style(slider_style(t)),
+                slider(0.0..=dur, pos, Message::SeekTo).step(0.5_f32).width(Length::Fill).style(slider_style(t)),
                 text(fmt_time(self.duration.unwrap_or(0.0))).size(11).style(tstyle(t.muted)),
             ]
             .spacing(10)
@@ -149,7 +149,7 @@ impl App {
         let pos = (self.position as f32).clamp(0.0, dur);
         let seek = row![
             text(fmt_time(self.position)).size(11).style(tstyle(t.muted)),
-            slider(0.0..=dur, pos, Message::SeekTo).step(0.5).width(Length::Fill).style(slider_style(t)),
+            slider(0.0..=dur, pos, Message::SeekTo).step(0.5_f32).width(Length::Fill).style(slider_style(t)),
             text(fmt_time(self.duration.unwrap_or(0.0))).size(11).style(tstyle(t.muted)),
         ]
         .spacing(10)
@@ -170,7 +170,7 @@ impl App {
             ctrl_button(icons::BAR_CHART, 16.0, stats_color, t, Message::TogglePanel(Panel::AudioStats)),
             ctrl_button(icons::WAVEFORM, 16.0, viz_color, t, Message::TogglePanel(Panel::Visualizer)),
             icons::icon(icons::VOLUME, 16.0, t.muted),
-            slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01).width(Length::Fixed(70.0)).style(slider_style(t)),
+            slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01_f32).width(Length::Fixed(70.0)).style(slider_style(t)),
         ]
         .spacing(10)
         .align_y(Alignment::Center);

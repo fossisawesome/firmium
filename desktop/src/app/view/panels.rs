@@ -323,7 +323,7 @@ impl App {
                             col = col.push(
                                 row![
                                     text(fmt_freq(b.freq)).size(10).style(tstyle(t.muted)).width(Length::Fixed(46.0)),
-                                    slider(-12.0..=12.0, b.gain, move |g| Message::EqBandChanged(i, g)).step(0.5).width(Length::Fill).style(slider_style(t)),
+                                    slider(-12.0..=12.0, b.gain, move |g| Message::EqBandChanged(i, g)).step(0.5_f32).width(Length::Fill).style(slider_style(t)),
                                     text(format!("{:+.1}", b.gain)).size(10).style(tstyle(t.muted)).width(Length::Fixed(40.0)),
                                 ]
                                 .spacing(8)
