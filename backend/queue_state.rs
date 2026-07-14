@@ -41,6 +41,12 @@ pub struct QueueStateInner {
     pub save_timer: Option<tokio::task::JoinHandle<()>>,
 }
 
+impl Default for QueueState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueueState {
     pub fn new() -> Self {
         QueueState {
