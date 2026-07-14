@@ -27,7 +27,7 @@ impl App {
                 ..button::Style::default()
             });
 
-        let close = icon_button(icons::CLOSE, 16.0, t.muted, t, spotify, Message::CloseAddToPlaylist);
+        let close = with_tooltip(icon_button(icons::CLOSE, 16.0, t.muted, t, spotify, Message::CloseAddToPlaylist), "Close", t);
         let header = row![
             text("Add to Playlist").size(16).style(tstyle(t.text)).width(Length::Fill),
             close,
@@ -212,7 +212,7 @@ impl App {
                     }
                 });
 
-            let close = icon_button(icons::CLOSE, 16.0, t.muted, t, spotify, Message::ToggleAccountSwitcher);
+            let close = with_tooltip(icon_button(icons::CLOSE, 16.0, t.muted, t, spotify, Message::ToggleAccountSwitcher), "Close", t);
             let header = row![
                 text("Connected").size(26).style(tstyle(t.accent)).width(Length::Fill),
                 close,

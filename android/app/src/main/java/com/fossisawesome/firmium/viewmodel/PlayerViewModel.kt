@@ -82,6 +82,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun skipToIndex(index: Int) = controller.skipToIndex(index)
     fun addToQueue(song: Song) = controller.addToQueue(song)
+    fun moveQueueItem(from: Int, to: Int) = controller.moveQueueItem(from, to)
+    fun removeQueueItem(index: Int) = controller.removeQueueItem(index)
     fun pause() = controller.pause()
     fun resume() = controller.resume()
     fun togglePlayPause() = controller.togglePlayPause()

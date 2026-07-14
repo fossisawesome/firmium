@@ -3,6 +3,7 @@ import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -29,18 +30,25 @@ fun StarRating(
     mutedColor: Color,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        // No extra gap: each star already reserves a 44dp tap box below, so touching
+        // boxes give ample separation without inflating the row's total width further.
+        horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (i in 1..5) {
-            FirmiumIcon(
-                imageVector = if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder,
-                contentDescription = "Rate $i",
-                tint = if (i <= rating) accentColor else mutedColor,
-                modifier = Modifier
-                    .size(starSize)
-                    .clickable { onRate(i) },
-            )
+            // Tap target is fixed at 44dp regardless of the visually-rendered star size,
+            // so compact stars (e.g. search screen's 16-18dp) still meet touch-target guidelines.
+            Box(
+                modifier = Modifier.size(44.dp).clickable { onRate(i) },
+                contentAlignment = Alignment.Center,
+            ) {
+                FirmiumIcon(
+                    imageVector = if (i <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = "Rate $i",
+                    tint = if (i <= rating) accentColor else mutedColor,
+                    modifier = Modifier.size(starSize),
+                )
+            }
         }
     }
 }

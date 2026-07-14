@@ -258,6 +258,38 @@ class PlaybackController(
         }
     }
 
+    // Reorders a track within the live queue (drag-to-reorder / move up-down in the queue sheet).
+    fun moveQueueItem(from: Int, to: Int) {
+        val pid = currentPlayerId ?: return
+        val queue = _state.value.queue
+        if (from !in queue.indices || to !in queue.indices || from == to) return
+        audioPlayer.moveQueueItem(pid, from, to)
+        val reordered = queue.toMutableList().apply { add(to, removeAt(from)) }
+        val newIndex = audioPlayer.getQueueIndex(pid)?.first ?: _state.value.queueIndex
+        _state.update { it.copy(queue = reordered, queueIndex = newIndex) }
+        nowPlaying.setQueue(reordered.map {
+            NowPlayingController.QueueEntry(it.id, it.title, it.displayArtist ?: it.artist,
+                it.coverArt?.let { c -> if (c.startsWith("file://")) c else auth.coverArtUrl(c, 512) })
+        })
+    }
+
+    // Removes a track from the live queue (queue sheet's remove action). Won't remove the last
+    // remaining track — use stop/pause for that.
+    fun removeQueueItem(index: Int) {
+        val pid = currentPlayerId ?: return
+        val queue = _state.value.queue
+        if (index !in queue.indices || queue.size <= 1) return
+        audioPlayer.removeQueueItem(pid, index)
+        val reduced = queue.toMutableList().apply { removeAt(index) }
+        val newIndex = audioPlayer.getQueueIndex(pid)?.first ?: _state.value.queueIndex.coerceAtMost(reduced.size - 1)
+        _state.update { it.copy(queue = reduced, queueIndex = newIndex) }
+        nowPlaying.setQueue(reduced.map {
+            NowPlayingController.QueueEntry(it.id, it.title, it.displayArtist ?: it.artist,
+                it.coverArt?.let { c -> if (c.startsWith("file://")) c else auth.coverArtUrl(c, 512) })
+        })
+        updateNowPlayingNotification()
+    }
+
     // ── Transport controls ─────────────────────────────────────────────────────
 
     fun pause() {

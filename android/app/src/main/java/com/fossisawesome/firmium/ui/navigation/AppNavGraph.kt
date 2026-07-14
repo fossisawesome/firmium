@@ -700,6 +700,8 @@ fun AppNavGraph(
             currentIndex = playerState.queueIndex,
             onDismiss = { showQueue = false },
             onPlayAt = { idx -> playerViewModel.skipToIndex(idx); showQueue = false },
+            onMove = { from, to -> playerViewModel.moveQueueItem(from, to) },
+            onRemove = { idx -> playerViewModel.removeQueueItem(idx) },
         )
     }
 

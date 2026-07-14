@@ -248,6 +248,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 - **Wipe cover-art cache** — clear cached cover art from Settings → Debug
 - **Reset preferences** — restore all settings to their defaults from Settings → Debug
 - **Command line control** — control a running instance from the terminal (`firmium play-pause`, `next`, `prev`, `volume`, `seek`, `status`, etc.), for scripts and keyboard shortcuts
+- **Keyboard shortcuts** — Space toggles play/pause, Escape closes the open modal or dialog
 
 ---
 
@@ -256,9 +257,9 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | Credentials stored in OS keyring — never saved as plaintext | ✅ | ✅ |
-| Multi-server quick switcher — save and switch between multiple servers | ✅ | ✅ |
+| Multi-server quick switcher — save and switch between multiple servers | ❌ | ❌ |
 | Auto-login on startup | ✅ | ✅ |
-| Scrobbling — reports plays to the server (Last.fm via Navidrome, etc.) | ✅ | ✅ |
+| Scrobbling — reports plays to the server (Last.fm via Navidrome, etc.) | ❌ | ❌ |
 | ListenBrainz scrobbling — submits completed tracks to ListenBrainz with your user token | ✅ | ✅ |
 | Playback reporting — keeps server "Now Playing" status accurate | ✅ | ✅ |
 | Warning shown when connecting over plain HTTP to a non-local server | ✅ | ✅ |

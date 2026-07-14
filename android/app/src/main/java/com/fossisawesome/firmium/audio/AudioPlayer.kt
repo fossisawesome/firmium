@@ -306,6 +306,40 @@ class AudioPlayer(private val context: Context) {
         sessions[playerId]?.player?.seekTo(index, 0L)
     }
 
+    // Reorders the live ExoPlayer playlist and keeps the session's parallel track-id / gain
+    // lists in sync so future transitions still resolve the right track/gain at each index.
+    fun moveQueueItem(playerId: String, from: Int, to: Int) {
+        val session = sessions[playerId] ?: return
+        val ids = session.queueTrackIds?.toMutableList() ?: return
+        if (from !in ids.indices || to !in ids.indices || from == to) return
+        session.player.moveMediaItem(from, to)
+        ids.add(to, ids.removeAt(from))
+        session.queueTrackIds = ids
+        session.queueReplayGainFactors = session.queueReplayGainFactors?.toMutableList()?.also {
+            if (from in it.indices) it.add(to, it.removeAt(from))
+        }
+        // moveMediaItem doesn't fire onMediaItemTransition (the playing item doesn't change),
+        // so resync the tracked index from ExoPlayer's own (now-shifted) currentMediaItemIndex.
+        session.currentQueueIndex = session.player.currentMediaItemIndex
+    }
+
+    // Removes a track from the live queue. If it's the currently playing item, ExoPlayer
+    // auto-advances and the existing onMediaItemTransition listener updates current track/index;
+    // otherwise we resync currentQueueIndex ourselves since no transition event fires.
+    fun removeQueueItem(playerId: String, index: Int) {
+        val session = sessions[playerId] ?: return
+        val ids = session.queueTrackIds?.toMutableList() ?: return
+        if (index !in ids.indices) return
+        session.player.removeMediaItem(index)
+        ids.removeAt(index)
+        session.queueTrackIds = ids
+        session.queueReplayGainFactors = session.queueReplayGainFactors?.toMutableList()?.also {
+            if (index in it.indices) it.removeAt(index)
+        }
+        session.currentQueueIndex = session.player.currentMediaItemIndex
+        ids.getOrNull(session.currentQueueIndex)?.let { session.currentTrackId = it }
+    }
+
     fun getQueueIndex(playerId: String): Pair<Int, String>? {
         val s = sessions[playerId] ?: return null
         return s.currentQueueIndex to s.currentTrackId

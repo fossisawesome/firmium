@@ -117,7 +117,7 @@ impl App {
             let sid = id.clone();
             stars = stars.push(
                 button(icons::icon(src, 12.0, color))
-                    .padding(4)
+                    .padding(12)
                     .on_press(Message::SetRating(sid, i))
                     .style(move |_th, status| {
                         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -156,7 +156,7 @@ impl App {
             let color = if filled { t.accent } else { t.muted };
             stars = stars.push(
                 button(icons::icon(src, 14.0, color))
-                    .padding(4)
+                    .padding(12)
                     .on_press(Message::SetSearchRatingFilter(i))
                     .style(move |_th, status| {
                         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);

@@ -200,9 +200,17 @@ impl App {
 
     // Chips don't wrap natively in an iced `row`, so lines are packed by hand
     // using a rough per-glyph width estimate and rebuilt on every resize breakpoint.
+    // iced 0.14 exposes no text-measurement call reachable from `view()` (the
+    // `Paragraph::min_width` API needs a live `Renderer`, which isn't available
+    // here without deep restructuring), and the font is user-selectable
+    // (`fonts::FONT_OPTIONS`) with several proportional options. Rather than
+    // assume a fixed-width font, GLYPH_WIDTH is a pragmatic upper bound sized to
+    // the widest glyphs among the bundled fonts (Comic Sans MS is the widest at
+    // this size) — chip rows may wrap slightly early on narrower fonts, but
+    // never overflow their row.
     fn genre_chip_rows<'a>(&'a self, names: &[String], available_width: f32) -> Element<'a, Message> {
         let t = self.tokens;
-        const GLYPH_WIDTH: f32 = 7.2;
+        const GLYPH_WIDTH: f32 = 10.0;
         const CHIP_PADDING: f32 = 24.0;
         const SPACING: f32 = 8.0;
 

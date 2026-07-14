@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, row, scrollable, slider, text, text_input, toggler};
+use iced::widget::{button, column, container, row, scrollable, slider, text, text_input, toggler, tooltip};
 use iced::{Alignment, Background, Border, Color, Element, Length, Shadow, Theme};
 
 use crate::icons;
@@ -130,7 +130,7 @@ pub(crate) fn back_button<'a>(t: Tokens) -> Element<'a, Message> {
         .spacing(6)
         .align_y(Alignment::Center),
     )
-    .padding(6)
+    .padding([12, 10])
     .on_press(Message::NavigateBack)
     .style(move |_theme, status| {
         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
@@ -154,6 +154,28 @@ pub(crate) fn setting_toggle<'a>(label: &'a str, on: bool, on_toggle: fn(bool) -
     .into()
 }
 
+/// Wraps an icon-only control in a text tooltip so its purpose is discoverable.
+/// iced 0.14 has no accesskit/accessible-name API on `Button` (verified against
+/// the vendored `iced_core`/`iced_widget` 0.14 sources — no `accesskit`/`a11y`
+/// references anywhere in the crate), so a hover tooltip is the best available
+/// fallback: it covers sighted-user discoverability even though it doesn't reach
+/// screen readers.
+pub(crate) fn with_tooltip<'a>(el: Element<'a, Message>, label: &'a str, t: Tokens) -> Element<'a, Message> {
+    tooltip(
+        el,
+        container(text(label).size(11).style(tstyle(t.text)))
+            .padding(6)
+            .style(move |_theme: &Theme| container::Style {
+                background: Some(Background::Color(t.surface2)),
+                border: Border { radius: 4.0.into(), width: 1.0, color: t.border },
+                ..container::Style::default()
+            }),
+        tooltip::Position::Top,
+    )
+    .gap(6)
+    .into()
+}
+
 pub(crate) fn icon_button<'a>(src: &'static str, size: f32, color: Color, t: Tokens, spotify: bool, msg: Message) -> Element<'a, Message> {
     let radius = if spotify { 500.0 } else { 4.0 };
     button(icons::icon(src, size, color))
@@ -172,14 +194,22 @@ pub(crate) fn icon_button<'a>(src: &'static str, size: f32, color: Color, t: Tok
 }
 
 /// Circular player-control button (matches the old `.ctrl-btn` style).
-pub(crate) fn ctrl_button<'a>(src: &'static str, size: f32, color: Color, t: Tokens, msg: Message) -> Element<'a, Message> {
+/// `active` toggles a filled pill background (matching the active-queue-row
+/// pattern in `panels.rs`) so on/off state isn't conveyed by icon color alone.
+pub(crate) fn ctrl_button<'a>(src: &'static str, size: f32, color: Color, active: bool, t: Tokens, msg: Message) -> Element<'a, Message> {
     button(icons::icon(src, size, color))
-        .padding(10)
+        .padding(12)
         .on_press(msg)
         .style(move |_theme, status| {
             let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
             button::Style {
-                background: if hovered { Some(Background::Color(t.surface2)) } else { None },
+                background: if active {
+                    Some(Background::Color(t.accent_dim))
+                } else if hovered {
+                    Some(Background::Color(t.surface2))
+                } else {
+                    None
+                },
                 text_color: color,
                 border: Border { radius: 100.0.into(), ..Border::default() },
                 ..button::Style::default()

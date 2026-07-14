@@ -36,6 +36,7 @@ impl App {
         let volume = row![
             icons::icon(icons::VOLUME, 16.0, t.muted),
             slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01_f32).width(Length::Fixed(55.0)).style(slider_style(t)),
+            text(format!("{:.0}%", self.volume * 100.0)).size(10).style(tstyle(t.muted)).width(Length::Fixed(30.0)),
         ]
         .spacing(6)
         .align_y(Alignment::Center);
@@ -57,25 +58,32 @@ impl App {
 
         let playing = matches!(self.playback_state, PlaybackState::Playing);
         let pp_icon = if playing { icons::PAUSE } else { icons::PLAY };
-        let repeat_color = if self.repeat_one || self.repeat_all { t.accent } else { t.muted };
-        let shuffle_color = if self.shuffle { t.accent } else { t.muted };
-        let viz_color = if self.right_panel == Some(Panel::Visualizer) { t.accent } else { t.muted };
-        let lyr_color = if self.right_panel == Some(Panel::Lyrics) { t.accent } else { t.muted };
-        let q_color = if self.right_panel == Some(Panel::Queue) { t.accent } else { t.muted };
-        let sim_color = if self.right_panel == Some(Panel::Similar) { t.accent } else { t.muted };
-        let stats_color = if self.right_panel == Some(Panel::AudioStats) { t.accent } else { t.muted };
+        let repeat_active = self.repeat_one || self.repeat_all;
+        let shuffle_active = self.shuffle;
+        let viz_active = self.right_panel == Some(Panel::Visualizer);
+        let lyr_active = self.right_panel == Some(Panel::Lyrics);
+        let q_active = self.right_panel == Some(Panel::Queue);
+        let sim_active = self.right_panel == Some(Panel::Similar);
+        let stats_active = self.right_panel == Some(Panel::AudioStats);
+        let repeat_color = if repeat_active { t.accent } else { t.muted };
+        let shuffle_color = if shuffle_active { t.accent } else { t.muted };
+        let viz_color = if viz_active { t.accent } else { t.muted };
+        let lyr_color = if lyr_active { t.accent } else { t.muted };
+        let q_color = if q_active { t.accent } else { t.muted };
+        let sim_color = if sim_active { t.accent } else { t.muted };
+        let stats_color = if stats_active { t.accent } else { t.muted };
 
         let controls = row![
-            ctrl_button(icons::SHUFFLE, 15.0, shuffle_color, t, Message::ToggleShuffle),
-            ctrl_button(icons::PREV, 15.0, t.text, t, Message::Prev),
-            main_ctrl_button(pp_icon, 20.0, t, false, Message::TogglePlay),
-            ctrl_button(icons::NEXT, 15.0, t.text, t, Message::Next),
-            ctrl_button(icons::REPEAT, 16.0, repeat_color, t, Message::CycleRepeat),
-            ctrl_button(icons::LYRICS, 16.0, lyr_color, t, Message::TogglePanel(Panel::Lyrics)),
-            ctrl_button(icons::QUEUE, 16.0, q_color, t, Message::TogglePanel(Panel::Queue)),
-            ctrl_button(icons::HEXAGON, 16.0, sim_color, t, Message::TogglePanel(Panel::Similar)),
-            ctrl_button(icons::BAR_CHART, 16.0, stats_color, t, Message::TogglePanel(Panel::AudioStats)),
-            ctrl_button(icons::WAVEFORM, 16.0, viz_color, t, Message::TogglePanel(Panel::Visualizer)),
+            with_tooltip(ctrl_button(icons::SHUFFLE, 15.0, shuffle_color, shuffle_active, t, Message::ToggleShuffle), "Shuffle", t),
+            with_tooltip(ctrl_button(icons::PREV, 15.0, t.text, false, t, Message::Prev), "Previous", t),
+            with_tooltip(main_ctrl_button(pp_icon, 20.0, t, false, Message::TogglePlay), if playing { "Pause" } else { "Play" }, t),
+            with_tooltip(ctrl_button(icons::NEXT, 15.0, t.text, false, t, Message::Next), "Next", t),
+            with_tooltip(ctrl_button(icons::REPEAT, 16.0, repeat_color, repeat_active, t, Message::CycleRepeat), "Repeat", t),
+            ctrl_button(icons::LYRICS, 16.0, lyr_color, lyr_active, t, Message::TogglePanel(Panel::Lyrics)),
+            ctrl_button(icons::QUEUE, 16.0, q_color, q_active, t, Message::TogglePanel(Panel::Queue)),
+            ctrl_button(icons::HEXAGON, 16.0, sim_color, sim_active, t, Message::TogglePanel(Panel::Similar)),
+            ctrl_button(icons::BAR_CHART, 16.0, stats_color, stats_active, t, Message::TogglePanel(Panel::AudioStats)),
+            ctrl_button(icons::WAVEFORM, 16.0, viz_color, viz_active, t, Message::TogglePanel(Panel::Visualizer)),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
@@ -132,15 +140,17 @@ impl App {
 
         let playing = matches!(self.playback_state, PlaybackState::Playing);
         let pp_icon = if playing { icons::PAUSE } else { icons::PLAY };
-        let repeat_color = if self.repeat_one || self.repeat_all { t.accent } else { t.muted };
-        let shuffle_color = if self.shuffle { t.accent } else { t.muted };
+        let repeat_active = self.repeat_one || self.repeat_all;
+        let shuffle_active = self.shuffle;
+        let repeat_color = if repeat_active { t.accent } else { t.muted };
+        let shuffle_color = if shuffle_active { t.accent } else { t.muted };
 
         let transport = row![
-            ctrl_button(icons::SHUFFLE, 15.0, shuffle_color, t, Message::ToggleShuffle),
-            ctrl_button(icons::PREV, 15.0, t.text, t, Message::Prev),
-            main_ctrl_button(pp_icon, 20.0, t, true, Message::TogglePlay),
-            ctrl_button(icons::NEXT, 15.0, t.text, t, Message::Next),
-            ctrl_button(icons::REPEAT, 16.0, repeat_color, t, Message::CycleRepeat),
+            with_tooltip(ctrl_button(icons::SHUFFLE, 15.0, shuffle_color, shuffle_active, t, Message::ToggleShuffle), "Shuffle", t),
+            with_tooltip(ctrl_button(icons::PREV, 15.0, t.text, false, t, Message::Prev), "Previous", t),
+            with_tooltip(main_ctrl_button(pp_icon, 20.0, t, true, Message::TogglePlay), if playing { "Pause" } else { "Play" }, t),
+            with_tooltip(ctrl_button(icons::NEXT, 15.0, t.text, false, t, Message::Next), "Next", t),
+            with_tooltip(ctrl_button(icons::REPEAT, 16.0, repeat_color, repeat_active, t, Message::CycleRepeat), "Repeat", t),
         ]
         .spacing(14)
         .align_y(Alignment::Center);
@@ -157,19 +167,25 @@ impl App {
 
         let center = container(column![transport, seek].spacing(6).align_x(Alignment::Center)).width(Length::Fill);
 
-        let viz_color = if self.right_panel == Some(Panel::Visualizer) { t.accent } else { t.muted };
-        let lyr_color = if self.right_panel == Some(Panel::Lyrics) { t.accent } else { t.muted };
-        let q_color = if self.right_panel == Some(Panel::Queue) { t.accent } else { t.muted };
-        let sim_color = if self.right_panel == Some(Panel::Similar) { t.accent } else { t.muted };
-        let stats_color = if self.right_panel == Some(Panel::AudioStats) { t.accent } else { t.muted };
+        let viz_active = self.right_panel == Some(Panel::Visualizer);
+        let lyr_active = self.right_panel == Some(Panel::Lyrics);
+        let q_active = self.right_panel == Some(Panel::Queue);
+        let sim_active = self.right_panel == Some(Panel::Similar);
+        let stats_active = self.right_panel == Some(Panel::AudioStats);
+        let viz_color = if viz_active { t.accent } else { t.muted };
+        let lyr_color = if lyr_active { t.accent } else { t.muted };
+        let q_color = if q_active { t.accent } else { t.muted };
+        let sim_color = if sim_active { t.accent } else { t.muted };
+        let stats_color = if stats_active { t.accent } else { t.muted };
 
         let right_controls = row![
-            ctrl_button(icons::LYRICS, 16.0, lyr_color, t, Message::TogglePanel(Panel::Lyrics)),
-            ctrl_button(icons::QUEUE, 16.0, q_color, t, Message::TogglePanel(Panel::Queue)),
-            ctrl_button(icons::HEXAGON, 16.0, sim_color, t, Message::TogglePanel(Panel::Similar)),
-            ctrl_button(icons::BAR_CHART, 16.0, stats_color, t, Message::TogglePanel(Panel::AudioStats)),
-            ctrl_button(icons::WAVEFORM, 16.0, viz_color, t, Message::TogglePanel(Panel::Visualizer)),
+            ctrl_button(icons::LYRICS, 16.0, lyr_color, lyr_active, t, Message::TogglePanel(Panel::Lyrics)),
+            ctrl_button(icons::QUEUE, 16.0, q_color, q_active, t, Message::TogglePanel(Panel::Queue)),
+            ctrl_button(icons::HEXAGON, 16.0, sim_color, sim_active, t, Message::TogglePanel(Panel::Similar)),
+            ctrl_button(icons::BAR_CHART, 16.0, stats_color, stats_active, t, Message::TogglePanel(Panel::AudioStats)),
+            ctrl_button(icons::WAVEFORM, 16.0, viz_color, viz_active, t, Message::TogglePanel(Panel::Visualizer)),
             icons::icon(icons::VOLUME, 16.0, t.muted),
+            text(format!("{:.0}%", self.volume * 100.0)).size(11).style(tstyle(t.muted)),
             slider(0.0..=1.0, self.volume, Message::SetVolume).step(0.01_f32).width(Length::Fixed(70.0)).style(slider_style(t)),
         ]
         .spacing(10)

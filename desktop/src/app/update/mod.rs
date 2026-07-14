@@ -198,7 +198,8 @@ impl App {
             | Message::VisualizerTick
             | Message::ShowToast(..)
             | Message::DismissToast(..)
-            | Message::ToastTick => self.update_nav(message),
+            | Message::ToastTick
+            | Message::EscapePressed => self.update_nav(message),
         }
     }
 }

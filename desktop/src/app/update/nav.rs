@@ -157,6 +157,21 @@ impl App {
                 self.toasts.retain(|t| t.spawned.elapsed().as_secs() < 5);
                 Task::none()
             }
+            // Priority mirrors the overlay stacking order in `shell()`: close
+            // whichever modal is on top first.
+            Message::EscapePressed => {
+                if self.show_account_switcher {
+                    self.update(Message::ToggleAccountSwitcher)
+                } else if self.add_to_playlist_song.is_some() {
+                    self.update(Message::CloseAddToPlaylist)
+                } else if self.show_create_playlist {
+                    self.update(Message::CloseCreatePlaylist)
+                } else if self.podcast_add_modal_open {
+                    self.update(Message::CloseAddPodcastModal)
+                } else {
+                    Task::none()
+                }
+            }
 
             // ── Onboarding ────────────────────────────────────────────────────
             _ => unreachable!(),

@@ -19,6 +19,8 @@ pub enum Message {
     NavigateBack,
     Backend(BackendEvent),
     VisualizerTick,
+    // Global Escape key press; dispatched to whichever overlay is currently open.
+    EscapePressed,
     #[expect(dead_code)]
     ShowToast(UserError),
     DismissToast(u64),
