@@ -70,6 +70,7 @@ pub struct App {
     home_recent_artists_cache: Vec<(String, String, Option<String>)>,
     album_detail: Option<AlbumTracks>,
     album_detail_id: Option<String>,
+    favorites: Option<firmium_backend::commands::mappers::Starred>,
     album_tracks_scroll: f32,
     artists: Vec<Artist>,
     artists_scroll: f32,
@@ -296,6 +297,7 @@ impl App {
             home_recent_artists_cache: Vec::new(),
             album_detail: None,
             album_detail_id: None,
+            favorites: None,
             album_tracks_scroll: 0.0,
             artists: Vec::new(),
             artists_scroll: 0.0,
@@ -725,6 +727,7 @@ impl App {
 
         let nav = column![
             self.nav_button(icons::HOME, "Home", View::Home),
+            self.nav_button(icons::HEART_OUTLINE, "Favorites", View::Favorites),
             self.nav_button(icons::DISC, "Albums", View::Albums),
             self.nav_button(icons::USER, "Artists", View::Artists),
             self.nav_button(icons::LIST, "Playlists", View::Playlists),
@@ -765,6 +768,7 @@ impl App {
 
         let fixed_nav = column![
             self.nav_button(icons::HOME, "Home", View::Home),
+            self.nav_button(icons::HEART_OUTLINE, "Favorites", View::Favorites),
             self.nav_button(icons::SEARCH, "Search", View::Search),
             self.nav_button(icons::DISC, "Albums", View::Albums),
             self.nav_button(icons::USER, "Artists", View::Artists),

@@ -274,6 +274,7 @@ fun AppNavGraph(
             Brush.verticalGradient(listOf(colors.bg, colors.surface))
         )) {
             val homeState by libraryViewModel.homeState.collectAsStateWithLifecycle()
+            val favoritesState by libraryViewModel.favoritesState.collectAsStateWithLifecycle()
             val albumListState by libraryViewModel.albumListState.collectAsStateWithLifecycle()
             val artistListState by libraryViewModel.artistListState.collectAsStateWithLifecycle()
             val albumDetailState by libraryViewModel.albumDetailState.collectAsStateWithLifecycle()
@@ -297,6 +298,25 @@ fun AppNavGraph(
                         onAlbumClick = { navController.navigate("album/$it") },
                         onArtistClick = { navController.navigate("artist/$it") },
                         onRefresh = { libraryViewModel.loadHome() },
+                        onFavoritesClick = { navController.navigate("favorites") },
+                    )
+                }
+                composable(
+                    "favorites",
+                    enterTransition = detailEnterTransition,
+                    exitTransition = detailExitTransition,
+                    popEnterTransition = detailPopEnterTransition,
+                    popExitTransition = detailPopExitTransition,
+                ) {
+                    FavoritesScreen(
+                        state = favoritesState,
+                        coverUrlFor = coverUrl,
+                        onLoad = { libraryViewModel.loadFavorites() },
+                        onAlbumClick = { navController.navigate("album/$it") },
+                        onArtistClick = { navController.navigate("artist/$it") },
+                        onPlaySong = { song -> playerViewModel.playAt(listOf(song), 0) },
+                        onToggleSongStar = { libraryViewModel.toggleSongStar(it) },
+                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable("mix") {
@@ -354,6 +374,8 @@ fun AppNavGraph(
                             { album -> { base(album)().also { if (it.isSuccess) libraryViewModel.refreshAlbumDownloaded() } } }
                         },
                         onArtistClick = { navController.navigate("artist/$it") },
+                        onToggleAlbumStar = { libraryViewModel.toggleAlbumStar(it) },
+                        onToggleSongStar = { libraryViewModel.toggleSongStar(it) },
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -593,6 +615,7 @@ fun AppNavGraph(
                 onPlayPause = { playerViewModel.togglePlayPause() },
                 onNext = { playerViewModel.skipToNext() },
                 onShuffleToggle = { playerViewModel.toggleShuffle() },
+                onToggleStar = { playerViewModel.toggleCurrentTrackStar() },
                 onRepeatCycle = {
                     // Cycle: none → all (repeat forever) → one (repeat once) → none
                     playerViewModel.setRepeatMode(when (playerState.repeatMode) {
@@ -673,6 +696,7 @@ fun AppNavGraph(
             },
             onStartRadio = { playerState.currentTrack?.let { playerViewModel.startRadio(it) } },
             onRate = { songId, rating -> playerViewModel.setRating(songId, rating) },
+            onToggleStar = { playerViewModel.toggleCurrentTrackStar() },
             onAddToQueue = { playerState.currentTrack?.let { playerViewModel.addToQueue(it) } },
             onViewArtist = {
                 playerState.currentTrack?.artistId?.takeIf { it.isNotBlank() }?.let {

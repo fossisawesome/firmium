@@ -32,10 +32,11 @@ fun PlayerBar(
     onNext: () -> Unit,
     onShuffleToggle: () -> Unit,
     onRepeatCycle: () -> Unit,
+    onToggleStar: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (LocalUiTheme.current == "spotify") {
-        PlayerBarSpotify(state, coverUrl, onBarClick, onPlayPause, onNext, modifier)
+        PlayerBarSpotify(state, coverUrl, onBarClick, onPlayPause, onNext, onToggleStar, modifier)
     } else {
         PlayerBarDefault(state, coverUrl, onBarClick, onPlayPause, onNext, onShuffleToggle, onRepeatCycle, modifier)
     }
@@ -159,6 +160,7 @@ private fun PlayerBarSpotify(
     onBarClick: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
+    onToggleStar: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val track = state.currentTrack ?: return
@@ -209,6 +211,7 @@ private fun PlayerBarSpotify(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            FavoriteButton(starred = track.starred, onToggle = onToggleStar, size = 16.dp)
             Spacer(Modifier.width(4.dp))
             FirmiumIconButton(onClick = onPlayPause, modifier = Modifier.size(44.dp)) {
                 FirmiumIcon(

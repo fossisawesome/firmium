@@ -35,6 +35,27 @@ pub(crate) fn primary_button(t: Tokens, spotify: bool) -> impl Fn(&Theme, button
     }
 }
 
+/// Outlined secondary action button (Shuffle/Download on album detail): a
+/// bordered `surface2` pill in spotify theme, the existing flat 4px-radius
+/// look otherwise — mirrors Android's `AlbumDetailScreen`'s Shuffle button,
+/// which already borders + pills in spotify mode.
+pub(crate) fn outline_pill_button(t: Tokens, spotify: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    let radius = if spotify { 500.0 } else { 4.0 };
+    move |_theme, status| {
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        button::Style {
+            background: Some(Background::Color(if hovered { t.surface } else { t.surface2 })),
+            text_color: t.text,
+            border: Border {
+                radius: radius.into(),
+                width: if spotify { 1.0 } else { 0.0 },
+                color: t.border,
+            },
+            ..button::Style::default()
+        }
+    }
+}
+
 pub(crate) fn section_label(label: &'static str, t: Tokens) -> Element<'static, Message> {
     text(label).size(11).style(tstyle(t.muted)).into()
 }

@@ -3,6 +3,7 @@ use firmium_backend::errors::UserError;
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum View {
     Home,
+    Favorites,
     Albums,
     AlbumDetail(String),
     Artists,
@@ -32,6 +33,7 @@ impl View {
     pub(crate) fn title(&self) -> &'static str {
         match self {
             View::Home => "Home",
+            View::Favorites => "Favorites",
             View::Albums => "Albums",
             View::AlbumDetail(_) => "Album",
             View::Artists => "Artists",

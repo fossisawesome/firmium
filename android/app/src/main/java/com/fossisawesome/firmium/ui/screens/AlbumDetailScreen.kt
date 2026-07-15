@@ -47,6 +47,8 @@ fun AlbumDetailScreen(
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
     onDownloadAlbum: ((com.fossisawesome.firmium.data.model.Album) -> suspend () -> Result<Unit>)? = null,
     onArtistClick: (String) -> Unit = {},
+    onToggleAlbumStar: (String) -> Unit = {},
+    onToggleSongStar: (Song) -> Unit = {},
     onBack: () -> Unit,
 ) {
     LaunchedEffect(albumId) { onLoad(albumId) }
@@ -122,6 +124,7 @@ fun AlbumDetailScreen(
                                     Text(meta, fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
                                     Spacer(Modifier.height(10.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        FavoriteButton(starred = album.starred, onToggle = { onToggleAlbumStar(album.id) }, size = 20.dp)
                                         if (onDownloadAlbum != null) {
                                             DownloadButton(
                                                 onDownload = onDownloadAlbum.invoke(album),
@@ -214,6 +217,7 @@ fun AlbumDetailScreen(
                             onAddClick = { pendingSong = song },
                             onDownloadClick = onDownloadTrack?.invoke(song),
                             isDownloaded = song.id in state.downloadedSongIds,
+                            onToggleStar = { onToggleSongStar(song) },
                         )
                         FirmiumDivider()
                     }
@@ -252,6 +256,7 @@ private fun AlbumTrackRow(
     onAddClick: () -> Unit,
     onDownloadClick: (suspend () -> Result<Unit>)? = null,
     isDownloaded: Boolean = false,
+    onToggleStar: () -> Unit = {},
 ) {
     val colors = LocalFirmiumColors.current
     Row(
@@ -283,6 +288,7 @@ private fun AlbumTrackRow(
             }
         }
         Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
+        FavoriteButton(starred = track.starred, onToggle = onToggleStar, size = 18.dp)
         if (onDownloadClick != null) {
             DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp,
                 initiallyDownloaded = isDownloaded)
@@ -307,6 +313,7 @@ fun TrackRow(
     canMoveUp: Boolean = false,
     canMoveDown: Boolean = false,
     onRemove: (() -> Unit)? = null,
+    onToggleStar: (() -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     Row(
@@ -335,6 +342,9 @@ fun TrackRow(
         }
         Spacer(Modifier.width(8.dp))
         Text(formatDuration(track.duration), fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
+        if (onToggleStar != null) {
+            FavoriteButton(starred = track.starred, onToggle = onToggleStar, size = 18.dp)
+        }
         if (onDownloadClick != null) {
             DownloadButton(onDownload = onDownloadClick, buttonSize = 32.dp, iconSize = 16.dp,
                 initiallyDownloaded = isDownloaded)

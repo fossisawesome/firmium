@@ -1,5 +1,6 @@
 mod albums;
 mod artists;
+mod favorites;
 mod genres;
 mod home;
 mod mix;
@@ -23,6 +24,7 @@ impl App {
     pub(crate) fn content_view(&self) -> Element<'_, Message> {
         match &self.view {
             View::Home => self.home_view(),
+            View::Favorites => self.favorites_view(),
             View::Albums => self.album_list_view(),
             View::AlbumDetail(_) => self.album_detail_view(),
             View::Artists => self.artists_view(),

@@ -114,6 +114,17 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ── Favorites ──────────────────────────────────────────────────────────────
+
+    fun toggleCurrentTrackStar() {
+        val track = state.value.currentTrack ?: return
+        val newStarred = !track.starred
+        viewModelScope.launch {
+            if (newStarred) api.star(songId = track.id) else api.unstar(songId = track.id)
+            controller.updateTrackStarred(track.id, newStarred)
+        }
+    }
+
     // ── Lyrics ─────────────────────────────────────────────────────────────────
 
     fun openLyrics() { lyrics.open() }

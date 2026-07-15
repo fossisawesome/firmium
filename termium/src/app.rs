@@ -366,6 +366,7 @@ mod tests {
             genres: None,
             year: None,
             is_compilation: false,
+            starred: false,
         }
     }
 }

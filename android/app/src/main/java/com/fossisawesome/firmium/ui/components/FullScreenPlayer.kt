@@ -87,6 +87,7 @@ fun FullScreenPlayer(
     onCreatePlaylistAndAdd: (name: String) -> Unit,
     onStartRadio: (() -> Unit)? = null,
     onRate: ((songId: String, rating: Int) -> Unit)? = null,
+    onToggleStar: () -> Unit = {},
     onAddToQueue: () -> Unit,
     onViewArtist: () -> Unit,
     onEqualizer: () -> Unit,
@@ -238,6 +239,7 @@ fun FullScreenPlayer(
                         onMoreOpen = { showMore = true },
                         statsExpanded = statsExpanded,
                         onToggleStats = { statsExpanded = !statsExpanded },
+                        onToggleStar = onToggleStar,
                         compact = true,
                     )
                 }
@@ -267,6 +269,7 @@ fun FullScreenPlayer(
                     onMoreOpen = { showMore = true },
                     statsExpanded = statsExpanded,
                     onToggleStats = { statsExpanded = !statsExpanded },
+                    onToggleStar = onToggleStar,
                     compact = false,
                 )
 
@@ -362,6 +365,7 @@ private fun PlayerControls(
     onMoreOpen: () -> Unit,
     statsExpanded: Boolean,
     onToggleStats: () -> Unit,
+    onToggleStar: () -> Unit = {},
     compact: Boolean,
 ) {
     val colors = LocalFirmiumColors.current
@@ -372,16 +376,19 @@ private fun PlayerControls(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = track.title,
-            fontFamily = LocalAppFontFamily.current,
-            fontSize = if (compact) 16.sp else 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.text,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            modifier = Modifier.basicMarquee(),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = track.title,
+                fontFamily = LocalAppFontFamily.current,
+                fontSize = if (compact) 16.sp else 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.text,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                modifier = Modifier.basicMarquee().weight(1f, fill = false),
+            )
+            FavoriteButton(starred = track.starred, onToggle = onToggleStar, size = 20.dp)
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             text = track.displayArtist ?: track.artist,

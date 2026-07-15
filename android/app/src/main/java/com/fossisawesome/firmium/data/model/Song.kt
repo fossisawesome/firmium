@@ -29,6 +29,7 @@ data class Song(
     val bpm: Int?,
     val userRating: Int? = null,
     val averageRating: Double? = null,
+    val starred: Boolean = false,
 ) {
     // Builds a "FLAC · 96 kHz · 24-bit · 1411 kbps" style summary, omitting missing parts.
     fun formatTrackInfo(): String {
