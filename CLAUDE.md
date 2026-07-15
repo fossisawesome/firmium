@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 8.0.1
+**Version**: 8.1.0
 
 Guidance for Claude Code (claude.ai/code) when working in this repository.
 

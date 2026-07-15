@@ -1,3 +1,20 @@
+# v8.1.0
+
+## Desktop / Android
+
+- **Favorites** — new Favorites screen/view (desktop and Android), reusable `FavoriteButton` component on Android, backend/API support for favorite tracking across local library and Subsonic sources.
+- **Spotify-layout polish** — home screen and player bar refined to match Spotify-style layout.
+
+## Termium
+
+- **New platform.** Termium, a TUI frontend for Firmium, in `termium/`. Screens: Home, Albums, Artists, Playlists, Search, visualizer, login, player bar; own keymap.
+- Repo restructured into Cargo workspace (`backend/`, `desktop/`, `termium/` crates); desktop code moved `src/` → `desktop/src/`.
+
+## Docs
+
+- `PRIVACY.md` added — privacy policy covering desktop, Android, Wear OS, Termium.
+- AGENTS.md/CLAUDE.md/CONTRIBUTING.md/README.md synced for workspace split.
+
 # v8.0.0
 
 ## Wear OS
