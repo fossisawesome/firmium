@@ -10,6 +10,7 @@ import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Artist
 import com.fossisawesome.firmium.data.model.ArtistDetail
+import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.data.toUserError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -27,6 +28,15 @@ data class HomeState(
     val recentAlbums: List<Album> = emptyList(),
     val recentArtists: List<RecentArtist> = emptyList(),
     val randomAlbums: List<Album> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null,
+)
+
+// Favorites screen data — starred artists/albums/songs from getStarred2.
+data class FavoritesState(
+    val artists: List<Artist> = emptyList(),
+    val albums: List<Album> = emptyList(),
+    val songs: List<Song> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
 )
@@ -93,6 +103,9 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val _homeState = MutableStateFlow(HomeState())
     val homeState: StateFlow<HomeState> = _homeState.asStateFlow()
 
+    private val _favoritesState = MutableStateFlow(FavoritesState())
+    val favoritesState: StateFlow<FavoritesState> = _favoritesState.asStateFlow()
+
     private val _albumListState = MutableStateFlow(AlbumListState())
     val albumListState: StateFlow<AlbumListState> = _albumListState.asStateFlow()
 
@@ -149,6 +162,22 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 _homeState.value = HomeState(error = e.toUserError().message)
+            }
+        }
+    }
+
+    fun loadFavorites(force: Boolean = false) {
+        if (!force && _favoritesState.value.albums.isNotEmpty()) return
+        if (_favoritesState.value.isLoading) return
+        _favoritesState.value = FavoritesState(isLoading = true)
+        viewModelScope.launch {
+            try {
+                val result = api.getStarred()
+                _favoritesState.value = FavoritesState(artists = result.artists, albums = result.albums, songs = result.songs)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _favoritesState.value = FavoritesState(error = e.toUserError().message)
             }
         }
     }
@@ -236,6 +265,51 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             localLibrary.invalidate()
             val downloaded = localLibrary.downloadedIds(album.tracks)
             _albumDetailState.value = _albumDetailState.value.copy(downloadedSongIds = downloaded)
+        }
+    }
+
+    // Optimistically flips the starred flag on the loaded album detail, then
+    // fires the network call; reverts on failure.
+    fun toggleAlbumStar(albumId: String) {
+        val current = _albumDetailState.value.album ?: return
+        val newStarred = !current.starred
+        _albumDetailState.value = _albumDetailState.value.copy(album = current.copy(starred = newStarred))
+        viewModelScope.launch {
+            try {
+                if (newStarred) api.star(albumId = albumId) else api.unstar(albumId = albumId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                val reverted = _albumDetailState.value.album ?: return@launch
+                _albumDetailState.value = _albumDetailState.value.copy(album = reverted.copy(starred = !newStarred))
+            }
+        }
+    }
+
+    fun toggleSongStar(song: Song) {
+        val newStarred = !song.starred
+        val current = _albumDetailState.value.album
+        if (current != null) {
+            _albumDetailState.value = _albumDetailState.value.copy(
+                album = current.copy(tracks = current.tracks.map { if (it.id == song.id) it.copy(starred = newStarred) else it }),
+            )
+        }
+        // Keep the Favorites list in sync: unstarring a song there should drop it immediately.
+        _favoritesState.value = _favoritesState.value.copy(
+            songs = if (newStarred) _favoritesState.value.songs.map { if (it.id == song.id) it.copy(starred = true) else it }
+                    else _favoritesState.value.songs.filterNot { it.id == song.id },
+        )
+        viewModelScope.launch {
+            try {
+                if (newStarred) api.star(songId = song.id) else api.unstar(songId = song.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                val reverted = _albumDetailState.value.album ?: return@launch
+                _albumDetailState.value = _albumDetailState.value.copy(
+                    album = reverted.copy(tracks = reverted.tracks.map { if (it.id == song.id) it.copy(starred = !newStarred) else it }),
+                )
+            }
         }
     }
 

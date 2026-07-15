@@ -10,6 +10,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.Album
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Radio
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +41,8 @@ fun HomeScreen(
     onAlbumClick: (String) -> Unit,
     onArtistClick: (String) -> Unit,
     onRefresh: () -> Unit,
+    onFavoritesClick: () -> Unit = {},
+    onExploreNavigate: (String) -> Unit = {},
 ) {
     LaunchedEffect(Unit) { onRefresh() }
 
@@ -54,8 +61,13 @@ fun HomeScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        if (spotify && state.recentAlbums.isNotEmpty()) {
-            HomeQuickAccess(state.recentAlbums, coverUrlFor, onAlbumClick)
+        if (spotify) {
+            ExploreChips(onNavigate = onExploreNavigate)
+            Spacer(Modifier.height(20.dp))
+        }
+
+        if (spotify) {
+            HomeQuickAccess(state.recentAlbums, coverUrlFor, onAlbumClick, onFavoritesClick)
             Spacer(Modifier.height(24.dp))
         }
 
@@ -125,36 +137,100 @@ private fun HomeGreeting(username: String) {
 
 // Spotify home's "quick access" grid: a 2-column grid of small horizontal cards
 // (square art + bold label) for recently played albums, shown above the shelves —
-// Spotify's most recognizable home pattern.
+// Spotify's most recognizable home pattern. Favorites is always the first tile.
 @Composable
-private fun HomeQuickAccess(albums: List<Album>, coverUrlFor: (String?) -> String?, onAlbumClick: (String) -> Unit) {
+private fun HomeQuickAccess(albums: List<Album>, coverUrlFor: (String?) -> String?, onAlbumClick: (String) -> Unit, onFavoritesClick: () -> Unit) {
     val colors = LocalFirmiumColors.current
+    val rest = albums.take(5)
+    val rows = (listOf<Album?>(null) + rest).chunked(2)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        albums.take(6).chunked(2).forEach { row ->
+        rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { album ->
-                    Row(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
-                            .background(colors.surface)
-                            .clickable { onAlbumClick(album.id) },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        CoverImage(
-                            url = coverUrlFor(album.coverArt),
-                            contentDescription = album.name,
-                            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(6.dp))
-                                .background(colors.surface2),
-                        )
-                        Text(
-                            album.name, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                            fontFamily = LocalAppFontFamily.current, color = colors.text,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(end = 12.dp),
-                        )
+                    if (album == null) {
+                        Row(
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
+                                .background(colors.surface)
+                                .clickable { onFavoritesClick() },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(6.dp)).background(colors.surface2),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                FirmiumIcon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
+                            Text(
+                                "Favorites", fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                fontFamily = LocalAppFontFamily.current, color = colors.text,
+                                modifier = Modifier.padding(end = 12.dp),
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
+                                .background(colors.surface)
+                                .clickable { onAlbumClick(album.id) },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            CoverImage(
+                                url = coverUrlFor(album.coverArt),
+                                contentDescription = album.name,
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(6.dp))
+                                    .background(colors.surface2),
+                            )
+                            Text(
+                                album.name, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                fontFamily = LocalAppFontFamily.current, color = colors.text,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(end = 12.dp),
+                            )
+                        }
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+// "Explore" pill row — quick shortcuts to Albums/Artists/Radio. Desktop skips this
+// since its permanent sidebar already exposes these destinations; Android's bottom
+// nav does too, but this mirrors the reference app's home-screen quick links.
+private data class ExploreDest(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
+private val EXPLORE_DESTS = listOf(
+    ExploreDest("music", "Albums", Icons.Outlined.Album),
+    ExploreDest("artists", "Artists", Icons.Outlined.People),
+    ExploreDest("mix", "Radio", Icons.Outlined.Radio),
+)
+
+@Composable
+private fun ExploreChips(onNavigate: (String) -> Unit) {
+    val colors = LocalFirmiumColors.current
+    LazyRow(
+        contentPadding = PaddingValues(end = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(EXPLORE_DESTS) { dest ->
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colors.surface2)
+                    .clickable { onNavigate(dest.route) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FirmiumIcon(dest.icon, contentDescription = null, tint = colors.text, modifier = Modifier.size(16.dp))
+                Text(dest.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = LocalAppFontFamily.current, color = colors.text)
             }
         }
     }

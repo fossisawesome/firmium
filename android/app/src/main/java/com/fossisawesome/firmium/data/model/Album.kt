@@ -16,4 +16,5 @@ data class Album(
     val isCompilation: Boolean,
     // Only populated after fetching album detail (getAlbum endpoint).
     val tracks: List<Song> = emptyList(),
+    val starred: Boolean = false,
 )

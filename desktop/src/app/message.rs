@@ -1,6 +1,6 @@
 use firmium_backend::commands::lyrics::LyricsResult;
-use firmium_backend::commands::mappers::{Album, Artist, SimilarMatch, Song};
-use firmium_backend::commands::subsonic::{AlbumTracks, ArtistDetails, ArtistInfo, Genre, PlaylistTracks, RemotePlayQueue, SearchResult};
+use firmium_backend::commands::mappers::{Album, Artist, SimilarMatch, Song, Starred};
+use firmium_backend::commands::subsonic::{AlbumTracks, ArtistDetails, ArtistInfo, Genre, PlaylistTracks, RemotePlayQueue, SearchResult, StarKind};
 use firmium_backend::config::SavedAccount;
 use firmium_backend::errors::UserError;
 use firmium_backend::events::BackendEvent;
@@ -56,6 +56,9 @@ pub enum Message {
     ShuffleAlbum,
     PlaySong(Song),
     SetRating(String, u32),
+    ToggleStar(String, StarKind),
+    StarToggled(String, StarKind, Result<bool, UserError>),
+    FavoritesLoaded(Result<Starred, UserError>),
     DownloadTrack(Song),
     DownloadDone(Result<(), String>),
 

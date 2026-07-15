@@ -354,6 +354,12 @@ class PlaybackController(
         }
     }
 
+    fun updateTrackStarred(songId: String, starred: Boolean) {
+        _state.update { s ->
+            s.copy(queue = s.queue.map { if (it.id == songId) it.copy(starred = starred) else it })
+        }
+    }
+
     // ── Settings ───────────────────────────────────────────────────────────────
 
     fun setRepeatMode(mode: String) {

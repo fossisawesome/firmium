@@ -117,15 +117,7 @@ impl App {
         )
         .padding(8)
         .on_press(Message::ShuffleAlbum)
-        .style(move |_t, status| {
-            let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            button::Style {
-                background: Some(Background::Color(if h { t.surface } else { t.surface2 })),
-                text_color: t.text,
-                border: Border { radius: 4.0.into(), ..Border::default() },
-                ..button::Style::default()
-            }
-        });
+        .style(outline_pill_button(t, spotify));
 
         let album_download_btn = button(
             row![
@@ -137,24 +129,27 @@ impl App {
         )
         .padding(8)
         .on_press(Message::DownloadAlbum)
-        .style(move |_t, status| {
-            let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            button::Style {
-                background: Some(Background::Color(if h { t.surface } else { t.surface2 })),
-                text_color: t.text,
-                border: Border { radius: 4.0.into(), ..Border::default() },
-                ..button::Style::default()
-            }
-        });
+        .style(outline_pill_button(t, spotify));
 
         let header = row![
-            self.cover_image(at.cover_art_id.as_deref(), 80.0),
+            self.cover_image(at.cover_art_id.as_deref(), if spotify { 130.0 } else { 80.0 }),
             column![
                 text(at.album_name.clone()).size(18).style(tstyle(t.text)).font(iced::Font {
                     weight: iced::font::Weight::Bold,
                     ..iced::Font::MONOSPACE
                 }),
-                text(at.album_artist.clone()).size(13).style(tstyle(t.muted)),
+                row![
+                    text(at.album_artist.clone()).size(13).style(tstyle(t.muted)),
+                    icon_button(
+                        if at.starred { icons::HEART_FILLED } else { icons::HEART_OUTLINE },
+                        14.0,
+                        if at.starred { t.accent } else { t.muted },
+                        t, spotify,
+                        Message::ToggleStar(self.album_detail_id.clone().unwrap_or_default(), firmium_backend::commands::subsonic::StarKind::Album),
+                    ),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
                 text(format!("{} tracks", at.tracks.len())).size(11).style(tstyle(t.muted)),
                 row![play_btn, shuffle_btn, album_download_btn].spacing(8),
             ]
@@ -225,6 +220,13 @@ impl App {
             play_area,
             self.star_rating(song),
             self.avg_rating_badge(song),
+            icon_button(
+                if song.starred { icons::HEART_FILLED } else { icons::HEART_OUTLINE },
+                14.0,
+                if song.starred { t.accent } else { t.muted },
+                t, spotify,
+                Message::ToggleStar(song.id.clone(), firmium_backend::commands::subsonic::StarKind::Song),
+            ),
             icon_button(icons::PLUS, 14.0, t.muted, t, spotify, Message::OpenAddToPlaylist(song.clone())),
             icon_button(icons::DOWNLOAD, 14.0, t.muted, t, spotify, Message::DownloadTrack(song.clone())),
             text(fmt_time(song.duration)).size(11).style(tstyle(t.muted)).width(Length::Fixed(44.0)),

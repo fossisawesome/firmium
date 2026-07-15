@@ -27,6 +27,7 @@ impl App {
                                     album_name: r.album_name,
                                     album_artist: r.album_artist,
                                     cover_art_id: r.cover_art_id,
+                                    starred: false,
                                 })
                                 .map_err(|_| UserError::NotFound);
                             Task::done(Message::AlbumTracksLoaded(result))
@@ -57,6 +58,9 @@ impl App {
                                 Task::perform(firmium_backend::commands::subsonic::get_similar_artists(state, id, None), Message::SimilarArtistsLoaded),
                             ])
                         }
+                    }
+                    View::Favorites if self.favorites.is_none() => {
+                        Task::perform(firmium_backend::commands::subsonic::get_starred(state), Message::FavoritesLoaded)
                     }
                     View::PlaylistDetail(id) if self.playlist_detail_id.as_deref() != Some(id.as_str()) => {
                         self.playlist_detail = None;

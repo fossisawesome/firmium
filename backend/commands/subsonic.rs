@@ -10,7 +10,7 @@
 
 use crate::commands::auth::generate_auth_params;
 use crate::commands::lyrics::{fetch_lrclib_lyrics, LyricLine, LyricsResult};
-use crate::commands::mappers::{map_albums, map_artists, map_similar_matches, map_songs, Album, Artist, SimilarMatch, Song};
+use crate::commands::mappers::{map_albums, map_artists, map_similar_matches, map_songs, map_starred, Album, Artist, SimilarMatch, Song, Starred};
 use crate::events::BackendEvent;
 use crate::state::{AppState, ConnectionState};
 use std::sync::Arc;
@@ -194,6 +194,7 @@ pub struct AlbumTracks {
     pub album_name: String,
     pub album_artist: String,
     pub cover_art_id: Option<String>,
+    pub starred: bool,
 }
 
 pub async fn get_album_tracks(state: Arc<AppState>, id: String) -> Result<AlbumTracks, crate::errors::UserError> {
@@ -205,6 +206,7 @@ pub async fn get_album_tracks(state: Arc<AppState>, id: String) -> Result<AlbumT
         album_name: album.get("name").or_else(|| album.get("title")).and_then(|v| v.as_str()).unwrap_or("Unknown Album").to_string(),
         album_artist: album.get("displayArtist").or_else(|| album.get("artist")).and_then(|v| v.as_str()).unwrap_or("Unknown Artist").to_string(),
         cover_art_id: album.get("coverArt").and_then(|v| v.as_str()).map(str::to_string),
+        starred: album.get("starred").is_some_and(|v| !v.is_null()),
     })
 }
 
@@ -545,6 +547,43 @@ pub async fn set_rating(state: Arc<AppState>, id: String, rating: u32) {
     if let Err(e) = subsonic_request(&state, "setRating", &params, true).await {
         eprintln!("Set rating failed: {}", e.message());
     }
+}
+
+/// Which entity a star/unstar call targets — Subsonic's `star`/`unstar` accept
+/// `id` (song), `albumId`, or `artistId` as separate query params.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StarKind {
+    Song,
+    Album,
+    Artist,
+}
+
+impl StarKind {
+    fn param(self) -> &'static str {
+        match self {
+            StarKind::Song => "id",
+            StarKind::Album => "albumId",
+            StarKind::Artist => "artistId",
+        }
+    }
+}
+
+/// Stars a song, album, or artist via the `star` endpoint.
+pub async fn star_item(state: Arc<AppState>, id: String, kind: StarKind) -> Result<(), crate::errors::UserError> {
+    subsonic_request(&state, "star", &[(kind.param(), id)], false).await?;
+    Ok(())
+}
+
+/// Unstars a song, album, or artist via the `unstar` endpoint.
+pub async fn unstar_item(state: Arc<AppState>, id: String, kind: StarKind) -> Result<(), crate::errors::UserError> {
+    subsonic_request(&state, "unstar", &[(kind.param(), id)], false).await?;
+    Ok(())
+}
+
+/// Fetches every starred artist/album/song via `getStarred2`.
+pub async fn get_starred(state: Arc<AppState>) -> Result<Starred, crate::errors::UserError> {
+    let body = subsonic_request(&state, "getStarred2", &[], false).await?;
+    Ok(map_starred(&body))
 }
 
 /// Reports playback state/position via the `playbackReport` extension. No-op if

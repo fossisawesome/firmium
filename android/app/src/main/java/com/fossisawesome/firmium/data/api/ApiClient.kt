@@ -290,6 +290,36 @@ class ApiClient(private val auth: AuthManager) {
         } catch (_: Exception) { /* rating failures are non-fatal */ }
     }
 
+    // ── Favorites ──────────────────────────────────────────────────────────────
+
+    data class StarredResult(val artists: List<Artist>, val albums: List<Album>, val songs: List<Song>)
+
+    private fun starParams(songId: String?, albumId: String?, artistId: String?): Map<String, String> =
+        buildMap {
+            songId?.let { put("id", it) }
+            albumId?.let { put("albumId", it) }
+            artistId?.let { put("artistId", it) }
+        }
+
+    suspend fun star(songId: String? = null, albumId: String? = null, artistId: String? = null) {
+        fetch("star", starParams(songId, albumId, artistId))
+    }
+
+    suspend fun unstar(songId: String? = null, albumId: String? = null, artistId: String? = null) {
+        fetch("unstar", starParams(songId, albumId, artistId))
+    }
+
+    suspend fun getStarred(): StarredResult {
+        val data = fetch("getStarred2")
+        val root = data.getAsJsonObject("starred2")
+        fun list(key: String) = root?.getAsJsonArray(key)?.map { it.asJsonObject } ?: emptyList()
+        return StarredResult(
+            artists = list("artist").map { parseArtist(it) },
+            albums = list("album").map { parseAlbum(it) },
+            songs = list("song").map { parseSong(it) },
+        )
+    }
+
     // ── Playback reporting ────────────────────────────────────────────────────
 
     // Reports playback state/position via the playbackReport OpenSubsonic extension
@@ -592,6 +622,7 @@ class ApiClient(private val auth: AuthManager) {
             genres = genres,
             releaseType = releaseType,
             isCompilation = obj.optBoolean("isCompilation") ?: false,
+            starred = obj.get("starred")?.isJsonNull == false,
         )
     }
 
@@ -626,6 +657,7 @@ class ApiClient(private val auth: AuthManager) {
             bpm = obj.optInt("bpm"),
             userRating = obj.optInt("userRating"),
             averageRating = obj.optDouble("averageRating")?.takeIf { it > 0.0 },
+            starred = obj.get("starred")?.isJsonNull == false,
         )
     }
 

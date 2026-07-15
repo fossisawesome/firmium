@@ -2,6 +2,7 @@ use iced::widget::{button, column, responsive, row, scrollable, text};
 use iced::{Alignment, Background, Border, Element, Length};
 
 use firmium_backend::commands::mappers::Album;
+use crate::icons;
 
 use super::super::message::Message;
 use super::super::styles::*;
@@ -48,39 +49,71 @@ impl App {
     /// shown above the shelves — Spotify's most recognizable home pattern.
     pub(crate) fn home_quick_access(&self) -> Element<'_, Message> {
         let t = self.tokens;
-        if self.home_recent_plays.is_empty() {
-            return column![].into();
-        }
-        let items: Vec<_> = self.home_recent_plays.iter().take(6).collect();
-        let mut grid = column![].spacing(8);
-        for chunk in items.chunks(3) {
-            let mut line = row![].spacing(8);
-            for play in chunk {
-                let cover = self.cover_image(play.cover_art_id.as_deref(), 56.0);
-                let title = text(play.track_title.clone()).size(13).style(tstyle(t.text)).font(iced::Font {
+        let favorites_tile = button(
+            row![
+                icons::icon(icons::HEART_OUTLINE, 24.0, t.accent),
+                text("Favorites").size(13).style(tstyle(t.text)).font(iced::Font {
                     weight: iced::font::Weight::Bold,
                     ..iced::Font::with_name("Inter")
-                });
-                let mut card = button(row![cover, title].spacing(12).align_y(Alignment::Center))
-                    .width(Length::Fill)
-                    .padding(0)
-                    .style(move |_th, status| {
-                        let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
-                        button::Style {
-                            background: Some(Background::Color(if h { t.surface2 } else { t.surface })),
-                            text_color: t.text,
-                            border: Border { radius: 6.0.into(), ..Border::default() },
-                            ..button::Style::default()
-                        }
-                    });
-                if let Some(aid) = play.album_id.clone() {
-                    card = card.on_press(Message::Navigate(View::AlbumDetail(aid)));
-                }
-                line = line.push(card);
+                }),
+            ]
+            .spacing(12)
+            .align_y(Alignment::Center),
+        )
+        .width(Length::Fill)
+        .padding(0)
+        .on_press(Message::Navigate(View::Favorites))
+        .style(move |_th, status| {
+            let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            button::Style {
+                background: Some(Background::Color(if h { t.surface2 } else { t.surface })),
+                text_color: t.text,
+                border: Border { radius: 6.0.into(), ..Border::default() },
+                ..button::Style::default()
+            }
+        });
+
+        let items: Vec<_> = self.home_recent_plays.iter().take(5).collect();
+        let mut grid = column![].spacing(8);
+        let mut first_row = row![].spacing(8).push(favorites_tile);
+        let mut remaining = items.iter();
+        if let Some(play) = remaining.next() {
+            first_row = first_row.push(self.home_quick_access_card(play));
+        }
+        grid = grid.push(first_row);
+        for chunk in remaining.collect::<Vec<_>>().chunks(3) {
+            let mut line = row![].spacing(8);
+            for play in chunk {
+                line = line.push(self.home_quick_access_card(play));
             }
             grid = grid.push(line);
         }
         grid.into()
+    }
+
+    fn home_quick_access_card<'a>(&'a self, play: &'a firmium_backend::db::RecentPlay) -> Element<'a, Message> {
+        let t = self.tokens;
+        let cover = self.cover_image(play.cover_art_id.as_deref(), 56.0);
+        let title = text(play.track_title.clone()).size(13).style(tstyle(t.text)).font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..iced::Font::with_name("Inter")
+        });
+        let mut card = button(row![cover, title].spacing(12).align_y(Alignment::Center))
+            .width(Length::Fill)
+            .padding(0)
+            .style(move |_th, status| {
+                let h = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                button::Style {
+                    background: Some(Background::Color(if h { t.surface2 } else { t.surface })),
+                    text_color: t.text,
+                    border: Border { radius: 6.0.into(), ..Border::default() },
+                    ..button::Style::default()
+                }
+            });
+        if let Some(aid) = play.album_id.clone() {
+            card = card.on_press(Message::Navigate(View::AlbumDetail(aid)));
+        }
+        card.into()
     }
 
     pub(crate) fn home_recent_songs_view(&self) -> Element<'_, Message> {

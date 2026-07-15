@@ -32,6 +32,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 |---|:---:|:---:|
 | Browse albums, artists, and genres | ✅ | ✅ |
 | Home screen — recently played, newest, and random albums | ✅ | ✅ |
+| Favorites — tap the heart on any song, album, or artist to favorite it; see everything you've favorited in one place, with a quick-access shortcut from the home screen | ✅ | ✅ |
 | Artist pages with photos and Last.fm biography | ✅ | ✅ |
 | Play button on artist page — instantly plays that artist's top tracks | ❌ | ✅ |
 | Album detail pages with full track list | ✅ | ✅ |

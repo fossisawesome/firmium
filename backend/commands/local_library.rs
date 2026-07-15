@@ -206,6 +206,7 @@ fn scan() -> Result<LocalLibraryCache, String> {
             track_info: format_track_info(&track_info_json),
             user_rating: None,
             average_rating: None,
+            starred: false,
         };
 
         songs_by_album.entry(album_id).or_default().push(song.clone());
@@ -235,6 +236,7 @@ fn scan() -> Result<LocalLibraryCache, String> {
             genres,
             year: album_year.get(album_id).copied().flatten(),
             is_compilation: false,
+            starred: false,
         };
         albums_by_artist.entry(artist_id).or_default().push(album.clone());
         albums.push(album);

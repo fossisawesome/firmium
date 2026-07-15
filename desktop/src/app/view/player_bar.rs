@@ -113,7 +113,7 @@ impl App {
         let cover = self.cover_image(song.and_then(|s| s.cover_art_id.as_deref()), 56.0);
         let title_text = song.map(|s| s.title.clone()).unwrap_or_else(|| "No track selected".to_string());
         let artist_text = song.map(|s| s.artist.clone()).unwrap_or_default();
-        let liked = song.is_some_and(|s| s.user_rating.unwrap_or(0) > 0);
+        let liked = song.is_some_and(|s| s.starred);
         let heart = if let Some(s) = song {
             let id = s.id.clone();
             icon_button(
@@ -122,7 +122,7 @@ impl App {
                 if liked { t.accent } else { t.muted },
                 t,
                 true,
-                Message::SetRating(id, if liked { 0 } else { 5 }),
+                Message::ToggleStar(id, firmium_backend::commands::subsonic::StarKind::Song),
             )
         } else {
             icons::icon(icons::HEART_OUTLINE, 15.0, t.muted)

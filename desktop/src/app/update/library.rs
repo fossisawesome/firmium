@@ -184,6 +184,39 @@ impl App {
                     |_| Message::DownloadDone(Ok(())),
                 )
             }
+            Message::ToggleStar(id, kind) => {
+                // Optimistic: figure out current starred state from whichever
+                // in-memory collection holds this id, flip it locally, then
+                // fire the network call. On failure, StarToggled reverts it.
+                let currently_starred = self.is_starred(&id, kind);
+                self.set_starred_locally(&id, kind, !currently_starred);
+                let state = self.backend.app_state.clone();
+                let id2 = id.clone();
+                Task::perform(
+                    async move {
+                        let result = if currently_starred {
+                            firmium_backend::commands::subsonic::unstar_item(state, id2, kind).await
+                        } else {
+                            firmium_backend::commands::subsonic::star_item(state, id2, kind).await
+                        };
+                        result.map(|_| !currently_starred)
+                    },
+                    move |r| Message::StarToggled(id.clone(), kind, r),
+                )
+            }
+            Message::StarToggled(id, kind, result) => {
+                if let Err(_e) = result {
+                    // Revert the optimistic flip — re-read what it should have stayed as.
+                    let reverted = !self.is_starred(&id, kind);
+                    self.set_starred_locally(&id, kind, reverted);
+                }
+                Task::none()
+            }
+            Message::FavoritesLoaded(Ok(starred)) => {
+                self.favorites = Some(starred);
+                Task::none()
+            }
+            Message::FavoritesLoaded(Err(_e)) => Task::none(),
             Message::DownloadTrack(song) => Task::perform(
                 firmium_backend::commands::downloads::download_track(
                     self.backend.app_state.clone(),

@@ -66,6 +66,44 @@ impl App {
         }
     }
 
+    /// Whether the given id is currently starred, checked against whichever
+    /// in-memory collection holds it (album detail, queue).
+    pub(crate) fn is_starred(&self, id: &str, kind: firmium_backend::commands::subsonic::StarKind) -> bool {
+        use firmium_backend::commands::subsonic::StarKind;
+        match kind {
+            StarKind::Song => {
+                self.queue.iter().find(|s| s.id == id).map(|s| s.starred)
+                    .or_else(|| self.album_detail.as_ref()?.tracks.iter().find(|s| s.id == id).map(|s| s.starred))
+                    .unwrap_or(false)
+            }
+            StarKind::Album => self.album_detail.as_ref().is_some_and(|at| at.starred),
+            StarKind::Artist => false, // artist starring has no local UI state to flip (list-only in Favorites screen).
+        }
+    }
+
+    /// Flips the starred flag on every in-memory copy of this id (queue, album detail).
+    pub(crate) fn set_starred_locally(&mut self, id: &str, kind: firmium_backend::commands::subsonic::StarKind, starred: bool) {
+        use firmium_backend::commands::subsonic::StarKind;
+        match kind {
+            StarKind::Song => {
+                for s in self.queue.iter_mut() {
+                    if s.id == id { s.starred = starred; }
+                }
+                if let Some(at) = self.album_detail.as_mut() {
+                    for s in at.tracks.iter_mut() {
+                        if s.id == id { s.starred = starred; }
+                    }
+                }
+            }
+            StarKind::Album => {
+                if let Some(at) = self.album_detail.as_mut() {
+                    at.starred = starred;
+                }
+            }
+            StarKind::Artist => {}
+        }
+    }
+
     pub(crate) fn cover_image(&self, cover_id: Option<&str>, size: f32) -> Element<'_, Message> {
         let t = self.tokens;
         let radius = if size >= 80.0 { 14.0_f32 } else if size >= 40.0 { 10.0 } else { 6.0 };

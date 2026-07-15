@@ -19,6 +19,7 @@ pub struct Album {
     pub genres: Option<serde_json::Value>,
     pub year: Option<u32>,
     pub is_compilation: bool,
+    pub starred: bool,
 }
 
 /// Mapped artist.
@@ -55,6 +56,7 @@ pub struct Song {
     pub track_info: Option<String>,
     pub user_rating: Option<u32>,
     pub average_rating: Option<f32>,
+    pub starred: bool,
 }
 
 impl Song {
@@ -146,6 +148,7 @@ fn map_album(a: &serde_json::Value) -> Album {
         genres: a.get("genres").cloned(),
         year: a.get("year").and_then(|v| v.as_u64()).map(|n| n as u32),
         is_compilation: a.get("isCompilation").and_then(|v| v.as_bool()).unwrap_or(false),
+        starred: a.get("starred").is_some_and(|v| !v.is_null()),
     }
 }
 
@@ -181,6 +184,7 @@ fn map_song(s: &serde_json::Value) -> Song {
         track_info: format_track_info(s),
         user_rating: s.get("userRating").and_then(|v| v.as_u64()).map(|n| n as u32),
         average_rating: s.get("averageRating").and_then(|v| v.as_f64()).map(|n| n as f32).filter(|&n| n > 0.0),
+        starred: s.get("starred").is_some_and(|v| !v.is_null()),
     }
 }
 
@@ -224,6 +228,31 @@ pub fn map_similar_matches(matches: Vec<serde_json::Value>) -> Vec<SimilarMatch>
             similarity: m.get("similarity").and_then(|v| v.as_f64()).unwrap_or(0.0),
         })
         .collect()
+}
+
+/// All items the user has starred, as returned by `getStarred2`.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Starred {
+    pub artists: Vec<Artist>,
+    pub albums: Vec<Album>,
+    pub songs: Vec<Song>,
+}
+
+/// Maps a raw `getStarred2` response body (the `subsonic-response` object) into a `Starred`.
+pub fn map_starred(body: &serde_json::Value) -> Starred {
+    let root = body.get("starred2");
+    let list = |key: &str| -> Vec<serde_json::Value> {
+        root.and_then(|r| r.get(key))
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+    };
+    Starred {
+        artists: map_artists(list("artist")),
+        albums: map_albums(list("album")),
+        songs: map_songs(list("song")),
+    }
 }
 
 #[cfg(test)]
@@ -433,5 +462,49 @@ mod tests {
         let matches = map_similar_matches(vec![json!({})]);
         assert_eq!(matches[0].similarity, 0.0);
         assert_eq!(matches[0].song.id, "");
+    }
+
+    // --- starred ---
+
+    #[test]
+    fn map_albums_reads_starred_flag() {
+        let starred = map_albums(vec![json!({ "starred": "2024-01-01T00:00:00.000Z" })]);
+        assert!(starred[0].starred);
+        let not_starred = map_albums(vec![json!({})]);
+        assert!(!not_starred[0].starred);
+    }
+
+    #[test]
+    fn map_songs_reads_starred_flag() {
+        let starred = map_songs(vec![json!({ "starred": "2024-01-01T00:00:00.000Z" })]);
+        assert!(starred[0].starred);
+        let not_starred = map_songs(vec![json!({})]);
+        assert!(!not_starred[0].starred);
+    }
+
+    #[test]
+    fn map_starred_parses_artists_albums_songs() {
+        let body = json!({
+            "starred2": {
+                "artist": [{ "id": "ar1", "name": "Artist" }],
+                "album": [{ "id": "al1", "name": "Album" }],
+                "song": [{ "id": "s1", "title": "Song" }],
+            }
+        });
+        let starred = map_starred(&body);
+        assert_eq!(starred.artists.len(), 1);
+        assert_eq!(starred.artists[0].id, "ar1");
+        assert_eq!(starred.albums.len(), 1);
+        assert_eq!(starred.albums[0].id, "al1");
+        assert_eq!(starred.songs.len(), 1);
+        assert_eq!(starred.songs[0].id, "s1");
+    }
+
+    #[test]
+    fn map_starred_missing_starred2_returns_empty() {
+        let starred = map_starred(&json!({}));
+        assert!(starred.artists.is_empty());
+        assert!(starred.albums.is_empty());
+        assert!(starred.songs.is_empty());
     }
 }
