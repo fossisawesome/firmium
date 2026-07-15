@@ -6,17 +6,25 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Project Overview
 
-**Firmium** is an OpenSubsonic music streaming client. The desktop app (Linux + Windows + macOS + FreeBSD) is a native [iced](https://iced.rs) (Rust) application — a single binary, no web view and no JavaScript — providing low-latency audio playback, OS-level credential storage, and integration with OpenSubsonic-compatible servers (e.g. Navidrome). Separate native Android app in `android/`, built with Kotlin + Jetpack Compose.
+**Firmium** is an OpenSubsonic music streaming client. This repo is a Cargo workspace (`Cargo.toml` `[workspace] members = ["backend", "desktop", "termium"]`) with three crates: a shared `backend` (no UI), a native [iced](https://iced.rs) desktop GUI (`desktop`), and a `ratatui` terminal client (`termium`) — both no web view, no JavaScript. Separate native Android app in `android/`, built with Kotlin + Jetpack Compose, sharing the same OpenSubsonic API contract but no Rust code.
 
 ### Tech Stack
 
-**Desktop (Linux, Windows, macOS, FreeBSD)**
+**Shared backend (`backend/` crate, `firmium-backend`)** — plain Rust, no UI, consumed by both `desktop` and `termium` via `path` dependency.
+
+**Desktop (`desktop/` crate — Linux, Windows, macOS, FreeBSD)**
 - **UI**: [iced](https://iced.rs) 0.14 (pure Rust; `canvas` for the visualizer, `svg` for icons, bundled font)
 - **Language**: Rust 2021 edition — UI and backend in one process, one crate
 - **Audio**: `symphonia` 0.5 (decoding) + `cpal` 0.17 (output device I/O), hand-rolled engine
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
 - **Credentials**: OS keyring via `keyring` crate (libsecret/Secret Service on Linux and FreeBSD, Windows Credential Manager on Windows, Keychain via `apple-native` on macOS)
 - **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer), macOS (`.app` bundle in a `.dmg`, unsigned), FreeBSD (`.pkg` via `pkg create`)
+
+**Termium (`termium/` crate — Linux, Windows, macOS, FreeBSD terminal client)**
+- **UI**: [ratatui](https://ratatui.rs) 0.29 + `crossterm` 0.28 (event-stream) — TUI, no GUI toolkit
+- **Async**: `tokio` (rt-multi-thread) for backend calls and event bus
+- **Scope**: library browsing (albums/artists/playlists/search/home), playback controls, persistent now-playing bar, terminal bar visualizer, configurable keybindings (`toml`-based). No lyrics/EQ/recap/similar-tracks panels (desktop-only).
+- Shares login/library/queue state with desktop and Android via the same OpenSubsonic server — logging into one, all see it.
 
 **Android**
 
@@ -26,9 +34,9 @@ See [android/CLAUDE.md](android/CLAUDE.md) for Android tech stack and architectu
 
 ### Backend (backend/)
 
-The backend is plain Rust — no UI, no IPC. The iced UI calls these modules directly via `iced::Task::perform` (async fns) or inline (sync fns); the backend pushes playback/queue events back to the UI over an in-process event bus (`backend/events.rs`, a `tokio::sync::broadcast` channel). `src/main.rs` mounts every `backend/*.rs` module at the crate root via `#[path]` attributes, so backend code keeps using `crate::...` paths. Key modules:
+The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no IPC. Both `desktop` and `termium` depend on it via `path = "../backend"` and call these modules directly via async task spawning (`iced::Task::perform` on desktop, `tokio::spawn`/awaits on termium) or inline (sync fns); the backend pushes playback/queue events back to the UI over an in-process event bus (`backend/events.rs`, a `tokio::sync::broadcast` channel). Key modules:
 
-- **init.rs**: `Backend::new()` builds the shared handles (event bus, `AudioPlayer`, `AppState`, `QueueState`, optional `PlayHistory`) and starts the `queue_manager` background task. Held by the iced `App` in `src/app/mod.rs`.
+- **init.rs**: `Backend::new()` builds the shared handles (event bus, `AudioPlayer`, `AppState`, `QueueState`, optional `PlayHistory`) and starts the `queue_manager` background task. Held by the iced `App` in `desktop/src/app/mod.rs` (and by termium's `App` in `termium/src/app.rs`).
 
 - **events.rs**: `EventBus` (broadcast sender) and `BackendEvent` enum (`PlaybackStateChanged`, `PlaybackPosition`, `PlaybackFinished`, `QueueStateChanged`, `QueueExhausted`, `SessionExpired`). The UI subscribes via an `iced::Subscription` that bridges the broadcast channel into `Message::Backend(BackendEvent)`.
 
@@ -57,21 +65,21 @@ The backend is plain Rust — no UI, no IPC. The iced UI calls these modules dir
   - Sessions stored in `Arc<RwLock<HashMap>>` — playback events fire on the `EventBus` (broadcast) consumed by `queue_manager` and the UI subscription
   - Supports `preload_stream()` and `crossfade_to()` for gapless playback
 
-### iced UI (src/)
+### iced UI (desktop/src/)
 
 The UI is one iced application. There are no components or routes in the web sense — the whole UI is a state struct, a message enum, an `update`, and a `view`.
 
-- **main.rs**: Entry point. Mounts the `backend/*` modules at the crate root (`#[path]`), creates a tokio runtime, and runs `iced::application(...)` wiring `App::update`, `App::view`, `App::theme`, `App::subscription`, the bundled font, and window size.
+- **main.rs**: Entry point. Creates a tokio runtime and runs `iced::application(...)` wiring `App::update`, `App::view`, `App::theme`, `App::subscription`, the bundled font, and window size.
 - **app/**: The UI, split by feature into a module directory. `mod.rs` holds `App` (all UI state), the top-level `view()`/`shell()`, `new()`, `theme()`, `subscription()` glue, and toast handling. `message.rs` holds the `Message` enum; `types.rs` holds the small supporting enums (`View`, `Panel`, `SettingsCategory`, …). `update/mod.rs` dispatches every `Message` variant (exhaustive match, one compiler-checked spot) to a `update_<domain>` method defined in a sibling file — `update/{auth,library,playlists,search,settings,equalizer,mix,transport,queue_resume,recap,podcasts,nav}.rs` — each of which spawns backend calls via `iced::Task::perform` whose result returns as another `Message`. `view/mod.rs` routes to one screen method per file — `view/{home,albums,artists,playlists,genres,podcasts,search,recap,settings,mix,panels,player_bar,overlays}.rs` (`home_view`, `album_list_view`, `album_detail_view`, `artists_view`, `playlists_view`, `search_view`, `mix_view`, `recap_view`, `settings_view`, the persistent `player_bar`, the right-dock panels in `panels.rs` (visualizer/queue/lyrics/EQ/audio-stats/similar), and `stack`-based modal overlays in `overlays.rs` (add-to-playlist, account switcher)). `styles.rs`, `format.rs`, `cover.rs`, `viz_colors.rs`, `subscription.rs`, `export.rs` hold shared free-function helpers (button/text styles, time/frequency formatting, cover art caching + the windowed-list `list_window` helper, visualizer color extraction, the event-bus subscription, file-save export).
 - **theme.rs**: parses a theme's TOML tokens into `iced::Color`s and builds the `iced::Theme`. Built-ins under `themes/` are embedded at compile time via `include_dir`.
 - **icons.rs**: the SVG icon set as raw string constants, recolored per theme through `svg::Style`.
-- **viz.rs**: the visualizer `canvas::Program` (bars / oscilloscope / orb), reading the latest FFT snapshot.
-- **config.rs**: `~/.config/<id>/config.toml` (server, last theme, volume, saved accounts). Passwords stay in the OS keyring, not here.
+- **viz/**: the visualizer, split into `mod.rs` (canvas::Program entry, bars / oscilloscope / orb modes), `pipeline.rs`/`shader.rs`/`shaders/` (wgpu custom shader pipeline), `particles.rs` (particle system), `config.rs` (particle count and other viz settings), `state.rs` (runtime FFT/particle state).
+- **config.rs** (in `backend/`, shared with termium): `~/.config/<id>/config.toml` (server, last theme, volume, saved accounts). Passwords stay in the OS keyring, not here.
 
 ### Data Flow
 
 ```
-src/app/    (App state, view, update — split into mod.rs/message.rs/types.rs/update/*.rs/view/*.rs)
+desktop/src/app/  (App state, view, update — split into mod.rs/message.rs/types.rs/update/*.rs/view/*.rs)
     │  user action → Message
     ▼  Message::… handled in App::update
 iced::Task::perform(backend fn) ──► backend/commands/…
@@ -88,9 +96,11 @@ iced::Task::perform(backend fn) ──► backend/commands/…
 App::update mutates App state ──► App::view re-renders
 ```
 
+Termium (`termium/src/`) follows the same backend, different front end: `app.rs` holds `App` state and the `ratatui` render/input loop, `keymap.rs` handles configurable keybindings, `ui/{home,albums,artists,playlists,search,login,player_bar,visualizer}.rs` are the ratatui screen/widget renderers. No `Message`/`Task` abstraction — reads backend state directly and awaits async calls in its event loop.
+
 ### Android App
 
-Native Kotlin/Compose app in `android/`, independent of the desktop iced build, sharing OpenSubsonic API contract with desktop. See [android/CLAUDE.md](android/CLAUDE.md) for architecture, build commands, and conventions.
+Native Kotlin/Compose app in `android/`, independent of the desktop and termium Rust binaries, sharing OpenSubsonic API contract with them. See [android/CLAUDE.md](android/CLAUDE.md) for architecture, build commands, and conventions.
 
 ### Key Design Decisions
 
@@ -126,10 +136,13 @@ Desktop (iced/Rust) and Android (Kotlin/Compose) implement same features indepen
 ### Commands
 
 ```bash
-# Develop (debug build, recompiles on .rs changes)
-cargo run
+# Desktop GUI (debug build, recompiles on .rs changes)
+cargo run -p desktop
 
-# Optimized release binary → target/release/firmium
+# Termium TUI
+cargo run -p termium
+
+# Optimized release binaries → target/release/{firmium,termium}
 cargo build --release
 
 # Android (separate native app in android/, built with Gradle)
@@ -138,21 +151,21 @@ cd android && ./gradlew assembleDebug     # debug APK
 cd android && ./gradlew installDebug      # install on connected device
 ```
 
-There is no Node, npm, or Vite — the desktop app is a single Rust crate.
+There is no Node, npm, or Vite for `desktop`/`termium` — both are Rust crates in the `firmium` Cargo workspace.
 
 ### First-Time Setup
 
 1. Clone repo; ensure Rust is installed (`rustup default stable`)
 2. On Linux, install system dependencies (see `README.md`)
-3. Run `cargo run` to launch
+3. Run `cargo run -p desktop` to launch
 4. In-app: enter Subsonic/Navidrome server URL, username, and password
 5. Credentials saved to OS keyring; server URL + username stored in `config.toml`
 
 ## Development Notes
 
-### Adding a UI Action / Backend Call
-- Add a variant to the `Message` enum in `src/app/message.rs`, emit it from the relevant `view/*.rs` method (e.g. `button(...).on_press(Message::Foo)`).
-- Add the variant to the matching domain's or-pattern arm in `src/app/update/mod.rs`, then handle it in that domain's `update_<domain>` method in `src/app/update/<domain>.rs`. For a backend call, return `Task::perform(commands::module::fn(self.backend.app_state.clone(), …), Message::FooDone)`; the result comes back as another message.
+### Adding a UI Action / Backend Call (desktop)
+- Add a variant to the `Message` enum in `desktop/src/app/message.rs`, emit it from the relevant `view/*.rs` method (e.g. `button(...).on_press(Message::Foo)`).
+- Add the variant to the matching domain's or-pattern arm in `desktop/src/app/update/mod.rs`, then handle it in that domain's `update_<domain>` method in `desktop/src/app/update/<domain>.rs`. For a backend call, return `Task::perform(commands::module::fn(self.backend.app_state.clone(), …), Message::FooDone)`; the result comes back as another message.
 - Async backend fns take owned `Arc<_>` handles (so the future is `'static`); sync fns take `&_`.
 - Any struct carried inside a `Message` must derive `Debug` + `Clone` (the enum derives both).
 
@@ -162,8 +175,8 @@ There is no Node, npm, or Vite — the desktop app is a single Rust crate.
 - Sessions identified by UUID; use `AudioPlayer::get_state(session_id)` to query state.
 - Crossfade implemented in Rust: `AudioPlayer::crossfade_to()` in `audio/mod.rs` ramps volume between outgoing and incoming sessions. The `queue_manager` task decides *when* to trigger (reacting to `PlaybackPosition` events on the bus); the engine performs the fade.
 
-### UI State Management
-- All mutable app state lives on the `App` struct in `src/app/mod.rs` — single source of truth, no stores.
+### UI State Management (desktop)
+- All mutable app state lives on the `App` struct in `desktop/src/app/mod.rs` — single source of truth, no stores.
 - `update` mutates `App` and returns a `Task`; `view` is a pure function of `App` state, re-run after every message.
 - Backend → UI events arrive via the `EventBus` subscription as `Message::Backend(BackendEvent)`.
 
@@ -179,7 +192,8 @@ There is no Node, npm, or Vite — the desktop app is a single Rust crate.
 Unit tests live in `#[cfg(test)] mod tests` blocks next to the code they cover (pure logic only — no network, no audio device, no keyring). Run:
 
 ```bash
-cargo test --bin firmium
+cargo test --workspace   # backend + desktop + termium
+cargo test -p firmium-backend   # backend only
 ```
 
 Before considering any change done, also run clippy strict (treats warnings as errors) — required after every change, not just before commit:
@@ -200,8 +214,8 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 
 ## Packaging & Distribution
 
-- The desktop build is a single binary: `cargo build --release` → `target/release/firmium`.
-- `PKGBUILD` (Arch), `firmium.spec` / `packaging/firmium.spec` (rpm/COPR), and the `.deb` packaging install that binary plus `packaging/firmium.desktop` and the icons under `assets/app-icons/`.
+- `cargo build --release` builds both workspace binaries: `target/release/firmium` (desktop GUI) and `target/release/termium` (TUI).
+- `PKGBUILD` (Arch), `firmium.spec` / `packaging/firmium.spec` (rpm/COPR), and the `.deb` packaging install the `firmium` binary plus `packaging/firmium.desktop` and the icons under `assets/app-icons/`. Termium is not yet packaged separately (build from source via `cargo build --release -p termium`).
 - macOS: `release.yml`'s `build-macos` job cross-compiles both `aarch64-apple-darwin` (Apple Silicon) and `x86_64-apple-darwin` (Intel) on a `macos-14` runner, assembles a `Firmium.app` bundle (binary + `assets/app-icons/icon.icns` + `packaging/macos/Info.plist` with the version substituted in), and wraps it into a `.dmg` via `hdiutil`. Builds are unsigned — no Apple Developer account yet, so no codesigning/notarization step.
 - FreeBSD: `release.yml`'s `build-freebsd` job runs inside a FreeBSD VM via `cross-platform-actions/action` (no native FreeBSD GitHub Actions runner exists), builds with `cargo build --release`, and packages the binary + `packaging/firmium.desktop` + icons into a `.pkg` via `pkg create`. Not submitted to the official FreeBSD ports tree (out of scope — that's a separate manual review process).
 - `scripts/bump-version.sh <ver>` updates `Cargo.toml`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, the Android `build.gradle.kts`, and the AUR folders.
@@ -216,17 +230,21 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 
 ## Key Files
 
-- `src/main.rs` — Entry point: mounts backend modules, runs `iced::application(...)`
-- `src/app/` — `App` state, `Message` enum, `update()`, `view()` — the whole UI, split into `mod.rs`/`message.rs`/`types.rs`/`update/*.rs`/`view/*.rs` (one file per feature domain/screen)
-- `src/theme.rs`, `src/icons.rs`, `src/viz.rs`, `src/config.rs` — theming, icons, visualizer canvas, config persistence
+- `desktop/src/main.rs` — Desktop entry point: runs `iced::application(...)`
+- `desktop/src/app/` — `App` state, `Message` enum, `update()`, `view()` — the whole desktop UI, split into `mod.rs`/`message.rs`/`types.rs`/`update/*.rs`/`view/*.rs` (one file per feature domain/screen)
+- `desktop/src/theme.rs`, `desktop/src/icons.rs`, `desktop/src/viz/` — theming, icons, visualizer canvas + wgpu shader pipeline
+- `termium/src/main.rs` — Termium entry point
+- `termium/src/app.rs` — Termium `App` state and ratatui render/input loop
+- `termium/src/ui/` — Termium screen/widget renderers
 - `backend/init.rs` — `Backend::new()`: builds shared handles, starts `queue_manager`
 - `backend/events.rs` — `EventBus` + `BackendEvent` (backend → UI)
 - `backend/state.rs` — `AppState` (connection + reqwest client + bus)
+- `backend/config.rs` — `~/.config/<id>/config.toml` persistence, shared by desktop and termium
 - `backend/audio/` — Audio playback engine (symphonia + cpal)
 - `backend/commands/` — OpenSubsonic client, queue, lyrics, covers, downloads, EQ, stats
-- `Cargo.toml` — single binary crate (iced + backend deps)
+- `Cargo.toml` — workspace root (`members = ["backend", "desktop", "termium"]`)
 - `themes/` — TOML theme files (embedded at compile time)
-- `assets/` — bundled font and app icons
+- `assets/` — bundled font and app icons (desktop)
 - `packaging/` — `firmium.desktop`, rpm spec, `macos/Info.plist`
 - `android/` — Separate native Kotlin/Compose Android app; see [android/CLAUDE.md](android/CLAUDE.md)
 
@@ -256,7 +274,7 @@ Common endpoints: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverArt`, 
 
 - **Cover Art Caching**: Disk-based cache under app cache dir (`commands/cover_cache.rs`), up to 200MB budget; LRU (by mtime) eviction when budget exceeded. Persists across restarts; loaded into an `iced::widget::image::Handle` cached in `App` (bounded to `MAX_COVER_HANDLES` decoded handles in memory, oldest evicted) so covers survive restarts without re-downloading.
 - **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit, `backend/commands/subsonic.rs`)
-- **Long lists**: albums, artists, and album/playlist track lists use a windowed renderer in `src/app/cover.rs` (the `list_window` helper: scroll offset + spacers) that only builds the rows currently on screen.
+- **Long lists**: albums, artists, and album/playlist track lists use a windowed renderer in `desktop/src/app/cover.rs` (the `list_window` helper: scroll offset + spacers) that only builds the rows currently on screen.
 - **Search**: Limited to 40 albums, 100 songs per query (`commands/subsonic.rs::search`)
 - **Playback Concurrency**: One audio stream per device active at a time; multiple devices can play different streams concurrently
 - **CPU**: Release build has `opt-level = 3` + LTO + `codegen-units = 1`; `strip = false` keeps debug symbols for crash reporting

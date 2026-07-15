@@ -1,6 +1,6 @@
 # Contributing to Firmium
 
-Thanks for your interest in contributing! Firmium is an OpenSubsonic music streaming client for desktop (Linux/Windows) and Android. This guide will help you get started.
+Thanks for your interest in contributing! Firmium is an OpenSubsonic music streaming client for desktop (Linux, Windows, macOS, FreeBSD) and Android. This guide will help you get started.
 
 ## Quick Start
 
@@ -8,6 +8,8 @@ Thanks for your interest in contributing! Firmium is an OpenSubsonic music strea
 - Rust 1.80+ (install via [rustup](https://rustup.rs/))
 - On Linux: ALSA (`libasound2`), `libssl`, `libsecret`, `libxkbcommon`, plus a Vulkan/OpenGL driver (for iced's `wgpu` renderer). Package names vary by distro — see `README.md`.
 - On Windows: no extra system dependencies needed
+- On macOS: Xcode Command Line Tools (`xcode-select --install`) only
+- On FreeBSD: `alsa-lib`, `dbus`, `libxkbcommon` via `pkg install`, plus a Mesa/Vulkan driver
 
 ### Set Up Your Environment
 
@@ -28,7 +30,7 @@ The app opens in its own window. Log into a Subsonic/Navidrome server to test. T
 firmium/
 ├── src/                      # iced UI (Rust)
 │   ├── main.rs              # Entry point: mounts backend, runs iced::application
-│   ├── app.rs              # App state, Message enum, update(), view() — the whole UI
+│   ├── app/                # App state, Message enum, update(), view() — split by feature (mod.rs/message.rs/types.rs/update/*.rs/view/*.rs)
 │   ├── theme.rs            # TOML theme tokens → iced Theme
 │   ├── icons.rs            # Bundled SVG icon set
 │   ├── viz.rs              # Visualizer canvas
@@ -56,8 +58,8 @@ firmium/
 
 The UI and backend are one crate, one process — no IPC, no web layer.
 
-- The UI is a state struct (`App`), a `Message` enum, an `update()`, and a `view()`, all in `src/app.rs`. `App` is the single source of truth for app state.
-- To add a UI action: add a `Message` variant, emit it from a `view` method (`button(...).on_press(Message::Foo)`), handle it in `App::update` — usually by spawning a backend call with `iced::Task::perform`, whose result returns as another message.
+- The UI is a state struct (`App`), a `Message` enum, an `update()`, and a `view()`, split across `src/app/mod.rs` (state), `message.rs` (the `Message` enum), `update/*.rs` (one file per feature domain), and `view/*.rs` (one file per screen). `App` is the single source of truth for app state.
+- To add a UI action: add a `Message` variant in `message.rs`, emit it from a `view/*.rs` method (`button(...).on_press(Message::Foo)`), handle it in the matching `update/<domain>.rs` — usually by spawning a backend call with `iced::Task::perform`, whose result returns as another message.
 - Backend → UI events (playback/queue) arrive via the `EventBus` subscription as `Message::Backend(BackendEvent)`.
 - Any struct carried inside a `Message` must derive `Debug` + `Clone`.
 
@@ -90,10 +92,10 @@ cd android && ./gradlew installDebug      # debug build on device
 - Async backend fns take owned `Arc<_>` handles (so the future is `'static`); sync fns take `&_`
 
 ### UI (src/)
-- All mutable UI state on the `App` struct in `src/app.rs` — no global stores
+- All mutable UI state on the `App` struct in `src/app/mod.rs` — no global stores
 - `update` mutates `App` and returns a `Task`; `view` is a pure function of `App`, re-run after each message
 - API result types come from `backend/commands` (typed structs via `mappers.rs`)
-- Match the existing widget/style idiom in `app.rs` (helper fns like `tstyle`, `primary_button`, `icon_button`)
+- Match the existing widget/style idiom in `src/app/styles.rs` (helper fns like `tstyle`, `primary_button`, `icon_button`)
 
 ### Themes
 - TOML files in `themes/` directory (built-ins embedded at compile time via `include_dir`)
@@ -115,14 +117,9 @@ Run `cargo run`, interact with the app, and watch the terminal for errors.
 
 ## Documentation
 
-When you make changes to settings, themes, or build/packaging commands, update the docs:
+Doc-sync rules (which file to update for which kind of change — settings, themes, build commands, new features, README/CONTRIBUTING/API.md/CHANGELOG/android docs) live in one place: [AGENTS.md](AGENTS.md) § "Keep Docs in Sync". Check there rather than this file — this section used to duplicate that table and drifted out of date.
 
-- **Settings** → update `src/content/settings.md` in [firmium-docs](https://github.com/fossisawesome/firmium-docs)
-- **Themes** → update `src/content/custom-themes.md` in `firmium-docs`
-- **Build Commands** → update `src/content/building-from-source.md` in `firmium-docs`
-- **Features** → add to appropriate page in `src/content/*.md` in `firmium-docs`
-
-Docs are built with Vite + Svelte (rendered via `src/lib/Markdown.svelte`) and deployed to GitHub Pages. The docs use Firmium's dark theme (CSS variables from `--bg` and `--accent`).
+The `firmium-docs` site itself is built with Vite + Svelte (rendered via `src/lib/Markdown.svelte`) and deployed to GitHub Pages, using Firmium's dark theme (CSS variables from `--bg` and `--accent`).
 
 ## Submitting Changes
 

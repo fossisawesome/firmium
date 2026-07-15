@@ -64,7 +64,7 @@ That's it. Your library will load automatically.
 
 ## Install
 
-Firmium is available for **Linux desktop, macOS, FreeBSD** and **Android**.
+Firmium is available for **Linux desktop, Windows, macOS, FreeBSD** and **Android**.
 
 > **Compatibility (Linux):** Tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
 
@@ -187,6 +187,7 @@ sudo dpkg -i ./firmium_*.deb
 
 - Rust 1.80 or later (`rustup default stable`)
 - On Linux, system dependencies for your distribution (see [System Dependencies (Linux)](#system-dependencies-linux) above) — ALSA, libsecret, libxkbcommon, and a Vulkan/OpenGL driver
+- On Windows, no extra system dependencies needed — rustls handles TLS, Windows Credential Manager is built in
 - On macOS, Xcode Command Line Tools (`xcode-select --install`) — no other system libraries needed
 - On FreeBSD, system dependencies via `pkg` (see [System Dependencies (FreeBSD)](#system-dependencies) above) — `alsa-lib`, `dbus`, `libxkbcommon`, and a Mesa/Vulkan driver
 
@@ -292,7 +293,7 @@ On PipeWire systems, the app stream can open at the track's native sample rate w
 
 ## Contributing
 
-Bug reports, feature requests, and pull requests are welcome - open an issue or PR on [GitHub](https://github.com/fossisawesome/firmium/issues).
+Bug reports, feature requests, and pull requests are welcome - open an issue or PR on [GitHub](https://github.com/fossisawesome/firmium/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, project structure, and PR expectations.
 
 ## License
 
