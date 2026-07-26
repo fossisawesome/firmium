@@ -17,6 +17,7 @@ use super::types::{Energy, HomeSection, Panel, RecapRange, SettingsCategory, Vie
 pub enum Message {
     Navigate(View),
     NavigateBack,
+    NavigateForward,
     Backend(BackendEvent),
     VisualizerTick,
     // Global Escape key press; dispatched to whichever overlay is currently open.

@@ -251,6 +251,8 @@ impl App {
                     self.playlist_detail = None;
                     self.playlist_detail_id = None;
                 }
+                self.nav_stack.retain(|v| *v != View::PlaylistDetail(local_id.clone()));
+                self.forward_stack.retain(|v| *v != View::PlaylistDetail(local_id.clone()));
                 match server_id {
                     Some(sid) => Task::perform(
                         firmium_backend::commands::playlists::push_delete(self.backend.app_state.clone(), sid),
