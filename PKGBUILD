@@ -9,7 +9,7 @@ license=('GPL-3.0-only')
 # cpal->alsa, rfd->gtk3, keyring->libsecret, winit->wayland/libxkbcommon,
 # wgpu->vulkan loader, iced text shaping->fontconfig.
 depends=('alsa-lib' 'gtk3' 'libsecret' 'libxkbcommon' 'wayland' 'vulkan-icd-loader' 'fontconfig')
-makedepends=('cargo')
+makedepends=('cargo' 'cmake')
 provides=('firmium-desktop')
 conflicts=('firmium-desktop-git')
 options=('!strip')

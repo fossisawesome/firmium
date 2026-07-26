@@ -11,6 +11,7 @@ Source0:        %{url}/archive/v%{version}.tar.gz
 BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  gcc
+BuildRequires:  cmake
 BuildRequires:  alsa-lib-devel
 BuildRequires:  gtk3-devel
 BuildRequires:  libsecret-devel
