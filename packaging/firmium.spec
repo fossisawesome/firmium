@@ -20,6 +20,7 @@ Source1:        firmium-VERSION_PLACEHOLDER-vendor.tar.xz
 BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  gcc
+BuildRequires:  cmake
 BuildRequires:  alsa-lib-devel
 BuildRequires:  gtk3-devel
 BuildRequires:  libsecret-devel

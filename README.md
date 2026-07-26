@@ -186,10 +186,11 @@ sudo dpkg -i ./firmium_*.deb
 ### Prerequisites
 
 - Rust 1.80 or later (`rustup default stable`)
-- On Linux, system dependencies for your distribution (see [System Dependencies (Linux)](#system-dependencies-linux) above) — ALSA, libsecret, libxkbcommon, and a Vulkan/OpenGL driver
-- On Windows, no extra system dependencies needed — rustls handles TLS, Windows Credential Manager is built in
-- On macOS, Xcode Command Line Tools (`xcode-select --install`) — no other system libraries needed
-- On FreeBSD, system dependencies via `pkg` (see [System Dependencies (FreeBSD)](#system-dependencies) above) — `alsa-lib`, `dbus`, `libxkbcommon`, and a Mesa/Vulkan driver
+- `cmake` and a C compiler, needed to build the bundled `libopus` (Opus decoding) — see per-platform notes below
+- On Linux, system dependencies for your distribution (see [System Dependencies (Linux)](#system-dependencies-linux) above) — ALSA, libsecret, libxkbcommon, and a Vulkan/OpenGL driver; `cmake` via your package manager (e.g. `apt install cmake` / `dnf install cmake` / `pacman -S cmake`)
+- On Windows, install [CMake](https://cmake.org/download/) and the "Desktop development with C++" workload (Visual Studio Build Tools) — rustls handles TLS, Windows Credential Manager is built in
+- On macOS, Xcode Command Line Tools (`xcode-select --install`) for the C compiler, plus `cmake` (`brew install cmake`, or the installer from [cmake.org](https://cmake.org/download/)) — Xcode CLT doesn't include `cmake` itself
+- On FreeBSD, system dependencies via `pkg` (see [System Dependencies (FreeBSD)](#system-dependencies) above) — `alsa-lib`, `dbus`, `libxkbcommon`, `cmake`, and a Mesa/Vulkan driver
 
 ### Steps
 

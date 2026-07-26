@@ -6,10 +6,11 @@ Thanks for your interest in contributing! Firmium is an OpenSubsonic music strea
 
 ### Prerequisites
 - Rust 1.80+ (install via [rustup](https://rustup.rs/))
-- On Linux: ALSA (`libasound2`), `libssl`, `libsecret`, `libxkbcommon`, plus a Vulkan/OpenGL driver (for iced's `wgpu` renderer). Package names vary by distro — see `README.md`.
-- On Windows: no extra system dependencies needed
-- On macOS: Xcode Command Line Tools (`xcode-select --install`) only
-- On FreeBSD: `alsa-lib`, `dbus`, `libxkbcommon` via `pkg install`, plus a Mesa/Vulkan driver
+- `cmake` and a C compiler (needed to build the bundled `libopus` for Opus decoding)
+- On Linux: ALSA (`libasound2`), `libssl`, `libsecret`, `libxkbcommon`, plus a Vulkan/OpenGL driver (for iced's `wgpu` renderer), plus `cmake`. Package names vary by distro — see `README.md`.
+- On Windows: install [CMake](https://cmake.org/download/) and the "Desktop development with C++" workload (Visual Studio Build Tools)
+- On macOS: Xcode Command Line Tools (`xcode-select --install`) for the C compiler, plus `cmake` (`brew install cmake`) — Xcode CLT doesn't include `cmake` itself
+- On FreeBSD: `alsa-lib`, `dbus`, `libxkbcommon`, `cmake` via `pkg install`, plus a Mesa/Vulkan driver
 
 ### Set Up Your Environment
 

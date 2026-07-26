@@ -1,18 +1,31 @@
 //! Symphonia probe/decode wrapper. Opens a `MediaSource`, probes the
 //! container format, and decodes packets to interleaved f32 sample chunks.
 
+use std::sync::LazyLock;
 use std::time::Duration;
 use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{Decoder, DecoderOptions};
+use symphonia::core::codecs::{CodecRegistry, Decoder, DecoderOptions};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatReader, FormatOptions, SeekMode, SeekTo};
 use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
+use symphonia_adapter_libopus::OpusDecoder;
 
 /// Sample rate assumed when the container/codec doesn't report one up front.
 pub const DEFAULT_SAMPLE_RATE: u32 = 48_000;
+
+/// Symphonia only registers decoders enabled via its own feature flags.
+/// This doesn't include Opus (Symphonia has no native Opus decoder).
+/// This registers everything `symphonia::default` would, plus
+/// the `libopus`-backed adapter, so Ogg-Opus tracks can be decoded.
+static CODEC_REGISTRY: LazyLock<CodecRegistry> = LazyLock::new(|| {
+    let mut registry = CodecRegistry::new();
+    symphonia::default::register_enabled_codecs(&mut registry);
+    registry.register_all::<OpusDecoder>();
+    registry
+});
 
 pub struct DecoderHandle {
     format: Box<dyn FormatReader>,
@@ -37,7 +50,7 @@ impl DecoderHandle {
         let track_id = track.id;
         let codec_params = track.codec_params.clone();
 
-        let decoder = symphonia::default::get_codecs()
+        let decoder = CODEC_REGISTRY
             .make(&codec_params, &DecoderOptions::default())
             .map_err(|e| format!("Failed to create decoder: {e}"))?;
 
