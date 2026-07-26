@@ -88,6 +88,11 @@ impl App {
                 Task::none()
             }
             Message::UnsubscribePodcastChannel(channel_id) => {
+                if self.view == View::PodcastDetail(channel_id.clone()) {
+                    self.view = View::Podcasts;
+                }
+                self.nav_stack.retain(|v| *v != View::PodcastDetail(channel_id.clone()));
+                self.forward_stack.retain(|v| *v != View::PodcastDetail(channel_id.clone()));
                 if let Some(store) = self.backend.podcasts.clone() {
                     Task::perform(
                         async move { firmium_backend::podcasts::unsubscribe(store, channel_id) },

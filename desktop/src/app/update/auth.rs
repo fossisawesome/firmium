@@ -123,6 +123,8 @@ impl App {
                 self.authed = false;
                 self.show_account_switcher = true;
                 self.search_results = None;
+                self.nav_stack.clear();
+                self.forward_stack.clear();
                 self.populate_offline_library();
                 self.save_config();
                 Task::batch([self.load_covers(), self.load_cover_ids(self.offline_home_cover_ids())])
@@ -217,5 +219,6 @@ impl App {
         self.genre_detail_name = None;
         self.view = View::Home;
         self.nav_stack.clear();
+        self.forward_stack.clear();
     }
 }

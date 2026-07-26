@@ -197,6 +197,7 @@ impl App {
             | Message::PlayPodcastEpisode(..) => self.update_podcasts(message),
             Message::Navigate(..)
             | Message::NavigateBack
+            | Message::NavigateForward
             | Message::Backend(..)
             | Message::VisualizerTick
             | Message::ShowToast(..)

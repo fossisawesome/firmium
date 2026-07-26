@@ -57,6 +57,7 @@ pub struct App {
 
     view: View,
     nav_stack: Vec<View>,
+    forward_stack: Vec<View>,
 
     // ── Library data ──────────────────────────────────────────────────────────
     albums: Vec<Album>,
@@ -288,6 +289,7 @@ impl App {
             next_toast_id: 0,
             view: View::Home,
             nav_stack: Vec::new(),
+            forward_stack: Vec::new(),
             albums: Vec::new(),
             albums_scroll: 0.0,
             home_recent: Vec::new(),

@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use iced::keyboard;
+use iced::{event, keyboard, mouse, window};
 use iced::Subscription;
 
 use firmium_backend::events::EventBus;
@@ -15,6 +15,7 @@ impl App {
         Subscription::batch([
             bus,
             keyboard::listen().filter_map(key_message),
+            event::listen_with(mouse_message),
             if self.right_panel == Some(Panel::Visualizer) {
                 iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::VisualizerTick)
             } else {
@@ -43,6 +44,18 @@ fn key_message(event: keyboard::Event) -> Option<Message> {
         }
         keyboard::Event::KeyPressed { key: keyboard::Key::Named(keyboard::key::Named::Space), .. } => {
             Some(Message::TogglePlay)
+        }
+        _ => None,
+    }
+}
+
+fn mouse_message(event: iced::Event, status: event::Status, _window: window::Id) -> Option<Message> {
+    match (event, status) {
+        (iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Back)), event::Status::Ignored) => {
+            Some(Message::NavigateBack)
+        }
+        (iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Forward)), event::Status::Ignored) => {
+            Some(Message::NavigateForward)
         }
         _ => None,
     }
