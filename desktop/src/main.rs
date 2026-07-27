@@ -50,12 +50,18 @@ fn main() -> iced::Result {
     .title("Firmium")
     .theme(App::theme)
     .subscription(App::subscription)
+    .settings(iced::Settings { id: Some("firmium".to_string()), ..Default::default() })
     .font(include_bytes!("../assets/fonts/LiberationMono-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/Inter-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/FiraCode-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/Hack-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/Cousine-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/BigBlueTerminalPlus.ttf").as_slice())
+    .window(iced::window::Settings {
+        platform_specific: platform_specific(),
+        icon: window_icon(),
+        ..Default::default()
+    })
     .window_size(iced::Size::new(1200.0, 800.0))
     .decorations(decorations);
 
@@ -74,6 +80,29 @@ fn main() -> iced::Result {
     runtime.shutdown_background();
 
     result
+}
+
+/// On X11 and Wayland, winit uses `application_id` as the window class/app_id
+#[cfg(target_os = "linux")]
+fn platform_specific() -> iced::window::settings::PlatformSpecific {
+    iced::window::settings::PlatformSpecific {
+        application_id: "firmium".to_string(),
+        ..Default::default()
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn platform_specific() -> iced::window::settings::PlatformSpecific {
+    Default::default()
+}
+
+/// Decodes the bundled app icon for use as the window's title bar/taskbar icon
+/// (X11, Windows; Wayland ignores this and relies on `application_id` instead).
+fn window_icon() -> Option<iced::window::Icon> {
+    let bytes = include_bytes!("../assets/app-icons/128x128.png");
+    let image = image::load_from_memory(bytes).ok()?.into_rgba8();
+    let (width, height) = image.dimensions();
+    iced::window::icon::from_rgba(image.into_raw(), width, height).ok()
 }
 
 /// Build the initial App state and spawn startup tasks.
