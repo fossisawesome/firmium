@@ -1,4 +1,4 @@
-use iced::widget::{button, column, row, scrollable, text, text_input};
+use iced::widget::{button, column, container, row, scrollable, text, text_input};
 use iced::{Alignment, Background, Border, Element, Length};
 
 use firmium_backend::commands::mappers::Song;
@@ -134,7 +134,7 @@ impl App {
 
     pub(crate) fn avg_rating_badge(&self, song: &Song) -> Element<'_, Message> {
         let t = self.tokens;
-        match song.average_rating {
+        let content: Element<'_, Message> = match song.average_rating {
             Some(r) if r > 0.0 => row![
                 icons::icon(icons::STAR_FILLED, 11.0, t.muted),
                 text(format!("{r:.1}")).size(11).style(tstyle(t.muted)),
@@ -143,7 +143,8 @@ impl App {
             .align_y(Alignment::Center)
             .into(),
             _ => row![].into(),
-        }
+        };
+        container(content).width(Length::Fixed(34.0)).into()
     }
 
     pub(crate) fn rating_filter_row(&self) -> Element<'_, Message> {

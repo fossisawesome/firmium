@@ -541,12 +541,27 @@ pub async fn scrobble(state: Arc<AppState>, id: String, submission: bool, time: 
     }
 }
 
-/// Sets a 1–5 star rating on a track (0 clears it). Logged-only on error.
-pub async fn set_rating(state: Arc<AppState>, id: String, rating: u32) {
+/// Sets a 1–5 star rating on a track (0 clears it).
+pub async fn set_rating(state: Arc<AppState>, id: String, rating: u32) -> Result<(), crate::errors::UserError> {
     let params = [("id", id), ("rating", rating.to_string())];
-    if let Err(e) = subsonic_request(&state, "setRating", &params, true).await {
-        eprintln!("Set rating failed: {}", e.message());
-    }
+    subsonic_request(&state, "setRating", &params, true).await?;
+    Ok(())
+}
+
+/// Fetches a single song by id, picks up the server-recomputed
+/// `averageRating` right after `set_rating
+pub async fn get_song(state: Arc<AppState>, id: String) -> Result<Song, crate::errors::UserError> {
+    let body = subsonic_request(&state, "getSong", &[("id", id)], false).await?;
+    let song = body.get("song").cloned().ok_or(crate::errors::UserError::Unknown)?;
+    map_songs(vec![song]).into_iter().next().ok_or(crate::errors::UserError::Unknown)
+}
+
+/// Sets a rating then re-fetches the song, so the caller can pick up the
+/// server-recomputed `averageRating` in one round trip. If the write itself
+/// fails, returns that error without fetching (nothing changed to reconcile).
+pub async fn set_rating_and_refetch(state: Arc<AppState>, id: String, rating: u32) -> Result<Song, crate::errors::UserError> {
+    set_rating(state.clone(), id.clone(), rating).await?;
+    get_song(state, id).await
 }
 
 /// Which entity a star/unstar call targets — Subsonic's `star`/`unstar` accept

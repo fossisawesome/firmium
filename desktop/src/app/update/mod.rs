@@ -46,9 +46,12 @@ impl App {
             | Message::ShuffleAlbum
             | Message::PlaySong(..)
             | Message::SetRating(..)
+            | Message::RatingRefreshed(..)
             | Message::ToggleStar(..)
             | Message::StarToggled(..)
             | Message::FavoritesLoaded(..)
+            | Message::FavoritesSongsScrolled(..)
+            | Message::FavoritesAlbumsScrolled(..)
             | Message::DownloadTrack(..)
             | Message::DownloadDone(..)
             | Message::GenresLoaded(..)

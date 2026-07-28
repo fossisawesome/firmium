@@ -1451,7 +1451,7 @@ checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
 name = "firmium"
-version = "8.0.1"
+version = "8.1.0"
 dependencies = [
  "bytemuck",
  "dirs",
@@ -1467,7 +1467,7 @@ dependencies = [
 
 [[package]]
 name = "firmium-backend"
-version = "8.0.1"
+version = "8.1.0"
 dependencies = [
  "bytes",
  "cpal",
@@ -5507,7 +5507,7 @@ dependencies = [
 
 [[package]]
 name = "termium"
-version = "8.0.1"
+version = "8.1.0"
 dependencies = [
  "crossterm",
  "firmium-backend",
