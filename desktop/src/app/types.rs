@@ -1,4 +1,6 @@
-use firmium_backend::errors::UserError;
+use std::fmt;
+
+use firmium_backend::{commands::mappers::Album, errors::UserError};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum View {
@@ -135,4 +137,56 @@ pub(crate) struct Toast {
     pub category: UserError,
     pub text: String,
     pub spawned: std::time::Instant,
+}
+
+/// Album sort options, referenced from Subsonic API getAlbumList2
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AlbumsSort {
+    Random,
+    Newest,
+    Frequent,
+    Recent,
+    Starred,
+    AlphabeticalByName,
+    AlphabeticalByArtist,
+}
+
+impl AlbumsSort {
+    pub(crate) fn get_items() -> Vec<AlbumsSort> {
+        return vec![
+            AlbumsSort::Random,
+            AlbumsSort::Newest,
+            AlbumsSort::Frequent,
+            AlbumsSort::Recent,
+            AlbumsSort::Starred,
+            AlbumsSort::AlphabeticalByName,
+            AlbumsSort::AlphabeticalByArtist,
+        ];
+    }
+
+    pub(crate) fn get_sort_param(self) -> &'static str {
+        match self {
+            AlbumsSort::Random => "random",
+            AlbumsSort::Newest => "newest",
+            AlbumsSort::Frequent => "frequent",
+            AlbumsSort::Recent => "recent",
+            AlbumsSort::Starred => "starred",
+            AlbumsSort::AlphabeticalByName => "alphabeticalByName",
+            AlbumsSort::AlphabeticalByArtist => "alphabeticalByArtist",
+        }
+    }
+}
+
+impl fmt::Display for AlbumsSort {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match *self {
+            AlbumsSort::Random => "Random",
+            AlbumsSort::Newest => "Recently Added",
+            AlbumsSort::Frequent => "Frequent",
+            AlbumsSort::Recent => "Recent",
+            AlbumsSort::Starred => "Starred",
+            AlbumsSort::AlphabeticalByName => "A-Z (name)",
+            AlbumsSort::AlphabeticalByArtist => "A-Z (artist)",
+        })
+    }
 }

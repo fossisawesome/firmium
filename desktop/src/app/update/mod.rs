@@ -35,6 +35,7 @@ impl App {
             | Message::HomeAlbumsLoaded(..)
             | Message::CoverLoaded(..)
             | Message::AlbumsScrolled(..)
+            | Message::AlbumsSortChanged(..)
             | Message::ArtistsScrolled(..)
             | Message::AlbumTracksScrolled(..)
             | Message::AlbumTracksLoaded(..)

@@ -153,7 +153,7 @@ pub async fn validate_connection(state: Arc<AppState>) -> Result<(), crate::erro
 
 const API_PAGE_SIZE: &str = "500";
 
-pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::errors::UserError> {
+pub async fn get_albums(state: Arc<AppState>, sort_param: &str) -> Result<Vec<Album>, crate::errors::UserError> {
     let page_size: u32 = API_PAGE_SIZE.parse().unwrap_or(500);
     let mut all = Vec::new();
     let mut offset: u32 = 0;
@@ -161,7 +161,7 @@ pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::error
         let body = subsonic_request(
             &state,
             "getAlbumList2",
-            &[("type", "alphabeticalByName".to_string()), ("size", page_size.to_string()), ("offset", offset.to_string())],
+            &[("type", sort_param.to_string()), ("size", page_size.to_string()), ("offset", offset.to_string())],
             false,
         )
         .await?;
