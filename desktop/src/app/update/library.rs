@@ -1,7 +1,7 @@
 use iced::Task;
 
 
-use super::super::cover::{ALBUM_ROW_H, load_rounded_cover};
+use super::super::cover::{ALBUM_CARD_W, ALBUM_ROW_H, TRACK_ROW_H, VIEWPORT_H, load_rounded_cover};
 use super::super::message::Message;
 use super::super::types::*;
 use super::super::App;
@@ -55,6 +55,22 @@ impl App {
             Message::AlbumTracksScrolled(y) => {
                 self.album_tracks_scroll = y;
                 Task::none()
+            }
+            Message::FavoritesSongsScrolled(y) => {
+                self.favorites_songs_scroll = y;
+                let Some(starred) = &self.favorites else { return Task::none(); };
+                let first = ((y / TRACK_ROW_H).floor().max(0.0) as usize).min(starred.songs.len());
+                let end = (first + 16).min(starred.songs.len());
+                let ids: Vec<String> = starred.songs[first..end].iter().filter_map(|s| s.cover_art_id.clone()).collect();
+                self.load_cover_ids(ids)
+            }
+            Message::FavoritesAlbumsScrolled(x) => {
+                self.favorites_albums_scroll = x;
+                let Some(starred) = &self.favorites else { return Task::none(); };
+                let first = ((x / ALBUM_CARD_W).floor().max(0.0) as usize).min(starred.albums.len());
+                let end = (first + 8).min(starred.albums.len());
+                let ids: Vec<String> = starred.albums[first..end].iter().filter_map(|a| a.cover_art_id.clone()).collect();
+                self.load_cover_ids(ids)
             }
             Message::AlbumTracksLoaded(Ok(at)) => {
                 let ids: Vec<String> = at
@@ -153,36 +169,30 @@ impl App {
             ),
             Message::SetRating(id, rating) => {
                 // Optimistic local update so the stars fill immediately.
-                if let Some(at) = &mut self.album_detail {
-                    for s in &mut at.tracks {
-                        if s.id == id {
-                            s.user_rating = Some(rating);
-                        }
-                    }
-                }
-                if let Some(pt) = &mut self.playlist_detail {
-                    for s in &mut pt.tracks {
-                        if s.id == id {
-                            s.user_rating = Some(rating);
-                        }
-                    }
-                }
-                if let Some(res) = &mut self.search_results {
-                    for s in &mut res.songs {
-                        if s.id == id {
-                            s.user_rating = Some(rating);
-                        }
-                    }
-                }
-                for m in &mut self.similar_results {
-                    if m.song.id == id {
-                        m.song.user_rating = Some(rating);
-                    }
-                }
+                // Remember what it was so a failed write (RatingRefreshed
+                // below) can be reverted, same as ToggleStar/StarToggled.
+                let previous_rating = self.current_user_rating(&id);
+                self.for_each_rated_song_mut(&id, |s| s.user_rating = Some(rating));
+                let temp_id = id.clone();
                 Task::perform(
-                    firmium_backend::commands::subsonic::set_rating(self.backend.app_state.clone(), id, rating),
-                    |_| Message::DownloadDone(Ok(())),
+                    firmium_backend::commands::subsonic::set_rating_and_refetch(self.backend.app_state.clone(), id, rating),
+                    move |result| Message::RatingRefreshed(temp_id.clone(), rating, previous_rating, result),
                 )
+            }
+            Message::RatingRefreshed(id, _rating, _previous, Ok(song)) => {
+                // Only revert if nothing newer has superseded this attempt
+                if self.current_user_rating(&id) == song.user_rating {
+                    self.update_average_rating_locally(&id, song.average_rating);
+                }
+                Task::none()
+            }
+            Message::RatingRefreshed(id, rating, previous, Err(e)) => {
+                // Only revert if nothing newer has superseded this attempt
+                if self.current_user_rating(&id) == Some(rating) {
+                    self.for_each_rated_song_mut(&id, |s| s.user_rating = previous);
+                }
+                self.show_toast(e);
+                Task::none()
             }
             Message::ToggleStar(id, kind) => {
                 // Optimistic: figure out current starred state from whichever
@@ -213,8 +223,16 @@ impl App {
                 Task::none()
             }
             Message::FavoritesLoaded(Ok(starred)) => {
+                // First screenful only, the rest load incrementally as each shelf scrolls
+                let albums_per_viewport = (VIEWPORT_H / ALBUM_CARD_W).ceil() as usize;
+                let songs_per_viewport = (VIEWPORT_H / TRACK_ROW_H).ceil() as usize;
+                let ids: Vec<String> = starred.albums.iter().take(albums_per_viewport).filter_map(|a| a.cover_art_id.clone())
+                    .chain(starred.songs.iter().take(songs_per_viewport).filter_map(|s| s.cover_art_id.clone()))
+                    .collect();
                 self.favorites = Some(starred);
-                Task::none()
+                self.favorites_songs_scroll = 0.0;
+                self.favorites_albums_scroll = 0.0;
+                self.load_cover_ids(ids)
             }
             Message::FavoritesLoaded(Err(_e)) => Task::none(),
             Message::DownloadTrack(song) => Task::perform(

@@ -66,22 +66,29 @@ impl App {
         }
     }
 
-    /// Whether the given id is currently starred, checked against whichever
-    /// in-memory collection holds it (album detail, queue).
+    /// Finds a song by id among the collections that can show the heart toggle
+    fn find_song_for_star(&self, id: &str) -> Option<&firmium_backend::commands::mappers::Song> {
+        self.queue.iter()
+            .chain(self.album_detail.iter().flat_map(|at| at.tracks.iter()))
+            .chain(self.playlist_detail.iter().flat_map(|pt| pt.tracks.iter()))
+            .chain(self.genre_songs.iter())
+            .chain(self.favorites.iter().flat_map(|f| f.songs.iter()))
+            .find(|s| s.id == id)
+    }
+
+    /// Whether the given id is currently starred.
     pub(crate) fn is_starred(&self, id: &str, kind: firmium_backend::commands::subsonic::StarKind) -> bool {
         use firmium_backend::commands::subsonic::StarKind;
         match kind {
-            StarKind::Song => {
-                self.queue.iter().find(|s| s.id == id).map(|s| s.starred)
-                    .or_else(|| self.album_detail.as_ref()?.tracks.iter().find(|s| s.id == id).map(|s| s.starred))
-                    .unwrap_or(false)
+            StarKind::Song => self.find_song_for_star(id).is_some_and(|s| s.starred),
+            StarKind::Album => {
+                self.album_detail.as_ref().is_some_and(|at| at.starred)
+                    || self.favorites.as_ref().is_some_and(|f| f.albums.iter().any(|a| a.id == id && a.starred))
             }
-            StarKind::Album => self.album_detail.as_ref().is_some_and(|at| at.starred),
             StarKind::Artist => false, // artist starring has no local UI state to flip (list-only in Favorites screen).
         }
     }
 
-    /// Flips the starred flag on every in-memory copy of this id (queue, album detail).
     pub(crate) fn set_starred_locally(&mut self, id: &str, kind: firmium_backend::commands::subsonic::StarKind, starred: bool) {
         use firmium_backend::commands::subsonic::StarKind;
         match kind {
@@ -94,14 +101,108 @@ impl App {
                         if s.id == id { s.starred = starred; }
                     }
                 }
+                if let Some(pt) = self.playlist_detail.as_mut() {
+                    for s in pt.tracks.iter_mut() {
+                        if s.id == id { s.starred = starred; }
+                    }
+                }
+                for s in self.genre_songs.iter_mut() {
+                    if s.id == id { s.starred = starred; }
+                }
+                if starred {
+                    if let Some(song) = self.find_song_for_star(id).cloned() {
+                        if let Some(f) = self.favorites.as_mut() {
+                            if !f.songs.iter().any(|s| s.id == id) {
+                                f.songs.push(song);
+                            }
+                        }
+                    }
+                } else if let Some(f) = self.favorites.as_mut() {
+                    f.songs.retain(|s| s.id != id);
+                }
             }
             StarKind::Album => {
                 if let Some(at) = self.album_detail.as_mut() {
                     at.starred = starred;
                 }
+                if starred {
+                    if let Some(at) = &self.album_detail {
+                        let album = firmium_backend::commands::mappers::Album {
+                            id: id.to_string(),
+                            name: at.album_name.clone(),
+                            album_artist: at.album_artist.clone(),
+                            artist_id: None, // Isnt rendered
+                            cover_art_id: at.cover_art_id.clone(),
+                            song_count: Some(at.tracks.len() as u32),
+                            release_type: String::new(),
+                            genres: None, // Isnt rendered
+                            year: None, // Isnt rendered
+                            is_compilation: false, // Isnt rendered
+                            starred: true,
+                        };
+                        if let Some(f) = self.favorites.as_mut() {
+                            if !f.albums.iter().any(|a| a.id == id) {
+                                f.albums.push(album);
+                            }
+                        }
+                    }
+                } else if let Some(f) = self.favorites.as_mut() {
+                    f.albums.retain(|a| a.id != id);
+                }
             }
             StarKind::Artist => {}
         }
+    }
+
+    /// Finds a song by id among the collections that can show the rating
+    /// stars/average badge. Deliberately excludes `queue`: the player bar has
+    /// no rating UI, and queue entries aren't kept in sync with rating changes
+    fn find_song_for_rating(&self, id: &str) -> Option<&firmium_backend::commands::mappers::Song> {
+        self.album_detail.iter().flat_map(|at| at.tracks.iter())
+            .chain(self.playlist_detail.iter().flat_map(|pt| pt.tracks.iter()))
+            .chain(self.genre_songs.iter())
+            .chain(self.search_results.iter().flat_map(|r| r.songs.iter()))
+            .chain(self.similar_results.iter().map(|m| &m.song))
+            .chain(self.favorites.iter().flat_map(|f| f.songs.iter()))
+            .find(|s| s.id == id)
+    }
+
+    pub(crate) fn current_user_rating(&self, id: &str) -> Option<u32> {
+        self.find_song_for_rating(id).and_then(|s| s.user_rating)
+    }
+
+    /// Applies `f` to every in-memory copy of this song across the rating-bearing collections
+    pub(crate) fn for_each_rated_song_mut(&mut self, id: &str, mut f: impl FnMut(&mut firmium_backend::commands::mappers::Song)) {
+        if let Some(at) = self.album_detail.as_mut() {
+            for s in at.tracks.iter_mut() {
+                if s.id == id { f(s); }
+            }
+        }
+        if let Some(pt) = self.playlist_detail.as_mut() {
+            for s in pt.tracks.iter_mut() {
+                if s.id == id { f(s); }
+            }
+        }
+        for s in self.genre_songs.iter_mut() {
+            if s.id == id { f(s); }
+        }
+        if let Some(res) = self.search_results.as_mut() {
+            for s in res.songs.iter_mut() {
+                if s.id == id { f(s); }
+            }
+        }
+        for m in self.similar_results.iter_mut() {
+            if m.song.id == id { f(&mut m.song); }
+        }
+        if let Some(fav) = self.favorites.as_mut() {
+            for s in fav.songs.iter_mut() {
+                if s.id == id { f(s); }
+            }
+        }
+    }
+
+    pub(crate) fn update_average_rating_locally(&mut self, id: &str, avg: Option<f32>) {
+        self.for_each_rated_song_mut(id, |s| s.average_rating = avg);
     }
 
     pub(crate) fn cover_image(&self, cover_id: Option<&str>, size: f32) -> Element<'_, Message> {
@@ -175,6 +276,9 @@ pub(crate) const ALBUM_ROW_H: f32 = 60.0;
 pub(crate) const ARTIST_ROW_H: f32 = 60.0;
 pub(crate) const TRACK_ROW_H: f32 = 52.0;
 pub(crate) const VIEWPORT_H: f32 = 640.0;
+
+/// Card width + spacing for the horizontal Favorites album shelf
+pub(crate) const ALBUM_CARD_W: f32 = 170.0;
 
 /// Max number of decoded cover-art image handles kept in memory at once.
 pub(crate) const MAX_COVER_HANDLES: usize = 512;

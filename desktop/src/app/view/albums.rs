@@ -33,6 +33,8 @@ impl App {
 
         let scroller = scrollable(list)
             .height(Length::Fill)
+            .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
+            .style(thin_scroll_style(t))
             .on_scroll(|v| Message::AlbumsScrolled(v.absolute_offset().y));
 
         column![header, scroller].spacing(16).into()

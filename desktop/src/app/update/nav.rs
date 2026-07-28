@@ -59,7 +59,7 @@ impl App {
                             ])
                         }
                     }
-                    View::Favorites if self.favorites.is_none() => {
+                    View::Favorites => {
                         Task::perform(firmium_backend::commands::subsonic::get_starred(state), Message::FavoritesLoaded)
                     }
                     View::PlaylistDetail(id) if self.playlist_detail_id.as_deref() != Some(id.as_str()) => {

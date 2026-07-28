@@ -321,19 +321,28 @@ pub(crate) fn thin_scrollbar() -> scrollable::Scrollbar {
 }
 
 pub(crate) fn thin_scroll_style(t: Tokens) -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
-    move |_, _| {
-        let rail = scrollable::Rail {
+    move |_, status| {
+        let (h_active, v_active) = match status {
+            scrollable::Status::Hovered { is_horizontal_scrollbar_hovered, is_vertical_scrollbar_hovered, .. } => {
+                (is_horizontal_scrollbar_hovered, is_vertical_scrollbar_hovered)
+            }
+            scrollable::Status::Dragged { is_horizontal_scrollbar_dragged, is_vertical_scrollbar_dragged, .. } => {
+                (is_horizontal_scrollbar_dragged, is_vertical_scrollbar_dragged)
+            }
+            scrollable::Status::Active { .. } => (false, false),
+        };
+        let rail = |active: bool| scrollable::Rail {
             background: Some(Background::Color(Color { a: 0.08, ..t.muted })),
             border: Border { radius: 3.0.into(), ..Border::default() },
             scroller: scrollable::Scroller {
-                background: Background::Color(Color { a: 0.55, ..t.muted }),
+                background: Background::Color(if active { t.accent } else { Color { a: 0.55, ..t.muted } }),
                 border: Border { radius: 3.0.into(), ..Border::default() },
             },
         };
         scrollable::Style {
             container: container::Style::default(),
-            vertical_rail: rail,
-            horizontal_rail: rail,
+            vertical_rail: rail(v_active),
+            horizontal_rail: rail(h_active),
             gap: None,
             auto_scroll: scrollable::AutoScroll {
                 background: Background::Color(t.surface),
