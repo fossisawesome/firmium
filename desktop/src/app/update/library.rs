@@ -48,6 +48,12 @@ impl App {
                     .collect();
                 self.load_cover_ids(ids)
             }
+            Message::AlbumsSortChanged(sort) => {
+                self.albums_sort = sort;
+                let s = self.backend.app_state.clone();
+
+                Task::perform(firmium_backend::commands::subsonic::get_albums(s, self.albums_sort.get_sort_param()), Message::AlbumsLoaded)
+            }
             Message::ArtistsScrolled(y) => {
                 self.artists_scroll = y;
                 Task::none()

@@ -5,6 +5,7 @@ use firmium_backend::config::SavedAccount;
 use firmium_backend::errors::UserError;
 use firmium_backend::events::BackendEvent;
 use firmium_backend::podcasts::{PodcastChannel, PodcastEpisode};
+use crate::app::types::AlbumsSort;
 use crate::viz::VizMode;
 use crate::viz::config::{
     BarsGradientMode, BarsGradientOrientation, BarsPeakGradientMode, BarsPeakMode, GradientMode,
@@ -48,6 +49,7 @@ pub enum Message {
     PlaylistTracksLoaded(Result<PlaylistTracks, UserError>),
     CoverLoaded(String, Result<String, String>),
     AlbumsScrolled(f32),
+    AlbumsSortChanged(AlbumsSort),
     ArtistsScrolled(f32),
     AlbumTracksScrolled(f32),
     PlaylistTracksScrolled(f32),

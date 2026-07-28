@@ -1,3 +1,5 @@
+use std::fmt;
+
 use firmium_backend::{commands::mappers::Album, errors::UserError};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -150,6 +152,18 @@ pub(crate) enum AlbumsSort {
 }
 
 impl AlbumsSort {
+    pub(crate) fn get_items() -> Vec<AlbumsSort> {
+        return vec![
+            AlbumsSort::Random,
+            AlbumsSort::Newest,
+            AlbumsSort::Frequent,
+            AlbumsSort::Recent,
+            AlbumsSort::Starred,
+            AlbumsSort::AlphabeticalByName,
+            AlbumsSort::AlphabeticalByArtist,
+        ];
+    }
+
     pub(crate) fn get_sort_param(self) -> &'static str {
         match self {
             AlbumsSort::Random => "random",
@@ -160,5 +174,19 @@ impl AlbumsSort {
             AlbumsSort::AlphabeticalByName => "alphabeticalByName",
             AlbumsSort::AlphabeticalByArtist => "alphabeticalByArtist",
         }
+    }
+}
+
+impl fmt::Display for AlbumsSort {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match *self {
+            AlbumsSort::Random => "Random",
+            AlbumsSort::Newest => "Recently Added",
+            AlbumsSort::Frequent => "Frequent",
+            AlbumsSort::Recent => "Recent",
+            AlbumsSort::Starred => "Starred",
+            AlbumsSort::AlphabeticalByName => "A-Z (name)",
+            AlbumsSort::AlphabeticalByArtist => "A-Z (artist)",
+        })
     }
 }

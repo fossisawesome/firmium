@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::widget::{button, column, container, pick_list, row, scrollable, text};
 use iced::{Alignment, Background, Border, Element, Length};
 
 use firmium_backend::commands::mappers::{Album, Song};
@@ -15,6 +15,10 @@ impl App {
     pub(crate) fn album_list_view(&self) -> Element<'_, Message> {
         let t = self.tokens;
         let header = page_header(format!("Albums ({})", self.albums.len()), t, self.ui_theme_id == "spotify");
+
+        let album_sort_selector: Element<'_, Message> = pick_list(AlbumsSort::get_items(), Some(self.albums_sort), Message::AlbumsSortChanged)
+        .width(Length::Fixed(180.0))
+        .into();
 
         // Windowed (virtual) rendering: only the visible rows are built; the
         // scrolled-past and remaining heights are filled with spacers so the
@@ -35,7 +39,7 @@ impl App {
             .height(Length::Fill)
             .on_scroll(|v| Message::AlbumsScrolled(v.absolute_offset().y));
 
-        column![header, scroller].spacing(16).into()
+        column![row![header, album_sort_selector].spacing(16), scroller].spacing(16).into()
     }
 
     pub(crate) fn album_row(&self, album: &Album) -> Element<'_, Message> {
