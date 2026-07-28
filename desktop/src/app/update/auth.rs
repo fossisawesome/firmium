@@ -75,7 +75,7 @@ impl App {
                 let cover_task = self.load_cover_ids(play_cover_ids);
                 let s = self.backend.app_state.clone();
                 Task::batch([
-                    Task::perform(firmium_backend::commands::subsonic::get_albums(s.clone()), Message::AlbumsLoaded),
+                    Task::perform(firmium_backend::commands::subsonic::get_albums(s.clone(), self.albums_sort.get_sort_param()), Message::AlbumsLoaded),
                     Task::perform(firmium_backend::commands::subsonic::get_recent_albums(s.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Recent, r)),
                     Task::perform(firmium_backend::commands::subsonic::get_newest_albums(s.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Newest, r)),
                     Task::perform(firmium_backend::commands::subsonic::get_random_albums(s.clone(), 12), |r| Message::HomeAlbumsLoaded(HomeSection::Random, r)),

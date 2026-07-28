@@ -1,4 +1,4 @@
-use firmium_backend::errors::UserError;
+use firmium_backend::{commands::mappers::Album, errors::UserError};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum View {
@@ -135,4 +135,30 @@ pub(crate) struct Toast {
     pub category: UserError,
     pub text: String,
     pub spawned: std::time::Instant,
+}
+
+/// Album sort options, referenced from Subsonic API getAlbumList2
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AlbumsSort {
+    Random,
+    Newest,
+    Frequent,
+    Recent,
+    Starred,
+    AlphabeticalByName,
+    AlphabeticalByArtist,
+}
+
+impl AlbumsSort {
+    pub(crate) fn get_sort_param(self) -> &'static str {
+        match self {
+            AlbumsSort::Random => "random",
+            AlbumsSort::Newest => "newest",
+            AlbumsSort::Frequent => "frequent",
+            AlbumsSort::Recent => "recent",
+            AlbumsSort::Starred => "starred",
+            AlbumsSort::AlphabeticalByName => "alphabeticalByName",
+            AlbumsSort::AlphabeticalByArtist => "alphabeticalByArtist",
+        }
+    }
 }
