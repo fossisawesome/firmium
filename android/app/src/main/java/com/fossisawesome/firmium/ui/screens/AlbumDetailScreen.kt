@@ -1,14 +1,17 @@
 package com.fossisawesome.firmium.ui.screens
 import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -49,12 +52,14 @@ fun AlbumDetailScreen(
     onArtistClick: (String) -> Unit = {},
     onToggleAlbumStar: (String) -> Unit = {},
     onToggleSongStar: (Song) -> Unit = {},
+    onAddToQueue: ((Song) -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     LaunchedEffect(albumId) { onLoad(albumId) }
 
     var pendingSong by remember { mutableStateOf<Song?>(null) }
     var pendingAllSongs by remember { mutableStateOf(false) }
+    var longPressSong by remember { mutableStateOf<Song?>(null) }
     val colors = LocalFirmiumColors.current
     var selectedBpm by remember { mutableIntStateOf(0) }
 
@@ -218,6 +223,8 @@ fun AlbumDetailScreen(
                             onDownloadClick = onDownloadTrack?.invoke(song),
                             isDownloaded = song.id in state.downloadedSongIds,
                             onToggleStar = { onToggleSongStar(song) },
+                            onAddToQueue = onAddToQueue?.let { { it(song) } },
+                            onLongPress = if (onAddToQueue != null) { { longPressSong = song } } else null,
                         )
                         FirmiumDivider()
                     }
@@ -244,9 +251,51 @@ fun AlbumDetailScreen(
             onDismiss = { pendingAllSongs = false },
         )
     }
+
+    longPressSong?.let { song ->
+        val colors = LocalFirmiumColors.current
+        FirmiumBottomSheet(onDismiss = { longPressSong = null }) {
+            Text(
+                song.title,
+                fontSize = 12.sp,
+                fontFamily = LocalAppFontFamily.current,
+                color = colors.muted,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = androidx.compose.ui.Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            )
+            FirmiumDivider()
+            Row(
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onAddToQueue?.invoke(song)
+                        longPressSong = null
+                    }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                FirmiumIcon(
+                    Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = androidx.compose.ui.Modifier.size(20.dp),
+                )
+                Text(
+                    "Add to queue",
+                    fontSize = 14.sp,
+                    fontFamily = LocalAppFontFamily.current,
+                    color = colors.text,
+                )
+            }
+            Spacer(androidx.compose.ui.Modifier.height(8.dp))
+        }
+    }
 }
 
 // Track row with thumbnail, title, optional artist, duration, and a visible + add button.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AlbumTrackRow(
     track: Song,
@@ -257,10 +306,19 @@ private fun AlbumTrackRow(
     onDownloadClick: (suspend () -> Result<Unit>)? = null,
     isDownloaded: Boolean = false,
     onToggleStar: () -> Unit = {},
+    onAddToQueue: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }
+    val rowContent: @Composable () -> Unit = {
+        Row(
+        modifier = Modifier.fillMaxWidth()
+            .then(
+                if (onLongPress != null)
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongPress)
+                else
+                    Modifier.clickable { onClick() }
+            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -297,9 +355,16 @@ private fun AlbumTrackRow(
             FirmiumIcon(Icons.Default.Add, contentDescription = "Add to playlist", tint = colors.muted, modifier = Modifier.size(18.dp))
         }
     }
+    }   // close rowContent lambda
+    if (onAddToQueue != null) {
+        SwipeToQueueBox(onAddToQueue = onAddToQueue) { rowContent() }
+    } else {
+        rowContent()
+    }
 }
 
-// Shared TrackRow used by PlaylistDetailScreen
+// Shared TrackRow used by PlaylistDetailScreen and FavoritesScreen.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TrackRow(
     track: Song,
@@ -314,10 +379,20 @@ fun TrackRow(
     canMoveDown: Boolean = false,
     onRemove: (() -> Unit)? = null,
     onToggleStar: (() -> Unit)? = null,
+    onAddToQueue: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
+    val rowContent: @Composable () -> Unit = {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth()
+            .then(
+                if (onLongPress != null)
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongPress)
+                else
+                    Modifier.clickable { onClick() }
+            )
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (index != null) {
@@ -367,6 +442,12 @@ fun TrackRow(
                     tint = colors.error, modifier = Modifier.size(18.dp))
             }
         }
+    }
+    }   // close rowContent lambda
+    if (onAddToQueue != null) {
+        SwipeToQueueBox(onAddToQueue = onAddToQueue) { rowContent() }
+    } else {
+        rowContent()
     }
 }
 
