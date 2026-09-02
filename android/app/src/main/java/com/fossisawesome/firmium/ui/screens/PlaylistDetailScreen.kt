@@ -1,10 +1,12 @@
 package com.fossisawesome.firmium.ui.screens
 import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
@@ -28,10 +30,12 @@ fun PlaylistDetailScreen(
     onMoveTrack: (from: Int, to: Int) -> Unit,
     onDownloadTrack: ((Song) -> suspend () -> Result<Unit>)? = null,
     downloadedSongIds: Set<String> = emptySet(),
+    onAddToQueue: ((Song) -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     val allDownloaded = tracks.isNotEmpty() && downloadedSongIds.size >= tracks.size
+    var longPressSong by remember { mutableStateOf<Song?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         FirmiumDetailHeader(
@@ -86,10 +90,52 @@ fun PlaylistDetailScreen(
                         canMoveUp = index > 0,
                         canMoveDown = index < tracks.size - 1,
                         onRemove = { onRemoveTrack(song.id, index) },
+                        onAddToQueue = onAddToQueue?.let { { it(song) } },
+                        onLongPress = if (onAddToQueue != null) { { longPressSong = song } } else null,
                     )
                     FirmiumDivider()
                 }
             }
+        }
+    }
+
+    longPressSong?.let { song ->
+        FirmiumBottomSheet(onDismiss = { longPressSong = null }) {
+            Text(
+                song.title,
+                fontSize = 12.sp,
+                fontFamily = LocalAppFontFamily.current,
+                color = colors.muted,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            )
+            FirmiumDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onAddToQueue?.invoke(song)
+                        longPressSong = null
+                    }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                FirmiumIcon(
+                    Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    "Add to queue",
+                    fontSize = 14.sp,
+                    fontFamily = LocalAppFontFamily.current,
+                    color = colors.text,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

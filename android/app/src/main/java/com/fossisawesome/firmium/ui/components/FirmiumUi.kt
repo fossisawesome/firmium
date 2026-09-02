@@ -7,13 +7,17 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Alignment
@@ -26,6 +30,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -34,9 +40,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 // Convenience Text composable backed by BasicText — replaces material3 Text() throughout the app.
 // Only supports parameters actually used in this codebase.
@@ -306,6 +315,103 @@ fun FirmiumTextButton(
         contentAlignment = Alignment.Center,
         content = { content() },
     )
+}
+
+// Swipe-right to add a song to the play queue.
+// As the user drags right, the theme accent colour is revealed behind the row and a QueueMusic
+// icon fades in. Releasing past 35% of the row width triggers the action; releasing earlier
+// springs the row back without doing anything.
+@Composable
+fun SwipeToQueueBox(
+    onAddToQueue: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val colors = LocalFirmiumColors.current
+    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    var widthPx by remember { mutableFloatStateOf(1f) }
+    val threshold = 0.35f
+
+    val accentColor = colors.accent
+    Box(modifier = modifier.onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }) {
+        val revealFraction = (offsetX.value / widthPx).coerceIn(0f, 1f)
+        // Canvas draws only the revealed strip. Using a nested Box with matchParentSize() +
+        // fillMaxWidth(fraction) doesn't work: matchParentSize() sets min == parent width so
+        // fillMaxWidth(0f) can't shrink it — the background was always full-width. Canvas draws
+        // exactly what we ask.
+        Canvas(modifier = Modifier.matchParentSize()) {
+            drawRect(
+                color = accentColor.copy(alpha = 0.35f),
+                size = androidx.compose.ui.geometry.Size(size.width * revealFraction, size.height),
+            )
+        }
+        if (revealFraction > 0.12f) {
+            Box(
+                modifier = Modifier.matchParentSize(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                FirmiumIcon(
+                    Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = null,
+                    tint = colors.bg.copy(alpha = ((revealFraction - 0.12f) * 5f).coerceIn(0f, 1f)),
+                    modifier = Modifier.padding(start = 16.dp).size(22.dp),
+                )
+            }
+        }
+
+        // Content offset by the drag amount.
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            scope.launch {
+                                if (offsetX.value >= widthPx * threshold) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onAddToQueue()
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Added to queue",
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                                offsetX.animateTo(
+                                    0f,
+                                    spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                )
+                            }
+                        },
+                        onDragCancel = {
+                            scope.launch {
+                                offsetX.animateTo(
+                                    0f,
+                                    spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                )
+                            }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            val capped = (offsetX.value + dragAmount)
+                                .coerceAtLeast(0f)
+                                .coerceAtMost(widthPx * 0.6f)
+                            scope.launch { offsetX.snapTo(capped) }
+                        },
+                    )
+                },
+        ) {
+            content()
+        }
+    }
 }
 
 // Thin vertical scroll-position indicator for verticalScroll() containers (no built-in scrollbar).

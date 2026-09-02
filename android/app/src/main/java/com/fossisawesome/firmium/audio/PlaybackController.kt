@@ -258,6 +258,35 @@ class PlaybackController(
         }
     }
 
+    // Inserts a track immediately after the currently playing item ("play next").
+    fun addNextInQueue(song: Song) {
+        val pid = currentPlayerId
+        if (pid == null || _state.value.queue.isEmpty()) {
+            playAt(listOf(song), 0)
+            return
+        }
+        scope.launch {
+            try {
+                val s = _state.value
+                val insertAt = s.queueIndex + 1
+                val rgEnabled = s.replayGainEnabled
+                audioPlayer.appendToQueue(pid, QueueTrack(
+                    streamUrl = streamUrlFor(song),
+                    trackId = song.id,
+                    replayGainDb = if (rgEnabled) (song.replayGainTrack ?: song.replayGainAlbum)?.toFloat() else null,
+                ))
+                val endIndex = s.queue.size
+                if (insertAt < endIndex) audioPlayer.moveQueueItem(pid, endIndex, insertAt)
+                val newQueue = s.queue.toMutableList().apply { add(insertAt, song) }
+                _state.update { it.copy(queue = newQueue) }
+                nowPlaying.setQueue(newQueue.map {
+                    NowPlayingController.QueueEntry(it.id, it.title, it.displayArtist ?: it.artist,
+                        it.coverArt?.let { c -> if (c.startsWith("file://")) c else auth.coverArtUrl(c, 512) })
+                })
+            } catch (_: Exception) {}
+        }
+    }
+
     // Reorders a track within the live queue (drag-to-reorder / move up-down in the queue sheet).
     fun moveQueueItem(from: Int, to: Int) {
         val pid = currentPlayerId ?: return
