@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,12 +34,13 @@ fun PlayerBar(
     onShuffleToggle: () -> Unit,
     onRepeatCycle: () -> Unit,
     onToggleStar: () -> Unit = {},
+    onQueueOpen: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (LocalUiTheme.current == "spotify") {
         PlayerBarSpotify(state, coverUrl, onBarClick, onPlayPause, onNext, onToggleStar, modifier)
     } else {
-        PlayerBarDefault(state, coverUrl, onBarClick, onPlayPause, onNext, onShuffleToggle, onRepeatCycle, modifier)
+        PlayerBarDefault(state, coverUrl, onBarClick, onPlayPause, onNext, onShuffleToggle, onRepeatCycle, onQueueOpen, modifier)
     }
 }
 
@@ -51,6 +53,7 @@ private fun PlayerBarDefault(
     onNext: () -> Unit,
     onShuffleToggle: () -> Unit,
     onRepeatCycle: () -> Unit,
+    onQueueOpen: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val track = state.currentTrack ?: return
@@ -144,6 +147,12 @@ private fun PlayerBarDefault(
                 if (state.repeatMode == "one") {
                     Text("1", fontSize = 9.sp, color = colors.accent, fontWeight = FontWeight.Bold,
                         modifier = Modifier.offset(x = (-6).dp, y = 4.dp))
+                }
+            }
+            if (onQueueOpen != null) {
+                FirmiumIconButton(onClick = onQueueOpen, modifier = Modifier.size(44.dp)) {
+                    FirmiumIcon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue",
+                        tint = colors.muted, modifier = Modifier.size(18.dp))
                 }
             }
         }
