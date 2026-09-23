@@ -2,6 +2,7 @@
 
 ## Desktop
 
+- **Artist page menu** — new ⋯ button on artist pages with Play all, Shuffle all, and Download all (downloads every album by the artist one at a time, with progress shown on the page).
 - **Fix: scroll position kept when going back** — returning to a list (artists, albums, playlists, home, search, favorites, genres, podcasts) with Back now restores where you were scrolled instead of jumping to the top.
 
 # v8.1.0

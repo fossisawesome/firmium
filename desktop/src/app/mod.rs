@@ -32,7 +32,7 @@ use crate::{icons, PlaybackState};
 
 pub use message::Message;
 use styles::*;
-use types::{Panel, PlaylistListItem, RecapRange, SettingsCategory, Toast, View};
+use types::{ArtistDownload, Panel, PlaylistListItem, RecapRange, SettingsCategory, Toast, View};
 
 pub struct App {
     backend: Backend,
@@ -206,6 +206,8 @@ pub struct App {
     show_create_playlist: bool,
     create_playlist_name: String,
     renaming_playlist: Option<String>,
+    artist_menu_open: bool,
+    artist_download: Option<ArtistDownload>,
 
     // ── Resume-queue prompt ───────────────────────────────────────────────────
     resume_queue: Option<RemotePlayQueue>,
@@ -439,6 +441,8 @@ impl App {
             show_create_playlist: false,
             create_playlist_name: String::new(),
             renaming_playlist: None,
+            artist_menu_open: false,
+            artist_download: None,
             resume_queue: None,
             accounts: cfg.accounts,
             show_account_switcher: true,

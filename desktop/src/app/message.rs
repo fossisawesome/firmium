@@ -230,6 +230,15 @@ pub enum Message {
     // ── Album download ────────────────────────────────────────────────────────
     DownloadAlbum,
 
+    // ── Artist page menu ──────────────────────────────────────────────────────
+    ToggleArtistMenu,
+    CloseArtistMenu,
+    /// Queue every track of the open artist; `true` shuffles.
+    PlayArtist(bool),
+    ArtistTracksLoaded(bool, Result<Vec<Song>, String>),
+    DownloadArtist,
+    ArtistAlbumDownloaded(Result<(), String>),
+
     // ── Podcasts ──────────────────────────────────────────────────────────────
     PodcastChannelsLoaded(Result<Vec<PodcastChannel>, String>),
     OpenAddPodcastModal,

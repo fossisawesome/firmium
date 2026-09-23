@@ -12,6 +12,7 @@ impl App {
     pub(crate) fn update_nav(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Navigate(view) => {
+                self.artist_menu_open = false;
                 let changed = view != self.view;
                 if changed {
                     self.nav_stack.push((self.view.clone(), self.main_scroll));
@@ -151,6 +152,7 @@ impl App {
                 }
             }
             Message::NavigateBack => {
+                self.artist_menu_open = false;
                 if let Some((view, y)) = self.nav_stack.pop() {
                     self.view = view;
                     self.set_view_scroll(y);
@@ -191,6 +193,8 @@ impl App {
                     self.update(Message::CloseCreatePlaylist)
                 } else if self.podcast_add_modal_open {
                     self.update(Message::CloseAddPodcastModal)
+                } else if self.artist_menu_open {
+                    self.update(Message::CloseArtistMenu)
                 } else {
                     Task::none()
                 }

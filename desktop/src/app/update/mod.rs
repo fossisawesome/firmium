@@ -54,7 +54,13 @@ impl App {
             | Message::GenresLoaded(..)
             | Message::GenreSongsLoaded(..)
             | Message::PlayGenreAt(..)
-            | Message::DownloadAlbum => self.update_library(message),
+            | Message::DownloadAlbum
+            | Message::ToggleArtistMenu
+            | Message::CloseArtistMenu
+            | Message::PlayArtist(..)
+            | Message::ArtistTracksLoaded(..)
+            | Message::DownloadArtist
+            | Message::ArtistAlbumDownloaded(..) => self.update_library(message),
             Message::PlaylistTracksScrolled(..)
             | Message::PlaylistsLoaded(..)
             | Message::PlaylistTracksLoaded(..)

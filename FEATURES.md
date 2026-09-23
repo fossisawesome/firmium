@@ -35,6 +35,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Favorites — tap the heart on any song, album, or artist to favorite it; see everything you've favorited in one place, with a quick-access shortcut from the home screen | ✅ | ✅ |
 | Artist pages with photos and Last.fm biography | ✅ | ✅ |
 | Play button on artist page — instantly plays that artist's top tracks | ❌ | ✅ |
+| Artist page ⋯ menu — play all, shuffle all, or download every album by that artist (with progress) | ✅ | ❌ |
 | Album detail pages with full track list | ✅ | ✅ |
 | Search across your whole library | ✅ | ✅ |
 | Track ratings — 1-5 star rating on tracks, synced to your server | ✅ | ✅ |

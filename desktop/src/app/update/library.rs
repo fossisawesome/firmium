@@ -1,5 +1,7 @@
 use iced::Task;
 
+use firmium_backend::errors::UserError;
+
 
 use super::super::cover::{ALBUM_ROW_H, load_rounded_cover};
 use super::super::message::Message;
@@ -288,8 +290,100 @@ impl App {
                 )
             }
 
+            // ── Artist page menu ─────────────────────────────────────────────
+            Message::ToggleArtistMenu => {
+                self.artist_menu_open = !self.artist_menu_open;
+                Task::none()
+            }
+            Message::CloseArtistMenu => {
+                self.artist_menu_open = false;
+                Task::none()
+            }
+            Message::PlayArtist(shuffle) => {
+                self.artist_menu_open = false;
+                let Some(d) = &self.artist_detail else { return Task::none() };
+                let album_ids: Vec<String> = d.albums.iter().map(|a| a.id.clone()).collect();
+                let state = self.backend.app_state.clone();
+                Task::perform(
+                    async move {
+                        let mut songs = Vec::new();
+                        for id in album_ids {
+                            if id.starts_with("local:") {
+                                songs.extend(firmium_backend::commands::local_library::get_local_album_tracks(&state, id)?.tracks);
+                            } else {
+                                let at = firmium_backend::commands::subsonic::get_album_tracks(state.clone(), id)
+                                    .await
+                                    .map_err(|e| e.message())?;
+                                songs.extend(at.tracks);
+                            }
+                        }
+                        Ok::<_, String>(songs)
+                    },
+                    move |r| Message::ArtistTracksLoaded(shuffle, r),
+                )
+            }
+            Message::ArtistTracksLoaded(_, Ok(songs)) if songs.is_empty() => Task::none(),
+            Message::ArtistTracksLoaded(shuffle, Ok(songs)) => {
+                let (queue, app, player) = (
+                    self.backend.queue_state.clone(),
+                    self.backend.app_state.clone(),
+                    self.backend.audio_player.clone(),
+                );
+                if shuffle {
+                    Task::perform(firmium_backend::commands::queue::shuffle_and_play(queue, app, player, songs), Message::PlaybackDone)
+                } else {
+                    Task::perform(firmium_backend::commands::queue::set_queue(queue, app, player, songs, 0), Message::PlaybackDone)
+                }
+            }
+            Message::ArtistTracksLoaded(_, Err(e)) => {
+                eprintln!("loading artist tracks failed: {e}");
+                self.show_toast(UserError::classify(&e));
+                Task::none()
+            }
+            Message::DownloadArtist => {
+                self.artist_menu_open = false;
+                if self.artist_download.as_ref().is_some_and(|dl| !dl.is_finished()) {
+                    return Task::none();
+                }
+                let (Some(artist_id), Some(d)) = (&self.artist_detail_id, &self.artist_detail) else {
+                    return Task::none();
+                };
+                // Local albums are already on disk.
+                let album_ids: Vec<String> = d.albums.iter()
+                    .filter(|a| !a.id.starts_with("local:"))
+                    .map(|a| a.id.clone())
+                    .collect();
+                self.artist_download = Some(ArtistDownload { artist_id: artist_id.clone(), album_ids, done: 0, failed: 0 });
+                self.download_next_artist_album()
+            }
+            Message::ArtistAlbumDownloaded(result) => {
+                // None after a logout / account switch: drop the stale result.
+                let Some(dl) = self.artist_download.as_mut() else { return Task::none() };
+                dl.done += 1;
+                if let Err(e) = result {
+                    eprintln!("artist album download failed: {e}");
+                    dl.failed += 1;
+                }
+                if dl.is_finished() && dl.failed > 0 {
+                    self.show_toast(UserError::Unknown);
+                }
+                self.download_next_artist_album()
+            }
+
             // ── Podcasts ─────────────────────────────────────────────────────
             _ => unreachable!(),
         }
+    }
+}
+
+impl App {
+    /// Starts the next album of the running artist download, if any are left.
+    fn download_next_artist_album(&self) -> Task<Message> {
+        let Some(dl) = &self.artist_download else { return Task::none() };
+        let Some(album_id) = dl.album_ids.get(dl.done).cloned() else { return Task::none() };
+        Task::perform(
+            firmium_backend::commands::downloads::download_album(self.backend.app_state.clone(), album_id, self.download_format.clone()),
+            Message::ArtistAlbumDownloaded,
+        )
     }
 }

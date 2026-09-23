@@ -217,6 +217,8 @@ impl App {
         self.genre_detail_name = None;
         self.view = View::Home;
         self.nav_stack.clear();
+        self.artist_menu_open = false;
+        self.artist_download = None;
         self.main_scroll = 0.0;
     }
 }

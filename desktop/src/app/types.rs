@@ -140,3 +140,19 @@ pub(crate) struct Toast {
     pub text: String,
     pub spawned: std::time::Instant,
 }
+
+/// An artist's "Download all", run one album at a time so the artist page can
+/// show progress. Kept after it finishes so the page can say it's done.
+#[derive(Debug, Clone)]
+pub(crate) struct ArtistDownload {
+    pub artist_id: String,
+    pub album_ids: Vec<String>,
+    pub done: usize,
+    pub failed: usize,
+}
+
+impl ArtistDownload {
+    pub(crate) fn is_finished(&self) -> bool {
+        self.done >= self.album_ids.len()
+    }
+}
