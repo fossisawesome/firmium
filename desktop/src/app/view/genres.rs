@@ -5,6 +5,7 @@ use crate::icons;
 
 use super::super::message::Message;
 use super::super::styles::*;
+use super::super::types::MAIN_SCROLL_ID;
 use super::super::App;
 
 impl App {
@@ -39,7 +40,7 @@ impl App {
             text(name).size(24).style(tstyle(t.text)),
             text(format!("{} songs", self.genre_songs.len())).size(11).style(tstyle(t.muted)),
             play,
-            scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)),
+            scrollable(list).height(Length::Fill).id(MAIN_SCROLL_ID).on_scroll(|v| Message::MainScrolled(v.absolute_offset().y)).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)),
         ]
         .spacing(12)
         .into()

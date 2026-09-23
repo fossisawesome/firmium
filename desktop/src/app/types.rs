@@ -1,5 +1,9 @@
 use firmium_backend::errors::UserError;
 
+/// Widget id shared by the main scrollable of every content view (only one is
+/// on screen at a time), used to restore the scroll position on NavigateBack.
+pub(crate) const MAIN_SCROLL_ID: &str = "main-view-scroll";
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum View {
     Home,

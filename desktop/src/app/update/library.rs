@@ -39,6 +39,7 @@ impl App {
             Message::CoverLoaded(_, Err(_)) => Task::none(),
             Message::AlbumsScrolled(y) => {
                 self.albums_scroll = y;
+                self.main_scroll = y;
                 // Load covers for the rows scrolling into view.
                 let first = ((y / ALBUM_ROW_H).floor().max(0.0) as usize).min(self.albums.len());
                 let end = (first + 16).min(self.albums.len());
@@ -50,10 +51,12 @@ impl App {
             }
             Message::ArtistsScrolled(y) => {
                 self.artists_scroll = y;
+                self.main_scroll = y;
                 Task::none()
             }
             Message::AlbumTracksScrolled(y) => {
                 self.album_tracks_scroll = y;
+                self.main_scroll = y;
                 Task::none()
             }
             Message::AlbumTracksLoaded(Ok(at)) => {

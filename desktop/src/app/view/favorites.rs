@@ -3,7 +3,7 @@ use iced::{Element, Length};
 
 use super::super::message::Message;
 use super::super::styles::*;
-use super::super::types::View;
+use super::super::types::{View, MAIN_SCROLL_ID};
 use super::super::App;
 
 impl App {
@@ -60,6 +60,6 @@ impl App {
             );
         }
 
-        scrollable(sections).width(Length::Fill).height(Length::Fill).style(thin_scroll_style(t)).into()
+        scrollable(sections).width(Length::Fill).height(Length::Fill).id(MAIN_SCROLL_ID).on_scroll(|v| Message::MainScrolled(v.absolute_offset().y)).style(thin_scroll_style(t)).into()
     }
 }

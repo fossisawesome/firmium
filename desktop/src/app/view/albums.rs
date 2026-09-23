@@ -33,6 +33,7 @@ impl App {
 
         let scroller = scrollable(list)
             .height(Length::Fill)
+            .id(MAIN_SCROLL_ID)
             .on_scroll(|v| Message::AlbumsScrolled(v.absolute_offset().y));
 
         column![header, scroller].spacing(16).into()
@@ -169,7 +170,7 @@ impl App {
             list = list.push(container(text("")).height(Length::Fixed(bottom)));
         }
 
-        column![back, header, scrollable(list).height(Length::Fill).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::AlbumTracksScrolled(v.absolute_offset().y))]
+        column![back, header, scrollable(list).height(Length::Fill).id(MAIN_SCROLL_ID).direction(scrollable::Direction::Vertical(self.make_scrollbar())).style(thin_scroll_style(t)).on_scroll(|v| Message::AlbumTracksScrolled(v.absolute_offset().y))]
             .spacing(16)
             .into()
     }

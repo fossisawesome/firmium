@@ -217,5 +217,6 @@ impl App {
         self.genre_detail_name = None;
         self.view = View::Home;
         self.nav_stack.clear();
+        self.main_scroll = 0.0;
     }
 }

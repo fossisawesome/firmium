@@ -10,6 +10,7 @@ impl App {
         match message {
             Message::PlaylistTracksScrolled(y) => {
                 self.playlist_tracks_scroll = y;
+                self.main_scroll = y;
                 Task::none()
             }
             Message::PlaylistsLoaded(Ok(p)) => {

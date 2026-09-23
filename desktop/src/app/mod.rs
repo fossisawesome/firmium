@@ -56,7 +56,11 @@ pub struct App {
     next_toast_id: u64,
 
     view: View,
-    nav_stack: Vec<View>,
+    // Each entry remembers the scroll offset the view was left at, so
+    // NavigateBack can restore it.
+    nav_stack: Vec<(View, f32)>,
+    // Vertical offset of the current view's main scrollable (`MAIN_SCROLL_ID`).
+    main_scroll: f32,
 
     // ── Library data ──────────────────────────────────────────────────────────
     albums: Vec<Album>,
@@ -288,6 +292,7 @@ impl App {
             next_toast_id: 0,
             view: View::Home,
             nav_stack: Vec::new(),
+            main_scroll: 0.0,
             albums: Vec::new(),
             albums_scroll: 0.0,
             home_recent: Vec::new(),

@@ -1,3 +1,5 @@
+use iced::widget::operation;
+use iced::widget::scrollable::AbsoluteOffset;
 use iced::Task;
 
 use firmium_backend::errors::UserError;
@@ -10,12 +12,13 @@ impl App {
     pub(crate) fn update_nav(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Navigate(view) => {
-                if view != self.view {
-                    self.nav_stack.push(self.view.clone());
+                let changed = view != self.view;
+                if changed {
+                    self.nav_stack.push((self.view.clone(), self.main_scroll));
                     self.view = view;
                 }
                 let state = self.backend.app_state.clone();
-                match self.view.clone() {
+                let load = match self.view.clone() {
                     View::AlbumDetail(id) if self.album_detail_id.as_deref() != Some(id.as_str()) => {
                         self.album_detail = None;
                         self.album_detail_id = Some(id.clone());
@@ -136,12 +139,28 @@ impl App {
                         }
                     }
                     _ => Task::none(),
+                };
+                if changed {
+                    // Must run after the loads above, which reset the detail
+                    // views' offsets when a different album/playlist opens.
+                    let y = self.opening_scroll(&self.view);
+                    self.set_view_scroll(y);
+                    Task::batch([load, scroll_main_to(y)])
+                } else {
+                    load
                 }
             }
             Message::NavigateBack => {
-                if let Some(view) = self.nav_stack.pop() {
+                if let Some((view, y)) = self.nav_stack.pop() {
                     self.view = view;
+                    self.set_view_scroll(y);
+                    scroll_main_to(y)
+                } else {
+                    Task::none()
                 }
+            }
+            Message::MainScrolled(y) => {
+                self.main_scroll = y;
                 Task::none()
             }
             Message::Backend(event) => {
@@ -181,4 +200,37 @@ impl App {
             _ => unreachable!(),
         }
     }
+}
+
+impl App {
+    /// Offset a view opens at when navigated to directly. The windowed lists
+    /// keep their own offset (it drives which rows get built), so opening them
+    /// must land on that same offset; everything else starts at the top.
+    fn opening_scroll(&self, view: &View) -> f32 {
+        match view {
+            View::Albums => self.albums_scroll,
+            View::Artists => self.artists_scroll,
+            View::AlbumDetail(_) => self.album_tracks_scroll,
+            View::PlaylistDetail(_) => self.playlist_tracks_scroll,
+            _ => 0.0,
+        }
+    }
+
+    /// Records `y` as the current view's offset, including the windowed list's
+    /// own offset so the right rows are built before the scroll is applied.
+    fn set_view_scroll(&mut self, y: f32) {
+        self.main_scroll = y;
+        match self.view {
+            View::Albums => self.albums_scroll = y,
+            View::Artists => self.artists_scroll = y,
+            View::AlbumDetail(_) => self.album_tracks_scroll = y,
+            View::PlaylistDetail(_) => self.playlist_tracks_scroll = y,
+            _ => {}
+        }
+    }
+}
+
+/// Scrolls the current view's main scrollable (see `MAIN_SCROLL_ID`) to `y`.
+fn scroll_main_to(y: f32) -> Task<Message> {
+    operation::scroll_to(MAIN_SCROLL_ID, AbsoluteOffset { x: None, y: Some(y) })
 }

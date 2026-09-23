@@ -39,6 +39,8 @@ impl App {
         scrollable(sections.spacing(28).padding(iced::Padding { right: 16.0, ..iced::Padding::ZERO }))
             .width(Length::Fill)
             .height(Length::Fill)
+            .id(MAIN_SCROLL_ID)
+            .on_scroll(|v| Message::MainScrolled(v.absolute_offset().y))
             .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
             .style(thin_scroll_style(t))
             .into()

@@ -61,6 +61,8 @@ impl App {
             header,
             scrollable(list)
                 .height(Length::Fill)
+                .id(MAIN_SCROLL_ID)
+                .on_scroll(|v| Message::MainScrolled(v.absolute_offset().y))
                 .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
                 .style(thin_scroll_style(t))
         ]
@@ -128,6 +130,8 @@ impl App {
             header,
             scrollable(list)
                 .height(Length::Fill)
+                .id(MAIN_SCROLL_ID)
+                .on_scroll(|v| Message::MainScrolled(v.absolute_offset().y))
                 .direction(scrollable::Direction::Vertical(self.make_scrollbar()))
                 .style(thin_scroll_style(t))
         ]

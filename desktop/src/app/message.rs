@@ -51,6 +51,7 @@ pub enum Message {
     ArtistsScrolled(f32),
     AlbumTracksScrolled(f32),
     PlaylistTracksScrolled(f32),
+    MainScrolled(f32),
     PlayAlbumAt(usize),
     PlayPlaylistAt(usize),
     ShuffleAlbum,
