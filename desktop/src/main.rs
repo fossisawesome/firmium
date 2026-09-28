@@ -56,6 +56,16 @@ fn main() -> iced::Result {
         .font_family
         .unwrap_or_else(|| "Liberation Mono".to_string());
 
+    let icon_image = image::load_from_memory(include_bytes!("../assets/app-icons/64x64.png"))
+        .expect("failed to decode app icon")
+        .into_rgba8();
+    let icon = iced::window::icon::from_rgba(
+        icon_image.as_raw().clone(),
+        icon_image.width(),
+        icon_image.height(),
+    )
+    .expect("invalid app icon");
+
     let mut builder = iced::application(
         move || boot(backend.lock().unwrap().take().expect("boot called twice")),
         App::update,
@@ -64,6 +74,7 @@ fn main() -> iced::Result {
     .title("Firmium")
     .theme(App::theme)
     .subscription(App::subscription)
+    .window(iced::window::Settings { icon: Some(icon), ..Default::default() })
     .font(include_bytes!("../assets/fonts/LiberationMono-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/Inter-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/FiraCode-Regular.ttf").as_slice())
