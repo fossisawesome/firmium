@@ -66,6 +66,10 @@ That's it. Your library will load automatically.
 
 Firmium is available for **Linux desktop, Windows, macOS, FreeBSD** and **Android**.
 
+On Windows, the installed `firmium.exe` opens only the GUI. For command-line control of a running app, run `firmium-cli.exe status` (or another playback command) from its installation directory, typically `C:\Program Files\Firmium`. The installer does not add that directory to PATH.
+
+GUI errors and panic messages are appended to `%APPDATA%\com.fossisawesome.firmium\firmium.log` on Windows.
+
 > **Compatibility (Linux):** Tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
 
 > **macOS builds are unsigned.** No Apple Developer account yet, so the app isn't notarized. On first launch, Gatekeeper will block it — right-click the app in Finder, choose **Open**, then confirm. This is only needed once.
@@ -208,7 +212,7 @@ For an optimized release build:
 cargo build --release
 ```
 
-This produces a single self-contained binary at `target/release/firmium`.
+This produces the desktop app at `target/release/firmium` (or `firmium.exe` on Windows). The build also produces `firmium-cli` (`firmium-cli.exe` on Windows) for command-line control.
 
 ### Building for Android
 

@@ -26,6 +26,7 @@ RequestExecutionLevel admin
 Section "Firmium"
   SetOutPath "$INSTDIR"
   File "..\target\release\firmium.exe"
+  File "..\target\release\firmium-cli.exe"
   File "..\assets\app-icons\icon.ico"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -52,6 +53,7 @@ SectionEnd
 
 Section "Uninstall"
   Delete "$INSTDIR\firmium.exe"
+  Delete "$INSTDIR\firmium-cli.exe"
   Delete "$INSTDIR\icon.ico"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"

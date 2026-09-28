@@ -248,7 +248,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 - **Window decorations toggle** — show or hide the native title bar and window borders from Settings
 - **Wipe cover-art cache** — clear cached cover art from Settings → Debug
 - **Reset preferences** — restore all settings to their defaults from Settings → Debug
-- **Command line control** — control a running instance from the terminal (`firmium play-pause`, `next`, `prev`, `volume`, `seek`, `status`, etc.), for scripts and keyboard shortcuts
+- **Command line control** — control a running instance from the terminal (`firmium play-pause` on Unix; `firmium-cli.exe play-pause` on Windows), for scripts and keyboard shortcuts; commands include `next`, `prev`, `volume`, `seek`, and `status`
 - **Keyboard shortcuts** — Space toggles play/pause, Escape closes the open modal or dialog
 
 ---

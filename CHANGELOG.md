@@ -2,6 +2,8 @@
 
 ## Desktop / Android
 
+- Windows desktop launches without an extra console window. The Windows installer now includes `firmium-cli.exe` for command-line control with readable output and logs GUI errors to a file in app data.
+
 - **Favorites** — new Favorites screen/view (desktop and Android), reusable `FavoriteButton` component on Android, backend/API support for favorite tracking across local library and Subsonic sources.
 - **Spotify-layout polish** — home screen and player bar refined to match Spotify-style layout.
 

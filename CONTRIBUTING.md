@@ -24,6 +24,8 @@ cargo run
 
 The app opens in its own window. Log into a Subsonic/Navidrome server to test. There is no Node/npm/Vite — the desktop app is a single Rust crate.
 
+On Windows, `firmium.exe` uses the GUI subsystem and appends GUI/backend stderr and panic messages to `%APPDATA%\com.fossisawesome.firmium\firmium.log` instead of showing a console. For command-line IPC replies and errors, run `cargo run -p firmium --bin firmium-cli -- status` while the GUI is running. Use `cargo run -p firmium --bin firmium` to launch the desktop app explicitly.
+
 ## Project Structure
 
 ```

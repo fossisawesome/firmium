@@ -4,10 +4,15 @@ version.workspace = true
 edition.workspace = true
 description = "Subsonic Desktop Music Streamer"
 authors = ["fossisawesome"]
+default-run = "firmium"
 
 [[bin]]
 name = "firmium"
 path = "src/main.rs"
+
+[[bin]]
+name = "firmium-cli"
+path = "src/bin/firmium-cli.rs"
 
 [dependencies]
 firmium-backend = { path = "../backend" }
