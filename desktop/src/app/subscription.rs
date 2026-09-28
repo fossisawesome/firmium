@@ -14,6 +14,7 @@ impl App {
         let bus = Subscription::run_with(BusSub(self.backend.bus.clone()), bus_stream);
         Subscription::batch([
             bus,
+            iced::window::close_requests().map(|_| Message::WindowCloseRequested),
             keyboard::listen().filter_map(key_message),
             if self.right_panel == Some(Panel::Visualizer) {
                 iced::time::every(std::time::Duration::from_millis(16)).map(|_| Message::VisualizerTick)

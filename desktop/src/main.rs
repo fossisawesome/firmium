@@ -3,6 +3,7 @@
 pub use firmium_backend::types::{AudioDevice, PlaybackState};
 
 mod app;
+#[cfg(not(windows))]
 mod cli;
 #[cfg(windows)]
 mod file_logging;
@@ -16,11 +17,13 @@ use app::{App, Message};
 use firmium_backend::init::Backend;
 
 fn main() -> iced::Result {
-    // `firmium <cmd> [arg]` controls an already-running instance over the IPC
-    // socket/pipe instead of launching a second GUI — e.g. `firmium play-pause`.
-    let cli_args: Vec<String> = std::env::args().skip(1).collect();
-    if !cli_args.is_empty() {
-        std::process::exit(cli::run_cli(&cli_args.join(" ")));
+    #[cfg(not(windows))]
+    {
+        // Unix keeps the existing `firmium <cmd>` entry point; Windows uses firmium-cli.exe.
+        let cli_args: Vec<String> = std::env::args().skip(1).collect();
+        if !cli_args.is_empty() {
+            std::process::exit(cli::run_cli(&cli_args.join(" ")));
+        }
     }
 
     #[cfg(windows)]
@@ -82,6 +85,7 @@ fn main() -> iced::Result {
     .font(include_bytes!("../assets/fonts/Cousine-Regular.ttf").as_slice())
     .font(include_bytes!("../assets/fonts/BigBlueTerminalPlus.ttf").as_slice())
     .window_size(iced::Size::new(1200.0, 800.0))
+    .exit_on_close_request(false)
     .decorations(decorations);
 
     if let Some(font) = crate::fonts::resolve_font(&font_family) {
@@ -90,12 +94,8 @@ fn main() -> iced::Result {
 
     let result = builder.run();
 
-    // `runtime`'s Drop blocks the current thread until every outstanding
-    // spawn_blocking task (e.g. decode-feeder loops in audio/session.rs,
-    // which only stop at end-of-track/error/cancel, never on window close)
-    // finishes — so closing the window mid-playback would hang the process
-    // and require a kill. Shut down without waiting: the OS reclaims threads
-    // on exit anyway.
+    // Some in-flight blocking tasks may outlive the GUI; do not wait for them
+    // after the window close handler has stopped playback.
     runtime.shutdown_background();
 
     result

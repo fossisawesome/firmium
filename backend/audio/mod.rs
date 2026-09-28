@@ -332,6 +332,13 @@ impl AudioPlayer {
         Ok(())
     }
 
+    pub fn stop_all(&self) {
+        for (_, session) in self.sessions.write().drain() {
+            session.playing.store(false, Ordering::Relaxed);
+            session.cancel.lock().store(true, Ordering::Relaxed);
+        }
+    }
+
     /// Stop and remove all sessions for `track_id` (called before starting a new one).
     fn stop_track(&self, track_id: &str) {
         let mut sessions = self.sessions.write();

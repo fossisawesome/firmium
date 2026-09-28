@@ -19,6 +19,11 @@ mod visualizer;
 impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::WindowCloseRequested => {
+                self.backend.audio_player.stop_all();
+                // iced's executor can wait indefinitely for blocking stream reads during teardown.
+                std::process::exit(0)
+            }
             Message::ServerInput(..)
             | Message::UsernameInput(..)
             | Message::PasswordInput(..)
