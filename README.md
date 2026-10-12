@@ -215,7 +215,7 @@ The Android app is a native Kotlin + Jetpack Compose app in the `android/` direc
 #### Additional Prerequisites
 
 - JDK 17 or later
-- Android SDK with build tools 35 (install via Android Studio or `sdkmanager`)
+- Android SDK platform 37 (install via Android Studio or `sdkmanager`)
 - `ANDROID_HOME` environment variable set
 
 #### Steps

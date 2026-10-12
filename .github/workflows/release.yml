@@ -262,7 +262,7 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install Android build tools
-        run: sdkmanager "build-tools;35.0.0"
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
 
       # Sign the release APK with a keystore stored as a base64 secret.
       # Set these repo secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEY_ALIAS,

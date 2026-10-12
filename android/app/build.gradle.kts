@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
@@ -10,7 +9,7 @@ val isFoss = providers.gradleProperty("foss").isPresent
 
 android {
     namespace = "com.fossisawesome.firmium"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.fossisawesome.firmium"
@@ -52,7 +51,7 @@ android {
         }
     }
 
-    sourceSets["main"].java.srcDir(if (isFoss) "src/foss/java" else "src/play/java")
+    sourceSets["main"].kotlin.directories.add(if (isFoss) "src/foss/java" else "src/play/java")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -82,7 +81,7 @@ kotlin {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2026.05.01")
+    val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -90,20 +89,20 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    implementation("androidx.navigation:navigation-compose:2.9.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
-    implementation("androidx.activity:activity-compose:1.10.1")
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.navigation:navigation-compose:2.10.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.core:core-splashscreen:1.2.0")
 
     // Android TV: D-pad-focusable Compose components for the leanback UI
     implementation("androidx.tv:tv-foundation:1.0.0")
     implementation("androidx.tv:tv-material:1.1.0")
 
     // HTTP + JSON
-    implementation("com.squareup.okhttp3:okhttp:5.4.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:5.4.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.5.0")
     implementation("com.google.code.gson:gson:2.14.0")
 
     // Image loading
@@ -112,13 +111,13 @@ dependencies {
     implementation("androidx.palette:palette-ktx:1.0.0")
 
     // Audio
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-common:1.4.1")
-    implementation("androidx.media:media:1.7.0")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-common:1.11.1")
+    implementation("androidx.media:media:1.8.0")
 
     // Wear OS companion: phone <-> watch communication (Wearable Data Layer).
     // Skipped with -Pfoss (F-Droid), where src/foss supplies no-op stubs instead.
-    if (!isFoss) implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    if (!isFoss) implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     // Secure storage
     implementation("androidx.security:security-crypto:1.1.0")
@@ -127,18 +126,18 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Room: local play-history store
-    implementation("androidx.room:room-runtime:2.7.1")
-    implementation("androidx.room:room-ktx:2.7.1")
-    ksp("androidx.room:room-compiler:2.7.1")
+    implementation("androidx.room:room-runtime:2.8.5")
+    implementation("androidx.room:room-ktx:2.8.5")
+    ksp("androidx.room:room-compiler:2.8.5")
 
     // Adaptive layout: WindowSizeClass + FoldingFeature for foldable / large screen support
-    implementation("androidx.window:window:1.3.0")
+    implementation("androidx.window:window:1.5.1")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:6.3.0")
-    testImplementation("org.mockito:mockito-core:5.23.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:6.4.0")
+    testImplementation("org.mockito:mockito-core:5.24.0")
 }

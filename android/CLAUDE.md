@@ -10,7 +10,7 @@ Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../C
 - **HTTP**: OkHttp/Retrofit-style `ApiClient` for OpenSubsonic API calls
 - **Credentials**: `SecureStorage` (Android Keystore-backed)
 - **Packaging**: Gradle (`assembleDebug` / `assembleRelease`)
-- **SDK**: minSdk 26 (Android 8.0), targetSdk/compileSdk 36
+- **SDK**: minSdk 26 (Android 8.0), targetSdk 36, compileSdk 37
 
 ## Architecture (android/app/src/main/java/com/fossisawesome/firmium/)
 

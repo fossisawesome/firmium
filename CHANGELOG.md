@@ -6,6 +6,8 @@
 - **Desktop:** The mouse back and forward side buttons now navigate between pages, and going back returns you to your previous scroll position.
 - **Desktop:** Opus files now play. Building from source now needs `cmake` and a C compiler.
 - **Desktop:** Artist pages have a button to download every album by that artist, with progress.
+- **Android:** Swipe a track right to add it to the queue, or long-press it for an Add to queue menu, on album, playlist and favorites lists. The mini player also has a queue button.
+- **Android:** Playback pauses automatically when headphones are unplugged or a Bluetooth device disconnects.
 - **Desktop:** FreeBSD is no longer mentioned or targeted anywhere in the code and docs.
 - **Desktop:** The desktop app is now built on Tauri again. On Linux it needs `webkit2gtk-4.1` installed.
 - **Desktop:** Albums can be sorted by name or by recently added ([#65](https://github.com/fossisawesome/firmium/issues/65)).
@@ -49,7 +51,7 @@
 - **Android:** Podcast episodes now show up in the mini player and full-screen player, with play/pause and 15 second skips, and resume where you left off.
 
 ### New Contributors
-- Louis_292, welcome aboard.
+- Louis_292, welcome aboard ([#77](https://github.com/fossisawesome/firmium/pull/77), [#78](https://github.com/fossisawesome/firmium/pull/78)).
 - Ignas Poklad ([#83](https://github.com/fossisawesome/firmium/pull/83)), thank you for your pull request. It targeted the old desktop app, so it could not be merged after the move back to Tauri.
 - Uriah ([#82](https://github.com/fossisawesome/firmium/pull/82), [#81](https://github.com/fossisawesome/firmium/pull/81)), thank you for your pull requests. Scroll position restore and the artist Download all button come from your PRs, reimplemented after the move back to Tauri.
 - Gabe ([#68](https://github.com/fossisawesome/firmium/pull/68)), thank you for your pull request. It targeted the old desktop app, so it could not be merged after the move back to Tauri.
