@@ -7,6 +7,7 @@ Thanks for your interest in contributing! Firmium is an OpenSubsonic music strea
 ### Prerequisites
 - Rust 1.80+ (install via [rustup](https://rustup.rs/))
 - Node.js 20+ and npm
+- `cmake` and a C compiler (builds the bundled `libopus` for Opus playback). On Windows, install [CMake](https://cmake.org/download/) and the "Desktop development with C++" Build Tools workload; on macOS, `brew install cmake`.
 - On Linux: ALSA (`libasound2`), `libssl`, `libsecret`, `libxkbcommon`, `webkit2gtk-4.1` and `xdotool` (Tauri webview). Package names vary by distro — see `README.md`.
 - On Windows: no extra system dependencies needed
 - On macOS: Xcode Command Line Tools (`xcode-select --install`) only

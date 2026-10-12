@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### What's New
+- **Desktop:** The mouse back and forward side buttons now navigate between pages, and going back returns you to your previous scroll position.
+- **Desktop:** Opus files now play. Building from source now needs `cmake` and a C compiler.
+- **Desktop:** Artist pages have a button to download every album by that artist, with progress.
 - **Desktop:** FreeBSD is no longer mentioned or targeted anywhere in the code and docs.
 - **Desktop:** The desktop app is now built on Tauri again. On Linux it needs `webkit2gtk-4.1` installed.
 - **Desktop:** Albums can be sorted by name or by recently added ([#65](https://github.com/fossisawesome/firmium/issues/65)).
@@ -47,6 +50,10 @@
 
 ### New Contributors
 - Louis_292, welcome aboard.
+- Ignas Poklad ([#83](https://github.com/fossisawesome/firmium/pull/83)), thank you for your pull request. It targeted the old desktop app, so it could not be merged after the move back to Tauri.
+- Uriah ([#82](https://github.com/fossisawesome/firmium/pull/82), [#81](https://github.com/fossisawesome/firmium/pull/81)), thank you for your pull requests. Scroll position restore and the artist Download all button come from your PRs, reimplemented after the move back to Tauri.
+- Gabe ([#68](https://github.com/fossisawesome/firmium/pull/68)), thank you for your pull request. It targeted the old desktop app, so it could not be merged after the move back to Tauri.
+- Will Hellinger ([#67](https://github.com/fossisawesome/firmium/pull/67), [#63](https://github.com/fossisawesome/firmium/pull/63), [#61](https://github.com/fossisawesome/firmium/pull/61), [#60](https://github.com/fossisawesome/firmium/pull/60)), thank you for your pull requests. The mouse back/forward buttons and Opus playback come from your PRs; the others targeted the old desktop app and could not be merged after the move back to Tauri.
 
 ## v8.1.0 (2026-07-15)
 

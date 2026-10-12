@@ -8,7 +8,7 @@ url="https://github.com/fossisawesome/firmium"
 license=('GPL-3.0-only')
 # cpal->alsa, tauri->webkit2gtk/gtk3, keyring->libsecret, tauri->libxdo, TLS->openssl.
 depends=('alsa-lib' 'gtk3' 'webkit2gtk-4.1' 'libsecret' 'openssl' 'xdotool')
-makedepends=('cargo' 'nodejs' 'npm')
+makedepends=('cargo' 'cmake' 'nodejs' 'npm')
 provides=('firmium-desktop')
 conflicts=('firmium-desktop-git')
 options=('!strip')

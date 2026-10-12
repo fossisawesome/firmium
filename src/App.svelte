@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import {
     initBackend, auth, setAuthState, activeView, navTo, showAccountModal, isAuthed, currentTrack, bumpData,
-    toast, toastError,
+    toast, toastError, navBack, navForward, setScrollHost,
   } from './lib/stores'
   import { Api } from './lib/api'
   import { errorMessage } from './lib/ipc'
@@ -34,6 +34,8 @@
   import GenreView from './views/GenreView.svelte'
   import PodcastsView from './views/PodcastsView.svelte'
   import PodcastDetail from './views/PodcastDetail.svelte'
+
+  const scrollHost = (el: HTMLElement) => { setScrollHost(el); return { destroy: () => setScrollHost(null) } }
 
   let ready = $state(false)
   let showOnboarding = $state(false)
@@ -80,6 +82,13 @@
 
     document.addEventListener('contextmenu', e => e.preventDefault())
 
+    // Mouse side buttons: 3 = back, 4 = forward.
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) { e.preventDefault(); navBack() }
+      else if (e.button === 4) { e.preventDefault(); navForward() }
+    }
+    window.addEventListener('mouseup', onMouseUp)
+
     // Dropping audio files/folders copies them into ~/Music/Firmium.
     let unlistenDrop: (() => void) | undefined
     getCurrentWindow().onDragDropEvent(async event => {
@@ -108,6 +117,8 @@
 
     return () => {
       stop?.()
+      window.removeEventListener('mouseup', onMouseUp)
+      setScrollHost(null)
       unlistenDrop?.()
       mobileQuery.removeEventListener('change', update)
       collapsedQuery.removeEventListener('change', update)
@@ -118,7 +129,7 @@
 {#if showOnboarding}<Onboarding onFinish={finishOnboarding} />{/if}
 <div class="sidebar"><Sidebar /></div>
 <div class="main-area">
-  <div class="list-panel">
+  <div class="list-panel" use:scrollHost>
     {#if ready}
       {#key $activeView.type + ($activeView.id ?? '')}
         {#if $activeView.type === 'home'}<HomeView />

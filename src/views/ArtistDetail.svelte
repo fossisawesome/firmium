@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { IconPlay, IconLoading, IconShuffle, IconHeart, IconHeartOutline } from '../lib/icons'
+  import { IconPlay, IconLoading, IconShuffle, IconHeart, IconHeartOutline, IconDownload } from '../lib/icons'
   import LoadingState from '../components/LoadingState.svelte'
   import AlbumRow from '../components/AlbumRow.svelte'
   import VirtualList from '../lib/VirtualList.svelte'
@@ -22,6 +22,7 @@
   let recommendations = $state<Artist[]>([])
   let busy = $state<'play' | 'shuffle' | null>(null)
   let starred = $state(false)
+  let downloaded = $state<number | null>(null)
 
   const stripTags = (s: string) => s.replace(/<[^>]+>/g, '').trim()
 
@@ -71,6 +72,20 @@
     finally { busy = null }
   }
 
+  // One album at a time so a big discography doesn't open dozens of parallel transfers.
+  async function downloadAll() {
+    if (downloaded !== null) return
+    downloaded = 0
+    try {
+      for (const album of albums) {
+        await Api.downloadAlbum(album.id)
+        downloaded++
+      }
+      toast(`Downloaded ${albums.length} album${albums.length === 1 ? '' : 's'}`)
+    } catch (e) { toastError(e) }
+    finally { downloaded = null }
+  }
+
   async function toggleStar() {
     starred = !starred
     try { await Api.setStarred(id, 'artist', starred) } catch (e) { starred = !starred; toastError(e) }
@@ -92,6 +107,9 @@
       {#if $isAuthed}
         <button class="play-all-btn shuffle-all-btn" onclick={toggleStar} aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}>
           <span class="icon" style="width:12px;height:12px">{@html starred ? IconHeart : IconHeartOutline}</span>
+        </button>
+        <button class="play-all-btn shuffle-all-btn" onclick={downloadAll} disabled={downloaded !== null || albums.length === 0} aria-label="Download all albums">
+          <span class="icon" class:icon-spin={downloaded !== null} style="width:12px;height:12px">{@html downloaded !== null ? IconLoading : IconDownload}</span>{#if downloaded !== null}<span style="margin-left:6px">{downloaded}/{albums.length}</span>{/if}
         </button>
       {/if}
       <button class="play-all-btn artist-add-btn" title="More options" aria-label="More options"

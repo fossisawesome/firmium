@@ -181,6 +181,7 @@ sudo apt install ./Firmium_*.deb
 - Rust 1.80 or later (`rustup default stable`)
 - Node.js 20+ and npm (builds the Svelte UI)
 - Node.js 22 or later (with npm) for the Svelte frontend
+- `cmake` and a C compiler, to build the bundled `libopus` used for Opus playback (`apt install cmake` / `dnf install cmake` / `pacman -S cmake` / `brew install cmake`; on Windows install [CMake](https://cmake.org/download/) and the "Desktop development with C++" Build Tools workload)
 - On Linux, the `-dev` variants of the libraries above (e.g. `libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libasound2-dev`, `libssl-dev`, `libsecret-1-dev`, `librsvg2-dev`) plus `pkg-config` — see the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
 - On Windows, WebView2 (preinstalled on Windows 10/11) — Windows Credential Manager is built in
 - On macOS, Xcode Command Line Tools (`xcode-select --install`) — no other system libraries needed

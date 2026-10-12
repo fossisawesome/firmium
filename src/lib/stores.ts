@@ -43,15 +43,52 @@ export type ViewType =
 export interface ActiveView { type: ViewType; id?: string }
 
 export const activeView = writable<ActiveView>({ type: 'home' })
-const history: ActiveView[] = []
+
+interface NavEntry { view: ActiveView; scroll: number }
+const backStack: NavEntry[] = []
+const forwardStack: NavEntry[] = []
+let scrollHost: HTMLElement | null = null
+
+/** The one scrollable pane every main view renders into, so its offset can be saved and restored. */
+export function setScrollHost(el: HTMLElement | null): void { scrollHost = el }
+
+const snapshot = (): NavEntry => ({ view: get(activeView), scroll: scrollHost?.scrollTop ?? 0 })
+
+// Views fetch asynchronously, so the pane may be too short at first; retry until it can reach `top`.
+function restoreScroll(top: number): void {
+  const el = scrollHost
+  if (!el) return
+  let frames = 0
+  const step = () => {
+    el.scrollTop = top
+    if (top > 0 && Math.abs(el.scrollTop - top) > 1 && ++frames < 60) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
+function show(entry: NavEntry): void {
+  activeView.set(entry.view)
+  restoreScroll(entry.scroll)
+}
 
 export function navTo(type: ViewType, id?: string): void {
-  history.push(get(activeView))
-  if (history.length > 50) history.shift()
+  backStack.push(snapshot())
+  if (backStack.length > 50) backStack.shift()
+  forwardStack.length = 0
   activeView.set({ type, id })
+  restoreScroll(0)
 }
 export function navBack(): void {
-  activeView.set(history.pop() ?? { type: 'home' })
+  const prev = backStack.pop()
+  if (!prev) return
+  forwardStack.push(snapshot())
+  show(prev)
+}
+export function navForward(): void {
+  const next = forwardStack.pop()
+  if (!next) return
+  backStack.push(snapshot())
+  show(next)
 }
 
 // ── Right-hand panels (one at a time) ───────────────────────────────────────
