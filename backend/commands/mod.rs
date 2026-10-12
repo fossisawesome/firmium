@@ -1,5 +1,4 @@
-// Command modules. These were Tauri command groups; in the iced app they are
-// plain async/sync fns called from `App::update` via `iced::Task`. Callers use
+// Command modules: plain async/sync fns called from `core::Core` and termium. Callers use
 // the full path (e.g. `crate::commands::subsonic::get_albums`).
 
 pub mod themes;

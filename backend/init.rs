@@ -1,6 +1,6 @@
 //! Backend bootstrap. Replaces the old Tauri `run()` setup: builds the shared
 //! handles (event bus, audio player, app/queue state, play history) and starts
-//! the queue-manager task. The iced `App` holds the returned `Backend`.
+//! the queue-manager task. `core::Core` (desktop) or termium holds the returned `Backend`.
 
 use std::sync::Arc;
 

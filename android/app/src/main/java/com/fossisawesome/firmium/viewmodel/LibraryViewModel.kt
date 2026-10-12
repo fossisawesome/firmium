@@ -14,6 +14,7 @@ import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.data.toUserError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,6 +77,8 @@ data class ArtistDetailState(
     val recommendations: List<Artist> = emptyList(),
     // Top songs for the artist (server only), shown in the "Songs" preview section.
     val topSongs: List<com.fossisawesome.firmium.data.model.Song> = emptyList(),
+    // Every track across every album by this artist, used by Play All / Shuffle.
+    val allSongs: List<com.fossisawesome.firmium.data.model.Song> = emptyList(),
 )
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
@@ -322,6 +325,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 _artistDetailState.value = ArtistDetailState(detail = detail)
                 resolveRecommendations(artistId, detail.artist.name)
                 loadArtistTopSongs(artistId, detail.artist.name)
+                loadArtistAllSongs(artistId, detail.albums)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 if (e is com.fossisawesome.firmium.data.api.SessionExpiredException) {
@@ -340,6 +344,28 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             val songs = api.getTopSongs(artistName, 20)
             if (songs.isNotEmpty() && _artistDetailState.value.detail?.artist?.id == artistId) {
                 _artistDetailState.value = _artistDetailState.value.copy(topSongs = songs)
+            }
+        }
+    }
+
+    // Loads full track listing across every album by this artist, for Play All / Shuffle —
+    // getTopSongs (used for topSongs) is a Last.fm-backed "top tracks" lookup capped well
+    // below the artist's real song count, not the full discography.
+    private fun loadArtistAllSongs(artistId: String, albums: List<Album>) {
+        viewModelScope.launch {
+            try {
+                val tracks = albums.map { album ->
+                    async {
+                        if (artistId.startsWith("local:")) localLibrary.getAlbumDetail(album.id).tracks
+                        else api.getAlbumDetail(album.id).tracks
+                    }
+                }.awaitAll().flatten()
+                if (_artistDetailState.value.detail?.artist?.id == artistId) {
+                    _artistDetailState.value = _artistDetailState.value.copy(allSongs = tracks)
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                /* best-effort: Play All just stays disabled if this fails */
             }
         }
     }

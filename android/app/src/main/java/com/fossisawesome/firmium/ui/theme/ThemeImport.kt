@@ -21,6 +21,16 @@ private data class ParsedTheme(
 
 private fun themesDir(context: Context): File = File(context.filesDir, THEMES_DIR)
 
+// Drops a trailing `# comment`, but keeps `#` inside quotes (hex colors like "#242424").
+private fun stripComment(line: String): String {
+    var quoted = false
+    for ((i, c) in line.withIndex()) {
+        if (c == '"') quoted = !quoted
+        else if (c == '#' && !quoted) return line.substring(0, i)
+    }
+    return line
+}
+
 /**
  * Minimal hand-rolled parser for the theme .toml format (no TOML dependency, mirrors
  * the approach in TomlEqParser). Reads top-level `name`/`color_scheme` and the keys
@@ -33,7 +43,7 @@ private fun parseThemeToml(text: String): ParsedTheme? {
     var inColors = false
 
     for (raw in text.lines()) {
-        val line = raw.substringBefore('#').trim()
+        val line = stripComment(raw).trim()
         if (line.isEmpty()) continue
 
         if (line.startsWith("[") && line.endsWith("]")) {

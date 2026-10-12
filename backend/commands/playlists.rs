@@ -1,6 +1,6 @@
-//! Best-effort server-sync primitives for local-first playlists. The in-memory
-//! `Vec<Playlist>` lives on `App`; these fns only talk to the OpenSubsonic server
-//! and are spawned via `iced::Task::perform`. Failures are surfaced to the caller
+//! Best-effort server-sync primitives for local-first playlists. The playlist
+//! list lives in `core::playlists`; these fns only talk to the OpenSubsonic server
+//! and are spawned as background tasks. Failures are surfaced to the caller
 //! (create) or swallowed/logged (the push_* helpers), never blocking the UI.
 
 use std::sync::Arc;

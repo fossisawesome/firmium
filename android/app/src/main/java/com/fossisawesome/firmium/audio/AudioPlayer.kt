@@ -63,6 +63,7 @@ class AudioPlayer(private val context: Context) {
         }
         val player = ExoPlayer.Builder(context, renderersFactory)
             .setAudioAttributes(audioAttrs, true)
+            .setHandleAudioBecomingNoisy(true)
             .build()
         return player to processor
     }

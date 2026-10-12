@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.audio.PlayerState
+import com.fossisawesome.firmium.data.podcast.isPodcastEpisodeId
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 
@@ -125,13 +126,15 @@ private fun PlayerBarDefault(
                     tint = colors.text,
                 )
             }
-            FirmiumIconButton(
-                onClick = onNext,
-                enabled = state.hasNext,
-                modifier = Modifier.size(44.dp),
-            ) {
-                FirmiumIcon(Icons.Default.SkipNext, contentDescription = "Next",
-                    tint = if (state.hasNext) colors.text else colors.muted)
+            if (!track.id.isPodcastEpisodeId()) {
+                FirmiumIconButton(
+                    onClick = onNext,
+                    enabled = state.hasNext,
+                    modifier = Modifier.size(44.dp),
+                ) {
+                    FirmiumIcon(Icons.Default.SkipNext, contentDescription = "Next",
+                        tint = if (state.hasNext) colors.text else colors.muted)
+                }
             }
             Box(contentAlignment = Alignment.TopEnd) {
                 FirmiumIconButton(onClick = onRepeatCycle, modifier = Modifier.size(44.dp)) {

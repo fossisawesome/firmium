@@ -54,15 +54,19 @@ update_file() {
 # Update main repo files
 update_file "$PROJECT_ROOT/CLAUDE.md" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/Cargo.toml" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/package.json" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/src-tauri/tauri.conf.json" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/PKGBUILD" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/firmium.spec" "$NEW_VERSION"
 
 # Update Android app
 update_file "$PROJECT_ROOT/android/app/build.gradle.kts" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/android/wear/build.gradle.kts" "$NEW_VERSION"
 
 # Update AUR folders
 update_file "$HOME/firmium/aur-firmium-git/PKGBUILD" "$NEW_VERSION"
 update_file "$HOME/firmium/aur-firmium-bin/PKGBUILD" "$NEW_VERSION"
+update_file "$PROJECT_ROOT/packaging/aur/PKGBUILD" "$NEW_VERSION"
 
 # Update .SRCINFO in AUR folders if they exist
 for aur_dir in "$HOME/firmium/aur-firmium-git" "$HOME/firmium/aur-firmium-bin"; do

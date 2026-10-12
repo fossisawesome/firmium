@@ -33,111 +33,26 @@ pub struct Config {
     #[serde(default)]
     pub window_decorations: Option<bool>,
     #[serde(default)]
-    pub viz_cover_colors: Option<bool>,
-    #[serde(default)]
     pub font_family: Option<String>,
     #[serde(default)]
     pub scrollbar_width: Option<u32>,
-
-    // ── Visualizer: Bars ──────────────────────────────────────────────────────
     #[serde(default)]
-    pub bars_monstercat: Option<f32>,
+    pub crossfade_enabled: Option<bool>,
     #[serde(default)]
-    pub bars_waves: Option<bool>,
+    pub crossfade_duration: Option<f32>,
     #[serde(default)]
-    pub bars_waves_smoothing: Option<u32>,
+    pub crossfade_curve: Option<String>,
     #[serde(default)]
-    pub bars_gradient_mode: Option<crate::viz_enums::BarsGradientMode>,
+    pub gapless_enabled: Option<bool>,
     #[serde(default)]
-    pub bars_gradient_orientation: Option<crate::viz_enums::BarsGradientOrientation>,
+    pub replay_gain_enabled: Option<bool>,
     #[serde(default)]
-    pub bars_peak_gradient_mode: Option<crate::viz_enums::BarsPeakGradientMode>,
+    pub auto_continue: Option<bool>,
     #[serde(default)]
-    pub bars_peak_mode: Option<crate::viz_enums::BarsPeakMode>,
+    pub bit_perfect_mode: Option<String>,
+    /// Unix seconds when the automatic weekly Recap last opened.
     #[serde(default)]
-    pub bars_peak_hold_time: Option<f32>,
-    #[serde(default)]
-    pub bars_peak_fade_time: Option<f32>,
-    #[serde(default)]
-    pub bars_peak_height: Option<f32>,
-    #[serde(default)]
-    pub bars_border_width: Option<f32>,
-    #[serde(default)]
-    pub bars_led_bars: Option<bool>,
-    #[serde(default)]
-    pub bars_led_segment_height: Option<f32>,
-    #[serde(default)]
-    pub bars_depth_3d: Option<f32>,
-    #[serde(default)]
-    pub bars_flash_intensity: Option<f32>,
-    #[serde(default)]
-    pub bars_max_bars: Option<u32>,
-    #[serde(default)]
-    pub bars_trails: Option<f32>,
-    #[serde(default)]
-    pub bars_echo: Option<f32>,
-
-    // ── Visualizer: Lines ─────────────────────────────────────────────────────
-    #[serde(default)]
-    pub lines_point_count: Option<u32>,
-    #[serde(default)]
-    pub lines_line_thickness: Option<f32>,
-    #[serde(default)]
-    pub lines_outline_thickness: Option<f32>,
-    #[serde(default)]
-    pub lines_outline_opacity: Option<f32>,
-    #[serde(default)]
-    pub lines_animation_speed: Option<f32>,
-    #[serde(default)]
-    pub lines_gradient_mode: Option<crate::viz_enums::GradientMode>,
-    #[serde(default)]
-    pub lines_fill_opacity: Option<f32>,
-    #[serde(default)]
-    pub lines_glow_intensity: Option<f32>,
-    #[serde(default)]
-    pub lines_mirror: Option<bool>,
-    #[serde(default)]
-    pub lines_style: Option<crate::viz_enums::LineStyle>,
-    #[serde(default)]
-    pub lines_trails: Option<f32>,
-    #[serde(default)]
-    pub lines_echo: Option<f32>,
-
-    // ── Visualizer: Scope ─────────────────────────────────────────────────────
-    #[serde(default)]
-    pub scope_radius: Option<f32>,
-    #[serde(default)]
-    pub scope_sensitivity: Option<f32>,
-    #[serde(default)]
-    pub scope_point_count: Option<u32>,
-    #[serde(default)]
-    pub scope_line_thickness: Option<f32>,
-    #[serde(default)]
-    pub scope_fill_opacity: Option<f32>,
-    #[serde(default)]
-    pub scope_glow_intensity: Option<f32>,
-    #[serde(default)]
-    pub scope_outline_thickness: Option<f32>,
-    #[serde(default)]
-    pub scope_outline_opacity: Option<f32>,
-    #[serde(default)]
-    pub scope_gradient_mode: Option<crate::viz_enums::GradientMode>,
-    #[serde(default)]
-    pub scope_animation_speed: Option<f32>,
-    #[serde(default)]
-    pub scope_style: Option<crate::viz_enums::LineStyle>,
-    #[serde(default)]
-    pub scope_particles: Option<bool>,
-    #[serde(default)]
-    pub scope_particle_count: Option<u32>,
-    #[serde(default)]
-    pub scope_particle_speed: Option<f32>,
-    #[serde(default)]
-    pub scope_beam: Option<bool>,
-    #[serde(default)]
-    pub scope_trails: Option<f32>,
-    #[serde(default)]
-    pub scope_echo: Option<f32>,
+    pub last_weekly_recap: Option<i64>,
 }
 
 fn config_path() -> PathBuf {
@@ -146,15 +61,14 @@ fn config_path() -> PathBuf {
 
 impl Config {
     pub fn load() -> Self {
-        std::fs::read_to_string(config_path())
-            .ok()
-            .and_then(|s| toml::from_str(&s).ok())
-            .unwrap_or_default()
+        crate::paths::read_or_backup(&config_path(), |s| toml::from_str(s).ok()).unwrap_or_default()
     }
 
     pub fn save(&self) {
         if let Ok(s) = toml::to_string_pretty(self) {
-            let _ = std::fs::write(config_path(), s);
+            if let Err(e) = crate::paths::write_atomic(&config_path(), &s) {
+                eprintln!("Config save failed: {e}");
+            }
         }
     }
 }

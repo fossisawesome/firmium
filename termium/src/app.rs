@@ -89,8 +89,6 @@ pub struct App {
     pub queue: Vec<Song>,
     pub queue_idx: i32,
 
-    // Visualizer
-    pub viz_snapshot: Vec<f32>,
 }
 
 impl App {
@@ -118,7 +116,6 @@ impl App {
             volume: 1.0,
             queue: Vec::new(),
             queue_idx: -1,
-            viz_snapshot: Vec::new(),
         }
     }
 
@@ -155,7 +152,6 @@ impl App {
                 self.search_results_songs.clear();
             }
             AppEvent::LoginResult(Ok(backend)) => {
-                backend.audio_player.set_visualizer_enabled(true);
                 self.backend = Some(backend);
                 self.view = View::Home;
                 self.status_message = None;
@@ -185,11 +181,7 @@ impl App {
             }
             AppEvent::PlaylistsLoaded(Err(e)) => self.status_message = Some(e),
             AppEvent::Backend(evt) => self.handle_backend_event(evt),
-            AppEvent::Tick => {
-                if let Some(backend) = &self.backend {
-                    self.viz_snapshot = backend.audio_player.visualizer().bars();
-                }
-            }
+            AppEvent::Tick => {}
         }
         None
     }

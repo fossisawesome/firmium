@@ -31,43 +31,12 @@ fun PodcastsScreen(
     addError: String?,
     onChannelClick: (String) -> Unit,
     onAddChannel: (String) -> Unit,
+    showAddDialog: Boolean,
+    onShowAddDialogChange: (Boolean) -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
-    val spotify = LocalUiTheme.current == "spotify"
-    var showAddDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (spotify) {
-                Text(
-                    "Podcasts",
-                    fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
-                    color = colors.text,
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                Text(
-                    "Podcasts".uppercase(),
-                    fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
-                    color = colors.muted, letterSpacing = 1.sp,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(colors.surface2)
-                    .border(1.dp, colors.accent.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
-                    .clickable { showAddDialog = true }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-            ) {
-                Text("+ Add", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
-            }
-        }
-
         if (channels.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -78,7 +47,7 @@ fun PodcastsScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
             ) {
                 items(channels, key = { it.id }) { channel ->
                     PodcastChannelRow(channel = channel, onClick = { onChannelClick(channel.id) })
@@ -94,10 +63,10 @@ fun PodcastsScreen(
             onConfirm = { url ->
                 if (url.isNotBlank()) {
                     onAddChannel(url)
-                    showAddDialog = false
+                    onShowAddDialogChange(false)
                 }
             },
-            onDismiss = { showAddDialog = false },
+            onDismiss = { onShowAddDialogChange(false) },
         )
     }
 }

@@ -4,9 +4,9 @@
 // Read-only OpenSubsonic endpoints. Connection details (server/username/
 // password) are held in `AppState.connection` and set via `set_connection`.
 //
-// These were Tauri commands; in the iced app they are plain async fns called
-// from `App::update` via `iced::Task::perform`. Async fns take an owned
-// `Arc<AppState>` so the returned future is `'static`; sync fns take `&AppState`.
+// Plain async fns called from `backend::core::Core` (and termium). Async fns
+// take an owned `Arc<AppState>` so the returned future is `'static`; sync fns
+// take `&AppState`.
 
 use crate::commands::auth::generate_auth_params;
 use crate::commands::lyrics::{fetch_lrclib_lyrics, LyricLine, LyricsResult};
@@ -155,7 +155,7 @@ const API_PAGE_SIZE: &str = "500";
 
 pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::errors::UserError> {
     let page_size: u32 = API_PAGE_SIZE.parse().unwrap_or(500);
-    let mut all = Vec::new();
+    let mut all: Vec<serde_json::Value> = Vec::new();
     let mut offset: u32 = 0;
     loop {
         let body = subsonic_request(
@@ -167,6 +167,11 @@ pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::error
         .await?;
         let page = array_field(&body, &["albumList2", "album"]);
         let page_len = page.len();
+        // A server that ignores `offset` returns the same page forever; stop on a repeat.
+        let first_id = page.first().and_then(|a| a.get("id")).cloned();
+        if offset > 0 && first_id.is_some() && first_id == all.get((offset - page_size) as usize).and_then(|a| a.get("id")).cloned() {
+            break;
+        }
         all.extend(page);
         if page_len < page_size as usize {
             break;
@@ -495,6 +500,7 @@ pub fn build_cover_url(state: &AppState, cover_id: &str, size: u32) -> Result<St
 
 /// Fire-and-forget scrobble, spawned from the (tokio) queue manager.
 pub(crate) fn fire_scrobble(state: Arc<AppState>, id: String, submission: bool) {
+    if !crate::commands::queue::is_server_song(&id) { return; }
     tokio::spawn(async move {
         let params = [("id", id), ("submission", submission.to_string()), ("time", "0".to_string())];
         if let Err(e) = subsonic_request(&state, "scrobble", &params, true).await {
@@ -505,6 +511,7 @@ pub(crate) fn fire_scrobble(state: Arc<AppState>, id: String, submission: bool) 
 
 /// Fire-and-forget playback report, spawned from the (tokio) queue manager.
 pub(crate) fn fire_report_playback(state: Arc<AppState>, media_id: String, position_ms: i64, playback_state: String) {
+    if !crate::commands::queue::is_server_song(&media_id) { return; }
     if !has_extension(&state, "playbackReport") { return; }
     tokio::spawn(async move {
         let params = [
@@ -551,7 +558,8 @@ pub async fn set_rating(state: Arc<AppState>, id: String, rating: u32) {
 
 /// Which entity a star/unstar call targets — Subsonic's `star`/`unstar` accept
 /// `id` (song), `albumId`, or `artistId` as separate query params.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum StarKind {
     Song,
     Album,

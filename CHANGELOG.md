@@ -1,3 +1,47 @@
+# Unreleased
+
+## Desktop
+
+- **Back to Tauri.** The iced desktop UI is replaced by a Tauri 2 app (`src-tauri/`). The Svelte 5 + SCSS + TypeScript frontend (`src/`) only renders: all logic (settings, accounts, data-source routing, local playlists + server sync, Mix/Radio/auto-continue seeding, lyrics word timing, recap windows, podcast playback) lives in Rust (`backend/core/`), reached through typed Tauri commands and events. The desktop build now needs `webkit2gtk-4.1` on Linux.
+- **Visualizer removed** from the desktop app, the shared backend (FFT tap, settings) and Termium. (Android's visualizer is still to be removed.)
+- Settings now persist crossfade, gapless, ReplayGain, auto-continue and bit-perfect mode across restarts. Strict bit-perfect disables gapless.
+- Podcast episodes play through the main queue and player bar; resume position is saved every few seconds.
+- Fix: adding the same track twice in one batch to a playlist no longer duplicates it.
+- Fix: playing the same song twice in a row (or a one-song queue on repeat-all) no longer cuts playback ~30 s early and stalls the queue.
+- Fix: a failed crossfade no longer advances the queue ahead of the track that is still playing.
+- Fix: local playlists and config are written atomically; a corrupt file is moved to `.bak` instead of being overwritten with an empty list.
+- Fix: cover art cache is scoped per server, so two saved servers with the same cover ids no longer share art. Cache hits now refresh recency and oversized chunked responses are rejected.
+- Fix: "play local copy" and "already downloaded" checks now match on artist, album and title, so a different song with the same title is no longer substituted or skipped.
+- Fix: downloads are written via a `.part` file; a failed track no longer aborts the rest of an album.
+- Fix: a failed login or account switch keeps the current session; ListenBrainz keyring lookups no longer delay the next track; library scans run off the async workers and cannot cache a stale result.
+- Fix: a second app instance no longer hijacks the CLI control socket; CLI `volume`/`seek` reject non-finite values.
+- Security: asset protocol scope narrowed to the app cache; play-history CSV export neutralises spreadsheet formulas.
+- **CI/release/packaging moved to Tauri.** CI gains a frontend job (`npm run check`, tests, build) and builds the frontend before the Rust jobs; release builds `.deb`, `.rpm`, NSIS and `.dmg` with the Tauri bundler; PKGBUILD, `firmium.spec` and the COPR spec/workflow build with npm + `--features custom-protocol`; CodeQL also scans JS/TS. FreeBSD builds are dropped from CI and releases. macOS `.dmg` names change to `Firmium_*_aarch64.dmg` / `Firmium_*_x64.dmg`.
+- Docs: README, CONTRIBUTING, AGENTS, bump script and the docs-site developer pages rewritten for Tauri; desktop visualizer docs removed.
+- Not ported: custom playlist cover/description, in-app updater (use your package manager).
+
+## Android
+
+- Fix: shuffle now randomises the upcoming queue when toggled on ([#76](https://github.com/fossisawesome/firmium/issues/76)).
+- Playback pauses automatically when headphones unplug or a Bluetooth output disconnects ([#77](https://github.com/fossisawesome/firmium/pull/77)).
+- Fix: imported custom themes no longer fail with "missing one or more required colors"; quoted hex values (`"#242424"`) were being cut off as comments ([#80](https://github.com/fossisawesome/firmium/issues/80)).
+
+## Termium
+
+- **Prebuilt binaries in releases.** The release workflow now builds Termium for Linux x86_64, Windows x86_64 and macOS (arm64, x86_64) and attaches `termium-<tag>-<target>` archives to each GitHub release.
+
+## Marketing Site
+
+- **firmium-site audit fixes.** One shared `VERSION` constant (nav + footer); removed the bogus Space shortcut; key handler ignores modifier keys and text inputs; changelog parser accepts plain bullets and skips empty entries (with a `npm test` test); `prefers-reduced-motion` support; reveal-on-scroll no longer hides content (threshold 0 + `<noscript>`); window dots and the logo egg use real buttons; Font Awesome CDN removed (platform badges are text, mini-player uses inline SVG); OG/Twitter meta + `og.png`; star count cached per session; shared `.reveal`/`.eyebrow` CSS moved to `app.css`; nav wordmark follows the live theme; comparison table copy tightened; deploy runs `npm run check`; README documents deploy and the manual version bump. Screenshots lose the fake window frame (title bar, macOS-style dots, close/minimize/maximize) and show as plain rounded images. Hero drops the "OPEN SOURCE · GPL-3.0 · LOCAL FILES + SUBSONIC" badge. Mobile fixes: gallery screenshots no longer crop, comparison header no longer breaks mid-word, hero badge dot no longer squishes. Fix: clicking the logo no longer reloads the page, so the 5-click easter egg works.
+- **Redesigned firmium-site** — full dark/gold "modern-retro" CRT-terminal aesthetic: 12-section single-page layout (hero, how-it-works, features, gallery, platforms, comparison, live theme picker, changelog, CTA, footer, sticky mini-player), a live 20-theme picker matching the app's built-in themes, scroll-reveal animations, CRT scanline/vignette/boot-flash overlay, interactive window chrome on screenshots (close/minimize/maximize, hover-scale traffic lights), and terminal-flavored easter eggs (Konami code, "subsonic" typing, `?` shortcuts overlay scoped to the hero window, logo 5-click, hero-scoped long-press/right-click diagnostics HUD).
+
+## Android
+
+- **Fix: artist "Play all"/Shuffle stuck at ~19-20 tracks** — buttons queued the Last.fm-backed `getTopSongs` result (capped, often incomplete) instead of the artist's full discography. Now fetches every track across all the artist's albums.
+- **Artist "Play All" added to Android TV** and moved on phone to sit alongside Shuffle/Radio as a matching pill button (was a small icon in the header overlay).
+- **Fix: Podcasts screen overlapped the status bar and had a different header/layout than Home/Music/Artists/Playlists.** Podcasts and Mix now use the same shared header (title, toolbar, safe-area insets) as the rest of the app.
+- **Podcast episode playback now integrates with the main player** — episodes play through the same pipeline as music, so the mini-player bar and full-screen player show and control them (play/pause, ±15s seek instead of track skip), and playback position is saved automatically so episodes resume where you left off. Previously, episode playback bypassed the shared player UI entirely and could only be controlled from a small play icon in the episode list.
+
 # v8.1.0
 
 ## Desktop / Android

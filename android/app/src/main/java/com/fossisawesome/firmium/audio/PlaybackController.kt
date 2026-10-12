@@ -7,6 +7,9 @@ import com.fossisawesome.firmium.data.db.PlayHistoryRepository
 import com.fossisawesome.firmium.data.eq.EqProfile
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Song
+import com.fossisawesome.firmium.data.podcast.PodcastRepository
+import com.fossisawesome.firmium.data.podcast.isPodcastEpisodeId
+import com.fossisawesome.firmium.data.podcast.podcastEpisodeId
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
@@ -55,6 +58,7 @@ class PlaybackController(
     private val playlists: PlaylistRepository,
     private val secureStorage: SecureStorage,
     private val playHistory: PlayHistoryRepository,
+    private val podcasts: PodcastRepository,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -72,6 +76,7 @@ class PlaybackController(
 
     private var currentPlayerId: String? = null
     private var positionJob: Job? = null
+    private var pendingResumeSeconds: Double? = null
 
     init {
         scope.launch {
@@ -111,8 +116,13 @@ class PlaybackController(
             override fun onStateChanged(playerId: String, state: String) {
                 if (playerId != currentPlayerId) return
                 _state.update { it.copy(playbackState = state) }
-                if (state == "playing") startPositionTracking()
-                else if (state == "paused" || state == "stopped") stopPositionTracking()
+                if (state == "playing") {
+                    startPositionTracking()
+                    pendingResumeSeconds?.let { resumeSecs ->
+                        pendingResumeSeconds = null
+                        audioPlayer.seek(playerId, resumeSecs)
+                    }
+                } else if (state == "paused" || state == "stopped") stopPositionTracking()
                 nowPlaying.updatePlaybackState(state == "playing")
             }
 
@@ -188,6 +198,9 @@ class PlaybackController(
     // For server tracks, prefer a locally-downloaded copy if one exists — avoids unnecessary
     // streaming and lets already-downloaded tracks play offline.
     private suspend fun streamUrlFor(song: Song): String {
+        if (song.id.isPodcastEpisodeId()) {
+            return podcasts.getEpisode(song.id.podcastEpisodeId())?.audioUrl ?: ""
+        }
         if (song.id.startsWith("local:")) {
             return localLibrary.getTrackUri(song.id)?.toString() ?: ""
         }
@@ -199,7 +212,8 @@ class PlaybackController(
         return auth.streamUrl(song.id)
     }
 
-    fun playAt(songs: List<Song>, startIndex: Int) {
+    fun playAt(songs: List<Song>, startIndex: Int, resumePositionSeconds: Double = 0.0) {
+        pendingResumeSeconds = resumePositionSeconds.takeIf { it > 0.0 }
         scope.launch {
             try {
                 val rgEnabled = _state.value.replayGainEnabled
@@ -373,6 +387,26 @@ class PlaybackController(
         _state.update { it.copy(shuffleEnabled = next) }
         scope.launch { prefs.setShuffleEnabled(next) }
         nowPlaying.setShuffleMode(next)
+        if (next) shuffleUpcoming()
+    }
+
+    // Randomises every track after the current one in place, so playback isn't interrupted.
+    private fun shuffleUpcoming() {
+        val pid = currentPlayerId ?: return
+        val queue = _state.value.queue.toMutableList()
+        val cur = _state.value.queueIndex
+        if (cur < 0) return
+        for (i in queue.lastIndex downTo cur + 2) {
+            val j = (cur + 1..i).random()
+            if (j == i) continue
+            audioPlayer.moveQueueItem(pid, j, i)
+            queue.add(i, queue.removeAt(j))
+        }
+        _state.update { it.copy(queue = queue, queueIndex = audioPlayer.getQueueIndex(pid)?.first ?: cur) }
+        nowPlaying.setQueue(queue.map {
+            NowPlayingController.QueueEntry(it.id, it.title, it.displayArtist ?: it.artist,
+                it.coverArt?.let { c -> if (c.startsWith("file://")) c else auth.coverArtUrl(c, 512) })
+        })
     }
 
     fun setCrossfadeEnabled(enabled: Boolean) {
@@ -552,6 +586,7 @@ class PlaybackController(
     private suspend fun submitListenBrainzCurrent() {
         if (!listenbrainzEnabled) return
         val song = _state.value.currentTrack ?: return
+        if (song.id.isPodcastEpisodeId()) return
         val token = secureStorage.get("listenbrainz", "token") ?: return
         api.submitListenBrainz(token, song)
     }
@@ -584,6 +619,7 @@ class PlaybackController(
 
     private suspend fun scrobbleCurrent(submission: Boolean) {
         val trackId = _state.value.currentTrack?.id ?: return
+        if (trackId.isPodcastEpisodeId()) return
         api.scrobble(trackId, submission)
     }
 
@@ -591,12 +627,14 @@ class PlaybackController(
     // Room IO executor (suspend insert) so a DB error never blocks playback.
     private fun recordPlayCurrent(durationPlayedSecs: Int) {
         val song = _state.value.currentTrack ?: return
+        if (song.id.isPodcastEpisodeId()) return
         scope.launch { try { playHistory.record(song, durationPlayedSecs) } catch (_: Exception) {} }
     }
 
     private suspend fun reportPlaybackCurrent(state: String, positionMs: Long? = null) {
         val s = _state.value
         val trackId = s.currentTrack?.id ?: return
+        if (trackId.isPodcastEpisodeId()) return
         api.reportPlayback(trackId, positionMs ?: (s.currentPosition * 1000).toLong(), state)
     }
 

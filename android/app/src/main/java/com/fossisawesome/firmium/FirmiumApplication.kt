@@ -49,7 +49,7 @@ class FirmiumApplication : Application() {
     val nowPlaying by lazy { NowPlayingController(this) }
     // App-scoped playback orchestration shared by the phone UI (PlayerViewModel) and Android Auto
     // (FirmiumMediaBrowserService), so the car can browse and play without an Activity present.
-    val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists, secureStorage, playHistory) }
+    val playback by lazy { PlaybackController(audioPlayer, nowPlaying, api, auth, localLibrary, prefs, playlists, secureStorage, playHistory, podcasts) }
     // Mirrors now-playing state to a paired Wear OS watch and applies its transport commands.
     val wearSync by lazy { WearStateSync(this) }
     // Pushes the active account's credentials to a paired Wear OS watch so it can

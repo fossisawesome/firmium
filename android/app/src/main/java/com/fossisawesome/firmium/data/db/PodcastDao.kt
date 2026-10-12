@@ -21,6 +21,9 @@ interface PodcastDao {
     @Query("SELECT * FROM podcast_episodes WHERE channelId = :channelId ORDER BY publishedAt DESC")
     suspend fun getEpisodes(channelId: String): List<PodcastEpisodeEntity>
 
+    @Query("SELECT * FROM podcast_episodes WHERE id = :episodeId LIMIT 1")
+    suspend fun getEpisode(episodeId: String): PodcastEpisodeEntity?
+
     @Query("DELETE FROM podcast_episodes WHERE channelId = :channelId")
     suspend fun deleteEpisodesForChannel(channelId: String)
 

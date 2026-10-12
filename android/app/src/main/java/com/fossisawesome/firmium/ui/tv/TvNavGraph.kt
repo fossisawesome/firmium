@@ -159,6 +159,10 @@ fun TvNavGraph(
                     coverUrlFor = coverUrl,
                     onLoad = { libraryViewModel.loadArtistDetail(it) },
                     onAlbumClick = { navController.navigate("album/$it") },
+                    onPlayAll = { songs, idx ->
+                        playerViewModel.playAt(songs, idx)
+                        navController.navigate("nowplaying")
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }

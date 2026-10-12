@@ -28,7 +28,11 @@ fn replay_gain_db(song: &Song) -> Option<f32> {
 }
 
 /// Resolves the stream URL for a song: local file → local match → Subsonic stream.
-pub(crate) async fn stream_url_for(song: &Song, app_state: &AppState) -> Result<String, String> {
+pub(crate) async fn stream_url_for(song: &Song, app_state: &Arc<AppState>) -> Result<String, String> {
+    if let Some(url) = app_state.external_streams.read().get(&song.id) {
+        return Ok(url.clone());
+    }
+    crate::commands::local_library::ensure_scanned_async(app_state.clone()).await?;
     if song.id.starts_with("local:") {
         let path = get_local_track_path(app_state, &song.id)?;
         return Ok(format!("file://{path}"));
@@ -37,6 +41,11 @@ pub(crate) async fn stream_url_for(song: &Song, app_state: &AppState) -> Result<
         return Ok(format!("file://{path}"));
     }
     build_stream_url(app_state, &song.id)
+}
+
+/// True for ids that exist on the OpenSubsonic server (not local files or podcast episodes).
+pub(crate) fn is_server_song(id: &str) -> bool {
+    !id.starts_with("local:") && !id.starts_with("podcast:")
 }
 
 /// Schedules a debounced (4s) save of the current play queue to the server.
@@ -55,11 +64,11 @@ pub(crate) fn schedule_save_play_queue(
     }
 
     let ids: Vec<String> = inner.queue.iter()
-        .filter(|t| !t.id.starts_with("local:"))
+        .filter(|t| !is_server_song(&t.id))
         .map(|t| t.id.clone())
         .collect();
     let current_id = inner.queue.get(inner.queue_idx as usize)
-        .filter(|t| !t.id.starts_with("local:"))
+        .filter(|t| !is_server_song(&t.id))
         .map(|t| t.id.clone());
 
     drop(inner);
@@ -602,6 +611,9 @@ pub fn seek_queue(queue_state: &QueueState, audio_player: &AudioPlayer, position
 
 /// Sets the global volume and applies it to the active player session.
 pub fn set_queue_volume(bus: &EventBus, queue_state: &QueueState, audio_player: &AudioPlayer, volume: f32) {
+    if !volume.is_finite() {
+        return;
+    }
     let volume = volume.clamp(0.0, 1.0);
     let pid = {
         let mut inner = queue_state.inner.lock();

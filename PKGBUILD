@@ -2,14 +2,13 @@
 pkgname=firmium-desktop-bin
 pkgver=8.1.0
 pkgrel=1
-pkgdesc="Lightning fast OpenSubsonic music player (native iced/Rust)"
+pkgdesc="Lightning fast OpenSubsonic music player (Tauri 2: Rust + Svelte)"
 arch=('x86_64')
 url="https://github.com/fossisawesome/firmium"
 license=('GPL-3.0-only')
-# cpal->alsa, rfd->gtk3, keyring->libsecret, winit->wayland/libxkbcommon,
-# wgpu->vulkan loader, iced text shaping->fontconfig.
-depends=('alsa-lib' 'gtk3' 'libsecret' 'libxkbcommon' 'wayland' 'vulkan-icd-loader' 'fontconfig')
-makedepends=('cargo')
+# cpal->alsa, tauri->webkit2gtk/gtk3, keyring->libsecret, tauri->libxdo, TLS->openssl.
+depends=('alsa-lib' 'gtk3' 'webkit2gtk-4.1' 'libsecret' 'openssl' 'xdotool')
+makedepends=('cargo' 'nodejs' 'npm')
 provides=('firmium-desktop')
 conflicts=('firmium-desktop-git')
 options=('!strip')
@@ -21,14 +20,16 @@ sha256sums=()
 build() {
   cd "$startdir"
   export RUSTUP_TOOLCHAIN=stable
-  cargo build --release --locked
+  npm ci
+  npm run build
+  cargo build --release --locked -p firmium --features custom-protocol
 }
 
 package() {
   cd "$startdir"
   install -Dm755 "target/release/firmium" "${pkgdir}/usr/bin/firmium"
   install -Dm644 "packaging/firmium.desktop" "${pkgdir}/usr/share/applications/firmium.desktop"
-  install -Dm644 "assets/app-icons/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/firmium.png"
-  install -Dm644 "assets/app-icons/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/firmium.png"
+  install -Dm644 "src-tauri/icons/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/firmium.png"
+  install -Dm644 "src-tauri/icons/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/firmium.png"
   install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

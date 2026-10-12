@@ -119,24 +119,6 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 
 ---
 
-## Audio Visualizer
-
-| Feature | Desktop | Android |
-|---|:---:|:---:|
-| GPU-accelerated visualizer — Bars, Lines, and Scope modes | ✅ | ✅ |
-| Bars mode — frequency spectrum bars with peak hold indicators and per-bar flash on transients | ✅ | ❌ |
-| Lines mode — smooth filled waveform with configurable glow and mirror effect | ✅ | ❌ |
-| Scope (oscilloscope) mode — circular waveform ring with particle field driven by audio energy | ✅ | ❌ |
-| Post-processing effects: bloom glow, motion trails, echo/Milkdrop feedback, CRT film grain | ✅ | ❌ |
-| Beat-reactive bloom and pulse — effects intensify on bass hits | ✅ | ❌ |
-| Toggle visualizer on/off | ✅ | ✅ |
-| Switch visualizer mode from the panel header | ✅ | ✅ |
-| Visualizer colors follow the album artwork (desktop: toggle in Settings, falls back to theme colors; Android: always-on) | ✅ | ✅ |
-| Bar smoothing — Monstercat (adjustable spread intensity) or Waves (spline smoothing), mutually exclusive, adjustable in Settings | ✅ | ❌ |
-| Full visualizer customization in Settings — dozens of knobs per mode (gradient/peak behavior, glow, outline, fill, point/bar count, particles, motion trails, echo, and more) | ✅ | ❌ |
-
----
-
 ## Downloads & Offline
 
 | Feature | Desktop | Android |

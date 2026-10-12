@@ -241,8 +241,10 @@ async fn handle_finished(
         let dur_ms = (cached_dur.unwrap_or(0.0) * 1000.0) as i64;
         fire_scrobble(Arc::clone(&app_state), song.id.clone(), true);
         fire_report_playback(Arc::clone(&app_state), song.id.clone(), dur_ms, "stopped".into());
-        fire_record_play(history.as_deref(), &song, dur_ms / 1000);
-        fire_listenbrainz_listen(Arc::clone(&app_state), song);
+        if !song.id.starts_with("podcast:") {
+            fire_record_play(history.as_deref(), &song, dur_ms / 1000);
+            fire_listenbrainz_listen(Arc::clone(&app_state), song);
+        }
     }
 
     // Determine next action
@@ -287,26 +289,16 @@ async fn do_crossfade(
     ctx: CrossfadeContext,
 ) {
     let CrossfadeContext { next_idx, old_player_id, fade_ms, volume } = ctx;
-    // Extract next song, update queue_idx, reset per-track flags
-    let (song, outgoing, rg_enabled, curve) = {
-        let mut inner = queue_state.inner.lock();
+    // Read only: queue state is committed after the fade starts, so a failure
+    // below leaves the old track playing with a consistent queue_idx.
+    let (song, rg_enabled, curve) = {
+        let inner = queue_state.inner.lock();
         let song = match inner.queue.get(next_idx).cloned() {
             Some(s) => s,
             None => return,
         };
-        let outgoing = inner.queue.get(inner.queue_idx as usize).cloned();
-        inner.queue_idx = next_idx as i32;
-        inner.reset_track_progress();
-        (song, outgoing, inner.replay_gain_enabled, inner.crossfade_curve.clone())
+        (song, inner.replay_gain_enabled, inner.crossfade_curve.clone())
     };
-
-    // Scrobble outgoing (Subsonic + ListenBrainz + local play history)
-    if let Some(outgoing) = outgoing {
-        fire_scrobble(Arc::clone(&app_state), outgoing.id.clone(), true);
-        fire_report_playback(Arc::clone(&app_state), outgoing.id.clone(), 0, "stopped".into());
-        fire_record_play(history.as_deref(), &outgoing, outgoing.duration as i64);
-        fire_listenbrainz_listen(Arc::clone(&app_state), outgoing);
-    }
 
     // Resolve URL — async, no lock held
     let stream_url = match stream_url_for(&song, &app_state).await {
@@ -321,8 +313,23 @@ async fn do_crossfade(
         Err(e) => { eprintln!("Crossfade failed: {e}"); return; }
     };
 
-    // Store new player_id
-    { queue_state.inner.lock().current_player_id = Some(new_pid.clone()); }
+    // Commit: advance the index and swap the player id together.
+    let outgoing = {
+        let mut inner = queue_state.inner.lock();
+        let outgoing = inner.queue.get(inner.queue_idx as usize).cloned();
+        inner.queue_idx = next_idx as i32;
+        inner.reset_track_progress();
+        inner.current_player_id = Some(new_pid.clone());
+        outgoing
+    };
+
+    // Scrobble outgoing (Subsonic + ListenBrainz + local play history)
+    if let Some(outgoing) = outgoing {
+        fire_scrobble(Arc::clone(&app_state), outgoing.id.clone(), true);
+        fire_report_playback(Arc::clone(&app_state), outgoing.id.clone(), 0, "stopped".into());
+        fire_record_play(history.as_deref(), &outgoing, outgoing.duration as i64);
+        fire_listenbrainz_listen(Arc::clone(&app_state), outgoing);
+    }
 
     emit_queue_state(&app_state.bus, &queue_state);
     fire_scrobble(Arc::clone(&app_state), song.id.clone(), false);

@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.audio.PlayerState
 import com.fossisawesome.firmium.data.model.Song
+import com.fossisawesome.firmium.data.podcast.isPodcastEpisodeId
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.viewmodel.LyricsState
 import com.fossisawesome.firmium.viewmodel.PlaylistListItem
@@ -76,6 +77,7 @@ fun FullScreenPlayer(
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
+    onSeekToSeconds: (Double) -> Unit,
     onVolumeChange: (Float) -> Unit,
     onRepeatCycle: () -> Unit,
     onShuffleToggle: () -> Unit,
@@ -232,6 +234,7 @@ fun FullScreenPlayer(
                     PlayerControls(
                         track = track, state = state, progress = progress,
                         onSeekStart = onSeekStart, onSeek = onSeek, onSeekEnd = onSeekEnd,
+                        onSeekToSeconds = onSeekToSeconds,
                         onPrevious = onPrevious, onPlayPause = onPlayPause, onNext = onNext,
                         onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
                         onQueueOpen = onQueueOpen,
@@ -262,6 +265,7 @@ fun FullScreenPlayer(
                 PlayerControls(
                     track = track, state = state, progress = progress,
                     onSeekStart = onSeekStart, onSeek = onSeek, onSeekEnd = onSeekEnd,
+                    onSeekToSeconds = onSeekToSeconds,
                     onPrevious = onPrevious, onPlayPause = onPlayPause, onNext = onNext,
                     onShuffleToggle = onShuffleToggle, onRepeatCycle = onRepeatCycle,
                     onQueueOpen = onQueueOpen,
@@ -355,6 +359,7 @@ private fun PlayerControls(
     onSeekStart: () -> Unit,
     onSeek: (Float) -> Unit,
     onSeekEnd: () -> Unit,
+    onSeekToSeconds: (Double) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -370,6 +375,7 @@ private fun PlayerControls(
 ) {
     val colors = LocalFirmiumColors.current
     val gap: Dp = if (compact) 12.dp else 28.dp
+    val isEpisode = track.id.isPodcastEpisodeId()
 
     // Track info — title + artist.
     Column(
@@ -457,9 +463,17 @@ private fun PlayerControls(
             FirmiumIcon(Icons.Default.Shuffle, contentDescription = "Shuffle",
                 tint = if (state.shuffleEnabled) colors.accent else colors.muted, modifier = Modifier.size(22.dp))
         }
-        FirmiumCircleButton(size = btnSize, onClick = onPrevious, enabled = state.hasPrev) {
-            FirmiumIcon(Icons.Default.SkipPrevious, contentDescription = "Previous",
-                tint = if (state.hasPrev) colors.text else colors.muted, modifier = Modifier.size(28.dp))
+        FirmiumCircleButton(
+            size = btnSize,
+            onClick = { if (isEpisode) onSeekToSeconds((state.currentPosition - 15.0).coerceAtLeast(0.0)) else onPrevious() },
+            enabled = if (isEpisode) true else state.hasPrev,
+        ) {
+            FirmiumIcon(
+                if (isEpisode) Icons.Default.Replay10 else Icons.Default.SkipPrevious,
+                contentDescription = if (isEpisode) "Back 15 seconds" else "Previous",
+                tint = if (isEpisode || state.hasPrev) colors.text else colors.muted,
+                modifier = Modifier.size(28.dp),
+            )
         }
         val playInteractionSource = remember { MutableInteractionSource() }
         val (_, playScale) = rememberPressAnimations(
@@ -490,9 +504,17 @@ private fun PlayerControls(
                 modifier = Modifier.size(28.dp),
             )
         }
-        FirmiumCircleButton(size = btnSize, onClick = onNext, enabled = state.hasNext) {
-            FirmiumIcon(Icons.Default.SkipNext, contentDescription = "Next",
-                tint = if (state.hasNext) colors.text else colors.muted, modifier = Modifier.size(28.dp))
+        FirmiumCircleButton(
+            size = btnSize,
+            onClick = { if (isEpisode) onSeekToSeconds((state.currentPosition + 15.0).coerceAtMost(state.trackDuration)) else onNext() },
+            enabled = if (isEpisode) true else state.hasNext,
+        ) {
+            FirmiumIcon(
+                if (isEpisode) Icons.Default.Forward10 else Icons.Default.SkipNext,
+                contentDescription = if (isEpisode) "Forward 15 seconds" else "Next",
+                tint = if (isEpisode || state.hasNext) colors.text else colors.muted,
+                modifier = Modifier.size(28.dp),
+            )
         }
         Box(contentAlignment = Alignment.TopEnd) {
             FirmiumCircleButton(size = secSize, onClick = onRepeatCycle) {

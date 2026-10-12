@@ -14,7 +14,7 @@ Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../C
 
 ## Architecture (android/app/src/main/java/com/fossisawesome/firmium/)
 
-Native Kotlin/Compose app, independent of the desktop iced/Rust build, sharing OpenSubsonic API contract with desktop. Second Gradle module, `wear/`, is Wear OS companion (remote control for phone playback over Wearable Data Layer); shares phone's `applicationId` but no code. Android TV support (`ui/tv/`, `TvMainActivity`) lives in this same module, not a separate one — it's a second UI layer over the same ViewModels/data/audio stack, not a separate app.
+Native Kotlin/Compose app, independent of the desktop Tauri build, sharing OpenSubsonic API contract with desktop. Second Gradle module, `wear/`, is Wear OS companion (remote control for phone playback over Wearable Data Layer); shares phone's `applicationId` but no code. Android TV support (`ui/tv/`, `TvMainActivity`) lives in this same module, not a separate one — it's a second UI layer over the same ViewModels/data/audio stack, not a separate app.
 
 - **MainActivity.kt / FirmiumApplication.kt**: App entry points
 - **TvMainActivity.kt**: Android TV entry point (separate `LEANBACK_LAUNCHER` activity), reusing the same ViewModels/data/audio layer as `MainActivity` — no touch-specific UI code

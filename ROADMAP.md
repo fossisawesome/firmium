@@ -45,4 +45,3 @@ Not yet implemented — under consideration. See [FEATURES.md](FEATURES.md) for 
 ## Accessibility/niche
 
 - **Full keyboard-driven mode on desktop** — vim-style modal navigation across whole app
-- **Colorblind-safe visualizer palettes** — dedicated accessible palette set, distinct from general theming

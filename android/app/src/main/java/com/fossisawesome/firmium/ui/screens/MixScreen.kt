@@ -44,11 +44,8 @@ fun MixScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .windowInsetsPadding(WindowInsets.statusBars)
             .padding(20.dp),
     ) {
-        Text("Mix", fontSize = if (spotify) 30.sp else 26.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current, color = colors.text)
-        Spacer(Modifier.height(4.dp))
         Text("Generate a shuffled queue tuned to an energy level.",
             fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
 

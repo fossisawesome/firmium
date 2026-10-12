@@ -39,8 +39,10 @@ fn load_token() -> Option<String> {
 /// Fire-and-forget ListenBrainz "single" listen submission, mirroring
 /// `fire_scrobble`. No-op when no token is stored. Errors are logged only.
 pub(crate) fn fire_listenbrainz_listen(state: Arc<AppState>, song: Song) {
-    let Some(token) = load_token() else { return };
     tokio::spawn(async move {
+        // The keyring lookup blocks (D-Bus, possibly an unlock prompt), so it
+        // stays off the caller and off the async workers.
+        let Ok(Some(token)) = tokio::task::spawn_blocking(load_token).await else { return };
         let listened_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())

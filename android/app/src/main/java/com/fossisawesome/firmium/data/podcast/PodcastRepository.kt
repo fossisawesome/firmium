@@ -54,6 +54,8 @@ class PodcastRepository(private val dao: PodcastDao) {
 
     suspend fun getEpisodes(channelId: String): List<PodcastEpisodeEntity> = dao.getEpisodes(channelId)
 
+    suspend fun getEpisode(episodeId: String): PodcastEpisodeEntity? = dao.getEpisode(episodeId)
+
     suspend fun unsubscribe(channelId: String) {
         dao.deleteEpisodesForChannel(channelId)
         dao.deleteChannel(channelId)

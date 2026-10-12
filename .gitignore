@@ -32,3 +32,6 @@ scripts
 
 # superpowers scratch artifacts (plans/specs), not meant for repo
 docs/superpowers/
+# Node / Vite
+node_modules/
+dist/

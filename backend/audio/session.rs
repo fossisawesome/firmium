@@ -12,7 +12,6 @@ use crate::events::{BackendEvent, EventBus};
 
 use super::decoder::DecoderHandle;
 use super::eq::{self, EqChain, EqShared};
-use crate::visualizer::{self, VisualizerState};
 
 /// Unique identifier for each playback session.
 pub type PlayerId = String;
@@ -121,15 +120,13 @@ impl Session {
 /// `apply_fade_in` ramps the first 25ms of audio linearly from silence (used
 /// only for the initial decode-feeder of a track, not seek-rebuilds).
 /// `replay_gain_factor` is written to `session.replay_gain_factor` so it can be
-/// updated live (e.g. when the user toggles ReplayGain off). `visualizer`
-/// receives a copy of each decoded chunk for analysis.
+/// updated live (e.g. when the user toggles ReplayGain off).
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_decode_feeder(
     session: Arc<Session>,
     mut decoder: DecoderHandle,
     apply_fade_in: bool,
     replay_gain_factor: f32,
-    visualizer: Arc<VisualizerState>,
     eq: Arc<EqShared>,
     bit_perfect_strict: bool,
     cancel: Arc<AtomicBool>,
@@ -215,8 +212,6 @@ pub fn spawn_decode_feeder(
                             chain.process_interleaved(&mut samples);
                         }
                     }
-
-                    visualizer::process_chunk(&samples, channels as u16, sample_rate, &visualizer);
 
                     if fade_done < fade_total {
                         for s in &mut samples {

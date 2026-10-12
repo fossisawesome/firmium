@@ -9,7 +9,12 @@ import com.fossisawesome.firmium.audio.PlayerState
 import com.fossisawesome.firmium.data.RadioSeeder
 import com.fossisawesome.firmium.data.toUserError
 import com.fossisawesome.firmium.data.api.ApiClient
+import com.fossisawesome.firmium.data.db.PodcastChannelEntity
+import com.fossisawesome.firmium.data.db.PodcastEpisodeEntity
 import com.fossisawesome.firmium.data.model.Song
+import com.fossisawesome.firmium.data.podcast.isPodcastEpisodeId
+import com.fossisawesome.firmium.data.podcast.podcastEpisodeId
+import com.fossisawesome.firmium.data.podcast.toSong
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -26,6 +31,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val controller: PlaybackController = getApplication<FirmiumApplication>().playback
     private val api: ApiClient = getApplication<FirmiumApplication>().api
+    private val podcasts = getApplication<FirmiumApplication>().podcasts
     private val radioSeeder = RadioSeeder(api)
 
     val state: StateFlow<PlayerState> get() = controller.state
@@ -49,11 +55,31 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 if (lyricsState.value.isOpen) lyrics.syncToPosition(s.currentPosition)
             }
         }
+        // Persist podcast playback position every ~5s so episodes resume where left off.
+        viewModelScope.launch {
+            var lastPersistedSecond = -1
+            controller.state.collect { s ->
+                val track = s.currentTrack ?: return@collect
+                if (!track.id.isPodcastEpisodeId()) return@collect
+                val currentSecond = s.currentPosition.toInt()
+                if (currentSecond != lastPersistedSecond && currentSecond % 5 == 0) {
+                    lastPersistedSecond = currentSecond
+                    podcasts.updatePosition(track.id.podcastEpisodeId(), (s.currentPosition * 1000).toLong())
+                }
+            }
+        }
     }
 
     // ── Transport (delegate to controller) ───────────────────────────────────────
 
     fun playAt(songs: List<Song>, startIndex: Int) = controller.playAt(songs, startIndex)
+
+    // Plays a podcast episode through the same PlaybackController pipeline as music,
+    // so the mini-player and full-screen player show/control it. Resumes from the
+    // episode's saved position (podcast_episodes.positionMs).
+    fun playEpisode(channel: PodcastChannelEntity, episode: PodcastEpisodeEntity) {
+        controller.playAt(listOf(episode.toSong(channel)), 0, resumePositionSeconds = episode.positionMs / 1000.0)
+    }
 
     // Start Radio: seed from an item and play immediately.
     fun startRadio(seed: Song) {

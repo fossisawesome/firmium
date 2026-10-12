@@ -460,8 +460,16 @@ fn rows_to_csv(rows: &[PlayRow]) -> String {
 }
 
 /// Quotes a CSV field when it contains a comma, quote, or newline (RFC 4180).
+/// Text starting with `= + - @` is prefixed with `'` so spreadsheets don't run it as a formula.
 fn csv_field(v: Option<&str>) -> String {
-    let s = v.unwrap_or("");
+    let raw = v.unwrap_or("");
+    let guarded;
+    let s = if raw.starts_with(['=', '+', '-', '@']) {
+        guarded = format!("'{raw}");
+        guarded.as_str()
+    } else {
+        raw
+    };
     if s.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
@@ -469,10 +477,22 @@ fn csv_field(v: Option<&str>) -> String {
     }
 }
 
+#[cfg(test)]
+mod csv_tests {
+    use super::csv_field;
+
+    #[test]
+    fn formula_prefix_is_neutralised() {
+        assert_eq!(csv_field(Some("=SUM(A1)")), "'=SUM(A1)");
+        assert_eq!(csv_field(Some("a,b")), "\"a,b\"");
+        assert_eq!(csv_field(None), "");
+    }
+}
+
 // ── Serializable result types (camelCase to match frontend) ──────────────────
 
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RecentPlay {
     pub track_id: String,
     pub track_title: String,

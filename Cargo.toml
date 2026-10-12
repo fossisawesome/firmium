@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["backend", "desktop", "termium"]
+members = ["backend", "src-tauri", "termium"]
 
 [workspace.package]
 version = "8.1.0"
