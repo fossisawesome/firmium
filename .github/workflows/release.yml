@@ -44,7 +44,7 @@ jobs:
       release_id: ${{ steps.create-release.outputs.result }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Create draft release
         id: create-release
@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies
         run: |
@@ -115,7 +115,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -151,7 +151,7 @@ jobs:
         target: [aarch64-apple-darwin, x86_64-apple-darwin]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -199,7 +199,7 @@ jobs:
             target: x86_64-apple-darwin
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies
         if: runner.os == 'Linux'
@@ -250,7 +250,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 21
         uses: actions/setup-java@v6
