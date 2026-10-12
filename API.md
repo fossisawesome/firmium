@@ -50,7 +50,7 @@ Plus one of the following credential methods (in priority order Navidrome evalua
 3. **Password** — `p` parameter; supports hex-encoding with `enc:` prefix
 4. **JWT** — `jwt` parameter validated against Navidrome session tokens
 
-Firmium always uses **Token/MD5**. The MD5 token is generated on the Rust side; plaintext passwords never reach the frontend.
+Firmium uses **Token/MD5**. If the server rejects it at login (e.g. Nextcloud Music), `validate_connection` retries once with the legacy `p=enc:<hex password>` param and keeps that mode for the session. The MD5 token is generated on the Rust side; plaintext passwords never reach the frontend.
 
 ### Middleware Pipeline
 

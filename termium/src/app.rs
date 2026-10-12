@@ -26,6 +26,7 @@ pub enum AppEvent {
     LoginSubmit,
     SearchSubmit,
     SearchCancel,
+    Status(String),
     LoginResult(Result<Arc<Backend>, String>),
     AlbumsLoaded(Result<Vec<Album>, String>),
     ArtistsLoaded(Result<Vec<Artist>, String>),
@@ -51,6 +52,7 @@ pub enum SideEffect {
     PlayAlbum(String),
     PlaySongs(Vec<Song>),
     PlayPlaylist(String),
+    ResumeRemoteQueue,
 }
 
 pub struct App {
@@ -151,6 +153,7 @@ impl App {
                 self.search_submitted = false;
                 self.search_results_songs.clear();
             }
+            AppEvent::Status(msg) => self.status_message = Some(msg),
             AppEvent::LoginResult(Ok(backend)) => {
                 self.backend = Some(backend);
                 self.view = View::Home;
@@ -252,6 +255,10 @@ impl App {
                     };
                 }
             }
+            Action::ResumeQueue => {
+                self.status_message = Some("Fetching server queue...".to_string());
+                return Some(SideEffect::ResumeRemoteQueue);
+            }
             Action::PlayPause => return Some(SideEffect::TogglePlay),
             Action::NextTrack => return Some(SideEffect::NextTrack),
             Action::PrevTrack => return Some(SideEffect::PrevTrack),
@@ -344,6 +351,13 @@ mod tests {
         app.selected_index = 0;
         app.update(AppEvent::Key(Action::NavDown));
         assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn resume_queue_action_requests_remote_queue() {
+        let mut app = App::new_for_test();
+        let effect = app.update(AppEvent::Key(Action::ResumeQueue));
+        assert!(matches!(effect, Some(SideEffect::ResumeRemoteQueue)));
     }
 
     fn test_album(id: &str, name: &str) -> Album {

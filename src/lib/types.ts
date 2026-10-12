@@ -183,9 +183,7 @@ export interface EqState {
   deviceProfiles: Record<string, string>
 }
 
-// ── Stats & recap ───────────────────────────────────────────────────────────
-export type RecapRange = 'week' | 'month' | 'threeMonths' | 'year' | 'all' | 'custom'
-
+// ── Stats ───────────────────────────────────────────────────────────
 export interface RecentPlay {
   trackId: string; trackTitle: string
   artistId?: string; artistName?: string
@@ -197,19 +195,6 @@ export interface PlayHistorySummary {
   totalPlays: number; totalSeconds: number
   uniqueTracks: number; uniqueArtists: number; uniqueAlbums: number
   firstPlay?: number; lastPlay?: number
-}
-
-export interface RecapStats {
-  from: number; to: number
-  totalPlays: number; totalSeconds: number
-  topTracks: { trackId: string; title: string; artist?: string; coverArtId?: string; count: number }[]
-  topArtists: { artistId?: string; name: string; count: number }[]
-  topAlbums: { albumId?: string; name: string; artist?: string; coverArtId?: string; count: number }[]
-  topGenre?: { genre: string; count: number }
-  byTimeOfDay: { morning: number; afternoon: number; evening: number; night: number }
-  byDayOfWeek: number[]
-  biggestDiscovery?: { trackId: string; title: string; artist?: string; coverArtId?: string; count: number; firstHeard: number }
-  streak: { daysActive: number; longestStreak: number }
 }
 
 // ── Podcasts ────────────────────────────────────────────────────────────────

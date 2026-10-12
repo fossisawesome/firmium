@@ -21,7 +21,7 @@
 
 ---
 
-Firmium is a cross-platform music player targeting **Linux desktop, Windows, macOS, FreeBSD and Android**, built for both a local music library and [OpenSubsonic](https://opensubsonic.netlify.app/) streaming — use either one, or both at once. The desktop app is a [Tauri 2](https://tauri.app) application (Rust backend, Svelte UI); Android is native Kotlin/Compose. Point it at a folder of local files, an OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — or both, and get lightweight, low-latency audio playback using the native OS audio engine.
+Firmium is a cross-platform music player targeting **Linux desktop, Windows, macOS and Android**, built for both a local music library and [OpenSubsonic](https://opensubsonic.netlify.app/) streaming — use either one, or both at once. The desktop app is a [Tauri 2](https://tauri.app) application (Rust backend, Svelte UI); Android is native Kotlin/Compose. Point it at a folder of local files, an OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — or both, and get lightweight, low-latency audio playback using the native OS audio engine.
 
 > **Note:** No server required. Firmium plays a local music folder out of the box; connecting an OpenSubsonic server (e.g. [Navidrome](https://www.navidrome.org/), free and open source) is optional, for streaming your library across devices.
 
@@ -37,7 +37,7 @@ Firmium is a cross-platform music player targeting **Linux desktop, Windows, mac
 - **Cross-device queue sync** — resume exactly where you left off on any device (server mode)
 - **ReplayGain normalization** and bit-perfect audio mode (desktop)
 - **18+ color themes** including Gruvbox, Tokyo Night, Dracula, Catppuccin, and more — plus custom TOML themes (desktop)
-- **Listening stats & Recap** — local play history with swipeable Recap cards (top tracks, artists, genres, streaks) across custom date ranges; export as CSV or JSON, works with or without a server
+- **Play history** — local play history recorded on-device; export as CSV or JSON, works with or without a server
 - **Android Auto & Wear OS** — full library browsing, voice search, and transport controls in the car and on your wrist
 - **Credentials in OS keyring** — never stored as plaintext; supports multiple saved servers
 - **Scrobbling** — Last.fm (via server) and ListenBrainz
@@ -66,7 +66,7 @@ Both can be used together, or on their own. Your library will load automatically
 
 ## Install
 
-Firmium is available for **Linux desktop, Windows, macOS, FreeBSD** and **Android**.
+Firmium is available for **Linux desktop, Windows, macOS** and **Android**.
 
 > **Compatibility (Linux):** Tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
 
@@ -139,16 +139,8 @@ sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl libsecret xdotool
 ```
 </details>
 
-<details>
-<summary><b>FreeBSD</b></summary>
-
-```bash
-pkg install -y alsa-lib dbus libxkbcommon
-```
-</details>
-
 Firmium also requires:
-- A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments on Linux and FreeBSD. Without it, passwords won't be saved and you'll need to log in every launch.
+- A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments on Linux. Without it, passwords won't be saved and you'll need to log in every launch.
 - **PipeWire or PulseAudio** — on modern distros ALSA routes through one of these. Run `aplay -l` to verify audio devices are visible.
 
 ### Installing the App
@@ -192,7 +184,6 @@ sudo apt install ./Firmium_*.deb
 - On Linux, the `-dev` variants of the libraries above (e.g. `libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libasound2-dev`, `libssl-dev`, `libsecret-1-dev`, `librsvg2-dev`) plus `pkg-config` — see the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
 - On Windows, WebView2 (preinstalled on Windows 10/11) — Windows Credential Manager is built in
 - On macOS, Xcode Command Line Tools (`xcode-select --install`) — no other system libraries needed
-- On FreeBSD, system dependencies via `pkg` (see [System Dependencies (FreeBSD)](#system-dependencies) above) — `alsa-lib`, `dbus`, `libxkbcommon`, and `webkit2gtk4`
 
 ### Steps
 
@@ -242,6 +233,8 @@ cd android
 ```
 
 The release APK is output to `android/app/build/outputs/apk/release/`.
+
+For an F-Droid style build without Google libraries (Wear OS sync is left out), add `-Pfoss`: `./gradlew assembleRelease -Pfoss`.
 
 To sign the release build, set these environment variables before running `assembleRelease`:
 

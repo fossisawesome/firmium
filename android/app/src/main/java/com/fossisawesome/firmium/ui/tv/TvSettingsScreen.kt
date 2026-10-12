@@ -17,7 +17,6 @@ import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 private val fontOptions = listOf(
     "Liberation Mono", "Inter", "Monospace", "Sans Serif", "Cousine", "FiraCode", "Hack", "BigBlue Terminal",
 )
-private val visualizerTypeOptions = listOf("orb", "bars", "oscilloscope")
 private val crossfadeCurveOptions = listOf("linear", "logarithmic")
 
 // Covers the core playback/appearance settings that matter on TV. Last.fm key/secret entry,
@@ -38,17 +37,13 @@ fun TvSettingsScreen(
     onCrossfadeCurveChange: (String) -> Unit,
     onGaplessToggle: (Boolean) -> Unit,
     onReplayGainToggle: (Boolean) -> Unit,
-    onVisualizerToggle: (Boolean) -> Unit,
-    onVisualizerTypeSelected: (String) -> Unit,
     onLogout: () -> Unit,
     onOpenEqualizer: () -> Unit,
-    onViewRecap: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     val themeIndex = ALL_THEMES.indexOfFirst { it.id == currentThemeId }.coerceAtLeast(0)
     val fontIndex = fontOptions.indexOf(currentFontFamily).coerceAtLeast(0)
     val crossfadeCurveIndex = crossfadeCurveOptions.indexOf(playerState.crossfadeCurve).coerceAtLeast(0)
-    val visualizerTypeIndex = visualizerTypeOptions.indexOf(playerState.visualizerType).coerceAtLeast(0)
     val crossfadeSeconds = playerState.crossfadeDurationMs / 1000
 
     LazyColumn(
@@ -100,24 +95,8 @@ fun TvSettingsScreen(
                 TvToggleRow(label = "Gapless playback", checked = playerState.gaplessEnabled, colors = colors, onToggle = onGaplessToggle, modifier = Modifier.padding(bottom = 8.dp))
                 TvToggleRow(label = "ReplayGain", checked = playerState.replayGainEnabled, colors = colors, onToggle = onReplayGainToggle, modifier = Modifier.padding(bottom = 24.dp))
 
-                Text(text = "Visualizer", color = colors.muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
-                TvToggleRow(label = "Show visualizer", checked = playerState.visualizerEnabled, colors = colors, onToggle = onVisualizerToggle, modifier = Modifier.padding(bottom = 8.dp))
-                if (playerState.visualizerEnabled) {
-                    TvCycleRow(
-                        label = "Visualizer type",
-                        options = visualizerTypeOptions,
-                        selectedIndex = visualizerTypeIndex,
-                        colors = colors,
-                        onSelect = { onVisualizerTypeSelected(visualizerTypeOptions[it]) },
-                        modifier = Modifier.padding(bottom = 24.dp),
-                    )
-                }
-
                 TvActionButton(onClick = onOpenEqualizer, colors = colors, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                     Text(text = "Equalizer", color = colors.text, fontSize = 14.sp)
-                }
-                TvActionButton(onClick = onViewRecap, colors = colors, modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                    Text(text = "Recap & Listening Stats", color = colors.text, fontSize = 14.sp)
                 }
 
                 TvActionButton(onClick = onLogout, colors = colors, modifier = Modifier.fillMaxWidth()) {

@@ -2,12 +2,10 @@ package com.fossisawesome.firmium.ui
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import androidx.core.content.FileProvider
 import java.io.File
-import java.io.FileOutputStream
 
-// Shares stats exports and recap images via the system share sheet, using the
+// Shares stats exports via the system share sheet, using the
 // FileProvider already declared in AndroidManifest.xml (cache-path in file_paths.xml).
 object ShareUtils {
 
@@ -15,12 +13,6 @@ object ShareUtils {
         val file = File(context.cacheDir, fileName)
         file.writeText(text)
         shareFile(context, file, mime)
-    }
-
-    fun shareBitmap(context: Context, fileName: String, bitmap: Bitmap) {
-        val file = File(context.cacheDir, fileName)
-        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        shareFile(context, file, "image/png")
     }
 
     private fun shareFile(context: Context, file: File, mime: String) {

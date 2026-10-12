@@ -34,7 +34,6 @@
   import GenreView from './views/GenreView.svelte'
   import PodcastsView from './views/PodcastsView.svelte'
   import PodcastDetail from './views/PodcastDetail.svelte'
-  import RecapView from './views/RecapView.svelte'
 
   let ready = $state(false)
   let showOnboarding = $state(false)
@@ -67,8 +66,7 @@
       try {
         const a = await Api.autoLogin()
         if (a) { await setAuthState(a); offerResume() }
-        if (await Api.weeklyRecapDue().catch(() => false)) navTo('recap')
-        else if (!$auth.authed) {
+        if (!$auth.authed) {
           let onboarded = false
           try { onboarded = localStorage.getItem(ONBOARDED) === 'true' } catch { /* ignore */ }
           if (!onboarded && $auth.accounts.length === 0) showOnboarding = true
@@ -136,7 +134,6 @@
         {:else if $activeView.type === 'playlist'}<PlaylistDetail id={$activeView.id!} />
         {:else if $activeView.type === 'podcasts'}<PodcastsView />
         {:else if $activeView.type === 'podcast'}<PodcastDetail id={$activeView.id!} />
-        {:else if $activeView.type === 'recap'}<RecapView />
         {:else if $activeView.type === 'settings'}<Settings />
         {/if}
       {/key}

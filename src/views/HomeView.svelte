@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { IconMusic, IconUser, IconHeart, IconRecap } from '../lib/icons'
-  import { auth, navTo, dataVersion } from '../lib/stores'
+  import { IconMusic, IconUser, IconHeart, IconShuffle } from '../lib/icons'
+  import { auth, navTo, dataVersion, toast } from '../lib/stores'
   import { Api } from '../lib/api'
   import { cover } from '../lib/cover'
+  import { errorMessage } from '../lib/ipc'
   import type { Album, Genre, RecentPlay } from '../lib/types'
 
   const hour = new Date().getHours()
@@ -13,6 +14,16 @@
   let randomAlbums = $state<Album[]>([])
   let genres = $state<Genre[]>([])
   let loading = $state(true)
+
+  let shuffling = false
+  async function shuffleAll() {
+    if (shuffling) return
+    shuffling = true
+    try {
+      if ((await Api.shuffleAll()) === 0) toast('No songs found to shuffle.')
+    } catch (e) { toast(errorMessage(e)) }
+    finally { shuffling = false }
+  }
 
   // Recently played albums / artists, deduplicated from the play history.
   const recentAlbums = $derived.by(() => {
@@ -49,8 +60,8 @@
     <button class="home-shortcut" onclick={() => navTo('favorites')}>
       <span class="icon" style="width:16px;height:16px">{@html IconHeart}</span>Favorites
     </button>
-    <button class="home-shortcut" onclick={() => navTo('recap')}>
-      <span class="icon" style="width:16px;height:16px">{@html IconRecap}</span>Recap
+    <button class="home-shortcut" onclick={shuffleAll}>
+      <span class="icon" style="width:16px;height:16px">{@html IconShuffle}</span>Shuffle all
     </button>
   </div>
 

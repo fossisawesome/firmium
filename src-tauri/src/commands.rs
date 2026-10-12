@@ -11,7 +11,7 @@ use firmium_backend::commands::{cover_cache, downloads, local_library, queue};
 use firmium_backend::core::library::{Energy, TimedLyrics};
 use firmium_backend::core::playlists::{Playlist, PlaylistLists};
 use firmium_backend::core::{AuthState, Core, Settings};
-use firmium_backend::db::{PlayHistorySummary, RecapStats, RecentPlay};
+use firmium_backend::db::{PlayHistorySummary, RecentPlay};
 use firmium_backend::errors::UserError;
 use firmium_backend::podcasts::{PodcastChannel, PodcastEpisode};
 use firmium_backend::AudioDevice;
@@ -310,6 +310,11 @@ pub async fn generate_mix(core: S<'_>, energy: Energy, genre: Option<String>) ->
 }
 
 #[tauri::command]
+pub async fn shuffle_all(core: S<'_>) -> R<usize> {
+    Ok(core.shuffle_all().await?)
+}
+
+#[tauri::command]
 pub async fn start_radio(core: S<'_>, seed: Song) -> R<()> {
     Ok(core.start_radio(seed).await?)
 }
@@ -476,17 +481,7 @@ pub async fn pick_and_import(app: AppHandle, core: S<'_>) -> R<Option<usize>> {
     Ok(Some(local_library::import_local_files(core.backend.app_state.clone(), paths).await?))
 }
 
-// ── Stats, recap, export ────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn get_recap(core: S, range: String, from: Option<i64>, to: Option<i64>) -> R<RecapStats> {
-    Ok(core.recap(&range, from.zip(to))?)
-}
-
-#[tauri::command]
-pub fn weekly_recap_due(core: S) -> bool {
-    core.weekly_recap_due()
-}
+// ── Stats, export ────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn get_history_summary(core: S) -> R<PlayHistorySummary> {
@@ -506,14 +501,6 @@ pub async fn export_history(app: AppHandle, core: S<'_>, format: String) -> R<bo
     save_with_dialog(app, format!("firmium-history.{ext}"), ext, contents.into_bytes()).await
 }
 
-/// Saves a PNG (base64 data URL from a rendered Recap card) via a save dialog.
-#[tauri::command]
-pub async fn save_image(app: AppHandle, default_name: String, png_base64: String) -> R<bool> {
-    let b64 = png_base64.split(',').next_back().unwrap_or_default();
-    let bytes = decode_base64(b64).ok_or_else(|| "invalid image data".to_string())?;
-    save_with_dialog(app, default_name, "png", bytes).await
-}
-
 async fn save_with_dialog(app: AppHandle, name: String, ext: &'static str, bytes: Vec<u8>) -> R<bool> {
     let path = tauri::async_runtime::spawn_blocking(move || app.dialog().file().set_file_name(name).add_filter(ext, &[ext]).blocking_save_file())
         .await
@@ -521,29 +508,6 @@ async fn save_with_dialog(app: AppHandle, name: String, ext: &'static str, bytes
     let Some(path) = path.and_then(|p| p.into_path().ok()) else { return Ok(false) };
     std::fs::write(path, bytes).map_err(|e| e.to_string())?;
     Ok(true)
-}
-
-fn decode_base64(s: &str) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity(s.len() * 3 / 4);
-    let (mut buf, mut bits) = (0u32, 0u32);
-    for c in s.bytes().filter(|c| !c.is_ascii_whitespace() && *c != b'=') {
-        let v = match c {
-            b'A'..=b'Z' => c - b'A',
-            b'a'..=b'z' => c - b'a' + 26,
-            b'0'..=b'9' => c - b'0' + 52,
-            b'+' => 62,
-            b'/' => 63,
-            _ => return None,
-        };
-        buf = (buf << 6) | u32::from(v);
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((buf >> bits) as u8);
-            buf &= (1 << bits) - 1;
-        }
-    }
-    Some(out)
 }
 
 // ── Podcasts ────────────────────────────────────────────────────────────────

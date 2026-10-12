@@ -41,8 +41,8 @@ async fn subsonic_request(
         .map_err(|_| UserError::Unknown)?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         for (key, value) in params {
             query.append_pair(key, value);
@@ -121,13 +121,24 @@ pub fn set_connection(state: &AppState, server: Option<String>, username: Option
     conn.username = username;
     conn.password = password;
     conn.open_subsonic_extensions = None;
+    crate::commands::auth::set_legacy_auth(false);
 }
 
 /// Validates credentials with a minimal request, used during the initial
 /// login flow. Does not emit `SessionExpired` on failure, since a rejected
 /// login isn't an expired session.
 pub async fn validate_connection(state: Arc<AppState>) -> Result<(), crate::errors::UserError> {
-    match subsonic_request(&state, "getAlbumList2", &[("type", "alphabeticalByName".to_string()), ("size", "1".to_string())], true).await {
+    let probe_params = [("type", "alphabeticalByName".to_string()), ("size", "1".to_string())];
+    let mut result = subsonic_request(&state, "getAlbumList2", &probe_params, true).await;
+    if matches!(result, Err(crate::errors::UserError::SessionExpired)) {
+        // Token auth rejected: retry once with the legacy password param (Nextcloud Music).
+        crate::commands::auth::set_legacy_auth(true);
+        result = subsonic_request(&state, "getAlbumList2", &probe_params, true).await;
+        if result.is_err() {
+            crate::commands::auth::set_legacy_auth(false);
+        }
+    }
+    match result {
         Ok(_) => {
             // openSubsonicExtensions is only included on this dedicated endpoint,
             // not on regular responses like getAlbumList2.
@@ -466,8 +477,8 @@ pub(crate) fn build_stream_url(state: &AppState, track_id: &str) -> Result<Strin
     let mut url = reqwest::Url::parse(&format!("{server}/rest/stream")).map_err(|e| e.to_string())?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         query.append_pair("id", track_id);
     }
@@ -489,8 +500,8 @@ pub fn build_cover_url(state: &AppState, cover_id: &str, size: u32) -> Result<St
     let mut url = reqwest::Url::parse(&format!("{server}/rest/getCoverArt")).map_err(|e| e.to_string())?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         query.append_pair("id", cover_id);
         query.append_pair("size", &size.to_string());

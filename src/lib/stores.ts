@@ -37,7 +37,7 @@ export const bumpData = () => dataVersion.update(n => n + 1)
 // ── Navigation (view-only) ──────────────────────────────────────────────────
 export type ViewType =
   | 'home' | 'albums' | 'artists' | 'search' | 'playlists' | 'favorites' | 'genres' | 'mix'
-  | 'podcasts' | 'recap' | 'settings'
+  | 'podcasts' | 'settings'
   | 'album' | 'artist' | 'playlist' | 'podcast' | 'genre'
 
 export interface ActiveView { type: ViewType; id?: string }

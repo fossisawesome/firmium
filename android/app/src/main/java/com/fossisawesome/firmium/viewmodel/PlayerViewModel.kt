@@ -72,7 +72,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Transport (delegate to controller) ───────────────────────────────────────
 
-    fun playAt(songs: List<Song>, startIndex: Int) = controller.playAt(songs, startIndex)
+    fun playAt(songs: List<Song>, startIndex: Int) = controller.playFresh(songs, startIndex)
 
     // Plays a podcast episode through the same PlaybackController pipeline as music,
     // so the mini-player and full-screen player show/control it. Resumes from the
@@ -106,6 +106,36 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+    // Shuffle All: plays a random sample of the whole library. onResult reports the track count.
+    fun shuffleAll(onResult: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val tracks = radioSeeder.buildShuffleAll()
+                if (tracks.isNotEmpty()) controller.playAt(tracks, 0)
+                onResult(tracks.size)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (e !is com.fossisawesome.firmium.data.api.SessionExpiredException) {
+                    getApplication<FirmiumApplication>().errors.report(e.toUserError())
+                }
+            }
+        }
+    }
+    // Server-saved queue worth offering at startup: once per ViewModel, and only while nothing plays.
+    private var resumeOffered = false
+
+    suspend fun offerableRemoteQueue(): ApiClient.RemotePlayQueue? {
+        if (resumeOffered || state.value.currentTrack != null) return null
+        resumeOffered = true
+        val remote = try { api.getPlayQueue() } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            return null
+        }
+        return remote.takeIf { state.value.currentTrack == null }
+    }
+
+    fun resumeRemoteQueue(remote: ApiClient.RemotePlayQueue) = controller.resumeRemoteQueue(remote)
+
     fun skipToIndex(index: Int) = controller.skipToIndex(index)
     fun addToQueue(song: Song) = controller.addToQueue(song)
     fun moveQueueItem(from: Int, to: Int) = controller.moveQueueItem(from, to)
@@ -128,8 +158,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun setCrossfadeCurve(curve: String) = controller.setCrossfadeCurve(curve)
     fun setGaplessEnabled(enabled: Boolean) = controller.setGaplessEnabled(enabled)
     fun setReplayGainEnabled(enabled: Boolean) = controller.setReplayGainEnabled(enabled)
-    fun setVisualizerEnabled(enabled: Boolean) = controller.setVisualizerEnabled(enabled)
-    fun setVisualizerType(type: String) = controller.setVisualizerType(type)
 
     // ── Rating ─────────────────────────────────────────────────────────────────
 

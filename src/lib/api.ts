@@ -60,6 +60,7 @@ export const Api = {
   toggleShuffle: () => call('toggle_shuffle'),
   setRepeat: (repeatOne: boolean, repeatAll: boolean) => call('set_repeat_mode', { repeatOne, repeatAll }),
   queueState: () => call<T.QueueState>('get_queue_state'),
+  shuffleAll: () => call<number>('shuffle_all'),
   generateMix: (energy: T.Energy, genre?: string) => call<number>('generate_mix', { energy, genre }),
   startRadio: (seed: T.Song) => call('start_radio', { seed }),
   remotePlayQueue: () => call<T.RemotePlayQueue | null>('get_remote_play_queue'),
@@ -98,12 +99,9 @@ export const Api = {
   pickAndImport: () => call<number | null>('pick_and_import'),
 
   // stats
-  recap: (range: T.RecapRange, from?: number, to?: number) => call<T.RecapStats>('get_recap', { range, from, to }),
-  weeklyRecapDue: () => call<boolean>('weekly_recap_due'),
   historySummary: () => call<T.PlayHistorySummary>('get_history_summary'),
   recentPlays: (limit: number) => call<T.RecentPlay[]>('get_recent_plays', { limit }),
   exportHistory: (format: 'csv' | 'json') => call<boolean>('export_history', { format }),
-  saveImage: (defaultName: string, pngBase64: string) => call<boolean>('save_image', { defaultName, pngBase64 }),
 
   // podcasts
   podcastChannels: () => call<T.PodcastChannel[]>('get_podcast_channels'),

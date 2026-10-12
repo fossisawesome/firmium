@@ -59,7 +59,6 @@ import com.fossisawesome.firmium.ui.screens.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.*
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private data class NavDest(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
@@ -171,15 +170,6 @@ fun AppNavGraph(
     // Fetch server playlists up front so "Add to playlist" dialogs can offer
     // server-only playlists (not just locally-created ones).
     LaunchedEffect(Unit) { playlistViewModel.refreshServerPlaylists() }
-
-    // Weekly Recap auto-show: surface once every 7 days on app open.
-    LaunchedEffect(Unit) {
-        val last = app.prefs.recapLastShown.first()
-        if (System.currentTimeMillis() - last > 7L * 86400 * 1000) {
-            app.prefs.setRecapLastShown(System.currentTimeMillis())
-            navController.navigate("recap")
-        }
-    }
 
     var showFullPlayer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
@@ -323,6 +313,7 @@ fun AppNavGraph(
                         onArtistClick = { navController.navigate("artist/$it") },
                         onRefresh = { libraryViewModel.loadHome() },
                         onFavoritesClick = { navController.navigate("favorites") },
+                        onShuffleAll = { playerViewModel.shuffleAll() },
                     )
                 }
                 composable(
@@ -356,6 +347,7 @@ fun AppNavGraph(
                         playlistItems = playlistsState.items,
                         onAlbumClick = { navController.navigate("album/$it") },
                         onLoad = { libraryViewModel.loadAlbums() },
+                        loadNewestIds = if (auth.isAuthenticated) ({ app.api.getNewestAlbums(500).map { it.id } }) else null,
                         onAddAlbumToPlaylist = { item, albumId ->
                             scope.launch {
                                 val tracks = try { app.api.getAlbumDetail(albumId).tracks } catch (_: Exception) { emptyList() }
@@ -588,8 +580,6 @@ fun AppNavGraph(
                         onThemeSelected = onThemeSelected,
                         onUiThemeSelected = onUiThemeSelected,
                         onFontSelected = onFontSelected,
-                        onVisualizerToggle = { playerViewModel.setVisualizerEnabled(it) },
-                        onVisualizerTypeSelected = { playerViewModel.setVisualizerType(it) },
                         onLrclibToggle = { scope.launch { app.prefs.setLrclibEnabled(it) } },
                         onLyricsWordFillToggle = { scope.launch { app.prefs.setLyricsWordFillEnabled(it) } },
                         onLastfmToggle = { scope.launch { app.prefs.setLastfmEnabled(it) } },
@@ -620,14 +610,6 @@ fun AppNavGraph(
                             }
                         },
                         onLogout = { authViewModel.logout() },
-                        onViewRecap = { navController.navigate("recap") },
-                    )
-                }
-                composable("recap") {
-                    RecapScreen(
-                        repository = app.playHistory,
-                        coverUrlFor = coverUrl,
-                        onClose = { navController.popBackStack() },
                     )
                 }
             }
@@ -690,7 +672,6 @@ fun AppNavGraph(
         FullScreenPlayer(
             state = playerState,
             coverUrl = coverUrl(playerState.currentTrack?.coverArt),
-            visualizerProcessor = playerState.visualizerProcessor,
             playlistItems = playlistsState.items,
             lyricsState = lyricsState,
             wordFillEnabled = lyricsWordFillEnabled,

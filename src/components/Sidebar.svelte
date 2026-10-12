@@ -20,7 +20,7 @@
 
   // Detail views highlight the list they belong to.
   const PARENT: Partial<Record<ViewType, ViewType>> = {
-    album: 'albums', artist: 'artists', playlist: 'playlists', podcast: 'podcasts', genre: 'home', recap: 'home',
+    album: 'albums', artist: 'artists', playlist: 'playlists', podcast: 'podcasts', genre: 'home',
   }
 
   const serverLabel = $derived.by(() => {

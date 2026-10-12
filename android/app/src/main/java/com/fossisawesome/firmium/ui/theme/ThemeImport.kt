@@ -69,25 +69,48 @@ private fun parseThemeToml(text: String): ParsedTheme? {
     return ParsedTheme(n, colorScheme, colors)
 }
 
-/** Build a FirmiumTheme from a parsed file, or null if a required color is missing/invalid. */
-private fun toFirmiumTheme(id: String, parsed: ParsedTheme, sourceFile: String): FirmiumTheme? {
-    fun color(key: String): Color? = parsed.colors[key]?.let {
-        runCatching { hex(it) }.getOrNull()
+// Accepts #RGB, #RRGGBB, CSS-style #RRGGBBAA and rgb()/rgba(), which desktop theme files use.
+private fun parseCssColor(raw: String): Color? {
+    val v = raw.trim()
+    if (v.startsWith("rgb", ignoreCase = true)) {
+        val p = v.substringAfter('(').substringBefore(')').split(',').map { it.trim() }
+        if (p.size < 3) return null
+        val ch = p.take(3).map { it.toFloatOrNull()?.toInt()?.coerceIn(0, 255) ?: return null }
+        val a = p.getOrNull(3)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 1f
+        return Color(ch[0], ch[1], ch[2], (a * 255).toInt())
     }
+    val h = v.trimStart('#')
+    val full = if (h.length == 8) h.substring(6) + h.substring(0, 6) else h
+    return runCatching { hex(full) }.getOrNull()
+}
+
+/**
+ * Build a FirmiumTheme from a parsed file. Only bg, text and accent are required;
+ * surface, surface2, muted and error fall back to values derived from those.
+ * Returns the theme, or the list of required keys that are missing/invalid.
+ */
+private fun toFirmiumTheme(id: String, parsed: ParsedTheme, sourceFile: String): Pair<FirmiumTheme?, List<String>> {
+    fun color(key: String): Color? = parsed.colors[key]?.let { parseCssColor(it) }
+    val bg = color("bg")
+    val text = color("text")
+    val accent = color("accent")
+    val bad = listOfNotNull("bg".takeIf { bg == null }, "text".takeIf { text == null }, "accent".takeIf { accent == null })
+    if (bg == null || text == null || accent == null) return null to bad
+    val surface = color("surface") ?: bg
     return FirmiumTheme(
         id = id,
         name = parsed.name,
         isDark = parsed.colorScheme != "light",
-        bg = color("bg") ?: return null,
-        surface = color("surface") ?: return null,
-        surface2 = color("surface2") ?: return null,
-        text = color("text") ?: return null,
-        muted = color("muted") ?: return null,
-        accent = color("accent") ?: return null,
-        error = color("error") ?: return null,
+        bg = bg,
+        surface = surface,
+        surface2 = color("surface2") ?: surface,
+        text = text,
+        muted = color("muted") ?: text.copy(alpha = 0.6f),
+        accent = accent,
+        error = color("error") ?: Color(0xFFE53935),
         isImported = true,
         sourceFile = sourceFile,
-    )
+    ) to emptyList()
 }
 
 /** Read all valid imported themes from filesDir/themes/. Invalid files are skipped. */
@@ -97,7 +120,7 @@ fun loadImportedThemes(context: Context): List<FirmiumTheme> {
     return files.mapNotNull { file ->
         val content = runCatching { file.readText() }.getOrNull() ?: return@mapNotNull null
         val parsed = parseThemeToml(content) ?: return@mapNotNull null
-        toFirmiumTheme(id = file.nameWithoutExtension, parsed = parsed, sourceFile = file.name)
+        toFirmiumTheme(id = file.nameWithoutExtension, parsed = parsed, sourceFile = file.name).first
     }.sortedBy { it.name.lowercase() }
 }
 
@@ -128,8 +151,9 @@ fun importThemeFromUri(context: Context, uri: Uri): Result<Unit> {
     val parsed = parseThemeToml(text)
         ?: return Result.failure(Exception("Not a valid theme file (missing name or colors)"))
     // Confirm the colors actually build a theme before saving.
-    if (toFirmiumTheme(sanitizeName(parsed.name), parsed, "tmp") == null) {
-        return Result.failure(Exception("Theme is missing one or more required colors"))
+    val missing = toFirmiumTheme(sanitizeName(parsed.name), parsed, "tmp").second
+    if (missing.isNotEmpty()) {
+        return Result.failure(Exception("Theme is missing or has invalid colors: ${missing.joinToString(", ")}"))
     }
 
     val dir = themesDir(context)

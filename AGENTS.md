@@ -123,7 +123,7 @@ Beyond `firmium-docs`, this repo carries its own doc files. Each has a narrower 
 
 - **New/changed system dependency** (ALSA, libsecret, libxkbcommon, WebKitGTK, etc., or a new Rust crate that pulls one in): update `README.md` "System Dependencies" **and** `CONTRIBUTING.md` "Prerequisites" — they list the same deps independently and drift if only one is touched.
 - **New/changed Subsonic/OpenSubsonic/Navidrome endpoint usage** (anything in `backend/commands/subsonic.rs` hitting a new `/rest/*` call, or a change in auth/params/caveats): update `API.md`.
-- **User-facing feature or removal** (desktop or Android): `firmium/FEATURES.md` (per root CLAUDE.md) **and** add an entry to `CHANGELOG.md` under the in-progress/unreleased version heading.
+- **User-facing feature or removal** (desktop or Android): `firmium/FEATURES.md` (per root CLAUDE.md; standout features only) **and** add an entry to `CHANGELOG.md` under the in-progress/unreleased version heading.
 - **Android architecture change** (new module, restructured state management, new native integration): update `android/CLAUDE.md`, not just the desktop `AGENTS.md`/`CLAUDE.md`.
 - **Termium change** (new screen in `termium/src/ui/`, keybinding scheme change, new backend feature ported to the TUI): update `CLAUDE.md`'s Termium tech-stack/architecture sections and `FEATURES.md`'s Termium section.
 - **Contributor workflow change** (build steps, test commands, clippy/lint config, git hooks): update `CONTRIBUTING.md`. If the change also affects docs-site or marketing-site contributors, check `firmium-docs/CONTRIBUTING.md` / `firmium-site/README.md` too — they're separate files, not auto-synced.

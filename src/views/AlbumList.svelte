@@ -15,6 +15,7 @@
   let error = $state('')
   let selectedGenres = $state(new Set<string>())
   let selectedDecades = $state(new Set<string>())
+  let sort = $state<'name' | 'newest'>('name')
 
   const allGenres = $derived.by(() => {
     const counts = new Map<string, number>()
@@ -36,10 +37,12 @@
 
   $effect(() => {
     $dataVersion
+    const bySort = sort
     let live = true
     loading = true
     error = ''
-    Api.albums()
+    // The server caps a single album-list page at 500, so 'newest' shows the latest 500.
+    ;(bySort === 'newest' ? Api.albumList('newest', 500) : Api.albums())
       .then(r => { if (live) albums = r })
       .catch(e => { if (live) error = errorMessage(e) })
       .finally(() => { if (live) loading = false })
@@ -48,6 +51,12 @@
 </script>
 
 <LoadingState {loading} {error} empty={albums.length === 0} loadingMessage="Loading albums…" emptyMessage="No albums found.">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <button class="filter-chip" class:active={sort === 'name'} onclick={() => (sort = 'name')}>A–Z</button>
+      <button class="filter-chip" class:active={sort === 'newest'} onclick={() => (sort = 'newest')}>Recently added</button>
+    </div>
+  </div>
   {#if allGenres.length > 0 || allDecades.length > 0}
     <div class="filter-bar">
       {#if allDecades.length > 0}

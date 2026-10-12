@@ -28,7 +28,7 @@
 
   const serverTrack = $derived(!track.id.startsWith('local:') && !track.id.startsWith('podcast:'))
 
-  let dl = $state<'idle' | 'loading' | 'done' | 'error'>(downloaded ? 'done' : 'idle')
+  let dl = $state<'idle' | 'loading' | 'done' | 'error'>('idle')
   $effect(() => { if (downloaded && dl === 'idle') dl = 'done' })
 
   async function download(e: MouseEvent) {

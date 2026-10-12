@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 // One row per completed play, written from the scrobble-completion path
-// (PlaybackController). Name columns are denormalized so Recap renders fully
+// (PlaybackController). Name columns are denormalized so exports render fully
 // offline without resolving IDs against the server. Mirrors the desktop
 // SQLite schema (src-tauri/src/db.rs).
 @Entity(tableName = "plays", indices = [Index("timestamp")])

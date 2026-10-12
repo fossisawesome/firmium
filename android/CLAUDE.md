@@ -20,8 +20,8 @@ Native Kotlin/Compose app, independent of the desktop Tauri build, sharing OpenS
 - **TvMainActivity.kt**: Android TV entry point (separate `LEANBACK_LAUNCHER` activity), reusing the same ViewModels/data/audio layer as `MainActivity` — no touch-specific UI code
 - **viewmodel/**: `AuthViewModel`, `LibraryViewModel`, `PlayerViewModel`, `PlaylistViewModel`, `SearchViewModel` — state holders feeding Compose UI
 - **audio/**: `AudioPlayer`, `NowPlayingService` (foreground media service), `NowPlayingController`
-- **wear/**: Wear OS companion bridge — `WearRemoteService` (receives watch transport commands), `WearStateSync` (pushes now-playing state + art to watch), `WearContract` (Data Layer paths/keys, mirrored in `:wear` module)
-- **ui/tv/**: Android TV screens (androidx.tv Compose, D-pad-focusable) — `TvNavGraph` (own `NavHost`, separate from phone's `AppNavGraph`), `TvHomeScreen`/`TvAlbumListScreen`/`TvArtistListScreen`/`TvAlbumDetailScreen`/`TvArtistDetailScreen`/`TvPlaylistListScreen`/`TvPlaylistDetailScreen`/`TvSearchScreen`/`TvNowPlayingScreen`/`TvLoginScreen`/`TvMixScreen`/`TvSettingsScreen`/`TvEqualizerScreen`/`TvRecapScreen`, `TvComponents.kt` (`TvTile`/`TvActionButton` focus-aware wrappers over `androidx.tv.material3.Card`/`Button`, plus `TvToggleRow`/`TvCycleRow`/`TvStepperRow` D-pad-friendly stand-ins for switches/dropdowns/drag sliders). `TvNowPlayingScreen` hosts queue/lyrics/similar-tracks as switchable side panels instead of separate sheets. `TvEqualizerScreen` and settings reads (`AppPreferences`) are accessed directly, same as phone's `FirmiumEqualizerPanel` — not routed through a ViewModel. TV-only scope trims vs. phone: no word-fill lyrics animation, no parametric EQ editing/`.toml` import, no Last.fm config or cache/reset actions (all text-entry-heavy or maintenance actions that don't suit a remote).
+- **wear/** (compiled from `src/play/java`, or no-op stubs in `src/foss/java` with `-Pfoss`; picked in `app/build.gradle.kts`): Wear OS companion bridge — `WearRemoteService` (receives watch transport commands), `WearStateSync` (pushes now-playing state + art to watch), `WearContract` (Data Layer paths/keys, mirrored in `:wear` module)
+- **ui/tv/**: Android TV screens (androidx.tv Compose, D-pad-focusable) — `TvNavGraph` (own `NavHost`, separate from phone's `AppNavGraph`), `TvHomeScreen`/`TvAlbumListScreen`/`TvArtistListScreen`/`TvAlbumDetailScreen`/`TvArtistDetailScreen`/`TvPlaylistListScreen`/`TvPlaylistDetailScreen`/`TvSearchScreen`/`TvNowPlayingScreen`/`TvLoginScreen`/`TvMixScreen`/`TvSettingsScreen`/`TvEqualizerScreen`, `TvComponents.kt` (`TvTile`/`TvActionButton` focus-aware wrappers over `androidx.tv.material3.Card`/`Button`, plus `TvToggleRow`/`TvCycleRow`/`TvStepperRow` D-pad-friendly stand-ins for switches/dropdowns/drag sliders). `TvNowPlayingScreen` hosts queue/lyrics/similar-tracks as switchable side panels instead of separate sheets. `TvEqualizerScreen` and settings reads (`AppPreferences`) are accessed directly, same as phone's `FirmiumEqualizerPanel` — not routed through a ViewModel. TV-only scope trims vs. phone: no word-fill lyrics animation, no parametric EQ editing/`.toml` import, no Last.fm config or cache/reset actions (all text-entry-heavy or maintenance actions that don't suit a remote).
 - **data/api/**: `ApiClient`, `AuthManager` — OpenSubsonic REST client and auth/token handling
 - **data/model/**: `Artist`, `Album`, `Song`, `Playlist` data classes
 - **data/storage/**: `AppPreferences`, `PlaylistRepository`, `SecureStorage` (Keystore-backed credential storage)
@@ -40,6 +40,8 @@ npm run android:install # :app installDebug via adb
 npm run wear:build      # :wear assembleRelease (Wear OS companion)
 npm run wear:debug      # :wear assembleDebug
 npm run wear:install    # :wear installDebug (installs on connected watch/emulator)
+
+cd android && ./gradlew :app:assembleRelease -Pfoss   # F-Droid build, no Google libs
 ```
 
 ## Development Notes

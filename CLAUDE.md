@@ -12,17 +12,17 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 **Shared backend (`backend/` crate, `firmium-backend`)** — plain Rust, no UI, consumed by both `desktop` and `termium` via `path` dependency.
 
-**Desktop (`src-tauri/` + `src/` — Linux, Windows, macOS, FreeBSD)**
+**Desktop (`src-tauri/` + `src/` — Linux, Windows, macOS)**
 - **UI**: Svelte 5 + SCSS + TypeScript in `src/`, rendering only. All logic is Rust: `backend/core/` (settings, accounts, library routing, playlists, radio, stats) behind `src-tauri/src/commands.rs`; the UI talks to it via `src/lib/api.ts` (invoke) and Tauri events (`playback-*`, `queue-state-changed`, `session-expired`).
 - **Audio**: `symphonia` 0.5 (decoding) + `cpal` 0.17 (output device I/O), hand-rolled engine
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
-- **Credentials**: OS keyring via `keyring` crate (libsecret/Secret Service on Linux and FreeBSD, Windows Credential Manager on Windows, Keychain via `apple-native` on macOS)
-- **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer), macOS (`.dmg`, unsigned); FreeBSD best-effort from source
+- **Credentials**: OS keyring via `keyring` crate (libsecret/Secret Service on Linux, Windows Credential Manager on Windows, Keychain via `apple-native` on macOS)
+- **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer), macOS (`.dmg`, unsigned)
 
-**Termium (`termium/` crate — Linux, Windows, macOS, FreeBSD terminal client)**
+**Termium (`termium/` crate — Linux, Windows, macOS terminal client)**
 - **UI**: [ratatui](https://ratatui.rs) 0.29 + `crossterm` 0.28 (event-stream) — TUI, no GUI toolkit
 - **Async**: `tokio` (rt-multi-thread) for backend calls and event bus
-- **Scope**: library browsing (albums/artists/playlists/search/home), playback controls, persistent now-playing bar, terminal bar visualizer, configurable keybindings (`toml`-based). No lyrics/EQ/recap/similar-tracks panels (desktop-only).
+- **Scope**: library browsing (albums/artists/playlists/search/home), playback controls, persistent now-playing bar, configurable keybindings (`toml`-based). No lyrics/EQ/similar-tracks panels (desktop-only).
 - Shares login/library/queue state with desktop and Android via the same OpenSubsonic server — logging into one, all see it.
 
 **Android**
@@ -51,13 +51,13 @@ The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no I
   - `cover_cache.rs`: `get_cover_art()`, `clear_cover_cache()` — disk-based cover art cache (200MB budget, mtime-based LRU eviction); the UI shows cached files through `convertFileSrc`
   - `queue.rs` / `queue_manager.rs`: queue mutation (`set_queue`, `shuffle_and_play`, `play_queue_index`, …) and the background task that drains the bus for crossfade, gapless preload, track advance and scrobbling
   - `playback.rs`: thin wrappers over `AudioPlayer` (`play_stream`, `preload_stream`, pause/resume/stop, `seek_position`, `set_volume`, `crossfade_to`, `list_audio_devices`, …)
-  - `downloads.rs`, `local_library.rs`, `equalizer.rs`, `stats.rs`, `cover_colors.rs`: offline downloads, `~/Music/Firmium` scan, EQ profiles, play-history aggregation (Recap / export), dominant-cover-color extraction
+  - `downloads.rs`, `local_library.rs`, `equalizer.rs`, `stats.rs`, `cover_colors.rs`: offline downloads, `~/Music/Firmium` scan, EQ profiles, play-history aggregation (summary / export), dominant-cover-color extraction
   - `app_info.rs`: `get_app_version()`
 
 - **audio/**: Desktop-only audio playback module (`symphonia` decode + `cpal` output). Core design:
   - `streaming_reader.rs`: `StreamingReader` implements Read+Seek over HTTP response body (bytes buffered locally to keep Subsonic "Now Playing" status during playback); `VecSource`/`FileSource` are seekable `MediaSource` wrappers for seek-rebuild and local files.
   - `decoder.rs`: `DecoderHandle` wraps `symphonia` `FormatReader`/`Decoder`, exposing `next_samples()` (interleaved f32), `seek()`, and `sample_rate`/`channels`/duration. Defaults to 48000 Hz if container doesn't report sample rate.
-  - `session.rs`: `Session` holds `Mutex<VecDeque<f32>>` ring buffer plus playback state (volume, playing, position). `spawn_decode_feeder()` runs blocking decode loop (ReplayGain, 25ms fade-in, visualizer tap, native seek via `SeekRequest`/`SeekReply`).
+  - `session.rs`: `Session` holds `Mutex<VecDeque<f32>>` ring buffer plus playback state (volume, playing, position). `spawn_decode_feeder()` runs blocking decode loop (ReplayGain, EQ, 25ms fade-in, native seek via `SeekRequest`/`SeekReply`).
   - `output.rs`: cpal device negotiation (`find_compatible_config`, `open_with_config`/`open_default`) and realtime `mix_into` callback, which sums all active sessions' ring buffers (with per-session volume, channel adaptation, and linear-interpolation resampler that degenerates to passthrough when rates match).
   - `mod.rs`: `AudioPlayer` manages session lifecycle (loading → playing → paused/stopped), reopens output stream at each track's native sample rate via `reopen_stream_if_needed()` (deferred during crossfade). Thread-safe via `parking_lot::Mutex`/`RwLock`.
   - Session state: `PlaybackState` enum (Loading, Playing, Paused, Stopped)
@@ -67,7 +67,7 @@ The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no I
 ### Tauri UI (`src/`, `src-tauri/`)
 
 - **src-tauri/src/**: `lib.rs` (builder, setup, handler list), `commands.rs` (thin `#[tauri::command]` forwarders, `CmdError {kind, message}`), `events.rs` (EventBus → Tauri events), `cli.rs` (`firmium <cmd>` control-socket client).
-- **backend/core/**: all app logic: `settings.rs` (persisted prefs + side effects), `accounts.rs` (login/switch/keyring), `library.rs` (server vs offline routing, Mix, radio, auto-continue, podcasts, artist helpers), `playlists.rs` (local-first playlists + server sync), `stats.rs` (recap windows, history).
+- **backend/core/**: all app logic: `settings.rs` (persisted prefs + side effects), `accounts.rs` (login/switch/keyring), `library.rs` (server vs offline routing, Mix, radio, auto-continue, podcasts, artist helpers), `playlists.rs` (local-first playlists + server sync), `stats.rs` (history summary, export).
 - **src/lib/**: `ipc.ts` (invoke/listen), `api.ts` (one-line typed command wrappers), `types.ts`, `stores.ts` (mirrors of backend state + view routing, panels, toasts, theme application), `cover.ts` (image actions), `menu.ts`/`playlists.ts` (popup + list stores). No business logic in TS.
 - **src/views, src/components**: Svelte 5 screens and widgets. **src/styles/**: SCSS partials (`main.scss` @uses them; `_spotify.scss` is the Spotify UI theme via `html[data-ui-theme]`).
 - Themes: TOML under `themes/`, embedded in the backend (`commands/themes.rs`) and applied as CSS variables.
@@ -87,7 +87,7 @@ src-tauri/commands.rs → backend::core::Core / backend::commands::…
 src/lib/stores.ts mirrors state → Svelte re-renders
 ```
 
-Termium (`termium/src/`) follows the same backend, different front end: `app.rs` holds `App` state and the `ratatui` render/input loop, `keymap.rs` handles configurable keybindings, `ui/{home,albums,artists,playlists,search,login,player_bar,visualizer}.rs` are the ratatui screen/widget renderers. No `Message`/`Task` abstraction — reads backend state directly and awaits async calls in its event loop.
+Termium (`termium/src/`) follows the same backend, different front end: `app.rs` holds `App` state and the `ratatui` render/input loop, `keymap.rs` handles configurable keybindings, `ui/{home,albums,artists,playlists,search,login,player_bar}.rs` are the ratatui screen/widget renderers. No `Message`/`Task` abstraction — reads backend state directly and awaits async calls in its event loop.
 
 ### Android App
 
@@ -122,7 +122,6 @@ Desktop (Tauri) and Android (Kotlin/Compose) implement same features independent
 - On Linux: ALSA (`libasound2`), `libssl`, `libsecret` (keyring), `libxkbcommon``webkit2gtk-4.1`, `xdotool`. Exact package names vary by distro — see `README.md` "System Dependencies".
 - On Windows: no extra system dependencies (rustls handles TLS, Windows Credential Manager built-in)
 - On macOS: Xcode Command Line Tools (`xcode-select --install`) only — CoreAudio and Keychain are built in, rustls handles TLS
-- On FreeBSD: `webkit2gtk4`, `alsa-lib`, `dbus` via `pkg install`. Not covered by CI or releases.
 
 ### Commands
 
@@ -204,7 +203,6 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 - Desktop installers come from the Tauri bundler: `npm run tauri:build` (targets in `src-tauri/tauri.conf.json`: deb, rpm, nsis, dmg) writes to `target/release/bundle/`. `release.yml` runs it per OS (`--bundles deb,rpm` on Ubuntu 22.04, `nsis` on Windows, `dmg` per arch on `macos-14`) and attaches the files with `gh release upload`. macOS builds are unsigned (no Apple Developer account).
 - A bare `cargo build --release -p firmium` needs `--features custom-protocol` (embeds `dist/`; otherwise the binary loads the dev URL). `PKGBUILD` (Arch) and `firmium.spec` run `npm ci && npm run build` first; COPR (`packaging/firmium.spec`, `copr.yml`) ships prebuilt `dist/` + `cargo vendor` in the vendor tarball because mock builds are offline. Icons come from `src-tauri/icons/`.
 - Termium: `release.yml` `build-termium` attaches `termium-<tag>-<target>.tar.gz` (`.zip` on Windows) for Linux x86_64, Windows x86_64, macOS arm64/x86_64. Not in deb/rpm/AUR/COPR; or build from source via `cargo build --release -p termium`.
-- FreeBSD: no longer built in CI or releases (the Tauri/WebKit stack is not covered by a runner). Best-effort from source only.
 - `scripts/bump-version.sh <ver>` updates `Cargo.toml`, `package.json`, `src-tauri/tauri.conf.json`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, the Android `build.gradle.kts`, and the AUR folders.
 - **In-app updater**: not ported to the Tauri build yet; `.deb`/`.rpm`/COPR/AUR users update through their package manager.
 - Android: no in-app updater (native Kotlin app) — updates via Play Store or manual APK install.

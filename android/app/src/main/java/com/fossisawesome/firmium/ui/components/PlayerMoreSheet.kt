@@ -39,7 +39,6 @@ fun PlayerMoreSheet(
     onTrackInfo: () -> Unit,
     onEqualizer: () -> Unit,
     onDownload: () -> Unit,
-    onToggleVisualizer: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
@@ -49,9 +48,6 @@ fun PlayerMoreSheet(
         add(MoreAction(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue") { onDismiss(); onAddToQueue() })
         add(MoreAction(Icons.Default.Info, "Track info") { onDismiss(); onTrackInfo() })
         add(MoreAction(Icons.Default.Person, "View artist") { onDismiss(); onViewArtist() })
-        if (onToggleVisualizer != null) {
-            add(MoreAction(Icons.Default.GraphicEq, "Visualizer") { onDismiss(); onToggleVisualizer() })
-        }
         add(MoreAction(Icons.Default.Equalizer, "Equalizer") { onDismiss(); onEqualizer() })
         add(MoreAction(Icons.Default.Download, "Download") { onDismiss(); onDownload() })
     }

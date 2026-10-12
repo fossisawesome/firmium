@@ -1,6 +1,7 @@
 pub mod cli;
 mod commands;
 mod events;
+mod media_controls;
 
 use commands::*;
 use firmium_backend::core::Core;
@@ -18,6 +19,7 @@ pub fn run() {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.set_decorations(core.settings().window_decorations);
             }
+            media_controls::start(app.handle(), &core);
             app.manage(core);
             Ok(())
         })
@@ -28,13 +30,13 @@ pub fn run() {
             get_album_list, get_genres, get_songs_by_genre, get_lyrics, get_similar_tracks, get_cover, get_cover_colors,
             clear_cover_cache, set_starred, get_starred, set_rating,
             set_queue, set_queue_seamless, append_and_play, shuffle_and_play, play_queue_index, queue_next, queue_prev,
-            toggle_play, seek_queue, toggle_shuffle, set_repeat_mode, get_queue_state, generate_mix, start_radio,
+            toggle_play, seek_queue, toggle_shuffle, set_repeat_mode, get_queue_state, generate_mix, shuffle_all, start_radio,
             get_remote_play_queue, resume_remote_queue, list_audio_devices,
             get_eq_state, save_eq_profile, delete_eq_profile, set_eq_active_profile, set_eq_bands, set_eq_enabled,
             get_local_playlists, get_server_playlists, get_server_playlist_tracks, add_to_server_playlist, reorder_server_playlist, remove_from_server_playlist, create_playlist, sync_playlist_now,
             delete_playlist, rename_playlist, add_to_playlist, move_playlist_track, remove_playlist_track,
             download_track, download_album, get_local_album_track_keys, import_local_files, pick_and_import,
-            get_recap, get_history_summary, weekly_recap_due, get_recent_plays, export_history, save_image,
+            get_history_summary, get_recent_plays, export_history,
             get_podcast_channels, get_podcast_episodes, add_podcast, refresh_podcast, unsubscribe_podcast, play_podcast_episode,
             set_window_decorations,
         ])

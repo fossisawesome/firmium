@@ -23,6 +23,7 @@ tauri-plugin-dialog = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+souvlaki = "0.8.3"
 
 [features]
 # Embed the built frontend (dist/) instead of loading devUrl. `tauri build` turns

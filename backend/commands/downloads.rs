@@ -58,8 +58,8 @@ pub async fn download_track(
     let mut url = reqwest::Url::parse(&format!("{server}/rest/stream")).map_err(|e| e.to_string())?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         query.append_pair("id", &song_id);
         query.append_pair("format", &format);

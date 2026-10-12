@@ -64,6 +64,9 @@ class RadioSeeder(private val api: ApiClient) {
         }
     }
 
+    // Shuffle All: a random sample of the whole library, no energy/BPM filtering.
+    suspend fun buildShuffleAll(): List<Song> = api.getRandomSongs(POOL_SIZE).shuffled()
+
     // Shuffled queue of library tracks matching an energy band (+ optional genre).
     suspend fun buildMoodMix(energy: Energy, genre: String? = null): List<Song> {
         val pool = if (!genre.isNullOrBlank()) api.getSongsByGenre(genre, POOL_SIZE) else api.getRandomSongs(POOL_SIZE)

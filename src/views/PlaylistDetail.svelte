@@ -14,7 +14,7 @@
   let { id }: { id: string } = $props()
 
   // Server-only playlists are navigated to as `server-<id>`.
-  const serverOnlyId = id.startsWith('server-') ? id.slice('server-'.length) : null
+  const serverOnlyId = $derived(id.startsWith('server-') ? id.slice('server-'.length) : null)
 
   let serverName = $state('Server Playlist')
   let serverTracks = $state<Song[]>([])
@@ -117,7 +117,8 @@
         <input class="pl-inline-edit" type="text" bind:value={nameValue} maxlength="100" autofocus onblur={commitName}
           onkeydown={e => { if (e.key === 'Enter') { e.preventDefault(); commitName() } if (e.key === 'Escape') editingName = false }} />
       {:else}
-        <div class="pl-detail-name" role={local ? 'button' : 'text'} tabindex={local ? 0 : -1} title={local ? 'Click to rename' : ''}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <div class="pl-detail-name" role={local ? 'button' : undefined} tabindex={local ? 0 : undefined} title={local ? 'Click to rename' : ''}
           onclick={() => { if (local) { nameValue = local.name; editingName = true } }}
           onkeydown={e => (e.key === 'Enter' || e.key === ' ') && local && (nameValue = local.name, editingName = true)}>
           {name}

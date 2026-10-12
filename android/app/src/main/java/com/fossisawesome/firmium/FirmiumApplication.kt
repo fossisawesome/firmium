@@ -3,8 +3,11 @@ package com.fossisawesome.firmium
 import android.app.Application
 import coil.Coil
 import coil.ImageLoader
+import coil.EventListener
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import coil.request.ErrorResult
+import coil.request.ImageRequest
 import com.fossisawesome.firmium.audio.AudioPlayer
 import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.audio.PlaybackController
@@ -41,7 +44,7 @@ class FirmiumApplication : Application() {
     val localLibrary by lazy { LocalLibraryRepository(this) }
     val downloadManager by lazy { DownloadManager(this, auth, localLibrary) }
     val playlists by lazy { PlaylistRepository(prefs, api) }
-    // Local play-history store (Room) — powers Stats Export and Firmium Recap.
+    // Local play-history store (Room) — powers Stats Export.
     val playHistory by lazy { PlayHistoryRepository(FirmiumDatabase.get(this).playDao()) }
     // Local-only podcast subscriptions (RSS, client-side — Navidrome has no podcast API).
     val podcasts by lazy { PodcastRepository(FirmiumDatabase.get(this).podcastDao()) }
@@ -78,6 +81,13 @@ class FirmiumApplication : Application() {
                     .build()
             }
             .crossfade(true)
+            // Covers fail silently into the placeholder (#56); log why, with the token/salt redacted.
+            .eventListener(object : EventListener {
+                override fun onError(request: ImageRequest, result: ErrorResult) {
+                    val url = request.data.toString().replace(Regex("([?&](?:t|s)=)[^&\\s]+"), "$1<redacted>")
+                    Log.w("FirmiumCover", "cover failed: $url", result.throwable)
+                }
+            })
             .build()
         Coil.setImageLoader(imageLoader)
 

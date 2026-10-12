@@ -64,8 +64,8 @@ pub async fn probe_server_podcast_support(state: Arc<AppState>) -> bool {
     };
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
     }
 

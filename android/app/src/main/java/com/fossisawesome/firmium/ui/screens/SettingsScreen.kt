@@ -89,8 +89,6 @@ fun SettingsScreen(
     onThemeSelected: (String) -> Unit,
     onUiThemeSelected: (String) -> Unit,
     onFontSelected: (String) -> Unit,
-    onVisualizerToggle: (Boolean) -> Unit,
-    onVisualizerTypeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
     onLastfmToggle: (Boolean) -> Unit,
@@ -102,7 +100,6 @@ fun SettingsScreen(
     onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
     onLogout: () -> Unit,
-    onViewRecap: () -> Unit,
 ) {
     FirmiumSettingsScreen(
         playerState = playerState,
@@ -127,8 +124,6 @@ fun SettingsScreen(
         onThemeSelected = onThemeSelected,
         onUiThemeSelected = onUiThemeSelected,
         onFontSelected = onFontSelected,
-        onVisualizerToggle = onVisualizerToggle,
-        onVisualizerTypeSelected = onVisualizerTypeSelected,
         onLrclibToggle = onLrclibToggle,
         onLyricsWordFillToggle = onLyricsWordFillToggle,
         onLastfmToggle = onLastfmToggle,
@@ -140,7 +135,6 @@ fun SettingsScreen(
         onClearCache = onClearCache,
         onResetSettings = onResetSettings,
         onLogout = onLogout,
-        onViewRecap = onViewRecap,
     )
 }
 
@@ -194,8 +188,6 @@ private fun FirmiumSettingsScreen(
     onThemeSelected: (String) -> Unit,
     onUiThemeSelected: (String) -> Unit,
     onFontSelected: (String) -> Unit,
-    onVisualizerToggle: (Boolean) -> Unit,
-    onVisualizerTypeSelected: (String) -> Unit,
     onLrclibToggle: (Boolean) -> Unit,
     onLyricsWordFillToggle: (Boolean) -> Unit,
     onLastfmToggle: (Boolean) -> Unit,
@@ -207,7 +199,6 @@ private fun FirmiumSettingsScreen(
     onClearCache: () -> Unit,
     onResetSettings: () -> Unit,
     onLogout: () -> Unit,
-    onViewRecap: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     val border = colors.border
@@ -320,10 +311,6 @@ private fun FirmiumSettingsScreen(
                             onUiThemeSelected = onUiThemeSelected,
                             currentFontFamily = currentFontFamily,
                             onFontSelected = onFontSelected,
-                            visualizerEnabled = playerState.visualizerEnabled,
-                            visualizerType = playerState.visualizerType,
-                            onVisualizerToggle = onVisualizerToggle,
-                            onVisualizerTypeSelected = onVisualizerTypeSelected,
                         )
                         "playback" -> FirmiumPlaybackPanel(
                             playerState = playerState,
@@ -338,7 +325,7 @@ private fun FirmiumSettingsScreen(
                             downloadFormat = downloadFormat,
                             onDownloadFormatSelected = onDownloadFormatSelected,
                         )
-                        "stats" -> FirmiumStatsPanel(onViewRecap = onViewRecap)
+                        "stats" -> FirmiumStatsPanel()
                         "services" -> FirmiumServicesPanel(
                             lrclibEnabled = lrclibEnabled,
                             lyricsWordFillEnabled = lyricsWordFillEnabled,
@@ -409,10 +396,6 @@ private fun FirmiumAppearancePanel(
     onUiThemeSelected: (String) -> Unit,
     currentFontFamily: String,
     onFontSelected: (String) -> Unit,
-    visualizerEnabled: Boolean,
-    visualizerType: String,
-    onVisualizerToggle: (Boolean) -> Unit,
-    onVisualizerTypeSelected: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val colors = LocalFirmiumColors.current
@@ -471,81 +454,6 @@ private fun FirmiumAppearancePanel(
             currentFontFamily = currentFontFamily,
             onFontSelected = onFontSelected,
         )
-
-        Text("Visualizer", fontSize = 12.sp, fontFamily = LocalAppFontFamily.current,
-            color = colors.muted, modifier = Modifier.padding(top = 8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Audio Visualizer", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
-                Spacer(Modifier.height(2.dp))
-                Text("Show an audio-reactive visualizer on the now playing screen",
-                    fontSize = 12.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
-            }
-            Spacer(Modifier.width(12.dp))
-            FirmiumSwitch(checked = visualizerEnabled, onCheckedChange = onVisualizerToggle)
-        }
-        if (visualizerEnabled) {
-            VisualizerDropdown(visualizerType = visualizerType, onTypeSelected = onVisualizerTypeSelected)
-        }
-    }
-}
-
-@Composable
-private fun VisualizerDropdown(visualizerType: String, onTypeSelected: (String) -> Unit) {
-    val colors = LocalFirmiumColors.current
-    val current = VisualizerType.fromId(visualizerType)
-    var expanded by remember { mutableStateOf(false) }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .border(1.dp, colors.border, RoundedCornerShape(6.dp))
-                .clickable { expanded = !expanded }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(current.label, fontSize = 14.sp, fontFamily = LocalAppFontFamily.current,
-                color = colors.text, modifier = Modifier.weight(1f))
-            FirmiumIcon(
-                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp),
-            )
-        }
-        AnimatedVisibility(visible = expanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
-                    .border(1.dp, colors.border, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
-                    .background(colors.surface),
-            ) {
-                VisualizerType.entries.forEachIndexed { i, t ->
-                    if (i > 0) FirmiumDivider(color = colors.border)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onTypeSelected(t.id); expanded = false }
-                            .background(if (t.id == visualizerType) colors.surface2.copy(alpha = 0.5f) else Color.Transparent)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(
-                            t.label, fontSize = 13.sp, fontFamily = LocalAppFontFamily.current,
-                            color = if (t.id == visualizerType) colors.accent else colors.text,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (t.id == visualizerType) {
-                            FirmiumIcon(Icons.Default.Check, contentDescription = null,
-                                tint = colors.accent, modifier = Modifier.size(14.dp))
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -612,7 +520,7 @@ private fun FirmiumDownloadsPanel(
 // Self-contained Stats Export panel — reads the local play-history repository directly
 // (FirmiumApplication.playHistory) and shares exports via the system share sheet.
 @Composable
-private fun FirmiumStatsPanel(onViewRecap: () -> Unit) {
+private fun FirmiumStatsPanel() {
     val colors = LocalFirmiumColors.current
     val context = LocalContext.current
     val app = context.applicationContext as FirmiumApplication
@@ -629,20 +537,6 @@ private fun FirmiumStatsPanel(onViewRecap: () -> Unit) {
     } ?: "Loading…"
 
     FirmiumSettingsRow("Listening Summary", summaryText) {}
-
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable { onViewRecap() }.padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("Firmium Recap", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)
-            Spacer(Modifier.height(2.dp))
-            Text("A swipeable, shareable recap of your listening", fontSize = 12.sp,
-                fontFamily = LocalAppFontFamily.current, color = colors.muted)
-        }
-        Text("View", fontSize = 14.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
-    }
-    FirmiumDivider()
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
         Text("Export Play History", fontSize = 15.sp, fontFamily = LocalAppFontFamily.current, color = colors.text)

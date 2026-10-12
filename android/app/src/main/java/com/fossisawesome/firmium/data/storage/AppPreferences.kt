@@ -46,9 +46,6 @@ class AppPreferences(context: Context) {
         val LISTENBRAINZ_ENABLED = booleanPreferencesKey("listenbrainz_enabled")
         // First-run onboarding tour completion flag.
         val ONBOARDED = booleanPreferencesKey("onboarded")
-        // Audio visualizer: off by default; type is "orb" | "bars" | "oscilloscope".
-        val VISUALIZER_ENABLED = booleanPreferencesKey("visualizer_enabled")
-        val VISUALIZER_TYPE = stringPreferencesKey("visualizer_type")
         // Equalizer: off by default. Profiles stored as a Gson JSON array; mode is
         // "graphic" | "parametric"; active profile referenced by name.
         val EQ_ENABLED = booleanPreferencesKey("eq_enabled")
@@ -56,8 +53,6 @@ class AppPreferences(context: Context) {
         val EQ_ACTIVE_PROFILE = stringPreferencesKey("eq_active_profile")
         val EQ_PROFILES_JSON = stringPreferencesKey("eq_profiles_json")
         val SERVER_LIST_JSON = stringPreferencesKey("server_list_json")
-        // Firmium Recap weekly auto-show: unix millis of the last time it was surfaced.
-        val RECAP_LAST_SHOWN = longPreferencesKey("recap_last_shown")
     }
 
     val serverUrl: Flow<String?> = store.data.map { it[SERVER_URL] }
@@ -86,14 +81,11 @@ class AppPreferences(context: Context) {
     val autoContinueEnabled: Flow<Boolean> = store.data.map { it[AUTO_CONTINUE_ENABLED] ?: false }
     val listenbrainzEnabled: Flow<Boolean> = store.data.map { it[LISTENBRAINZ_ENABLED] ?: false }
     val onboarded: Flow<Boolean> = store.data.map { it[ONBOARDED] ?: false }
-    val visualizerEnabled: Flow<Boolean> = store.data.map { it[VISUALIZER_ENABLED] ?: false }
-    val visualizerType: Flow<String> = store.data.map { it[VISUALIZER_TYPE] ?: "orb" }
     val eqEnabled: Flow<Boolean> = store.data.map { it[EQ_ENABLED] ?: false }
     val eqMode: Flow<String> = store.data.map { it[EQ_MODE] ?: "graphic" }
     val eqActiveProfile: Flow<String?> = store.data.map { it[EQ_ACTIVE_PROFILE] }
     val eqProfilesJson: Flow<String?> = store.data.map { it[EQ_PROFILES_JSON] }
     val serverListJson: Flow<String?> = store.data.map { it[SERVER_LIST_JSON] }
-    val recapLastShown: Flow<Long> = store.data.map { it[RECAP_LAST_SHOWN] ?: 0L }
 
     suspend fun setServerUrl(url: String) = store.edit { it[SERVER_URL] = url }
     suspend fun setUsername(name: String) = store.edit { it[USERNAME] = name }
@@ -118,14 +110,11 @@ class AppPreferences(context: Context) {
     suspend fun setAutoContinueEnabled(v: Boolean) = store.edit { it[AUTO_CONTINUE_ENABLED] = v }
     suspend fun setListenbrainzEnabled(v: Boolean) = store.edit { it[LISTENBRAINZ_ENABLED] = v }
     suspend fun setOnboarded(v: Boolean) = store.edit { it[ONBOARDED] = v }
-    suspend fun setVisualizerEnabled(v: Boolean) = store.edit { it[VISUALIZER_ENABLED] = v }
-    suspend fun setVisualizerType(t: String) = store.edit { it[VISUALIZER_TYPE] = t }
     suspend fun setEqEnabled(v: Boolean) = store.edit { it[EQ_ENABLED] = v }
     suspend fun setEqMode(mode: String) = store.edit { it[EQ_MODE] = mode }
     suspend fun setEqActiveProfile(name: String) = store.edit { it[EQ_ACTIVE_PROFILE] = name }
     suspend fun setEqProfilesJson(json: String) = store.edit { it[EQ_PROFILES_JSON] = json }
     suspend fun setServerListJson(json: String) = store.edit { it[SERVER_LIST_JSON] = json }
-    suspend fun setRecapLastShown(millis: Long) = store.edit { it[RECAP_LAST_SHOWN] = millis }
 
     suspend fun clear() = store.edit { it.clear() }
 }

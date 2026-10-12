@@ -50,9 +50,6 @@ pub struct Config {
     pub auto_continue: Option<bool>,
     #[serde(default)]
     pub bit_perfect_mode: Option<String>,
-    /// Unix seconds when the automatic weekly Recap last opened.
-    #[serde(default)]
-    pub last_weekly_recap: Option<i64>,
 }
 
 fn config_path() -> PathBuf {

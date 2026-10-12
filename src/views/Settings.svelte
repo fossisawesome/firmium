@@ -4,7 +4,7 @@
   import {
     settings, themes, updateSetting, resetSettings, isAuthed, auth, showAccountModal, setAuthState, navTo, toast, toastError, FONT_OPTIONS,
   } from '../lib/stores'
-  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload, IconEqualizer, IconRecap } from '../lib/icons'
+  import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload, IconEqualizer, IconStats } from '../lib/icons'
   import EqualizerSettings from '../components/EqualizerSettings.svelte'
   import type { PlayHistorySummary } from '../lib/types'
 
@@ -14,7 +14,7 @@
     { id: 'equalizer', label: 'Equalizer', icon: IconEqualizer },
     { id: 'downloads', label: 'Downloads', icon: IconDownload },
     { id: 'services', label: 'Services', icon: IconGlobe },
-    { id: 'stats', label: 'Stats', icon: IconRecap },
+    { id: 'stats', label: 'Stats', icon: IconStats },
     { id: 'account', label: 'Account', icon: IconUser },
     { id: 'debug', label: 'Debug', icon: IconInfo },
   ]
@@ -270,7 +270,6 @@
             {:else}Every completed track is recorded on this device.{/if}
           </div>
         </div>
-        <button class="debug-btn" onclick={() => navTo('recap')}>Open Recap</button>
       </div>
       <div class="settings-row">
         <div class="settings-info"><div class="settings-title">Export History</div><div class="settings-desc">Save your play history as a file</div></div>

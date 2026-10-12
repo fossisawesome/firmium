@@ -127,6 +127,6 @@
   .reco-row { display: flex; flex-wrap: wrap; gap: 16px; padding: 8px 0 24px; }
   .reco-card { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 96px; background: none; border: none; cursor: pointer; color: var(--text); }
   .reco-img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--surface2); border: 1px solid var(--border); }
-  .reco-name { font-size: 13px; text-align: center; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .reco-name { font-size: 13px; text-align: center; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .reco-card:hover .reco-name { color: var(--accent); }
 </style>

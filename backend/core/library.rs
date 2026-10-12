@@ -326,6 +326,20 @@ impl Core {
         Ok(n)
     }
 
+    /// Shuffle All: a random sample of the whole library, played immediately. Returns the
+    /// queue length (0 when the library is empty or unreachable).
+    pub async fn shuffle_all(&self) -> Result<usize, String> {
+        let mut songs = self.library_pool(None).await;
+        songs.shuffle(&mut rand::rng());
+        let n = songs.len();
+        if n == 0 {
+            return Ok(0);
+        }
+        let b = &self.backend;
+        queue::set_queue(b.queue_state.clone(), b.app_state.clone(), b.audio_player.clone(), songs, 0).await?;
+        Ok(n)
+    }
+
     /// Start Radio: seed track plus similar tracks, played immediately.
     pub async fn start_radio(&self, seed: Song) -> Result<(), String> {
         let seeded = self.seed_from(&seed, &HashSet::new(), RADIO_BATCH).await;

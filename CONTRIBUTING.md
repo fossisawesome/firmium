@@ -1,6 +1,6 @@
 # Contributing to Firmium
 
-Thanks for your interest in contributing! Firmium is an OpenSubsonic music streaming client for desktop (Linux, Windows, macOS, FreeBSD) and Android. This guide will help you get started.
+Thanks for your interest in contributing! Firmium is an OpenSubsonic music streaming client for desktop (Linux, Windows, macOS) and Android. This guide will help you get started.
 
 ## Quick Start
 
@@ -10,7 +10,6 @@ Thanks for your interest in contributing! Firmium is an OpenSubsonic music strea
 - On Linux: ALSA (`libasound2`), `libssl`, `libsecret`, `libxkbcommon`, `webkit2gtk-4.1` and `xdotool` (Tauri webview). Package names vary by distro — see `README.md`.
 - On Windows: no extra system dependencies needed
 - On macOS: Xcode Command Line Tools (`xcode-select --install`) only
-- On FreeBSD: `alsa-lib`, `dbus`, `libxkbcommon` via `pkg install`, plus `webkit2gtk4`
 
 ### Set Up Your Environment
 
@@ -78,6 +77,7 @@ The Svelte UI only renders. Logic lives in Rust, so a feature is mostly a backen
 See [android/CLAUDE.md](android/CLAUDE.md) for Android-specific setup and conventions. Key commands:
 ```bash
 cd android && ./gradlew assembleRelease   # release APK
+cd android && ./gradlew assembleRelease -Pfoss   # F-Droid build, no Google libs (src/foss stubs instead of src/play Wear sync)
 cd android && ./gradlew installDebug      # debug build on device
 ```
 

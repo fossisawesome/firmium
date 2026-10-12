@@ -1,5 +1,4 @@
 package com.fossisawesome.firmium.ui.components
-import com.fossisawesome.firmium.audio.VisualizerAudioProcessor
 import com.fossisawesome.firmium.ui.theme.LocalAppFontFamily
 
 import androidx.activity.compose.BackHandler
@@ -66,7 +65,6 @@ import kotlin.math.roundToInt
 fun FullScreenPlayer(
     state: PlayerState,
     coverUrl: String?,
-    visualizerProcessor: VisualizerAudioProcessor? = null,
     playlistItems: List<PlaylistListItem>,
     lyricsState: LyricsState,
     wordFillEnabled: Boolean,
@@ -102,11 +100,6 @@ fun FullScreenPlayer(
     // Extract dominant colour from cover art, darken to 22% (same formula as Svelte version).
     val bgColor = rememberDominantColor(coverUrl)
 
-    val orbPalette = rememberOrbPalette(coverUrl)
-    var showOrb by remember { mutableStateOf(false) }
-    // In-player visualizer type, seeded from settings; tapping the visualizer cycles it live.
-    var vizType by remember(state.visualizerType) { mutableStateOf(VisualizerType.fromId(state.visualizerType)) }
-    val cycleViz = { vizType = VisualizerType.entries[(vizType.ordinal + 1) % VisualizerType.entries.size] }
     var showAddToPlaylist by remember { mutableStateOf(false) }
     var showMore by remember { mutableStateOf(false) }
     // Lyrics replace the album art in the center; stars pop up over the art on long-press.
@@ -170,16 +163,8 @@ fun FullScreenPlayer(
             positionSeconds = state.currentPosition,
             isPlaying = state.playbackState == "playing",
             wordFillEnabled = wordFillEnabled,
-            showOrb = showOrb,
-            onToggleOrb = { showOrb = !showOrb },
-            visualizerEnabled = state.visualizerEnabled,
-            vizType = vizType,
-            onCycleViz = cycleViz,
             coverUrl = coverUrl,
             track = track,
-            visualizerProcessor = visualizerProcessor,
-            orbPalette = orbPalette,
-            isPlayingArt = state.playbackState == "playing",
             onTapArt = openLyrics,
             onSwipeLeft = onNext,
             onSwipeRight = onPrevious,
@@ -344,7 +329,6 @@ fun FullScreenPlayer(
             onTrackInfo = { statsExpanded = true },
             onEqualizer = onEqualizer,
             onDownload = { onDownloadTrack?.invoke() },
-            onToggleVisualizer = if (state.visualizerEnabled) ({ showOrb = !showOrb }) else null,
             onDismiss = { showMore = false },
         )
     }
@@ -595,7 +579,7 @@ private fun AudioStats(track: Song, compact: Boolean) {
     }
 }
 
-// Center area of the player: either the album art (with orb/visualizer toggle and a long-press
+// Center area of the player: either the album art (with a long-press
 // star popup) or, when toggled, the lyrics in place of the art with an X to return.
 @Composable
 private fun ArtOrLyrics(
@@ -606,16 +590,8 @@ private fun ArtOrLyrics(
     positionSeconds: Double,
     isPlaying: Boolean,
     wordFillEnabled: Boolean,
-    showOrb: Boolean,
-    onToggleOrb: () -> Unit,
-    visualizerEnabled: Boolean,
-    vizType: VisualizerType,
-    onCycleViz: () -> Unit,
     coverUrl: String?,
     track: Song,
-    visualizerProcessor: VisualizerAudioProcessor?,
-    orbPalette: OrbPalette,
-    isPlayingArt: Boolean,
     onTapArt: () -> Unit,
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
@@ -652,23 +628,15 @@ private fun ArtOrLyrics(
                     tint = colors.text, modifier = Modifier.size(18.dp))
             }
         } else {
-            ArtOrOrb(
-                showOrb = showOrb,
-                onToggle = onToggleOrb,
-                visualizerEnabled = visualizerEnabled,
-                vizType = vizType,
-                onCycleType = onCycleViz,
+            ArtWithGestures(
                 coverUrl = coverUrl,
                 albumDescription = track.album,
-                visualizerProcessor = visualizerProcessor,
-                palette = orbPalette,
-                isPlaying = isPlayingArt,
                 onTap = onTapArt,
                 onSwipeLeft = onSwipeLeft,
                 onSwipeRight = onSwipeRight,
                 onLongPress = onLongPressArt,
                 modifier = Modifier.fillMaxSize()
-                    .then(if (!showOrb) Modifier.shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp)) else Modifier),
+                    .shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp)),
             )
 
             // Star-rating popup, animated in over the art on long-press.
@@ -708,83 +676,6 @@ private fun ArtOrLyrics(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-// Switches between album art and the NCS orb visualizer.
-@Composable
-private fun ArtOrOrb(
-    showOrb: Boolean,
-    onToggle: () -> Unit,
-    visualizerEnabled: Boolean,
-    vizType: VisualizerType,
-    onCycleType: () -> Unit,
-    coverUrl: String?,
-    albumDescription: String,
-    visualizerProcessor: VisualizerAudioProcessor?,
-    palette: OrbPalette,
-    isPlaying: Boolean,
-    onTap: () -> Unit,
-    onSwipeLeft: () -> Unit,
-    onSwipeRight: () -> Unit,
-    onLongPress: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // The visualizer is only available when enabled in Settings.
-    val showViz = showOrb && visualizerEnabled
-    Box(modifier = modifier) {
-        if (showViz) {
-            Box(
-                modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown()
-                        val up = waitForUpOrCancellation()
-                        if (up != null) onCycleType()  // tap visualizer = next type
-                    }
-                },
-            ) {
-                VisualizerView(
-                    type = vizType,
-                    visualizerProcessor = visualizerProcessor,
-                    palette = palette,
-                    isPlaying = isPlaying,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                Text(
-                    vizType.label,
-                    fontSize = 10.sp,
-                    fontFamily = LocalAppFontFamily.current,
-                    color = Color.White.copy(alpha = 0.65f),
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
-                )
-            }
-        } else {
-            ArtWithGestures(
-                coverUrl = coverUrl,
-                albumDescription = albumDescription,
-                onTap = onTap,
-                onSwipeLeft = onSwipeLeft,
-                onSwipeRight = onSwipeRight,
-                onLongPress = onLongPress,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        if (visualizerEnabled) {
-            FirmiumIconButton(
-                onClick = onToggle,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(32.dp),
-            ) {
-                FirmiumIcon(
-                    imageVector = if (showViz) Icons.Default.Image else Icons.Default.Equalizer,
-                    contentDescription = if (showViz) "Show art" else "Show visualizer",
-                    tint = Color.White.copy(alpha = 0.75f),
-                    modifier = Modifier.size(18.dp),
-                )
             }
         }
     }
