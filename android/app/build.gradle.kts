@@ -121,7 +121,7 @@ dependencies {
     if (!isFoss) implementation("com.google.android.gms:play-services-wearable:19.0.0")
 
     // Secure storage
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // DataStore for non-sensitive preferences (server URL, settings)
     implementation("androidx.datastore:datastore-preferences:1.2.1")
