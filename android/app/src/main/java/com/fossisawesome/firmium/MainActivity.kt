@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
         else Manifest.permission.READ_EXTERNAL_STORAGE
 
-    // Request notifications, microphone (visualizer), and audio/storage (local music) together.
+    // Request notifications and audio/storage (local music) together.
     // A single RequestMultiplePermissions flow is required: launching several single-permission
     // requests back-to-back drops all but the first dialog, so only notifications ever showed.
     private val permissionsLauncher = registerForActivityResult(
@@ -152,6 +152,19 @@ class MainActivity : ComponentActivity() {
                             kotlinx.coroutines.delay(5000)
                             currentError = null
                         }
+                    }
+
+                    // Offer to continue the queue another device saved on the server.
+                    LaunchedEffect(authState.isAuthenticated) {
+                        if (!authState.isAuthenticated) return@LaunchedEffect
+                        val remote = playerViewModel.offerableRemoteQueue() ?: return@LaunchedEffect
+                        val first = remote.songs.firstOrNull { it.id == remote.currentId } ?: remote.songs.first()
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Resume server queue?")
+                            .setMessage("${remote.songs.size} tracks saved by ${remote.changedBy ?: "another device"}, starting at \"${first.title}\".")
+                            .setPositiveButton("Resume") { _, _ -> playerViewModel.resumeRemoteQueue(remote) }
+                            .setNegativeButton("Not now", null)
+                            .show()
                     }
 
                     // Auto-open login dialog when saved credentials couldn't be restored.

@@ -5,8 +5,6 @@
 #[path = "../types.rs"]
 pub mod types;
 pub use types::{AudioDevice, PlaybackState};
-#[path = "../viz_enums.rs"]
-pub mod viz_enums;
 #[path = "../config.rs"]
 pub mod config;
 #[path = "../events.rs"]
@@ -17,8 +15,6 @@ pub mod errors;
 pub mod paths;
 #[path = "../state.rs"]
 pub mod state;
-#[path = "../visualizer.rs"]
-pub mod visualizer;
 #[path = "../audio/mod.rs"]
 pub mod audio;
 #[path = "../db.rs"]
@@ -35,3 +31,5 @@ pub mod podcasts;
 pub mod init;
 #[path = "../ipc.rs"]
 pub mod ipc;
+#[path = "../core/mod.rs"]
+pub mod core;

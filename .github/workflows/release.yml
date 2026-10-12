@@ -44,7 +44,7 @@ jobs:
       release_id: ${{ steps.create-release.outputs.result }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Create draft release
         id: create-release
@@ -68,7 +68,27 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libasound2-dev \
+            libssl-dev \
+            libsecret-1-dev \
+            libdbus-1-dev \
+            pkg-config \
+            patchelf \
+            rpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -76,123 +96,31 @@ jobs:
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
 
-      - name: Install system dependencies
+      - name: Build .deb and .rpm
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev \
-            libssl-dev \
-            libsecret-1-dev \
-            libxkbcommon-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libdbus-1-dev \
-            pkg-config \
-            dpkg-dev \
-            rpm
-
-      - name: Set version
-        run: |
-          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Package .deb
-        run: |
-          mkdir -p deb/DEBIAN \
-            deb/usr/bin \
-            deb/usr/share/applications \
-            deb/usr/share/icons/hicolor/128x128/apps \
-            deb/usr/share/icons/hicolor/32x32/apps
-          cp target/release/firmium deb/usr/bin/
-          cp packaging/firmium.desktop deb/usr/share/applications/
-          cp assets/app-icons/128x128.png deb/usr/share/icons/hicolor/128x128/apps/firmium.png
-          cp assets/app-icons/32x32.png deb/usr/share/icons/hicolor/32x32/apps/firmium.png
-          cat > deb/DEBIAN/control << EOF
-          Package: firmium
-          Version: ${{ env.VERSION }}
-          Architecture: amd64
-          Maintainer: fossisawesome
-          Depends: libasound2 | libasound2t64, libsecret-1-0, libxkbcommon0, libvulkan1
-          Description: OpenSubsonic music streaming desktop client
-           Firmium is a low-latency native iced/Rust music streaming client for Linux.
-          EOF
-          dpkg-deb --build deb firmium_${{ env.VERSION }}_amd64.deb
-
-      - name: Package .rpm
-        run: |
-          mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-          cp target/release/firmium ~/rpmbuild/SOURCES/
-          cp packaging/firmium.desktop ~/rpmbuild/SOURCES/
-          cp assets/app-icons/128x128.png ~/rpmbuild/SOURCES/128x128.png
-          cp assets/app-icons/32x32.png ~/rpmbuild/SOURCES/32x32.png
-          cat > ~/rpmbuild/SPECS/firmium.spec << 'SPECEOF'
-          %define debug_package %{nil}
-          Name:      firmium
-          Version:   VERSIONTOKEN
-          Release:   1
-          Summary:   OpenSubsonic music streaming desktop client
-          License:   GPL-3.0-only
-          URL:       https://github.com/fossisawesome/firmium
-          BuildArch: x86_64
-          AutoReqProv: no
-          Requires:  alsa-lib, libsecret, libxkbcommon, vulkan-loader
-
-          %description
-          Firmium is a low-latency native iced/Rust music streaming client for Linux,
-          built on the iced GUI framework with symphonia decoding and cpal audio output.
-
-          %install
-          install -Dm755 %{_sourcedir}/firmium       %{buildroot}%{_bindir}/firmium
-          install -Dm644 %{_sourcedir}/firmium.desktop %{buildroot}%{_datadir}/applications/firmium.desktop
-          install -Dm644 %{_sourcedir}/128x128.png   %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/firmium.png
-          install -Dm644 %{_sourcedir}/32x32.png     %{buildroot}%{_datadir}/icons/hicolor/32x32/apps/firmium.png
-
-          %files
-          %{_bindir}/firmium
-          %{_datadir}/applications/firmium.desktop
-          %{_datadir}/icons/hicolor/*/apps/firmium.png
-          SPECEOF
-          sed -i "s/VERSIONTOKEN/${{ env.VERSION }}/" ~/rpmbuild/SPECS/firmium.spec
-          rpmbuild -bb ~/rpmbuild/SPECS/firmium.spec
-          RPM=$(ls ~/rpmbuild/RPMS/x86_64/firmium-*.rpm | head -1)
-          echo "RPM_FILE=$RPM" >> $GITHUB_ENV
+          npm ci
+          npm run tauri:build -- --bundles deb,rpm
 
       - name: Upload Linux artifacts
-        uses: actions/github-script@v9
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ env.VERSION }}
-          RPM_FILE: ${{ env.RPM_FILE }}
-        with:
-          script: |
-            const fs = require('fs')
-            const path = require('path')
-            const releaseId = ${{ needs.create-release.outputs.release_id }}
-            const debFile = `firmium_${process.env.VERSION}_amd64.deb`
-            const files = [debFile, process.env.RPM_FILE].filter(Boolean)
-            if (!files.length) throw new Error('No Linux artifacts found')
-            for (const file of files) {
-              if (!fs.existsSync(file)) throw new Error(`Artifact not found: ${file}`)
-              await github.rest.repos.uploadReleaseAsset({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: releaseId,
-                name: path.basename(file),
-                data: fs.readFileSync(file),
-              })
-            }
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            target/release/bundle/deb/*.deb \
+            target/release/bundle/rpm/*.rpm \
+            --repo "${{ github.repository }}" --clobber
 
   build-windows:
     needs: create-release
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -200,37 +128,19 @@ jobs:
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
 
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Install NSIS
-        run: choco install nsis --no-progress -y
-
       - name: Build NSIS installer
-        shell: pwsh
         run: |
-          $version = (Select-String '^version = "' Cargo.toml | Select-Object -First 1).Line.Split('"')[1]
-          if (-not $version) { Write-Error "Could not parse version from Cargo.toml"; exit 1 }
-          Write-Host "Building installer for version: $version"
-          & "C:\Program Files (x86)\NSIS\makensis.exe" /V4 /DVERSION=$version packaging\firmium.nsi
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci
+          npm run tauri:build -- --bundles nsis
 
       - name: Upload Windows installer
-        uses: actions/github-script@v9
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          script: |
-            const fs = require('fs')
-            const files = fs.readdirSync('.').filter(f => f.startsWith('firmium-setup-') && f.endsWith('.exe'))
-            if (!files.length) throw new Error('No NSIS installer found: ' + fs.readdirSync('.').join(', '))
-            await github.rest.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.create-release.outputs.release_id }},
-              name: files[0],
-              data: fs.readFileSync(files[0]),
-            })
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            target/release/bundle/nsis/*-setup.exe \
+            --repo "${{ github.repository }}" --clobber
 
   build-macos:
     needs: create-release
@@ -238,14 +148,15 @@ jobs:
 
     strategy:
       matrix:
-        include:
-          - target: aarch64-apple-darwin
-            label: AppleSilicon
-          - target: x86_64-apple-darwin
-            label: Intel
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -257,122 +168,92 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Set version
+      - name: Build .dmg
         run: |
-          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          npm ci
+          npm run tauri:build -- --target ${{ matrix.target }} --bundles dmg
 
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Assemble .app bundle
-        run: |
-          APP="Firmium.app"
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp "target/${{ matrix.target }}/release/firmium" "$APP/Contents/MacOS/firmium"
-          cp assets/app-icons/icon.icns "$APP/Contents/Resources/icon.icns"
-          sed "s/VERSIONTOKEN/${{ env.VERSION }}/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
-
-      - name: Package .dmg
-        run: |
-          mkdir dmg-src
-          mv Firmium.app dmg-src/
-          ln -s /Applications dmg-src/Applications
-          hdiutil create -volname Firmium -srcfolder dmg-src -ov -format UDZO "firmium-${{ env.VERSION }}-${{ matrix.label }}.dmg"
-
+      # Bundle names differ per arch (aarch64 / x64), so no clobber risk between matrix legs.
       - name: Upload macOS artifact
-        uses: actions/github-script@v9
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ env.VERSION }}
-          LABEL: ${{ matrix.label }}
-        with:
-          script: |
-            const fs = require('fs')
-            const file = `firmium-${process.env.VERSION}-${process.env.LABEL}.dmg`
-            if (!fs.existsSync(file)) throw new Error(`Artifact not found: ${file}`)
-            await github.rest.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.create-release.outputs.release_id }},
-              name: file,
-              data: fs.readFileSync(file),
-            })
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg \
+            --repo "${{ github.repository }}" --clobber
 
-  build-freebsd:
+  build-termium:
     needs: create-release
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-14
+            target: x86_64-apple-darwin
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - name: Set version
+      - name: Install system dependencies
+        if: runner.os == 'Linux'
         run: |
-          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libssl-dev libsecret-1-dev libdbus-1-dev pkg-config
 
-      - name: Build and package on FreeBSD
-        uses: cross-platform-actions/action@v1.3.0
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
         with:
-          operating_system: freebsd
-          version: '14.2'
-          run: |
-            sudo pkg install -y rust alsa-lib dbus libxkbcommon pkgconf
-            cargo build --release
+          targets: ${{ matrix.target }}
 
-            mkdir -p stage/usr/bin stage/usr/share/applications \
-              stage/usr/share/icons/hicolor/128x128/apps \
-              stage/usr/share/icons/hicolor/32x32/apps
-            cp target/release/firmium stage/usr/bin/
-            cp packaging/firmium.desktop stage/usr/share/applications/
-            cp assets/app-icons/128x128.png stage/usr/share/icons/hicolor/128x128/apps/firmium.png
-            cp assets/app-icons/32x32.png stage/usr/share/icons/hicolor/32x32/apps/firmium.png
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          key: termium-${{ matrix.target }}
 
-            cat > +MANIFEST << EOF
-            name: firmium
-            version: "${{ env.VERSION }}"
-            origin: audio/firmium
-            comment: "OpenSubsonic music streaming desktop client"
-            desc: "Firmium is a low-latency native iced/Rust music streaming client."
-            maintainer: fossisawesome
-            www: https://github.com/fossisawesome/firmium
-            prefix: /usr
-            deps:
-              alsa-lib: {origin: audio/alsa-lib, version: "1"}
-              dbus: {origin: devel/dbus, version: "1"}
-              libxkbcommon: {origin: x11/libxkbcommon, version: "1"}
-            EOF
+      - name: Build Termium
+        run: cargo build --release -p termium --target ${{ matrix.target }}
 
-            pkg create -m . -r stage -o .
-            mv firmium-${{ env.VERSION }}.pkg firmium-${{ env.VERSION }}-freebsd.pkg
+      - name: Package (tar.gz)
+        if: runner.os != 'Windows'
+        run: |
+          NAME=termium-${{ github.ref_name }}-${{ matrix.target }}
+          mkdir "$NAME"
+          cp target/${{ matrix.target }}/release/termium "$NAME/"
+          tar czf "$NAME.tar.gz" "$NAME"
+          echo "ASSET=$NAME.tar.gz" >> $GITHUB_ENV
 
-      - name: Upload FreeBSD package
-        uses: actions/github-script@v9
+      - name: Package (zip)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          NAME=termium-${{ github.ref_name }}-${{ matrix.target }}
+          mkdir "$NAME"
+          cp target/${{ matrix.target }}/release/termium.exe "$NAME/"
+          7z a "$NAME.zip" "$NAME"
+          echo "ASSET=$NAME.zip" >> $GITHUB_ENV
+
+      - name: Upload Termium artifact
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ env.VERSION }}
-        with:
-          script: |
-            const fs = require('fs')
-            const file = `firmium-${process.env.VERSION}-freebsd.pkg`
-            if (!fs.existsSync(file)) throw new Error(`Artifact not found: ${file}`)
-            await github.rest.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.create-release.outputs.release_id }},
-              name: file,
-              data: fs.readFileSync(file),
-            })
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" "$ASSET" --repo "${{ github.repository }}" --clobber
 
   build-android:
     needs: create-release
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -436,7 +317,7 @@ jobs:
             })
 
   publish-release:
-    needs: [create-release, build-linux, build-windows, build-macos, build-android]
+    needs: [create-release, build-linux, build-windows, build-macos, build-termium, build-android]
     runs-on: ubuntu-latest
     steps:
       - name: Publish release

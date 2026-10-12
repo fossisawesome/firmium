@@ -36,13 +36,17 @@ fn sanitize_cover_id(cover_id: &str) -> String {
     }
 }
 
+/// Extensions a cached cover can have (see `extension_for_content_type`).
+const COVER_EXTS: [&str; 4] = ["jpg", "png", "webp", "gif"];
+
 /// Finds an existing cached file for this cover id, regardless of extension.
+/// Touches the file's mtime on a hit so eviction is least-recently-used.
 fn find_cached(dir: &Path, safe_id: &str) -> Option<PathBuf> {
-    let entries = std::fs::read_dir(dir).ok()?;
-    let prefix = format!("{safe_id}.");
-    for entry in entries.flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&prefix) {
-            return Some(entry.path());
+    for ext in COVER_EXTS {
+        let path = dir.join(format!("{safe_id}.{ext}"));
+        if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&path) {
+            let _ = file.set_modified(std::time::SystemTime::now());
+            return Some(path);
         }
     }
     None
@@ -88,6 +92,19 @@ fn evict_if_needed(dir: &Path) {
     }
 }
 
+/// Reads the response body, failing once it exceeds `MAX_COVER_BYTES` (covers
+/// chunked responses that carry no `Content-Length`).
+async fn read_capped(mut res: reqwest::Response) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+        if (out.len() + chunk.len()) as u64 > MAX_COVER_BYTES {
+            return Err("Cover art exceeds maximum size".to_string());
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
 /// Returns a filesystem path to the cached cover art for `cover_id`,
 /// downloading it from `url` first if not already cached. The frontend
 /// converts the path with `convertFileSrc()` for use in an `<img src>`.
@@ -111,13 +128,23 @@ pub async fn get_cover_art(cover_id: String, url: String) -> Result<String, Stri
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
-    let bytes = res.bytes().await.map_err(|e| e.to_string())?;
+    let bytes = read_capped(res).await?;
 
     let ext = extension_for_content_type(content_type.as_deref());
     let path = dir.join(format!("{safe_id}.{ext}"));
-    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
-
-    evict_if_needed(&dir);
+    // Write to a temp name first so a concurrent reader never sees a partial image.
+    let tmp = dir.join(format!("{safe_id}.{ext}.tmp"));
+    let write_dir = dir.clone();
+    tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        std::fs::write(&tmp, &bytes)?;
+        std::fs::rename(&tmp, &path)?;
+        evict_if_needed(&write_dir);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    let path = dir.join(format!("{safe_id}.{ext}"));
 
     Ok(path.to_string_lossy().into_owned())
 }
@@ -129,5 +156,18 @@ pub fn clear_cover_cache() -> Result<(), String> {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_cover_id;
+
+    #[test]
+    fn cover_id_cannot_escape_the_cache_dir() {
+        assert_eq!(sanitize_cover_id(".."), "__"); // dots are replaced, so no traversal component survives
+        assert_eq!(sanitize_cover_id(""), "unknown");
+        assert_eq!(sanitize_cover_id("../x"), "___x");
+        assert_eq!(sanitize_cover_id("al-12_ok"), "al-12_ok");
     }
 }

@@ -15,8 +15,12 @@ pub fn render(app: &App, frame: &mut Frame, area: ratatui::layout::Rect) {
         Some(song) => format!("{} — {}", song.title, song.artist),
         None => "Nothing playing".to_string(),
     };
+    let mut block = Block::default().borders(Borders::ALL);
+    if let Some(msg) = &app.status_message {
+        block = block.title(msg.as_str());
+    }
     frame.render_widget(
-        Paragraph::new(title).block(Block::default().borders(Borders::ALL)),
+        Paragraph::new(title).block(block),
         chunks[0],
     );
 

@@ -3,8 +3,8 @@
 // ============================================================================
 // Records one row per completed play, written from the same scrobble-completion
 // path as Subsonic scrobbling (`queue_manager.rs`). Local only — no server calls.
-// Powers the Stats Export page and Firmium Recap. Name columns are denormalized so
-// Recap renders fully offline without resolving IDs against the server.
+// Powers the Stats Export page. Name columns are denormalized so
+// exports render fully offline without resolving IDs against the server.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -133,43 +133,6 @@ impl PlayHistory {
         .map_err(|e| e.to_string())
     }
 
-    pub fn recap(&self, from: i64, to: i64) -> Result<RecapStats, String> {
-        let conn = self.conn.lock().map_err(|e| e.to_string())?;
-
-        let (total_plays, total_seconds): (i64, i64) = conn
-            .query_row(
-                "SELECT COUNT(*), COALESCE(SUM(duration_played), 0)
-                 FROM plays WHERE timestamp >= ?1 AND timestamp < ?2",
-                [from, to],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .map_err(|e| e.to_string())?;
-
-        let top_tracks = query_top_tracks(&conn, from, to, 10)?;
-        let top_artists = query_top_artists(&conn, from, to, 10)?;
-        let top_albums = query_top_albums(&conn, from, to, 10)?;
-        let top_genre = query_top_genre(&conn, from, to)?;
-        let by_time_of_day = query_by_time_of_day(&conn, from, to)?;
-        let by_day_of_week = query_by_day_of_week(&conn, from, to)?;
-        let biggest_discovery = query_biggest_discovery(&conn, from, to)?;
-        let streak = query_streak(&conn, from, to)?;
-
-        Ok(RecapStats {
-            from,
-            to,
-            total_plays,
-            total_seconds,
-            top_tracks,
-            top_artists,
-            top_albums,
-            top_genre,
-            by_time_of_day,
-            by_day_of_week,
-            biggest_discovery,
-            streak,
-        })
-    }
-
     /// Returns every play row (newest first) as CSV or pretty JSON for export.
     pub fn export(&self, format: &str) -> Result<String, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
@@ -230,211 +193,6 @@ impl PlayHistory {
     }
 }
 
-fn query_top_tracks(conn: &Connection, from: i64, to: i64, limit: i64) -> Result<Vec<TrackStat>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT track_id, track_title, artist_name, cover_art_id, COUNT(*) AS c
-             FROM plays WHERE timestamp >= ?1 AND timestamp < ?2
-             GROUP BY track_id ORDER BY c DESC, track_title ASC LIMIT ?3",
-        )
-        .map_err(|e| e.to_string())?;
-    let out = stmt
-        .query_map([from, to, limit], |r| {
-            Ok(TrackStat {
-                track_id: r.get(0)?,
-                title: r.get(1)?,
-                artist: r.get(2)?,
-                cover_art_id: r.get(3)?,
-                count: r.get(4)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(out)
-}
-
-fn query_top_artists(conn: &Connection, from: i64, to: i64, limit: i64) -> Result<Vec<ArtistStat>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT artist_id, artist_name, COUNT(*) AS c
-             FROM plays WHERE timestamp >= ?1 AND timestamp < ?2 AND artist_name IS NOT NULL
-             GROUP BY artist_name ORDER BY c DESC, artist_name ASC LIMIT ?3",
-        )
-        .map_err(|e| e.to_string())?;
-    let out = stmt
-        .query_map([from, to, limit], |r| {
-            Ok(ArtistStat {
-                artist_id: r.get(0)?,
-                name: r.get(1)?,
-                count: r.get(2)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(out)
-}
-
-fn query_top_albums(conn: &Connection, from: i64, to: i64, limit: i64) -> Result<Vec<AlbumStat>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT album_id, album_name, artist_name, cover_art_id, COUNT(*) AS c
-             FROM plays WHERE timestamp >= ?1 AND timestamp < ?2 AND album_name IS NOT NULL
-             GROUP BY album_name ORDER BY c DESC, album_name ASC LIMIT ?3",
-        )
-        .map_err(|e| e.to_string())?;
-    let out = stmt
-        .query_map([from, to, limit], |r| {
-            Ok(AlbumStat {
-                album_id: r.get(0)?,
-                name: r.get(1)?,
-                artist: r.get(2)?,
-                cover_art_id: r.get(3)?,
-                count: r.get(4)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(out)
-}
-
-fn query_top_genre(conn: &Connection, from: i64, to: i64) -> Result<Option<GenreStat>, String> {
-    conn.query_row(
-        "SELECT genre, COUNT(*) AS c
-         FROM plays WHERE timestamp >= ?1 AND timestamp < ?2 AND genre IS NOT NULL AND genre != ''
-         GROUP BY genre ORDER BY c DESC LIMIT 1",
-        [from, to],
-        |r| Ok(GenreStat { genre: r.get(0)?, count: r.get(1)? }),
-    )
-    .map(Some)
-    .or_else(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => Ok(None),
-        other => Err(other.to_string()),
-    })
-}
-
-fn query_by_time_of_day(conn: &Connection, from: i64, to: i64) -> Result<TimeOfDay, String> {
-    // Local-time hour buckets: morning 5-11, afternoon 12-16, evening 17-20, night 21-4.
-    let mut stmt = conn
-        .prepare(
-            "SELECT CAST(strftime('%H', timestamp, 'unixepoch', 'localtime') AS INTEGER) AS h, COUNT(*)
-             FROM plays WHERE timestamp >= ?1 AND timestamp < ?2 GROUP BY h",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([from, to], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))
-        .map_err(|e| e.to_string())?;
-    let mut t = TimeOfDay::default();
-    for row in rows {
-        let (h, c) = row.map_err(|e| e.to_string())?;
-        match h {
-            5..=11 => t.morning += c,
-            12..=16 => t.afternoon += c,
-            17..=20 => t.evening += c,
-            _ => t.night += c,
-        }
-    }
-    Ok(t)
-}
-
-fn query_by_day_of_week(conn: &Connection, from: i64, to: i64) -> Result<[i64; 7], String> {
-    // strftime '%w': 0 = Sunday .. 6 = Saturday.
-    let mut stmt = conn
-        .prepare(
-            "SELECT CAST(strftime('%w', timestamp, 'unixepoch', 'localtime') AS INTEGER) AS d, COUNT(*)
-             FROM plays WHERE timestamp >= ?1 AND timestamp < ?2 GROUP BY d",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([from, to], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))
-        .map_err(|e| e.to_string())?;
-    let mut out = [0i64; 7];
-    for row in rows {
-        let (d, c) = row.map_err(|e| e.to_string())?;
-        if (0..7).contains(&d) {
-            out[d as usize] = c;
-        }
-    }
-    Ok(out)
-}
-
-fn query_biggest_discovery(conn: &Connection, from: i64, to: i64) -> Result<Option<DiscoveryStat>, String> {
-    // A track first heard within the window that racked up the most plays in it.
-    conn.query_row(
-        "SELECT track_id, track_title, artist_name, cover_art_id, COUNT(*) AS c, MIN(timestamp)
-         FROM plays WHERE timestamp >= ?1 AND timestamp < ?2
-         GROUP BY track_id HAVING c > 1 ORDER BY c DESC, MIN(timestamp) DESC LIMIT 1",
-        [from, to],
-        |r| {
-            Ok(DiscoveryStat {
-                track_id: r.get(0)?,
-                title: r.get(1)?,
-                artist: r.get(2)?,
-                cover_art_id: r.get(3)?,
-                count: r.get(4)?,
-                first_heard: r.get(5)?,
-            })
-        },
-    )
-    .map(Some)
-    .or_else(|e| match e {
-        rusqlite::Error::QueryReturnedNoRows => Ok(None),
-        other => Err(other.to_string()),
-    })
-}
-
-fn query_streak(conn: &Connection, from: i64, to: i64) -> Result<Streak, String> {
-    // Distinct local days with at least one play, ascending.
-    let mut stmt = conn
-        .prepare(
-            "SELECT DISTINCT date(timestamp, 'unixepoch', 'localtime') AS d
-             FROM plays WHERE timestamp >= ?1 AND timestamp < ?2 ORDER BY d ASC",
-        )
-        .map_err(|e| e.to_string())?;
-    let days = stmt
-        .query_map([from, to], |r| r.get::<_, String>(0))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-
-    let days_active = days.len() as i64;
-    let mut longest = 0i64;
-    let mut current = 0i64;
-    let mut prev: Option<i64> = None;
-    for d in &days {
-        let day_num = day_to_epoch_days(d);
-        match prev {
-            Some(p) if day_num == p + 1 => current += 1,
-            _ => current = 1,
-        }
-        if current > longest {
-            longest = current;
-        }
-        prev = Some(day_num);
-    }
-    Ok(Streak { days_active, longest_streak: longest })
-}
-
-/// Converts an `YYYY-MM-DD` string to a day count since the epoch for adjacency
-/// comparison. Returns 0 on a malformed string (won't extend any streak).
-fn day_to_epoch_days(d: &str) -> i64 {
-    let parts: Vec<i64> = d.split('-').filter_map(|p| p.parse().ok()).collect();
-    if parts.len() != 3 {
-        return 0;
-    }
-    let (y, m, day) = (parts[0], parts[1], parts[2]);
-    // Days from civil date (Howard Hinnant's algorithm).
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = y - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146097 + doe - 719468
-}
-
 fn rows_to_csv(rows: &[PlayRow]) -> String {
     let mut out = String::from(
         "track_id,track_title,artist_id,artist_name,album_id,album_name,genre,bpm,timestamp,duration_played\n",
@@ -460,8 +218,16 @@ fn rows_to_csv(rows: &[PlayRow]) -> String {
 }
 
 /// Quotes a CSV field when it contains a comma, quote, or newline (RFC 4180).
+/// Text starting with `= + - @` is prefixed with `'` so spreadsheets don't run it as a formula.
 fn csv_field(v: Option<&str>) -> String {
-    let s = v.unwrap_or("");
+    let raw = v.unwrap_or("");
+    let guarded;
+    let s = if raw.starts_with(['=', '+', '-', '@']) {
+        guarded = format!("'{raw}");
+        guarded.as_str()
+    } else {
+        raw
+    };
     if s.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
@@ -469,10 +235,22 @@ fn csv_field(v: Option<&str>) -> String {
     }
 }
 
+#[cfg(test)]
+mod csv_tests {
+    use super::csv_field;
+
+    #[test]
+    fn formula_prefix_is_neutralised() {
+        assert_eq!(csv_field(Some("=SUM(A1)")), "'=SUM(A1)");
+        assert_eq!(csv_field(Some("a,b")), "\"a,b\"");
+        assert_eq!(csv_field(None), "");
+    }
+}
+
 // ── Serializable result types (camelCase to match frontend) ──────────────────
 
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RecentPlay {
     pub track_id: String,
     pub track_title: String,
@@ -493,83 +271,6 @@ pub struct PlayHistorySummary {
     pub unique_albums: i64,
     pub first_play: Option<i64>,
     pub last_play: Option<i64>,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecapStats {
-    pub from: i64,
-    pub to: i64,
-    pub total_plays: i64,
-    pub total_seconds: i64,
-    pub top_tracks: Vec<TrackStat>,
-    pub top_artists: Vec<ArtistStat>,
-    pub top_albums: Vec<AlbumStat>,
-    pub top_genre: Option<GenreStat>,
-    pub by_time_of_day: TimeOfDay,
-    pub by_day_of_week: [i64; 7],
-    pub biggest_discovery: Option<DiscoveryStat>,
-    pub streak: Streak,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TrackStat {
-    pub track_id: String,
-    pub title: String,
-    pub artist: Option<String>,
-    pub cover_art_id: Option<String>,
-    pub count: i64,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArtistStat {
-    pub artist_id: Option<String>,
-    pub name: String,
-    pub count: i64,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AlbumStat {
-    pub album_id: Option<String>,
-    pub name: String,
-    pub artist: Option<String>,
-    pub cover_art_id: Option<String>,
-    pub count: i64,
-}
-
-#[derive(serde::Serialize)]
-pub struct GenreStat {
-    pub genre: String,
-    pub count: i64,
-}
-
-#[derive(serde::Serialize, Default)]
-pub struct TimeOfDay {
-    pub morning: i64,
-    pub afternoon: i64,
-    pub evening: i64,
-    pub night: i64,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DiscoveryStat {
-    pub track_id: String,
-    pub title: String,
-    pub artist: Option<String>,
-    pub cover_art_id: Option<String>,
-    pub count: i64,
-    pub first_heard: i64,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Streak {
-    pub days_active: i64,
-    pub longest_streak: i64,
 }
 
 #[derive(serde::Serialize)]

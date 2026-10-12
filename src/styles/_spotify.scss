@@ -1,0 +1,116 @@
+/* ── Spotify UI theme ─────────────────────────────────────────────────────────
+   Layout style independent of the color theme: pill buttons, rounded cards,
+   bolder titles, larger artwork and a library list under the nav. Applied via
+   <html data-ui-theme="spotify"> (set from the UiTheme setting). */
+
+html[data-ui-theme='spotify'] {
+  --radius-card: 8px;
+  --radius-pill: 500px;
+
+  .sidebar {
+    background: var(--bg);
+    border-right: none;
+  }
+
+  .nav-btn {
+    border-radius: var(--radius-card);
+    font-weight: 700;
+
+    &.active {
+      background: var(--surface2);
+      color: var(--text);
+      border-left-color: transparent;
+    }
+  }
+
+  .spotify-library {
+    margin-top: 12px;
+    padding: 12px 8px 0;
+    border-top: 1px solid var(--border);
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .spotify-library-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 8px 8px;
+  }
+
+  .spotify-library-row {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    text-align: left;
+    padding: 8px;
+    border-radius: var(--radius-card);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover { background: var(--surface2); }
+  }
+
+  /* Pill buttons */
+  .play-all-btn,
+  .btn-primary,
+  .pl-new-btn,
+  .debug-btn,
+  .filter-chip,
+  .home-genre-chip,
+  .bp-mode-btn {
+    border-radius: var(--radius-pill);
+  }
+
+  .play-all-btn { font-weight: 700; padding-left: 18px; padding-right: 18px; }
+
+  /* Cards: larger art, rounded hover surface */
+  .home-card {
+    width: 150px;
+    padding: 10px;
+    border-radius: var(--radius-card);
+    background: var(--surface);
+
+    &:hover { background: var(--surface2); }
+  }
+  .home-card-art { width: 130px; height: 130px; border-radius: var(--radius-card); }
+  .home-card-title { font-weight: 700; }
+  .home-section-title { font-weight: 700; font-size: 16px; letter-spacing: 0; text-transform: none; color: var(--text); }
+  .home-greeting-name { font-weight: 700; }
+
+  /* Rows: roomier, rounded, bigger thumbs */
+  .album-row,
+  .artist-row,
+  .pl-card,
+  .track-row {
+    border-radius: var(--radius-card);
+  }
+  .album-row { padding: 10px; }
+  .album-art-sm { width: 56px; height: 56px; border-radius: 4px; }
+  .album-title, .pl-card-name, .artist-name { font-weight: 700; }
+
+  /* Player bar: centered transport, progress under it, rounded art */
+  .player-bar {
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    height: 88px;
+  }
+  .np-art { border-radius: 4px; }
+  .main-ctrl {
+    background: var(--text);
+    color: var(--bg);
+    border-radius: 50%;
+  }
+  #seekBar { border-radius: var(--radius-pill); }
+
+  .list-panel { background: var(--surface); border-radius: var(--radius-card); }
+}

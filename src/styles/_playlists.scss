@@ -1,0 +1,322 @@
+/* ── Playlists list view ─────────────────────────────────────────────────── */
+
+.pl-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.pl-new-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  padding: 6px 14px;
+  font-family: var(--font);
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background var(--timing), border-color var(--timing);
+}
+
+.pl-new-btn:hover {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.pl-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.pl-empty-icon {
+  font-size: 48px;
+  opacity: 0.4;
+}
+
+.pl-card {
+  display: flex;
+  align-items: center;
+  padding: 12px 10px;
+  cursor: pointer;
+  gap: 16px;
+  transition: background var(--timing);
+  touch-action: manipulation;
+}
+
+.pl-card:hover {
+  background: var(--surface);
+}
+
+.pl-card:active {
+  background: var(--surface2);
+}
+
+.pl-card-art {
+  width: 48px;
+  height: 48px;
+  background: var(--surface2);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pl-card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pl-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pl-card-name {
+  font-weight: bold;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+
+.pl-card-meta {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Playlist detail view ────────────────────────────────────────────────── */
+
+.pl-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding-bottom: 0;
+}
+
+.pl-detail-art {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  background: var(--surface2);
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  color: var(--muted);
+}
+
+.pl-detail-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pl-detail-art-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 11px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0;
+  transition: opacity var(--timing);
+}
+
+.pl-detail-art:hover .pl-detail-art-overlay {
+  opacity: 1;
+}
+
+.pl-detail-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.pl-detail-name {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--text);
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--timing);
+}
+
+.pl-detail-name:hover {
+  border-bottom-color: var(--border);
+}
+
+.pl-detail-desc {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: text;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--timing);
+  min-height: 18px;
+}
+
+.pl-detail-desc:hover {
+  border-bottom-color: var(--border);
+}
+
+.pl-detail-desc-hint {
+  color: var(--border);
+  font-style: italic;
+}
+
+.pl-detail-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.pl-detail-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.pl-delete-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 7px 14px;
+  font-family: var(--font);
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all var(--timing);
+}
+
+.pl-delete-btn:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* ── Playlist cover picker ───────────────────────────────────────────────── */
+
+.pl-cover-picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.pl-cover-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.pl-cover-upload-label {
+  cursor: pointer;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 3px;
+  font-size: 11px;
+  transition: background var(--timing);
+}
+
+.pl-cover-upload-label:hover {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.pl-cover-file-input {
+  display: none;
+}
+
+.pl-cover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pl-cover-option {
+  width: 52px;
+  height: 52px;
+  border-radius: 3px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color var(--timing), transform var(--timing);
+  flex-shrink: 0;
+}
+
+.pl-cover-option:hover {
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+.pl-cover-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pl-cover-empty {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Inline edit fields ──────────────────────────────────────────────────── */
+
+.pl-inline-edit {
+  font-size: 22px;
+  font-weight: bold;
+  font-family: var(--font);
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 2px 8px;
+  outline: none;
+  width: 100%;
+}
+
+.pl-inline-edit--desc {
+  font-size: 12px;
+  font-weight: normal;
+}
+

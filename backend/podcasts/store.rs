@@ -13,6 +13,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PodcastChannel {
     pub id: String,
     pub feed_url: String,
@@ -23,6 +24,7 @@ pub struct PodcastChannel {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PodcastEpisode {
     pub id: String,
     pub channel_id: String,

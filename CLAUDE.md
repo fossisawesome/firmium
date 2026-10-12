@@ -6,24 +6,23 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Project Overview
 
-**Firmium** is an OpenSubsonic music streaming client. This repo is a Cargo workspace (`Cargo.toml` `[workspace] members = ["backend", "desktop", "termium"]`) with three crates: a shared `backend` (no UI), a native [iced](https://iced.rs) desktop GUI (`desktop`), and a `ratatui` terminal client (`termium`) — both no web view, no JavaScript. Separate native Android app in `android/`, built with Kotlin + Jetpack Compose, sharing the same OpenSubsonic API contract but no Rust code.
+**Firmium** is an OpenSubsonic music streaming client. This repo is a Cargo workspace (`Cargo.toml` `[workspace] members = ["backend", "src-tauri", "termium"]`) with three crates: a shared `backend` (no UI), a [Tauri 2](https://tauri.app) desktop app (`src-tauri/` Rust shell + `src/` Svelte/SCSS/TS UI), and a `ratatui` terminal client (`termium`). Separate native Android app in `android/`, built with Kotlin + Jetpack Compose, sharing the same OpenSubsonic API contract but no Rust code.
 
 ### Tech Stack
 
 **Shared backend (`backend/` crate, `firmium-backend`)** — plain Rust, no UI, consumed by both `desktop` and `termium` via `path` dependency.
 
-**Desktop (`desktop/` crate — Linux, Windows, macOS, FreeBSD)**
-- **UI**: [iced](https://iced.rs) 0.14 (pure Rust; `canvas` for the visualizer, `svg` for icons, bundled font)
-- **Language**: Rust 2021 edition — UI and backend in one process, one crate
+**Desktop (`src-tauri/` + `src/` — Linux, Windows, macOS)**
+- **UI**: Svelte 5 + SCSS + TypeScript in `src/`, rendering only. All logic is Rust: `backend/core/` (settings, accounts, library routing, playlists, radio, stats) behind `src-tauri/src/commands.rs`; the UI talks to it via `src/lib/api.ts` (invoke) and Tauri events (`playback-*`, `queue-state-changed`, `session-expired`).
 - **Audio**: `symphonia` 0.5 (decoding) + `cpal` 0.17 (output device I/O), hand-rolled engine
 - **HTTP**: `reqwest` 0.13 for async OpenSubsonic API calls
-- **Credentials**: OS keyring via `keyring` crate (libsecret/Secret Service on Linux and FreeBSD, Windows Credential Manager on Windows, Keychain via `apple-native` on macOS)
-- **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer), macOS (`.app` bundle in a `.dmg`, unsigned), FreeBSD (`.pkg` via `pkg create`)
+- **Credentials**: OS keyring via `keyring` crate (libsecret/Secret Service on Linux, Windows Credential Manager on Windows, Keychain via `apple-native` on macOS)
+- **Packaging**: Linux (deb, rpm, Arch makepkg), Windows (NSIS installer), macOS (`.dmg`, unsigned)
 
-**Termium (`termium/` crate — Linux, Windows, macOS, FreeBSD terminal client)**
+**Termium (`termium/` crate — Linux, Windows, macOS terminal client)**
 - **UI**: [ratatui](https://ratatui.rs) 0.29 + `crossterm` 0.28 (event-stream) — TUI, no GUI toolkit
 - **Async**: `tokio` (rt-multi-thread) for backend calls and event bus
-- **Scope**: library browsing (albums/artists/playlists/search/home), playback controls, persistent now-playing bar, terminal bar visualizer, configurable keybindings (`toml`-based). No lyrics/EQ/recap/similar-tracks panels (desktop-only).
+- **Scope**: library browsing (albums/artists/playlists/search/home), playback controls, persistent now-playing bar, configurable keybindings (`toml`-based). No lyrics/EQ/similar-tracks panels (desktop-only).
 - Shares login/library/queue state with desktop and Android via the same OpenSubsonic server — logging into one, all see it.
 
 **Android**
@@ -34,11 +33,11 @@ See [android/CLAUDE.md](android/CLAUDE.md) for Android tech stack and architectu
 
 ### Backend (backend/)
 
-The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no IPC. Both `desktop` and `termium` depend on it via `path = "../backend"` and call these modules directly via async task spawning (`iced::Task::perform` on desktop, `tokio::spawn`/awaits on termium) or inline (sync fns); the backend pushes playback/queue events back to the UI over an in-process event bus (`backend/events.rs`, a `tokio::sync::broadcast` channel). Key modules:
+The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no IPC. `src-tauri` and `termium` depend on it via `path`; `src-tauri/src/commands.rs` forwards Tauri commands to `backend::core::Core`, termium awaits backend fns directly; the backend pushes playback/queue events back to the UI over an in-process event bus (`backend/events.rs`, a `tokio::sync::broadcast` channel). Key modules:
 
-- **init.rs**: `Backend::new()` builds the shared handles (event bus, `AudioPlayer`, `AppState`, `QueueState`, optional `PlayHistory`) and starts the `queue_manager` background task. Held by the iced `App` in `desktop/src/app/mod.rs` (and by termium's `App` in `termium/src/app.rs`).
+- **init.rs**: `Backend::new()` builds the shared handles (event bus, `AudioPlayer`, `AppState`, `QueueState`, optional `PlayHistory`) and starts the `queue_manager` background task. `core::Core` (settings, accounts, library routing, playlists, radio, stats, podcasts) wraps it and is held in Tauri state (`src-tauri/src/lib.rs`); termium holds the bare `Backend`.
 
-- **events.rs**: `EventBus` (broadcast sender) and `BackendEvent` enum (`PlaybackStateChanged`, `PlaybackPosition`, `PlaybackFinished`, `QueueStateChanged`, `QueueExhausted`, `SessionExpired`). The UI subscribes via an `iced::Subscription` that bridges the broadcast channel into `Message::Backend(BackendEvent)`.
+- **events.rs**: `EventBus` (broadcast sender) and `BackendEvent` enum (`PlaybackStateChanged`, `PlaybackPosition`, `PlaybackFinished`, `QueueStateChanged`, `QueueExhausted`, `SessionExpired`). `src-tauri/src/events.rs` re-emits them as Tauri events.
 
 - **state.rs**: `AppState` — holds `ConnectionState` (server URL, username, password, detected `openSubsonicExtensions`) behind `parking_lot::RwLock`, plus shared async `reqwest::Client` used by `commands/subsonic.rs` and `commands/lyrics.rs`, plus the `EventBus` handle. Set via `set_connection`.
 
@@ -49,54 +48,46 @@ The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no I
   - `credentials.rs`: `save_password()`, `get_password()`, `delete_password()` — OS keyring
   - `subsonic.rs`: `set_connection()`, `validate_connection()`, OpenSubsonic API — album/artist/search/genre reads, playlist CRUD, `scrobble()`, `save_play_queue()`/`get_play_queue()` (cross-device queue sync), `get_song_lyrics()` (structured → legacy → LRCLIB cascade), `get_sonic_similar_tracks()`. Internal `subsonic_request()` builds authenticated requests, emits `BackendEvent::SessionExpired` on the bus on HTTP 401 or OpenSubsonic error codes 40/41.
   - `lyrics.rs`: `parse_lrc()`, `fetch_lrclib_lyrics()` — LRC parsing and LRCLIB fallback used by `get_song_lyrics()`
-  - `cover_cache.rs`: `get_cover_art()`, `clear_cover_cache()` — disk-based cover art cache (200MB budget, mtime-based LRU eviction); the UI loads cached files into an `iced::widget::image::Handle` cached in `App`
+  - `cover_cache.rs`: `get_cover_art()`, `clear_cover_cache()` — disk-based cover art cache (200MB budget, mtime-based LRU eviction); the UI shows cached files through `convertFileSrc`
   - `queue.rs` / `queue_manager.rs`: queue mutation (`set_queue`, `shuffle_and_play`, `play_queue_index`, …) and the background task that drains the bus for crossfade, gapless preload, track advance and scrobbling
   - `playback.rs`: thin wrappers over `AudioPlayer` (`play_stream`, `preload_stream`, pause/resume/stop, `seek_position`, `set_volume`, `crossfade_to`, `list_audio_devices`, …)
-  - `downloads.rs`, `local_library.rs`, `equalizer.rs`, `stats.rs`, `cover_colors.rs`: offline downloads, `~/Music/Firmium` scan, EQ profiles, play-history aggregation (Recap / export), dominant-cover-color extraction
+  - `downloads.rs`, `local_library.rs`, `equalizer.rs`, `stats.rs`, `cover_colors.rs`: offline downloads, `~/Music/Firmium` scan, EQ profiles, play-history aggregation (summary / export), dominant-cover-color extraction
   - `app_info.rs`: `get_app_version()`
 
 - **audio/**: Desktop-only audio playback module (`symphonia` decode + `cpal` output). Core design:
   - `streaming_reader.rs`: `StreamingReader` implements Read+Seek over HTTP response body (bytes buffered locally to keep Subsonic "Now Playing" status during playback); `VecSource`/`FileSource` are seekable `MediaSource` wrappers for seek-rebuild and local files.
   - `decoder.rs`: `DecoderHandle` wraps `symphonia` `FormatReader`/`Decoder`, exposing `next_samples()` (interleaved f32), `seek()`, and `sample_rate`/`channels`/duration. Defaults to 48000 Hz if container doesn't report sample rate.
-  - `session.rs`: `Session` holds `Mutex<VecDeque<f32>>` ring buffer plus playback state (volume, playing, position). `spawn_decode_feeder()` runs blocking decode loop (ReplayGain, 25ms fade-in, visualizer tap, native seek via `SeekRequest`/`SeekReply`).
+  - `session.rs`: `Session` holds `Mutex<VecDeque<f32>>` ring buffer plus playback state (volume, playing, position). `spawn_decode_feeder()` runs blocking decode loop (ReplayGain, EQ, 25ms fade-in, native seek via `SeekRequest`/`SeekReply`).
   - `output.rs`: cpal device negotiation (`find_compatible_config`, `open_with_config`/`open_default`) and realtime `mix_into` callback, which sums all active sessions' ring buffers (with per-session volume, channel adaptation, and linear-interpolation resampler that degenerates to passthrough when rates match).
   - `mod.rs`: `AudioPlayer` manages session lifecycle (loading → playing → paused/stopped), reopens output stream at each track's native sample rate via `reopen_stream_if_needed()` (deferred during crossfade). Thread-safe via `parking_lot::Mutex`/`RwLock`.
   - Session state: `PlaybackState` enum (Loading, Playing, Paused, Stopped)
   - Sessions stored in `Arc<RwLock<HashMap>>` — playback events fire on the `EventBus` (broadcast) consumed by `queue_manager` and the UI subscription
   - Supports `preload_stream()` and `crossfade_to()` for gapless playback
 
-### iced UI (desktop/src/)
+### Tauri UI (`src/`, `src-tauri/`)
 
-The UI is one iced application. There are no components or routes in the web sense — the whole UI is a state struct, a message enum, an `update`, and a `view`.
-
-- **main.rs**: Entry point. Creates a tokio runtime and runs `iced::application(...)` wiring `App::update`, `App::view`, `App::theme`, `App::subscription`, the bundled font, and window size.
-- **app/**: The UI, split by feature into a module directory. `mod.rs` holds `App` (all UI state), the top-level `view()`/`shell()`, `new()`, `theme()`, `subscription()` glue, and toast handling. `message.rs` holds the `Message` enum; `types.rs` holds the small supporting enums (`View`, `Panel`, `SettingsCategory`, …). `update/mod.rs` dispatches every `Message` variant (exhaustive match, one compiler-checked spot) to a `update_<domain>` method defined in a sibling file — `update/{auth,library,playlists,search,settings,equalizer,mix,transport,queue_resume,recap,podcasts,nav}.rs` — each of which spawns backend calls via `iced::Task::perform` whose result returns as another `Message`. `view/mod.rs` routes to one screen method per file — `view/{home,albums,artists,playlists,genres,podcasts,search,recap,settings,mix,panels,player_bar,overlays}.rs` (`home_view`, `album_list_view`, `album_detail_view`, `artists_view`, `playlists_view`, `search_view`, `mix_view`, `recap_view`, `settings_view`, the persistent `player_bar`, the right-dock panels in `panels.rs` (visualizer/queue/lyrics/EQ/audio-stats/similar), and `stack`-based modal overlays in `overlays.rs` (add-to-playlist, account switcher)). `styles.rs`, `format.rs`, `cover.rs`, `viz_colors.rs`, `subscription.rs`, `export.rs` hold shared free-function helpers (button/text styles, time/frequency formatting, cover art caching + the windowed-list `list_window` helper, visualizer color extraction, the event-bus subscription, file-save export).
-- **theme.rs**: parses a theme's TOML tokens into `iced::Color`s and builds the `iced::Theme`. Built-ins under `themes/` are embedded at compile time via `include_dir`.
-- **icons.rs**: the SVG icon set as raw string constants, recolored per theme through `svg::Style`.
-- **viz/**: the visualizer, split into `mod.rs` (canvas::Program entry, bars / oscilloscope / orb modes), `pipeline.rs`/`shader.rs`/`shaders/` (wgpu custom shader pipeline), `particles.rs` (particle system), `config.rs` (particle count and other viz settings), `state.rs` (runtime FFT/particle state).
-- **config.rs** (in `backend/`, shared with termium): `~/.config/<id>/config.toml` (server, last theme, volume, saved accounts). Passwords stay in the OS keyring, not here.
+- **src-tauri/src/**: `lib.rs` (builder, setup, handler list), `commands.rs` (thin `#[tauri::command]` forwarders, `CmdError {kind, message}`), `events.rs` (EventBus → Tauri events), `cli.rs` (`firmium <cmd>` control-socket client).
+- **backend/core/**: all app logic: `settings.rs` (persisted prefs + side effects), `accounts.rs` (login/switch/keyring), `library.rs` (server vs offline routing, Mix, radio, auto-continue, podcasts, artist helpers), `playlists.rs` (local-first playlists + server sync), `stats.rs` (history summary, export).
+- **src/lib/**: `ipc.ts` (invoke/listen), `api.ts` (one-line typed command wrappers), `types.ts`, `stores.ts` (mirrors of backend state + view routing, panels, toasts, theme application), `cover.ts` (image actions), `menu.ts`/`playlists.ts` (popup + list stores). No business logic in TS.
+- **src/views, src/components**: Svelte 5 screens and widgets. **src/styles/**: SCSS partials (`main.scss` @uses them; `_spotify.scss` is the Spotify UI theme via `html[data-ui-theme]`).
+- Themes: TOML under `themes/`, embedded in the backend (`commands/themes.rs`) and applied as CSS variables.
 
 ### Data Flow
 
 ```
-desktop/src/app/  (App state, view, update — split into mod.rs/message.rs/types.rs/update/*.rs/view/*.rs)
-    │  user action → Message
-    ▼  Message::… handled in App::update
-iced::Task::perform(backend fn) ──► backend/commands/…
-    ├─ OpenSubsonic API calls (subsonic.rs, async reqwest::Client in AppState)
-    │    ├─ MD5 auth token generation (auth.rs)
-    │    ├─ JSON → typed structs (mappers.rs)
-    │    └─ 401 / error 40/41 → EventBus.emit(SessionExpired)
-    ├─ Cover art → disk cache (cover_cache.rs) → iced image::Handle
-    ├─ Lyrics cascade (subsonic.rs::get_song_lyrics → lyrics.rs)
-    └─ Audio playback (audio/)
-         └─ StreamingReader (HTTP) → symphonia decode → cpal
-    │  result future → Message    │  playback/queue events → EventBus (broadcast)
-    ▼                             ▼  Subscription → Message::Backend(BackendEvent)
-App::update mutates App state ──► App::view re-renders
+src/ (Svelte)  user action → Api.xxx() → invoke
+    ▼
+src-tauri/commands.rs → backend::core::Core / backend::commands::…
+    ├─ OpenSubsonic API (subsonic.rs) or offline library (local_library.rs)
+    ├─ Cover art → disk cache (cover_cache.rs) → file path → convertFileSrc
+    ├─ Lyrics cascade (subsonic.rs::get_song_lyrics → lyrics.rs) + word timing (core/library.rs)
+    └─ Audio playback (audio/): StreamingReader → symphonia → cpal
+    │  playback/queue events → EventBus → events.rs → Tauri events
+    ▼
+src/lib/stores.ts mirrors state → Svelte re-renders
 ```
 
-Termium (`termium/src/`) follows the same backend, different front end: `app.rs` holds `App` state and the `ratatui` render/input loop, `keymap.rs` handles configurable keybindings, `ui/{home,albums,artists,playlists,search,login,player_bar,visualizer}.rs` are the ratatui screen/widget renderers. No `Message`/`Task` abstraction — reads backend state directly and awaits async calls in its event loop.
+Termium (`termium/src/`) follows the same backend, different front end: `app.rs` holds `App` state and the `ratatui` render/input loop, `keymap.rs` handles configurable keybindings, `ui/{home,albums,artists,playlists,search,login,player_bar}.rs` are the ratatui screen/widget renderers. No `Message`/`Task` abstraction — reads backend state directly and awaits async calls in its event loop.
 
 ### Android App
 
@@ -116,7 +107,7 @@ Native Kotlin/Compose app in `android/`, independent of the desktop and termium 
 
 ### Known Cross-Platform Divergences
 
-Desktop (iced/Rust) and Android (Kotlin/Compose) implement same features independently and have drifted. These are intentional or accepted differences — don't "fix" one to match other without checking with user first:
+Desktop (Tauri) and Android (Kotlin/Compose) implement same features independently and have drifted. These are intentional or accepted differences — don't "fix" one to match other without checking with user first:
 
 1. **Release type inference**: `commands/mappers.rs::infer_release_type()` (desktop) returns lowercase `"single"/"ep"/"album"` with title-text and songCount fallback heuristics. `ApiClient.kt::inferReleaseType()` (Android) returns Title Case `"Single"/"EP"/"Album"/"Compilation"/"Live"/"Remix"`, checks `isCompilation` first, no title/songCount fallback — `AlbumListScreen.kt::effectiveType()` does separate songCount-based reclassification on Android side.
 
@@ -128,16 +119,15 @@ Desktop (iced/Rust) and Android (Kotlin/Compose) implement same features indepen
 
 ### Prerequisites
 - Rust 1.80+ (`rustup default stable`)
-- On Linux: ALSA (`libasound2`), `libssl`, `libsecret` (keyring), `libxkbcommon`, plus a Vulkan/OpenGL driver for iced's `wgpu` renderer. Exact package names vary by distro — see `README.md` "System Dependencies".
+- On Linux: ALSA (`libasound2`), `libssl`, `libsecret` (keyring), `libxkbcommon``webkit2gtk-4.1`, `xdotool`. Exact package names vary by distro — see `README.md` "System Dependencies".
 - On Windows: no extra system dependencies (rustls handles TLS, Windows Credential Manager built-in)
 - On macOS: Xcode Command Line Tools (`xcode-select --install`) only — CoreAudio and Keychain are built in, rustls handles TLS
-- On FreeBSD: `alsa-lib`, `dbus`, `libxkbcommon` via `pkg install`, plus a Mesa/Vulkan driver. Built and tested only via CI (`cross-platform-actions` qemu VM) — no native FreeBSD runner in GitHub Actions.
 
 ### Commands
 
 ```bash
 # Desktop GUI (debug build, recompiles on .rs changes)
-cargo run -p desktop
+npm run tauri dev
 
 # Termium TUI
 cargo run -p termium
@@ -151,23 +141,21 @@ cd android && ./gradlew assembleDebug     # debug APK
 cd android && ./gradlew installDebug      # install on connected device
 ```
 
-There is no Node, npm, or Vite for `desktop`/`termium` — both are Rust crates in the `firmium` Cargo workspace.
+Desktop needs Node (Vite) and, on Linux, `webkit2gtk-4.1`. Termium is a plain Rust crate.
 
 ### First-Time Setup
 
 1. Clone repo; ensure Rust is installed (`rustup default stable`)
 2. On Linux, install system dependencies (see `README.md`)
-3. Run `cargo run -p desktop` to launch
+3. Run `npm run tauri dev` to launch
 4. In-app: enter Subsonic/Navidrome server URL, username, and password
 5. Credentials saved to OS keyring; server URL + username stored in `config.toml`
 
 ## Development Notes
 
 ### Adding a UI Action / Backend Call (desktop)
-- Add a variant to the `Message` enum in `desktop/src/app/message.rs`, emit it from the relevant `view/*.rs` method (e.g. `button(...).on_press(Message::Foo)`).
-- Add the variant to the matching domain's or-pattern arm in `desktop/src/app/update/mod.rs`, then handle it in that domain's `update_<domain>` method in `desktop/src/app/update/<domain>.rs`. For a backend call, return `Task::perform(commands::module::fn(self.backend.app_state.clone(), …), Message::FooDone)`; the result comes back as another message.
-- Async backend fns take owned `Arc<_>` handles (so the future is `'static`); sync fns take `&_`.
-- Any struct carried inside a `Message` must derive `Debug` + `Clone` (the enum derives both).
+- Put the logic in `backend/` (usually a `Core` method in `backend/core/`), add a `#[tauri::command]` forwarder in `src-tauri/src/commands.rs`, register it in `generate_handler!` in `src-tauri/src/lib.rs`, add a typed wrapper to `src/lib/api.ts` and any new shape to `src/lib/types.ts`.
+- Async commands with borrowed `State` args must return `Result`. Types crossing the boundary need `Serialize` (`Deserialize` when sent from the UI), camelCase.
 
 ### Adding Audio Playback Features
 - Playback logic in `audio/`. New playback methods (e.g., equalizer) belong there — `mod.rs` for public `AudioPlayer` API, `session.rs` for per-track decode/state, `output.rs` for cpal mixing callback.
@@ -176,14 +164,12 @@ There is no Node, npm, or Vite for `desktop`/`termium` — both are Rust crates 
 - Crossfade implemented in Rust: `AudioPlayer::crossfade_to()` in `audio/mod.rs` ramps volume between outgoing and incoming sessions. The `queue_manager` task decides *when* to trigger (reacting to `PlaybackPosition` events on the bus); the engine performs the fade.
 
 ### UI State Management (desktop)
-- All mutable app state lives on the `App` struct in `desktop/src/app/mod.rs` — single source of truth, no stores.
-- `update` mutates `App` and returns a `Task`; `view` is a pure function of `App` state, re-run after every message.
-- Backend → UI events arrive via the `EventBus` subscription as `Message::Backend(BackendEvent)`.
+- Real state lives in Rust (`Core`, `QueueState`, config). Svelte stores in `src/lib/stores.ts` only mirror what the backend emits/returns, plus view-only state (current view, open panel, toasts).
 
 ### Debugging
 - `eprintln!()` prints to the terminal running `cargo run`.
 - `RUST_BACKTRACE=1 cargo run` for panic backtraces.
-- iced renderer issues on Wayland: try `WAYLAND_DISPLAY= cargo run` (forces XWayland) or set `WGPU_BACKEND=gl`.
+- Blank/black window on Wayland or NVIDIA: try `WEBKIT_DISABLE_DMABUF_RENDERER=1 npm run tauri dev`.
 
 ## Testing
 
@@ -206,7 +192,7 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 
 ### Manual
 
-1. `cargo run`
+1. `npm run tauri dev`
 2. Log into local Subsonic/Navidrome instance
 3. Test playback, seeking, pause/resume, volume control
 4. Test cover art caching (should be cached on second view)
@@ -214,14 +200,13 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 
 ## Packaging & Distribution
 
-- `cargo build --release` builds both workspace binaries: `target/release/firmium` (desktop GUI) and `target/release/termium` (TUI).
-- `PKGBUILD` (Arch), `firmium.spec` / `packaging/firmium.spec` (rpm/COPR), and the `.deb` packaging install the `firmium` binary plus `packaging/firmium.desktop` and the icons under `assets/app-icons/`. Termium is not yet packaged separately (build from source via `cargo build --release -p termium`).
-- macOS: `release.yml`'s `build-macos` job cross-compiles both `aarch64-apple-darwin` (Apple Silicon) and `x86_64-apple-darwin` (Intel) on a `macos-14` runner, assembles a `Firmium.app` bundle (binary + `assets/app-icons/icon.icns` + `packaging/macos/Info.plist` with the version substituted in), and wraps it into a `.dmg` via `hdiutil`. Builds are unsigned — no Apple Developer account yet, so no codesigning/notarization step.
-- FreeBSD: `release.yml`'s `build-freebsd` job runs inside a FreeBSD VM via `cross-platform-actions/action` (no native FreeBSD GitHub Actions runner exists), builds with `cargo build --release`, and packages the binary + `packaging/firmium.desktop` + icons into a `.pkg` via `pkg create`. Not submitted to the official FreeBSD ports tree (out of scope — that's a separate manual review process).
-- `scripts/bump-version.sh <ver>` updates `Cargo.toml`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, the Android `build.gradle.kts`, and the AUR folders.
-- **In-app updater**: not yet ported to the native build. The old Tauri self-updater (signed AppImage / NSIS via `release.yml`) was removed with the web layer; `.deb`/`.rpm`/COPR/AUR users update through their package manager. A native updater is a future task coupled to a redesign of the release pipeline.
+- Desktop installers come from the Tauri bundler: `npm run tauri:build` (targets in `src-tauri/tauri.conf.json`: deb, rpm, nsis, dmg) writes to `target/release/bundle/`. `release.yml` runs it per OS (`--bundles deb,rpm` on Ubuntu 22.04, `nsis` on Windows, `dmg` per arch on `macos-14`) and attaches the files with `gh release upload`. macOS builds are unsigned (no Apple Developer account).
+- A bare `cargo build --release -p firmium` needs `--features custom-protocol` (embeds `dist/`; otherwise the binary loads the dev URL). `PKGBUILD` (Arch) and `firmium.spec` run `npm ci && npm run build` first; COPR (`packaging/firmium.spec`, `copr.yml`) ships prebuilt `dist/` + `cargo vendor` in the vendor tarball because mock builds are offline. Icons come from `src-tauri/icons/`.
+- Termium: `release.yml` `build-termium` attaches `termium-<tag>-<target>.tar.gz` (`.zip` on Windows) for Linux x86_64, Windows x86_64, macOS arm64/x86_64. Not in deb/rpm/AUR/COPR; or build from source via `cargo build --release -p termium`.
+- `scripts/bump-version.sh <ver>` updates `Cargo.toml`, `package.json`, `src-tauri/tauri.conf.json`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, the Android `build.gradle.kts`, and the AUR folders.
+- **In-app updater**: not ported to the Tauri build yet; `.deb`/`.rpm`/COPR/AUR users update through their package manager.
 - Android: no in-app updater (native Kotlin app) — updates via Play Store or manual APK install.
-- Linux `.desktop` launcher: `packaging/firmium.desktop`. App icons under `assets/app-icons/`.
+- Linux `.desktop` launcher: `packaging/firmium.desktop`. App icons under `src-tauri/icons/`.
 
 ## Documentation
 
@@ -230,9 +215,9 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 
 ## Key Files
 
-- `desktop/src/main.rs` — Desktop entry point: runs `iced::application(...)`
-- `desktop/src/app/` — `App` state, `Message` enum, `update()`, `view()` — the whole desktop UI, split into `mod.rs`/`message.rs`/`types.rs`/`update/*.rs`/`view/*.rs` (one file per feature domain/screen)
-- `desktop/src/theme.rs`, `desktop/src/icons.rs`, `desktop/src/viz/` — theming, icons, visualizer canvas + wgpu shader pipeline
+- `src-tauri/src/` — Tauri shell (`lib.rs`, `commands.rs`, `events.rs`, `cli.rs`)
+- `src/` — Svelte UI (`App.svelte`, `views/`, `components/`, `lib/`, `styles/`)
+- `backend/core/` — app logic shared by UI shells
 - `termium/src/main.rs` — Termium entry point
 - `termium/src/app.rs` — Termium `App` state and ratatui render/input loop
 - `termium/src/ui/` — Termium screen/widget renderers
@@ -242,7 +227,7 @@ If clippy flags new code, fix it (don't suppress with `#[allow(...)]` unless the
 - `backend/config.rs` — `~/.config/<id>/config.toml` persistence, shared by desktop and termium
 - `backend/audio/` — Audio playback engine (symphonia + cpal)
 - `backend/commands/` — OpenSubsonic client, queue, lyrics, covers, downloads, EQ, stats
-- `Cargo.toml` — workspace root (`members = ["backend", "desktop", "termium"]`)
+- `Cargo.toml` — workspace root (`members = ["backend", "src-tauri", "termium"]`)
 - `themes/` — TOML theme files (embedded at compile time)
 - `assets/` — bundled font and app icons (desktop)
 - `packaging/` — `firmium.desktop`, rpm spec, `macos/Info.plist`
@@ -272,9 +257,9 @@ Common endpoints: `getArtists`, `getAlbum`, `search3`, `stream`, `getCoverArt`, 
 
 ## Performance Considerations
 
-- **Cover Art Caching**: Disk-based cache under app cache dir (`commands/cover_cache.rs`), up to 200MB budget; LRU (by mtime) eviction when budget exceeded. Persists across restarts; loaded into an `iced::widget::image::Handle` cached in `App` (bounded to `MAX_COVER_HANDLES` decoded handles in memory, oldest evicted) so covers survive restarts without re-downloading.
+- **Cover Art Caching**: Disk-based cache under app cache dir (`commands/cover_cache.rs`), up to 200MB budget; LRU (by mtime) eviction when budget exceeded. Persists across restarts; served via the asset protocol so covers survive restarts without re-downloading.
 - **Album Fetching**: Paginated with `maxItems=500` (Subsonic API limit, `backend/commands/subsonic.rs`)
-- **Long lists**: albums, artists, and album/playlist track lists use a windowed renderer in `desktop/src/app/cover.rs` (the `list_window` helper: scroll offset + spacers) that only builds the rows currently on screen.
+- **Long lists**: albums, artists, and album/playlist track lists use `src/lib/VirtualList.svelte`, which only renders rows on screen.
 - **Search**: Limited to 40 albums, 100 songs per query (`commands/subsonic.rs::search`)
 - **Playback Concurrency**: One audio stream per device active at a time; multiple devices can play different streams concurrently
 - **CPU**: Release build has `opt-level = 3` + LTO + `codegen-units = 1`; `strip = false` keeps debug symbols for crash reporting

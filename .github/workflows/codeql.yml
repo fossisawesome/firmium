@@ -25,14 +25,16 @@ jobs:
             build-mode: manual
           - language: rust
             build-mode: none
+          - language: javascript-typescript
+            build-mode: none
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up JDK
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "21"
           distribution: "temurin"

@@ -25,7 +25,6 @@ use parking_lot::{Mutex, RwLock};
 use uuid::Uuid;
 
 use crate::events::{AudioInfo, BackendEvent, EventBus};
-use crate::visualizer::VisualizerState;
 use crate::{AudioDevice, PlaybackState};
 
 use eq::{EqBand, EqShared};
@@ -57,8 +56,6 @@ pub struct AudioPlayer {
     /// stream mid-crossfade would silence whichever session is on the old
     /// stream, so reopens are deferred until the fade completes.
     crossfade_in_progress: AtomicBool,
-    /// Shared state for the audio visualizer (sample ring buffer + analysis toggle).
-    pub(crate) visualizer: Arc<VisualizerState>,
     /// "off" | "relaxed" | "strict" — controls whether the output stream is reopened
     /// to match each track's native sample rate. "off" skips reopening entirely.
     bit_perfect_mode: parking_lot::Mutex<String>,
@@ -80,9 +77,6 @@ impl AudioPlayer {
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-        let visualizer = Arc::new(VisualizerState::new());
-        crate::visualizer::spawn_analysis_task(Arc::clone(&visualizer));
-
         let eq = Arc::new(EqShared::new(crate::commands::equalizer::resolve_runtime()));
 
         Ok(AudioPlayer {
@@ -91,7 +85,6 @@ impl AudioPlayer {
             http_client,
             bus,
             crossfade_in_progress: AtomicBool::new(false),
-            visualizer,
             bit_perfect_mode: parking_lot::Mutex::new("relaxed".to_string()),
             eq,
         })
@@ -104,16 +97,6 @@ impl AudioPlayer {
 
     fn bit_perfect_is_strict(&self) -> bool {
         *self.bit_perfect_mode.lock() == "strict"
-    }
-
-    /// Enable or disable the audio visualizer analysis task.
-    pub fn set_visualizer_enabled(&self, enabled: bool) {
-        self.visualizer.set_enabled(enabled);
-    }
-
-    /// Shared visualizer analysis state — the iced canvas reads `snapshot()` from it.
-    pub fn visualizer(&self) -> Arc<VisualizerState> {
-        Arc::clone(&self.visualizer)
     }
 
     pub fn set_bit_perfect_mode(&self, mode: String) {
@@ -199,8 +182,6 @@ impl AudioPlayer {
     fn start_session(self_arc: &Arc<Self>, stream_url: &str, track_id: String, start_paused: bool, replay_gain_db: Option<f32>) -> Result<PlayerId, String> {
         let player_id = Uuid::new_v4().to_string();
 
-        self_arc.stop_track(&track_id);
-
         let session = Arc::new(Session::new(track_id.clone()));
         self_arc.sessions.write().insert(player_id.clone(), Arc::clone(&session));
 
@@ -246,7 +227,7 @@ impl AudioPlayer {
                     *session.cancel.lock() = Arc::clone(&cancel);
                     *session.seek_tx.lock() = Some(seek_tx);
 
-                    session::spawn_decode_feeder(Arc::clone(&session), decoder, true, gain_factor, Arc::clone(&player.visualizer), Arc::clone(&player.eq), player.bit_perfect_is_strict(), cancel, seek_rx);
+                    session::spawn_decode_feeder(Arc::clone(&session), decoder, true, gain_factor, Arc::clone(&player.eq), player.bit_perfect_is_strict(), cancel, seek_rx);
 
                     session.loading.store(false, Ordering::Relaxed);
 
@@ -330,22 +311,6 @@ impl AudioPlayer {
         session.playing.store(false, Ordering::Relaxed);
         session.cancel.lock().store(true, Ordering::Relaxed);
         Ok(())
-    }
-
-    /// Stop and remove all sessions for `track_id` (called before starting a new one).
-    fn stop_track(&self, track_id: &str) {
-        let mut sessions = self.sessions.write();
-        let to_remove: Vec<PlayerId> = sessions
-            .iter()
-            .filter(|(_, s)| s.track_id == track_id)
-            .map(|(id, _)| id.clone())
-            .collect();
-        for id in to_remove {
-            if let Some(session) = sessions.remove(&id) {
-                session.playing.store(false, Ordering::Relaxed);
-                session.cancel.lock().store(true, Ordering::Relaxed);
-            }
-        }
     }
 
     pub fn pause(&self, player_id: &str) -> Result<(), String> {
@@ -495,7 +460,7 @@ impl AudioPlayer {
         *session.seek_tx.lock() = Some(seek_tx);
 
         // Seek-rebuild feeders don't reapply fade-in or ReplayGain (matches prior behavior).
-        session::spawn_decode_feeder(Arc::clone(&session), decoder, false, 1.0, Arc::clone(&self.visualizer), Arc::clone(&self.eq), self.bit_perfect_is_strict(), cancel, seek_rx);
+        session::spawn_decode_feeder(Arc::clone(&session), decoder, false, 1.0, Arc::clone(&self.eq), self.bit_perfect_is_strict(), cancel, seek_rx);
 
         Self::apply_seek_position(&session, position);
         Ok(())

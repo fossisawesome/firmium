@@ -4,9 +4,9 @@
 // Read-only OpenSubsonic endpoints. Connection details (server/username/
 // password) are held in `AppState.connection` and set via `set_connection`.
 //
-// These were Tauri commands; in the iced app they are plain async fns called
-// from `App::update` via `iced::Task::perform`. Async fns take an owned
-// `Arc<AppState>` so the returned future is `'static`; sync fns take `&AppState`.
+// Plain async fns called from `backend::core::Core` (and termium). Async fns
+// take an owned `Arc<AppState>` so the returned future is `'static`; sync fns
+// take `&AppState`.
 
 use crate::commands::auth::generate_auth_params;
 use crate::commands::lyrics::{fetch_lrclib_lyrics, LyricLine, LyricsResult};
@@ -41,8 +41,8 @@ async fn subsonic_request(
         .map_err(|_| UserError::Unknown)?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         for (key, value) in params {
             query.append_pair(key, value);
@@ -121,13 +121,24 @@ pub fn set_connection(state: &AppState, server: Option<String>, username: Option
     conn.username = username;
     conn.password = password;
     conn.open_subsonic_extensions = None;
+    crate::commands::auth::set_legacy_auth(false);
 }
 
 /// Validates credentials with a minimal request, used during the initial
 /// login flow. Does not emit `SessionExpired` on failure, since a rejected
 /// login isn't an expired session.
 pub async fn validate_connection(state: Arc<AppState>) -> Result<(), crate::errors::UserError> {
-    match subsonic_request(&state, "getAlbumList2", &[("type", "alphabeticalByName".to_string()), ("size", "1".to_string())], true).await {
+    let probe_params = [("type", "alphabeticalByName".to_string()), ("size", "1".to_string())];
+    let mut result = subsonic_request(&state, "getAlbumList2", &probe_params, true).await;
+    if matches!(result, Err(crate::errors::UserError::SessionExpired)) {
+        // Token auth rejected: retry once with the legacy password param (Nextcloud Music).
+        crate::commands::auth::set_legacy_auth(true);
+        result = subsonic_request(&state, "getAlbumList2", &probe_params, true).await;
+        if result.is_err() {
+            crate::commands::auth::set_legacy_auth(false);
+        }
+    }
+    match result {
         Ok(_) => {
             // openSubsonicExtensions is only included on this dedicated endpoint,
             // not on regular responses like getAlbumList2.
@@ -155,7 +166,7 @@ const API_PAGE_SIZE: &str = "500";
 
 pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::errors::UserError> {
     let page_size: u32 = API_PAGE_SIZE.parse().unwrap_or(500);
-    let mut all = Vec::new();
+    let mut all: Vec<serde_json::Value> = Vec::new();
     let mut offset: u32 = 0;
     loop {
         let body = subsonic_request(
@@ -167,6 +178,11 @@ pub async fn get_albums(state: Arc<AppState>) -> Result<Vec<Album>, crate::error
         .await?;
         let page = array_field(&body, &["albumList2", "album"]);
         let page_len = page.len();
+        // A server that ignores `offset` returns the same page forever; stop on a repeat.
+        let first_id = page.first().and_then(|a| a.get("id")).cloned();
+        if offset > 0 && first_id.is_some() && first_id == all.get((offset - page_size) as usize).and_then(|a| a.get("id")).cloned() {
+            break;
+        }
         all.extend(page);
         if page_len < page_size as usize {
             break;
@@ -461,8 +477,8 @@ pub(crate) fn build_stream_url(state: &AppState, track_id: &str) -> Result<Strin
     let mut url = reqwest::Url::parse(&format!("{server}/rest/stream")).map_err(|e| e.to_string())?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         query.append_pair("id", track_id);
     }
@@ -484,8 +500,8 @@ pub fn build_cover_url(state: &AppState, cover_id: &str, size: u32) -> Result<St
     let mut url = reqwest::Url::parse(&format!("{server}/rest/getCoverArt")).map_err(|e| e.to_string())?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         query.append_pair("id", cover_id);
         query.append_pair("size", &size.to_string());
@@ -495,6 +511,7 @@ pub fn build_cover_url(state: &AppState, cover_id: &str, size: u32) -> Result<St
 
 /// Fire-and-forget scrobble, spawned from the (tokio) queue manager.
 pub(crate) fn fire_scrobble(state: Arc<AppState>, id: String, submission: bool) {
+    if !crate::commands::queue::is_server_song(&id) { return; }
     tokio::spawn(async move {
         let params = [("id", id), ("submission", submission.to_string()), ("time", "0".to_string())];
         if let Err(e) = subsonic_request(&state, "scrobble", &params, true).await {
@@ -505,6 +522,7 @@ pub(crate) fn fire_scrobble(state: Arc<AppState>, id: String, submission: bool) 
 
 /// Fire-and-forget playback report, spawned from the (tokio) queue manager.
 pub(crate) fn fire_report_playback(state: Arc<AppState>, media_id: String, position_ms: i64, playback_state: String) {
+    if !crate::commands::queue::is_server_song(&media_id) { return; }
     if !has_extension(&state, "playbackReport") { return; }
     tokio::spawn(async move {
         let params = [
@@ -551,7 +569,8 @@ pub async fn set_rating(state: Arc<AppState>, id: String, rating: u32) {
 
 /// Which entity a star/unstar call targets — Subsonic's `star`/`unstar` accept
 /// `id` (song), `albumId`, or `artistId` as separate query params.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum StarKind {
     Song,
     Album,

@@ -159,6 +159,10 @@ fun TvNavGraph(
                     coverUrlFor = coverUrl,
                     onLoad = { libraryViewModel.loadArtistDetail(it) },
                     onAlbumClick = { navController.navigate("album/$it") },
+                    onPlayAll = { songs, idx ->
+                        playerViewModel.playAt(songs, idx)
+                        navController.navigate("nowplaying")
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -257,25 +261,15 @@ fun TvNavGraph(
                     onCrossfadeCurveChange = { playerViewModel.setCrossfadeCurve(it) },
                     onGaplessToggle = { playerViewModel.setGaplessEnabled(it) },
                     onReplayGainToggle = { playerViewModel.setReplayGainEnabled(it) },
-                    onVisualizerToggle = { playerViewModel.setVisualizerEnabled(it) },
-                    onVisualizerTypeSelected = { playerViewModel.setVisualizerType(it) },
                     onLogout = {
                         authViewModel.logout()
                         libraryViewModel.invalidateAll()
                     },
                     onOpenEqualizer = { navController.navigate("equalizer") },
-                    onViewRecap = { navController.navigate("recap") },
                 )
             }
             composable("equalizer") {
                 TvEqualizerScreen(onBack = { navController.popBackStack() })
-            }
-            composable("recap") {
-                TvRecapScreen(
-                    repository = app.playHistory,
-                    coverUrlFor = coverUrl,
-                    onBack = { navController.popBackStack() },
-                )
             }
         }
         }

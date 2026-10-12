@@ -23,7 +23,7 @@ Not yet implemented — under consideration. See [FEATURES.md](FEATURES.md) for 
 ## Social/discovery
 
 - **Listen Party mode** — sync playback across multiple logged-in devices/accounts in real time, piggybacking on existing cross-device queue-sync infra
-- **Recap Blend** — combine two accounts' local play history into a shared "you both love" mix, using existing Recap/stats engine
+- **History Blend** — combine two accounts' local play history into a shared "you both love" mix, using existing stats engine
 
 ## Library intelligence
 
@@ -45,4 +45,3 @@ Not yet implemented — under consideration. See [FEATURES.md](FEATURES.md) for 
 ## Accessibility/niche
 
 - **Full keyboard-driven mode on desktop** — vim-style modal navigation across whole app
-- **Colorblind-safe visualizer palettes** — dedicated accessible palette set, distinct from general theming

@@ -39,7 +39,7 @@ pub async fn download_track(
     {
         let cache = state.local_library.read();
         if let Some(cache) = cache.as_ref() {
-            if cache.has_local_match(&title, &album) {
+            if cache.has_local_match(&title, &album_artist, &album) {
                 return Ok(());
             }
         }
@@ -58,8 +58,8 @@ pub async fn download_track(
     let mut url = reqwest::Url::parse(&format!("{server}/rest/stream")).map_err(|e| e.to_string())?;
     {
         let mut query = url.query_pairs_mut();
-        for key in ["u", "t", "s", "v", "c", "f"] {
-            query.append_pair(key, auth[key].as_str().unwrap_or(""));
+        for (key, value) in auth.as_object().into_iter().flatten() {
+            query.append_pair(key, value.as_str().unwrap_or(""));
         }
         query.append_pair("id", &song_id);
         query.append_pair("format", &format);
@@ -101,7 +101,12 @@ pub async fn download_track(
     let bytes = res.bytes().await.map_err(|e| e.to_string())?;
     tokio::task::spawn_blocking(move || -> std::io::Result<()> {
         std::fs::create_dir_all(&dir)?;
-        std::fs::write(&path, &bytes)
+        // Write under a temp name, then rename: an interrupted write must never
+        // leave a truncated file that the local library would treat as complete.
+        let mut part = path.clone().into_os_string();
+        part.push(".part");
+        std::fs::write(&part, &bytes)?;
+        std::fs::rename(&part, &path)
     }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
 
     invalidate_local_library(&state);
@@ -110,8 +115,11 @@ pub async fn download_track(
 
 pub async fn download_album(state: Arc<AppState>, album_id: String, format: String) -> Result<(), String> {
     let album_tracks = get_album_tracks(state.clone(), album_id).await.map_err(|e| e.message())?;
+    let mut failed = 0usize;
+    let mut last_err = String::new();
+    // One bad track must not abandon the rest of the album.
     for track in album_tracks.tracks {
-        download_track(
+        if let Err(e) = download_track(
             state.clone(),
             track.id,
             format.clone(),
@@ -120,7 +128,34 @@ pub async fn download_album(state: Arc<AppState>, album_id: String, format: Stri
             track.title,
             track.track_number,
             track.suffix,
-        ).await?;
+        ).await {
+            failed += 1;
+            last_err = e;
+        }
+    }
+    if failed > 0 {
+        return Err(format!("{failed} track(s) failed to download: {last_err}"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_path_component;
+
+    #[test]
+    fn traversal_components_are_neutralised() {
+        assert_eq!(sanitize_path_component(".."), "Unknown");
+        assert_eq!(sanitize_path_component("."), "Unknown");
+        assert_eq!(sanitize_path_component(""), "Unknown");
+        assert_eq!(sanitize_path_component("   "), "Unknown");
+    }
+
+    #[test]
+    fn separators_and_hidden_prefix_are_removed() {
+        assert_eq!(sanitize_path_component("a/b\\c"), "a_b_c");
+        assert_eq!(sanitize_path_component("../etc"), "_etc");
+        assert_eq!(sanitize_path_component(".hidden"), "hidden");
+        assert_eq!(sanitize_path_component("AC:DC?"), "AC_DC_");
+    }
 }

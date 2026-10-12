@@ -21,22 +21,23 @@
 
 ---
 
-Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) music streaming client targeting **Linux desktop, Windows, macOS, FreeBSD and Android**. The desktop app is a native [iced](https://iced.rs) (Rust) application; Android is native Kotlin/Compose. It connects to any OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — and provides lightweight, low-latency audio playback using the native OS audio engine.
+Firmium is a cross-platform music player targeting **Linux desktop, Windows, macOS and Android**, built for both a local music library and [OpenSubsonic](https://opensubsonic.netlify.app/) streaming — use either one, or both at once. The desktop app is a [Tauri 2](https://tauri.app) application (Rust backend, Svelte UI); Android is native Kotlin/Compose. Point it at a folder of local files, an OpenSubsonic-compatible server — such as [Navidrome](https://www.navidrome.org/) — or both, and get lightweight, low-latency audio playback using the native OS audio engine.
 
-> **Note:** Firmium is a *client only* — you need a self-hosted OpenSubsonic-compatible server to use it. [Navidrome](https://www.navidrome.org/) is the most popular choice and is free and open source.
+> **Note:** No server required. Firmium plays a local music folder out of the box; connecting an OpenSubsonic server (e.g. [Navidrome](https://www.navidrome.org/), free and open source) is optional, for streaming your library across devices.
 
 ## Features
 
+- **Local music library** — point Firmium at a folder (drag-and-drop import on desktop) and browse/play by album, artist, search, and genre — no server required
+- **OpenSubsonic streaming** — connect to any compatible server (Navidrome, etc.); use alongside or instead of a local library
 - **Gapless & crossfade playback** — next track preloads silently; configurable 1–12 s crossfade
 - **Equalizer** — 10-band graphic and parametric modes, saveable profiles, per-device assignment
 - **Synced lyrics** — LRC line highlighting, word-by-word karaoke animation, LRCLIB fallback
 - **Smart radio & mixes** — Start Radio from any track/album/artist; generate queues by BPM/genre; auto-continues after queue ends
-- **Audio visualizer** — Orb, Bars, and Oscilloscope modes, colors pulled from cover art
-- **Offline library** — download tracks or full albums, plays local copy automatically when available
-- **Cross-device queue sync** — resume exactly where you left off on any device
+- **Offline downloads** — download tracks or full albums from a server, plays local copy automatically when available
+- **Cross-device queue sync** — resume exactly where you left off on any device (server mode)
 - **ReplayGain normalization** and bit-perfect audio mode (desktop)
 - **18+ color themes** including Gruvbox, Tokyo Night, Dracula, Catppuccin, and more — plus custom TOML themes (desktop)
-- **Listening stats & Recap** — local play history with swipeable Recap cards (top tracks, artists, genres, streaks) across custom date ranges; export as CSV or JSON
+- **Play history** — local play history recorded on-device; export as CSV or JSON, works with or without a server
 - **Android Auto & Wear OS** — full library browsing, voice search, and transport controls in the car and on your wrist
 - **Credentials in OS keyring** — never stored as plaintext; supports multiple saved servers
 - **Scrobbling** — Last.fm (via server) and ListenBrainz
@@ -57,14 +58,15 @@ Firmium is a cross-platform [OpenSubsonic](https://opensubsonic.netlify.app/) mu
 ## Getting Started
 
 1. Install Firmium for your distribution (see [Install](#install) below)
-2. Open the app and enter your OpenSubsonic server URL (e.g. `http://your-navidrome-server:4533`)
-3. Enter your username and password — credentials are saved securely to your OS keyring
+2. Pick a mode:
+   - **Local library** — point Firmium at a folder of music files and it's ready to play, no account needed
+   - **OpenSubsonic server** — enter your server URL (e.g. `http://your-navidrome-server:4533`), username and password; credentials are saved securely to your OS keyring
 
-That's it. Your library will load automatically.
+Both can be used together, or on their own. Your library will load automatically.
 
 ## Install
 
-Firmium is available for **Linux desktop, Windows, macOS, FreeBSD** and **Android**.
+Firmium is available for **Linux desktop, Windows, macOS** and **Android**.
 
 > **Compatibility (Linux):** Tested on Hyprland (Wayland). Other desktop environments should work but are not officially tested. X11 is untested.
 
@@ -103,7 +105,7 @@ Store; it would not be needed for a Play Store release approved for Android Auto
 
 ### macOS
 
-Download the `.dmg` matching your Mac from the [releases page](https://github.com/fossisawesome/firmium/releases/latest) — `firmium-*-Intel.dmg` for Intel Macs, `firmium-*-AppleSilicon.dmg` for Apple Silicon (M1/M2/M3/M4). Open the `.dmg` and drag **Firmium** into **Applications**.
+Download the `.dmg` matching your Mac from the [releases page](https://github.com/fossisawesome/firmium/releases/latest) — `Firmium_*_x64.dmg` for Intel Macs, `Firmium_*_aarch64.dmg` for Apple Silicon (M1/M2/M3/M4). Open the `.dmg` and drag **Firmium** into **Applications**.
 
 Since the build is unsigned, first launch requires right-click → **Open** in Finder (see note above) instead of a normal double-click.
 
@@ -117,7 +119,7 @@ Before running Firmium, install the required system libraries for your distribut
 <summary><b>Debian / Ubuntu</b></summary>
 
 ```bash
-sudo apt update && sudo apt install -y libasound2 libssl3 libsecret-1-0 libxkbcommon0
+sudo apt update && sudo apt install -y libwebkit2gtk-4.1-0 libasound2 libssl3 libsecret-1-0 libxdo3
 ```
 </details>
 
@@ -125,7 +127,7 @@ sudo apt update && sudo apt install -y libasound2 libssl3 libsecret-1-0 libxkbco
 <summary><b>Fedora</b></summary>
 
 ```bash
-sudo dnf install -y alsa-lib openssl-libs libsecret libxkbcommon
+sudo dnf install -y webkit2gtk4.1 alsa-lib openssl-libs libsecret libxdo
 ```
 </details>
 
@@ -133,22 +135,13 @@ sudo dnf install -y alsa-lib openssl-libs libsecret libxkbcommon
 <summary><b>Arch Linux</b></summary>
 
 ```bash
-sudo pacman -S --needed alsa-lib openssl libsecret libxkbcommon
-```
-</details>
-
-<details>
-<summary><b>FreeBSD</b></summary>
-
-```bash
-pkg install -y alsa-lib dbus libxkbcommon
+sudo pacman -S --needed webkit2gtk-4.1 alsa-lib openssl libsecret xdotool
 ```
 </details>
 
 Firmium also requires:
-- A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments on Linux and FreeBSD. Without it, passwords won't be saved and you'll need to log in every launch.
+- A **Secret Service provider** (GNOME Keyring or KWallet) for credential storage — included in most desktop environments on Linux. Without it, passwords won't be saved and you'll need to log in every launch.
 - **PipeWire or PulseAudio** — on modern distros ALSA routes through one of these. Run `aplay -l` to verify audio devices are visible.
-- A **Vulkan or OpenGL driver** for iced's `wgpu` renderer — included with most GPU drivers already.
 
 ### Installing the App
 
@@ -174,7 +167,7 @@ sudo dnf install firmium
 Download the `.deb` from the [releases page](https://github.com/fossisawesome/firmium/releases/latest), then:
 
 ```bash
-sudo dpkg -i ./firmium_*.deb
+sudo apt install ./Firmium_*.deb
 ```
 </td>
   </tr>
@@ -186,10 +179,12 @@ sudo dpkg -i ./firmium_*.deb
 ### Prerequisites
 
 - Rust 1.80 or later (`rustup default stable`)
-- On Linux, system dependencies for your distribution (see [System Dependencies (Linux)](#system-dependencies-linux) above) — ALSA, libsecret, libxkbcommon, and a Vulkan/OpenGL driver
-- On Windows, no extra system dependencies needed — rustls handles TLS, Windows Credential Manager is built in
+- Node.js 20+ and npm (builds the Svelte UI)
+- Node.js 22 or later (with npm) for the Svelte frontend
+- `cmake` and a C compiler, to build the bundled `libopus` used for Opus playback (`apt install cmake` / `dnf install cmake` / `pacman -S cmake` / `brew install cmake`; on Windows install [CMake](https://cmake.org/download/) and the "Desktop development with C++" Build Tools workload)
+- On Linux, the `-dev` variants of the libraries above (e.g. `libwebkit2gtk-4.1-dev`, `libxdo-dev`, `libasound2-dev`, `libssl-dev`, `libsecret-1-dev`, `librsvg2-dev`) plus `pkg-config` — see the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
+- On Windows, WebView2 (preinstalled on Windows 10/11) — Windows Credential Manager is built in
 - On macOS, Xcode Command Line Tools (`xcode-select --install`) — no other system libraries needed
-- On FreeBSD, system dependencies via `pkg` (see [System Dependencies (FreeBSD)](#system-dependencies) above) — `alsa-lib`, `dbus`, `libxkbcommon`, and a Mesa/Vulkan driver
 
 ### Steps
 
@@ -198,21 +193,24 @@ sudo dpkg -i ./firmium_*.deb
 git clone https://github.com/fossisawesome/firmium.git
 cd firmium
 
-# Run the app (debug build)
-cargo run
+# Install frontend dependencies
+npm ci
+
+# Run the app (Vite dev server + debug build)
+npm run tauri:dev
 ```
 
 For an optimized release build:
 
 ```bash
-cargo build --release
+npm run tauri:build
 ```
 
-This produces a single self-contained binary at `target/release/firmium`.
+This builds the frontend and produces the binary at `target/release/firmium` plus installers (`.deb`, `.rpm`, NSIS, `.dmg` depending on your OS) under `target/release/bundle/`.
 
 ### Building for Android
 
-The Android app is a native Kotlin + Jetpack Compose app in the `android/` directory, built with Gradle independently of the desktop iced project.
+The Android app is a native Kotlin + Jetpack Compose app in the `android/` directory, built with Gradle independently of the desktop Tauri project.
 
 #### Additional Prerequisites
 
@@ -236,6 +234,8 @@ cd android
 ```
 
 The release APK is output to `android/app/build/outputs/apk/release/`.
+
+For an F-Droid style build without Google libraries (Wear OS sync is left out), add `-Pfoss`: `./gradlew assembleRelease -Pfoss`.
 
 To sign the release build, set these environment variables before running `assembleRelease`:
 

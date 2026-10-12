@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -13,11 +15,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fossisawesome.firmium.data.model.Song
 import com.fossisawesome.firmium.ui.components.CoverImage
 import com.fossisawesome.firmium.ui.components.Text
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
@@ -30,6 +34,7 @@ fun TvArtistDetailScreen(
     coverUrlFor: (String?) -> String?,
     onLoad: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
+    onPlayAll: (List<Song>, Int) -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
@@ -44,12 +49,24 @@ fun TvArtistDetailScreen(
     val detail = state.detail ?: return
 
     Column(modifier = Modifier.fillMaxSize().padding(top = 48.dp)) {
-        Text(
-            text = detail.artist.name,
-            color = colors.text,
-            fontSize = 24.sp,
-            modifier = Modifier.padding(start = 48.dp, bottom = 24.dp),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, bottom = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = detail.artist.name,
+                color = colors.text,
+                fontSize = 24.sp,
+                modifier = Modifier.weight(1f),
+            )
+            TvActionButton(
+                onClick = { onPlayAll(state.allSongs, 0) },
+                colors = colors,
+                modifier = Modifier.focusRequester(firstFocusRequester),
+            ) {
+                Text(text = "Play All", color = colors.text, fontSize = 13.sp)
+            }
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(6),
             modifier = Modifier.fillMaxSize(),
@@ -62,9 +79,7 @@ fun TvArtistDetailScreen(
                 TvTile(
                     onClick = { onAlbumClick(album.id) },
                     colors = colors,
-                    modifier = Modifier
-                        .size(width = 160.dp, height = 200.dp)
-                        .then(if (index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier),
+                    modifier = Modifier.size(width = 160.dp, height = 200.dp),
                 ) {
                     Column {
                         CoverImage(url = coverUrlFor(album.coverArt), contentDescription = album.name, size = 160.dp)

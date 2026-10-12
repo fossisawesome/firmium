@@ -1,20 +1,20 @@
 # Agents Guidelines
 
-Behavioral guidelines for autonomous and semi-autonomous task execution. Use when working on iterative debugging, research, testing, build configuration, and multi-step problem-solving in Firmium — across the desktop stack (native iced/Rust, targeting Linux and Windows) and Android stack (Kotlin/Jetpack Compose).
+Behavioral guidelines for autonomous and semi-autonomous task execution. Use when working on iterative debugging, research, testing, build configuration, and multi-step problem-solving in Firmium — across the desktop stack (Tauri (Rust backend, Svelte UI), targeting Linux and Windows) and Android stack (Kotlin/Jetpack Compose).
 
 ## 1. Search & Verify First
 
 Don't speculate. Don't hide uncertainty. Use tools to ground claims.
 
 Before proposing solution:
-- Current state (crate versions, Gradle/Kotlin dependency versions, iced/cpal/symphonia/Compose API behavior): check it (`Cargo.toml`, `android/app/build.gradle*`, docs).
-- Problem others have hit (iced/wgpu render errors, cpal/symphonia panics, keyring issues on Linux/Windows, Media3/ExoPlayer or Compose issues on Android): search for existing solutions.
+- Current state (crate versions, Gradle/Kotlin dependency versions, Tauri/cpal/symphonia/Compose API behavior): check it (`Cargo.toml`, `android/app/build.gradle*`, docs).
+- Problem others have hit (Tauri/WebKitGTK render errors, cpal/symphonia panics, keyring issues on Linux/Windows, Media3/ExoPlayer or Compose issues on Android): search for existing solutions.
 - Uncertain about fact: verify, don't guess.
 
 Can't verify (tool fails, no results):
 - Say so explicitly. Don't pretend certainty.
 - Propose what you'd check if you could.
-- Ask user to run diagnostic or provide context (e.g. `cargo run` console output, `RUST_BACKTRACE=1` trace).
+- Ask user to run diagnostic or provide context (e.g. `npm run tauri dev` console output, `RUST_BACKTRACE=1` trace).
 
 ## 2. Tool Chains Over Single Actions
 
@@ -40,11 +40,11 @@ Prevents chasing dead ends, makes reasoning auditable.
 Act without asking when path is clear. Pause when ambiguous.
 
 Proceed without asking:
-- Run `cargo run`, `cargo check`, `cargo build`, `./gradlew assembleDebug`
-- Search for error messages or known issues (iced, cpal, symphonia, reqwest, Kotlin, Jetpack Compose, Media3/ExoPlayer)
+- Run `npm run tauri dev`, `cargo check`, `cargo build`, `./gradlew assembleDebug`
+- Search for error messages or known issues (Tauri, Svelte, cpal, symphonia, reqwest, Kotlin, Jetpack Compose, Media3/ExoPlayer)
 - Check config (`Cargo.toml`, `android/app/build.gradle*`)
 - Diagnose system state (check audio devices, keyring availability, Android logcat)
-- Propose fixes based on clear patterns (iced `Message`/`update` wiring, MD5 auth token format, Compose state hoisting, ViewModel wiring)
+- Propose fixes based on clear patterns (Tauri command/`api.ts` wiring, MD5 auth token format, Compose state hoisting, ViewModel wiring)
 
 Ask before acting:
 - Creating new files outside standard dirs (`src/`, `backend/`, `themes/`, `assets/`, `packaging/`, `android/app/src/main/java/com/fossisawesome/firmium/`)
@@ -97,7 +97,7 @@ Define "done." Loop until verified.
 
 For each task, state success criteria upfront:
 - "Fix crossfade glitch" → verify: `crossfade_to()` transitions between sessions with no audio dropout, tested in dev window
-- "Add new UI action / backend call" → verify: `Message` variant handled in `App::update`, backend fn called via `Task::perform`, result message updates `App` state and re-renders
+- "Add new UI action / backend call" → verify: `#[tauri::command]` registered in `lib.rs`, wrapper added to `src/lib/api.ts`, UI updates from the returned value or backend event
 - "Fix Subsonic auth issue" → verify: `generate_auth_params()` (desktop) / `AuthManager` (Android) produces correct MD5 token, login succeeds against real Navidrome instance
 - "Fix Android playback issue" → verify: `AudioPlayer`/`NowPlayingService` plays/pauses/seeks correctly, foreground notification stays in sync, tested via `./gradlew installDebug` + `adb logcat`
 
@@ -110,7 +110,7 @@ Strong criteria = operate independently. Vague criteria = constant back-and-fort
 
 ## 7. Keep Docs in Sync
 
-Change touches settings (the settings view in `src/app/view/settings.rs` + state in `src/app/mod.rs`), themes (`themes/*.toml`, `src/theme.rs`), or build/packaging commands (`Cargo.toml`, `PKGBUILD`, `firmium.spec`): update matching pages in `firmium-docs` repo in same change:
+Change touches settings (the settings view in `src/views/Settings.svelte` + `backend/core/settings.rs`), themes (`themes/*.toml`, `backend/commands/themes.rs`), or build/packaging commands (`Cargo.toml`, `PKGBUILD`, `firmium.spec`): update matching pages in `firmium-docs` repo in same change:
 
 - Settings: `src/content/settings.md` (what it does, layman's terms) and `src/content/settings-themes-internals.md` (storage keys, code references)
 - Themes: `src/content/custom-themes.md` (how to use/create themes) and `src/content/settings-themes-internals.md` (how themes loaded/applied internally)
@@ -121,19 +121,19 @@ Change touches settings (the settings view in `src/app/view/settings.rs` + state
 
 Beyond `firmium-docs`, this repo carries its own doc files. Each has a narrower trigger — check these on every change, not just feature work:
 
-- **New/changed system dependency** (ALSA, libsecret, libxkbcommon, Vulkan/OpenGL driver, etc., or a new Rust crate that pulls one in): update `README.md` "System Dependencies" **and** `CONTRIBUTING.md` "Prerequisites" — they list the same deps independently and drift if only one is touched.
+- **New/changed system dependency** (ALSA, libsecret, libxkbcommon, WebKitGTK, etc., or a new Rust crate that pulls one in): update `README.md` "System Dependencies" **and** `CONTRIBUTING.md` "Prerequisites" — they list the same deps independently and drift if only one is touched.
 - **New/changed Subsonic/OpenSubsonic/Navidrome endpoint usage** (anything in `backend/commands/subsonic.rs` hitting a new `/rest/*` call, or a change in auth/params/caveats): update `API.md`.
-- **User-facing feature or removal** (desktop or Android): `firmium/FEATURES.md` (per root CLAUDE.md) **and** add an entry to `CHANGELOG.md` under the in-progress/unreleased version heading.
+- **User-facing feature or removal** (desktop or Android): `firmium/FEATURES.md` (per root CLAUDE.md; standout features only) **and** add an entry to `CHANGELOG.md` under the in-progress/unreleased version heading.
 - **Android architecture change** (new module, restructured state management, new native integration): update `android/CLAUDE.md`, not just the desktop `AGENTS.md`/`CLAUDE.md`.
 - **Termium change** (new screen in `termium/src/ui/`, keybinding scheme change, new backend feature ported to the TUI): update `CLAUDE.md`'s Termium tech-stack/architecture sections and `FEATURES.md`'s Termium section.
 - **Contributor workflow change** (build steps, test commands, clippy/lint config, git hooks): update `CONTRIBUTING.md`. If the change also affects docs-site or marketing-site contributors, check `firmium-docs/CONTRIBUTING.md` / `firmium-site/README.md` too — they're separate files, not auto-synced.
-- **Version bump**: use `scripts/bump-version.sh <ver>` — it already updates `Cargo.toml`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, Android `build.gradle.kts`, and the AUR folders in one shot. Don't hand-edit versions in these files.
+- **Version bump**: use `scripts/bump-version.sh <ver>` — it already updates `Cargo.toml`, `package.json`, `src-tauri/tauri.conf.json`, `CLAUDE.md`, `PKGBUILD`, `firmium.spec`, Android `build.gradle.kts`, and the AUR folders in one shot. Don't hand-edit versions in these files.
 - Edge case — **doc-only or copy changes**: don't touch `CHANGELOG.md`/`FEATURES.md` for wording/typo fixes with no behavior change; those files are for user-visible feature history, not doc churn.
 
 ## When to Use These Guidelines
 
-- Iterative debugging (audio playback, iced rendering, keyring/SecureStorage credential issues, Compose UI state bugs)
-- Multi-step research (finding solutions to OpenSubsonic API quirks, iced/cpal bugs, Media3/ExoPlayer or Compose issues)
+- Iterative debugging (audio playback, webview rendering, keyring/SecureStorage credential issues, Compose UI state bugs)
+- Multi-step research (finding solutions to OpenSubsonic API quirks, Tauri/cpal bugs, Media3/ExoPlayer or Compose issues)
 - System diagnostics (checking machine info, audio devices, Android logcat)
 - Testing and verification workflows (manual playback testing per Testing section in CLAUDE.md, on desktop and Android)
 

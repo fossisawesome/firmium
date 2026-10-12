@@ -123,7 +123,8 @@ fn walk(dir: &Path, out: &mut Vec<RawTrack>) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        // file_type() does not follow symlinks, so a link back to a parent can't loop.
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
             walk(&path, out);
         } else if AUDIO_EXTENSIONS.contains(&extension_lower(&path).as_str()) {
             if let Some(track) = read_track(&path) {
@@ -266,26 +267,49 @@ fn scan() -> Result<LocalLibraryCache, String> {
 }
 
 impl LocalLibraryCache {
-    pub fn has_local_match(&self, title: &str, album: &str) -> bool {
+    /// True when a track with this title already exists in the local copy of
+    /// `album_artist`'s `album` (same key the scan and `import_file` use).
+    pub fn has_local_match(&self, title: &str, album_artist: &str, album: &str) -> bool {
+        let album_id = local_id(&format!("album:{}|{}", album_artist.to_lowercase(), album.to_lowercase()));
         let title_lc = title.to_lowercase();
-        let album_lc = album.to_lowercase();
-        self.all_songs.iter().any(|s| {
-            s.title.to_lowercase() == title_lc && s.album.to_lowercase() == album_lc
-        })
+        self.songs_by_album.get(&album_id).is_some_and(|tracks| tracks.iter().any(|s| s.title.to_lowercase() == title_lc))
     }
 }
 
 fn ensure_scanned(state: &AppState) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
     if state.local_library.read().is_some() {
         return Ok(());
     }
-    let cache = scan()?;
-    *state.local_library.write() = Some(cache);
+    // A scan that raced with `invalidate_local_library` may have missed new
+    // files, so it is retried rather than stored.
+    for attempt in 0..3 {
+        let generation = state.local_library_gen.load(Ordering::SeqCst);
+        let cache = scan()?;
+        let mut slot = state.local_library.write();
+        if slot.is_some() {
+            return Ok(());
+        }
+        if generation == state.local_library_gen.load(Ordering::SeqCst) || attempt == 2 {
+            *slot = Some(cache);
+            return Ok(());
+        }
+    }
     Ok(())
+}
+
+/// `ensure_scanned` on the blocking pool: the scan reads tags from every file
+/// and must not stall an async worker.
+pub async fn ensure_scanned_async(state: Arc<AppState>) -> Result<(), String> {
+    if state.local_library.read().is_some() {
+        return Ok(());
+    }
+    tokio::task::spawn_blocking(move || ensure_scanned(&state)).await.map_err(|e| e.to_string())?
 }
 
 /// Forces a rescan on next access. Called after downloads/imports change the folder contents.
 pub fn invalidate_local_library(state: &AppState) {
+    state.local_library_gen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     *state.local_library.write() = None;
 }
 
@@ -433,7 +457,7 @@ pub fn get_local_track_path(state: &AppState, id: &str) -> Result<String, String
         .ok_or_else(|| "Track not found".to_string())
 }
 
-/// Best-effort path lookup for a song matching title + (album OR artist), used by
+/// Best-effort path lookup for a song matching title + artist + album, used by
 /// the queue manager to prefer a local copy over streaming.
 pub(crate) fn find_local_match_internal(state: &AppState, title: &str, artist: &str, album: &str) -> Option<String> {
     ensure_scanned(state).ok()?;
@@ -444,7 +468,8 @@ pub(crate) fn find_local_match_internal(state: &AppState, title: &str, artist: &
     let album_lc = album.to_lowercase();
     let found = cache.all_songs.iter().find(|s| {
         s.title.to_lowercase() == title_lc
-            && (s.album.to_lowercase() == album_lc || s.artist.to_lowercase() == artist_lc)
+            && s.album.to_lowercase() == album_lc
+            && s.artist.to_lowercase() == artist_lc
     })?;
     cache.paths.get(&found.id).map(|p| p.to_string_lossy().into_owned())
 }
@@ -491,7 +516,7 @@ pub fn get_local_cover_art(state: &AppState, id: String) -> Result<String, Strin
     Ok(out_path.to_string_lossy().into_owned())
 }
 
-/// Async wrapper around `get_local_cover_art` for use with `iced::Task::perform`
+/// Async wrapper around `get_local_cover_art` for use from async callers
 /// (the file read + tag parse can block, so it runs via `spawn_blocking`).
 pub async fn get_local_cover_art_async(state: Arc<AppState>, id: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || get_local_cover_art(&state, id)).await.map_err(|e| e.to_string())?
@@ -566,7 +591,8 @@ pub fn find_local_match(state: &AppState, title: String, artist: String, album: 
     let album_lc = album.to_lowercase();
     let found = cache.all_songs.iter().find(|s| {
         s.title.to_lowercase() == title_lc
-            && (s.album.to_lowercase() == album_lc || s.artist.to_lowercase() == artist_lc)
+            && s.album.to_lowercase() == album_lc
+            && s.artist.to_lowercase() == artist_lc
     });
     Ok(found.and_then(|s| cache.paths.get(&s.id)).map(|p| p.to_string_lossy().into_owned()))
 }

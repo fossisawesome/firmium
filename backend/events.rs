@@ -2,7 +2,7 @@
 //!
 //! Backend tasks (audio sessions, the queue manager, the OpenSubsonic client)
 //! broadcast `BackendEvent`s onto a `tokio::sync::broadcast` channel. Both the
-//! queue manager task and the iced subscription hold independent receivers, so
+//! queue manager task and the UI forwarder (Tauri events / termium) hold independent receivers, so
 //! the same event fans out to every consumer exactly like the old Tauri
 //! emit/listen pair did.
 

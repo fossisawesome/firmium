@@ -16,8 +16,8 @@ import kotlin.math.pow
 private const val TAG = "FirmiumWatchAudio"
 
 // Native ExoPlayer-based audio engine for the watch. Port of the phone's AudioPlayer.kt minus
-// EqualizerController/setupEq/audio-session-id plumbing (EQ + desktop-only visualizer wiring,
-// neither of which exist on the watch).
+// EqualizerController/setupEq/audio-session-id plumbing (EQ wiring, which does not exist
+// on the watch).
 class AudioPlayer(private val context: Context) {
 
     interface Listener {

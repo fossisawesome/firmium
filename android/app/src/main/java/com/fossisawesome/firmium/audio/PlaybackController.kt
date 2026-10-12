@@ -7,6 +7,9 @@ import com.fossisawesome.firmium.data.db.PlayHistoryRepository
 import com.fossisawesome.firmium.data.eq.EqProfile
 import com.fossisawesome.firmium.data.local.LocalLibraryRepository
 import com.fossisawesome.firmium.data.model.Song
+import com.fossisawesome.firmium.data.podcast.PodcastRepository
+import com.fossisawesome.firmium.data.podcast.isPodcastEpisodeId
+import com.fossisawesome.firmium.data.podcast.podcastEpisodeId
 import com.fossisawesome.firmium.data.storage.AppPreferences
 import com.fossisawesome.firmium.data.storage.PlaylistRepository
 import com.fossisawesome.firmium.data.storage.SecureStorage
@@ -32,14 +35,15 @@ data class PlayerState(
     val gaplessEnabled: Boolean = true,
     val replayGainEnabled: Boolean = true,
     val isSeeking: Boolean = false,
-    val visualizerProcessor: VisualizerAudioProcessor? = null,
-    val visualizerEnabled: Boolean = false,
-    val visualizerType: String = "orb",
 ) {
     val currentTrack: Song? get() = queue.getOrNull(queueIndex)
     val hasNext: Boolean get() = queueIndex < queue.size - 1 || repeatMode == "all"
     val hasPrev: Boolean get() = queueIndex > 0
 }
+
+private const val QUEUE_SAVE_INTERVAL_MS = 30_000L
+private const val SAVED_QUEUE_MAX = 500
+private const val SAVED_QUEUE_BEFORE = 50
 
 // Application-scoped playback orchestration. Hoisted out of PlayerViewModel so Android Auto can
 // browse and control playback while no Activity (and therefore no ViewModel) exists. Owns the
@@ -55,6 +59,7 @@ class PlaybackController(
     private val playlists: PlaylistRepository,
     private val secureStorage: SecureStorage,
     private val playHistory: PlayHistoryRepository,
+    private val podcasts: PodcastRepository,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -72,6 +77,9 @@ class PlaybackController(
 
     private var currentPlayerId: String? = null
     private var positionJob: Job? = null
+    private var saveQueueJob: Job? = null
+    private var lastQueueSaveAt = 0L
+    private var pendingResumeSeconds: Double? = null
 
     init {
         scope.launch {
@@ -98,10 +106,6 @@ class PlaybackController(
         scope.launch { prefs.autoContinueEnabled.collect { autoContinueEnabled = it } }
         scope.launch { prefs.listenbrainzEnabled.collect { listenbrainzEnabled = it } }
         scope.launch {
-            combine(prefs.visualizerEnabled, prefs.visualizerType) { en, ty -> en to ty }
-                .collect { (en, ty) -> _state.update { it.copy(visualizerEnabled = en, visualizerType = ty) } }
-        }
-        scope.launch {
             combine(prefs.eqEnabled, prefs.eqMode, prefs.eqActiveProfile, prefs.eqProfilesJson) { enabled, mode, active, json ->
                 buildEqConfig(enabled, mode, active, json)
             }.collect { cfg -> audioPlayer.equalizer.setConfig(cfg) }
@@ -111,8 +115,13 @@ class PlaybackController(
             override fun onStateChanged(playerId: String, state: String) {
                 if (playerId != currentPlayerId) return
                 _state.update { it.copy(playbackState = state) }
-                if (state == "playing") startPositionTracking()
-                else if (state == "paused" || state == "stopped") stopPositionTracking()
+                if (state == "playing") {
+                    startPositionTracking()
+                    pendingResumeSeconds?.let { resumeSecs ->
+                        pendingResumeSeconds = null
+                        audioPlayer.seek(playerId, resumeSecs)
+                    }
+                } else if (state == "paused" || state == "stopped") stopPositionTracking()
                 nowPlaying.updatePlaybackState(state == "playing")
             }
 
@@ -139,6 +148,7 @@ class PlaybackController(
                 }
                 _state.update { it.copy(queueIndex = index) }
                 updateNowPlayingNotification()
+                scheduleSaveQueue()
                 scope.launch { scrobbleCurrent(false) }
                 scope.launch { reportPlaybackCurrent("starting", 0L) }
             }
@@ -188,6 +198,9 @@ class PlaybackController(
     // For server tracks, prefer a locally-downloaded copy if one exists — avoids unnecessary
     // streaming and lets already-downloaded tracks play offline.
     private suspend fun streamUrlFor(song: Song): String {
+        if (song.id.isPodcastEpisodeId()) {
+            return podcasts.getEpisode(song.id.podcastEpisodeId())?.audioUrl ?: ""
+        }
         if (song.id.startsWith("local:")) {
             return localLibrary.getTrackUri(song.id)?.toString() ?: ""
         }
@@ -199,7 +212,16 @@ class PlaybackController(
         return auth.streamUrl(song.id)
     }
 
-    fun playAt(songs: List<Song>, startIndex: Int) {
+    // Entry point for user-started queues. Shuffle is otherwise only applied when toggled on,
+    // so a queue started afterwards would play in order (#76).
+    fun playFresh(songs: List<Song>, startIndex: Int) {
+        val from = startIndex + 1
+        val queue = if (_state.value.shuffleEnabled && from < songs.size) songs.take(from) + songs.drop(from).shuffled() else songs
+        playAt(queue, startIndex)
+    }
+
+    fun playAt(songs: List<Song>, startIndex: Int, resumePositionSeconds: Double = 0.0) {
+        pendingResumeSeconds = resumePositionSeconds.takeIf { it > 0.0 }
         scope.launch {
             try {
                 val rgEnabled = _state.value.replayGainEnabled
@@ -216,14 +238,37 @@ class PlaybackController(
                 _state.update { it.copy(
                     queue = songs, queueIndex = actualIndex,
                     playbackState = "loading", currentPosition = 0.0,
-                    visualizerProcessor = audioPlayer.getVisualizerProcessor(playerId),
                 ) }
                 updateNowPlayingNotification()
+                scheduleSaveQueue()
                 scrobbleCurrent(false)
                 reportPlaybackCurrent("starting", 0L)
             } catch (_: Exception) { /* credentials unavailable or stream setup failed */ }
         }
     }
+
+    fun resumeRemoteQueue(remote: ApiClient.RemotePlayQueue) {
+        val idx = remote.songs.indexOfFirst { it.id == remote.currentId }.coerceAtLeast(0)
+        playAt(remote.songs, idx, remote.positionMs / 1000.0)
+    }
+
+    // Debounced (4s) like desktop: track changes and pauses coalesce into one savePlayQueue.
+    // Local files and podcast episodes aren't on the server, so they're left out.
+    private fun scheduleSaveQueue(delayMs: Long = 4000) {
+        saveQueueJob?.cancel()
+        saveQueueJob = scope.launch {
+            delay(delayMs)
+            lastQueueSaveAt = System.currentTimeMillis()
+            val s = _state.value
+            val currentId = s.currentTrack?.id?.takeIf { isServerSongId(it) } ?: return@launch
+            val ids = s.queue.map { it.id }.filter { isServerSongId(it) }
+            // The ids go in one GET URL, so send a window around the current track, not the whole queue.
+            val from = (ids.indexOf(currentId) - SAVED_QUEUE_BEFORE).coerceAtLeast(0)
+            api.savePlayQueue(ids.drop(from).take(SAVED_QUEUE_MAX), currentId, (s.currentPosition * 1000).toLong())
+        }
+    }
+
+    private fun isServerSongId(id: String) = !id.startsWith("local:") && !id.isPodcastEpisodeId()
 
     fun skipToIndex(index: Int) {
         val pid = currentPlayerId ?: return
@@ -294,6 +339,7 @@ class PlaybackController(
 
     fun pause() {
         currentPlayerId?.let { audioPlayer.pause(it) }
+        scheduleSaveQueue()
         scope.launch { reportPlaybackCurrent("paused") }
     }
 
@@ -373,6 +419,31 @@ class PlaybackController(
         _state.update { it.copy(shuffleEnabled = next) }
         scope.launch { prefs.setShuffleEnabled(next) }
         nowPlaying.setShuffleMode(next)
+        if (next) shuffleUpcoming()
+    }
+
+    // Randomises every track after the current one in place, so playback isn't interrupted.
+    private fun shuffleUpcoming() {
+        val pid = currentPlayerId ?: return
+        val queue = _state.value.queue.toMutableList()
+        val cur = _state.value.queueIndex
+        if (cur < 0) return
+        if (!audioPlayer.hasQueue(pid)) {
+            // After a crossfade the live session holds only the current track, so restart on the shuffled remainder.
+            playAt(queue.take(cur + 1) + queue.drop(cur + 1).shuffled(), cur, _state.value.currentPosition)
+            return
+        }
+        for (i in queue.lastIndex downTo cur + 2) {
+            val j = (cur + 1..i).random()
+            if (j == i) continue
+            audioPlayer.moveQueueItem(pid, j, i)
+            queue.add(i, queue.removeAt(j))
+        }
+        _state.update { it.copy(queue = queue, queueIndex = audioPlayer.getQueueIndex(pid)?.first ?: cur) }
+        nowPlaying.setQueue(queue.map {
+            NowPlayingController.QueueEntry(it.id, it.title, it.displayArtist ?: it.artist,
+                it.coverArt?.let { c -> if (c.startsWith("file://")) c else auth.coverArtUrl(c, 512) })
+        })
     }
 
     fun setCrossfadeEnabled(enabled: Boolean) {
@@ -400,16 +471,6 @@ class PlaybackController(
         _state.update { it.copy(replayGainEnabled = enabled) }
         scope.launch { prefs.setReplayGainEnabled(enabled) }
         audioPlayer.setReplayGainEnabled(enabled)
-    }
-
-    fun setVisualizerEnabled(enabled: Boolean) {
-        _state.update { it.copy(visualizerEnabled = enabled) }
-        scope.launch { prefs.setVisualizerEnabled(enabled) }
-    }
-
-    fun setVisualizerType(type: String) {
-        _state.update { it.copy(visualizerType = type) }
-        scope.launch { prefs.setVisualizerType(type) }
     }
 
     // ── Android Auto entry points ────────────────────────────────────────────────
@@ -503,7 +564,6 @@ class PlaybackController(
             currentPlayerId = newPid
             _state.update { it.copy(
                 queueIndex = nextIdx, currentPosition = 0.0,
-                visualizerProcessor = audioPlayer.getVisualizerProcessor(newPid),
             ) }
             updateNowPlayingNotification()
             scrobbleCurrent(false)
@@ -552,6 +612,7 @@ class PlaybackController(
     private suspend fun submitListenBrainzCurrent() {
         if (!listenbrainzEnabled) return
         val song = _state.value.currentTrack ?: return
+        if (song.id.isPodcastEpisodeId()) return
         val token = secureStorage.get("listenbrainz", "token") ?: return
         api.submitListenBrainz(token, song)
     }
@@ -584,6 +645,7 @@ class PlaybackController(
 
     private suspend fun scrobbleCurrent(submission: Boolean) {
         val trackId = _state.value.currentTrack?.id ?: return
+        if (trackId.isPodcastEpisodeId()) return
         api.scrobble(trackId, submission)
     }
 
@@ -591,12 +653,14 @@ class PlaybackController(
     // Room IO executor (suspend insert) so a DB error never blocks playback.
     private fun recordPlayCurrent(durationPlayedSecs: Int) {
         val song = _state.value.currentTrack ?: return
+        if (song.id.isPodcastEpisodeId()) return
         scope.launch { try { playHistory.record(song, durationPlayedSecs) } catch (_: Exception) {} }
     }
 
     private suspend fun reportPlaybackCurrent(state: String, positionMs: Long? = null) {
         val s = _state.value
         val trackId = s.currentTrack?.id ?: return
+        if (trackId.isPodcastEpisodeId()) return
         api.reportPlayback(trackId, positionMs ?: (s.currentPosition * 1000).toLong(), state)
     }
 
@@ -612,6 +676,8 @@ class PlaybackController(
                 }
                 // Push position to notification so the lock-screen seekbar stays live.
                 nowPlaying.updatePosition((pos * 1000).toLong(), (dur * 1000).toLong(), _state.value.playbackState == "playing")
+                if (_state.value.playbackState == "playing" &&
+                    System.currentTimeMillis() - lastQueueSaveAt >= QUEUE_SAVE_INTERVAL_MS) scheduleSaveQueue(0)
                 val s = _state.value
                 if (dur > 0 && s.playbackState == "playing" && s.hasNext) {
                     if (s.crossfadeEnabled) {

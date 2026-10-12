@@ -26,6 +26,7 @@ pub enum AppEvent {
     LoginSubmit,
     SearchSubmit,
     SearchCancel,
+    Status(String),
     LoginResult(Result<Arc<Backend>, String>),
     AlbumsLoaded(Result<Vec<Album>, String>),
     ArtistsLoaded(Result<Vec<Artist>, String>),
@@ -51,6 +52,7 @@ pub enum SideEffect {
     PlayAlbum(String),
     PlaySongs(Vec<Song>),
     PlayPlaylist(String),
+    ResumeRemoteQueue,
 }
 
 pub struct App {
@@ -89,8 +91,6 @@ pub struct App {
     pub queue: Vec<Song>,
     pub queue_idx: i32,
 
-    // Visualizer
-    pub viz_snapshot: Vec<f32>,
 }
 
 impl App {
@@ -118,7 +118,6 @@ impl App {
             volume: 1.0,
             queue: Vec::new(),
             queue_idx: -1,
-            viz_snapshot: Vec::new(),
         }
     }
 
@@ -154,8 +153,8 @@ impl App {
                 self.search_submitted = false;
                 self.search_results_songs.clear();
             }
+            AppEvent::Status(msg) => self.status_message = Some(msg),
             AppEvent::LoginResult(Ok(backend)) => {
-                backend.audio_player.set_visualizer_enabled(true);
                 self.backend = Some(backend);
                 self.view = View::Home;
                 self.status_message = None;
@@ -185,11 +184,7 @@ impl App {
             }
             AppEvent::PlaylistsLoaded(Err(e)) => self.status_message = Some(e),
             AppEvent::Backend(evt) => self.handle_backend_event(evt),
-            AppEvent::Tick => {
-                if let Some(backend) = &self.backend {
-                    self.viz_snapshot = backend.audio_player.visualizer().bars();
-                }
-            }
+            AppEvent::Tick => {}
         }
         None
     }
@@ -259,6 +254,10 @@ impl App {
                         _ => None,
                     };
                 }
+            }
+            Action::ResumeQueue => {
+                self.status_message = Some("Fetching server queue...".to_string());
+                return Some(SideEffect::ResumeRemoteQueue);
             }
             Action::PlayPause => return Some(SideEffect::TogglePlay),
             Action::NextTrack => return Some(SideEffect::NextTrack),
@@ -352,6 +351,13 @@ mod tests {
         app.selected_index = 0;
         app.update(AppEvent::Key(Action::NavDown));
         assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn resume_queue_action_requests_remote_queue() {
+        let mut app = App::new_for_test();
+        let effect = app.update(AppEvent::Key(Action::ResumeQueue));
+        assert!(matches!(effect, Some(SideEffect::ResumeRemoteQueue)));
     }
 
     fn test_album(id: &str, name: &str) -> Album {

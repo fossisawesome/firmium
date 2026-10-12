@@ -13,6 +13,7 @@ pub enum Action {
     NavRight,
     Search,
     Activate,
+    ResumeQueue,
     Quit,
 }
 
@@ -26,6 +27,7 @@ const ACTIONS: &[(Action, &str)] = &[
     (Action::NavRight, "nav_right"),
     (Action::Search, "search"),
     (Action::Activate, "activate"),
+    (Action::ResumeQueue, "resume_queue"),
     (Action::Quit, "quit"),
 ];
 
@@ -40,6 +42,7 @@ fn default_key_for(action: Action) -> KeyEvent {
         Action::NavRight => KeyCode::Char('l'),
         Action::Search => KeyCode::Char('/'),
         Action::Activate => KeyCode::Enter,
+        Action::ResumeQueue => KeyCode::Char('r'),
         Action::Quit => KeyCode::Char('q'),
     };
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -79,6 +82,7 @@ struct RawKeymap {
     nav_right: Option<String>,
     search: Option<String>,
     activate: Option<String>,
+    resume_queue: Option<String>,
     quit: Option<String>,
 }
 
@@ -94,6 +98,7 @@ impl RawKeymap {
             "nav_right" => self.nav_right.as_deref(),
             "search" => self.search.as_deref(),
             "activate" => self.activate.as_deref(),
+            "resume_queue" => self.resume_queue.as_deref(),
             "quit" => self.quit.as_deref(),
             _ => None,
         }
@@ -209,6 +214,12 @@ mod tests {
             km.resolve(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
             Some(Action::NavDown)
         );
+    }
+
+    #[test]
+    fn default_keymap_resolves_resume_queue() {
+        let km = Keymap::from_toml_str_with_warnings("").0;
+        assert_eq!(km.resolve(key('r')), Some(Action::ResumeQueue));
     }
 
     #[test]

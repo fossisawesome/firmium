@@ -48,6 +48,8 @@ fun AlbumListScreen(
     onAddAlbumToPlaylist: (item: PlaylistListItem, albumId: String) -> Unit,
     onCreatePlaylistAndAddAlbum: (name: String, albumId: String) -> Unit,
     onDownloadAlbum: ((Album) -> suspend () -> Result<Unit>)? = null,
+    // Album ids newest-first; null when the source (e.g. local library only) can't sort by date added.
+    loadNewestIds: (suspend () -> List<String>)? = null,
 ) {
     LaunchedEffect(Unit) { onLoad() }
 
@@ -56,6 +58,11 @@ fun AlbumListScreen(
     var pendingAlbumId by remember { mutableStateOf<String?>(null) }
     var selectedGenres by remember { mutableStateOf(emptySet<String>()) }
     var selectedDecades by remember { mutableStateOf(emptySet<String>()) }
+    var sortNewest by remember { mutableStateOf(false) }
+    var newestIds by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(sortNewest) {
+        if (sortNewest && newestIds == null) newestIds = try { loadNewestIds?.invoke() } catch (_: Exception) { null }
+    }
 
     val allGenres = remember(state.albums) {
         val counts = mutableMapOf<String, Int>()
@@ -104,8 +111,13 @@ fun AlbumListScreen(
         else -> {
             // Sort + group only when the filtered album set changes, not on every
             // recomposition (e.g. when pendingAlbumId toggles).
-            val grouped = remember(filteredAlbums) {
-                filteredAlbums
+            val newest = newestIds
+            val grouped = remember(filteredAlbums, sortNewest, newest) {
+                if (sortNewest && newest != null) {
+                    // The server caps a page at 500, so this shows the latest 500 added.
+                    val rank = newest.withIndex().associate { it.value to it.index }
+                    mapOf("Recently added" to filteredAlbums.filter { it.id in rank }.sortedBy { rank.getValue(it.id) })
+                } else filteredAlbums
                     .sortedWith(compareBy({ it.effectiveType().releaseTypeSortOrder() }, { -(it.year ?: 0) }))
                     .groupBy { it.effectiveType() }
             }
@@ -114,9 +126,12 @@ fun AlbumListScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp),
             ) {
-                if (allDecades.isNotEmpty() || allGenres.isNotEmpty()) {
+                if (allDecades.isNotEmpty() || allGenres.isNotEmpty() || loadNewestIds != null) {
                     item(key = "filters") {
                         FilterChipsRow(
+                            showSort = loadNewestIds != null,
+                            sortNewest = sortNewest,
+                            onSortChange = { sortNewest = it },
                             decades = allDecades,
                             genres = allGenres.take(20),
                             selectedDecades = selectedDecades,
@@ -133,7 +148,7 @@ fun AlbumListScreen(
                 }
                 item(key = "sort_label") {
                     Text(
-                        "Sorted by type, then year",
+                        if (sortNewest && newest != null) "Sorted by recently added" else "Sorted by type, then year",
                         fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                         color = colors.muted,
                         modifier = Modifier.padding(start = 16.dp, top = 12.dp),
@@ -184,6 +199,9 @@ fun AlbumListScreen(
 
 @Composable
 private fun FilterChipsRow(
+    showSort: Boolean,
+    sortNewest: Boolean,
+    onSortChange: (Boolean) -> Unit,
     decades: List<String>,
     genres: List<String>,
     selectedDecades: Set<String>,
@@ -216,6 +234,10 @@ private fun FilterChipsRow(
         }
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (showSort) {
+                Chip("A–Z", !sortNewest) { onSortChange(false) }
+                Chip("Recently added", sortNewest) { onSortChange(true) }
+            }
             decades.forEach { d -> Chip(d, d in selectedDecades) { onToggleDecade(d) } }
             genres.forEach { g -> Chip(g, g in selectedGenres) { onToggleGenre(g) } }
             if (hasActive) {

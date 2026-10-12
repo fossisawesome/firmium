@@ -29,13 +29,13 @@ jobs:
 
     steps:
       - name: Install tools
-        run: dnf install -y rpm-build rpmdevtools copr-cli gh git curl cargo rust
+        run: dnf install -y rpm-build rpmdevtools copr-cli gh git curl cargo rust nodejs npm
 
       # Containers run as root; mark all directories safe so git/gh work.
       - name: Fix git safe directory
         run: git config --global --add safe.directory '*'
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Extract version from tag
         id: version
@@ -80,8 +80,10 @@ jobs:
           curl -fsSL "https://github.com/fossisawesome/firmium/archive/${TAG}.tar.gz" \
             -o ~/rpmbuild/SOURCES/${TAG}.tar.gz
           tar xzf ~/rpmbuild/SOURCES/${TAG}.tar.gz
-          ( cd firmium-"$VERSION" && cargo vendor ../vendor )
-          tar cJf ~/rpmbuild/SOURCES/firmium-"$VERSION"-vendor.tar.xz vendor
+          # Mock builds are offline: vendor crates and ship the prebuilt frontend (dist/).
+          ( cd firmium-"$VERSION" && cargo vendor ../vendor && npm ci && npm run build )
+          cp -r firmium-"$VERSION"/dist dist
+          tar cJf ~/rpmbuild/SOURCES/firmium-"$VERSION"-vendor.tar.xz vendor dist
           rpmbuild -bs ~/rpmbuild/SPECS/firmium.spec
 
       - name: Submit to COPR

@@ -1,0 +1,332 @@
+/* ── Playlist add button on track rows ────────────────────────────────────── */
+
+.track-add-btn,
+.track-remove-btn,
+.track-move-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 16px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--timing), color var(--timing), border-color var(--timing), background var(--timing);
+  font-family: var(--font);
+  line-height: 1;
+}
+
+.track-row:hover .track-add-btn,
+.track-row:hover .track-remove-btn,
+.track-row:hover .track-move-btn {
+  opacity: 1;
+}
+
+.track-move-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.track-move-btn:disabled {
+  opacity: 0.3 !important;
+  cursor: not-allowed;
+}
+
+.track-add-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.track-remove-btn {
+  font-size: 14px;
+}
+
+.track-remove-btn:hover {
+  color: var(--error);
+  border-color: var(--error);
+  background: rgba(224, 96, 96, 0.12);
+}
+
+/* ── Album add button ─────────────────────────────────────────────────────── */
+
+.album-add-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 16px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--timing), color var(--timing), border-color var(--timing), background var(--timing);
+  font-family: var(--font);
+  line-height: 1;
+  margin-right: 4px;
+}
+
+.album-row:hover .album-add-btn {
+  opacity: 1;
+}
+
+.album-add-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* ── Download buttons (track + album rows) ────────────────────────────────── */
+
+.track-download-btn,
+.album-download-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 16px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--timing), color var(--timing), border-color var(--timing), background var(--timing);
+  font-family: var(--font);
+  line-height: 1;
+}
+
+.album-download-btn {
+  margin-right: 4px;
+}
+
+.track-row:hover .track-download-btn,
+.album-row:hover .album-download-btn {
+  opacity: 1;
+}
+
+.track-download-btn:hover,
+.album-download-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.track-add-btn:disabled,
+.album-add-btn:disabled,
+.track-download-btn:disabled,
+.album-download-btn:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed;
+}
+
+.download-done {
+  opacity: 1 !important;
+  color: var(--accent) !important;
+}
+
+.download-error {
+  opacity: 1 !important;
+  color: var(--error) !important;
+}
+
+/* ── Star rating on track rows ──────────────────────────────────────────── */
+
+.track-stars {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--timing);
+}
+
+.track-stars.has-rating { opacity: 1; }
+.track-row:hover .track-stars { opacity: 1; }
+
+.star-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--timing);
+}
+
+.star-btn:hover { color: var(--accent); }
+.track-stars.has-rating .star-btn { color: var(--accent); }
+
+/* ── Playlist add popup menu ─────────────────────────────────────────────── */
+
+.pl-popup {
+  position: fixed;
+  z-index: 9999;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 200px;
+  max-width: 260px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  padding: 6px 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.95);
+  transform-origin: top left;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+.pl-popup--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.pl-popup-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  padding: 6px 14px 8px;
+  
+  margin-bottom: 4px;
+}
+
+.pl-popup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  transition: background var(--timing);
+  gap: 8px;
+}
+
+.pl-popup-item:hover {
+  background: var(--surface2);
+}
+
+.pl-popup-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-popup-count {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.pl-popup-cloud {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--accent);
+  opacity: 0.8;
+  vertical-align: middle;
+}
+
+.pl-popup-empty {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.pl-popup-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.pl-popup-create {
+  color: var(--accent);
+}
+
+.pl-popup-input {
+  width: calc(100% - 28px);
+  margin: 4px 14px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 10px;
+  font-family: var(--font);
+  font-size: 12px;
+  border-radius: 3px;
+  outline: none;
+  display: block;
+}
+
+.pl-popup-input:focus {
+  border-color: var(--accent);
+}
+
+.pl-popup-actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 8px;
+}
+
+.pl-popup-btn {
+  flex: 1;
+  padding: 6px;
+  font-family: var(--font);
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  transition: background var(--timing), color var(--timing), border-color var(--timing);
+}
+
+.pl-popup-confirm {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.pl-popup-confirm:hover {
+  opacity: 0.85;
+}
+
+.pl-popup-cancel:hover {
+  background: var(--surface);
+}
+
+
+/* ── Favorite (heart) toggle on track rows ───────────────────────────────── */
+.track-heart-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  opacity: 0;
+  transition: opacity var(--timing), color var(--timing);
+}
+.track-row:hover .track-heart-btn,
+.track-heart-btn.starred { opacity: 1; }
+.track-heart-btn.starred { color: var(--accent); }
+.track-heart-btn:hover { color: var(--accent); }
+
+.np-heart { flex-shrink: 0; }

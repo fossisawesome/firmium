@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-07-14_
+_Last updated: 2026-10-12_
 
 Firmium is a local-first music and podcast player. This policy covers the desktop app, Android app, Wear OS companion, and Termium (TUI).
 
@@ -18,7 +18,7 @@ Firmium is developed by an individual maintainer, not a registered company. This
 Firmium stores the following on your device only:
 
 - Library metadata (scanned from your local files or your media server)
-- Playback queue, history, and listening stats (used for the Recap feature)
+- Playback queue, history, and listening stats
 - Playlists
 - App settings and themes
 - Cached cover art and lyrics (to avoid repeat network requests)

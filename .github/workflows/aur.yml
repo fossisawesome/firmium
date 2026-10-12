@@ -1,0 +1,53 @@
+name: Publish to AUR
+
+# Fires after the Release workflow succeeds so the .deb the PKGBUILD downloads exists.
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v8.1.0)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  aur-publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Extract version from tag
+        id: version
+        # Passed via env and validated against strict semver so a crafted branch name
+        # cannot inject shell code.
+        env:
+          TAG_INPUT: ${{ github.event.workflow_run.head_branch || inputs.tag }}
+        run: |
+          if ! echo "$TAG_INPUT" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid tag format: '$TAG_INPUT' (expected vX.Y.Z)" >&2
+            exit 1
+          fi
+          echo "version=${TAG_INPUT#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set pkgver
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sed -i -e "s/^pkgver=.*/pkgver=$VERSION/" -e "s/^pkgrel=.*/pkgrel=1/" packaging/aur/PKGBUILD
+
+      # Needs the AUR_SSH_PRIVATE_KEY repo secret (public half added to the AUR account).
+      - name: Publish firmium-desktop-bin
+        uses: KSXT/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: firmium-desktop-bin
+          pkgbuild: packaging/aur/PKGBUILD
+          updpkgsums: true
+          commit_username: fossisawesome
+          commit_email: noreply@github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ steps.version.outputs.version }}"

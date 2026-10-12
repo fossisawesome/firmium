@@ -5,6 +5,9 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// ./gradlew assembleRelease -Pfoss builds the F-Droid variant without Google libraries.
+val isFoss = providers.gradleProperty("foss").isPresent
+
 android {
     namespace = "com.fossisawesome.firmium"
     compileSdk = 36
@@ -48,6 +51,8 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
+
+    sourceSets["main"].java.srcDir(if (isFoss) "src/foss/java" else "src/play/java")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -111,11 +116,12 @@ dependencies {
     implementation("androidx.media3:media3-common:1.4.1")
     implementation("androidx.media:media:1.7.0")
 
-    // Wear OS companion: phone <-> watch communication (Wearable Data Layer)
-    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    // Wear OS companion: phone <-> watch communication (Wearable Data Layer).
+    // Skipped with -Pfoss (F-Droid), where src/foss supplies no-op stubs instead.
+    if (!isFoss) implementation("com.google.android.gms:play-services-wearable:19.0.0")
 
     // Secure storage
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // DataStore for non-sensitive preferences (server URL, settings)
     implementation("androidx.datastore:datastore-preferences:1.2.1")

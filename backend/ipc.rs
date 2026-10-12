@@ -42,13 +42,21 @@ async fn run(bus: EventBus, queue_state: Arc<QueueState>, app_state: Arc<AppStat
     use tokio::net::UnixListener;
 
     let path = socket_path();
-    // Stale socket from a crashed previous run — a live instance would have
-    // held this listener open, so removing it here is safe.
+    // If something answers on the socket, another instance owns it: leave it be
+    // (deleting the path would orphan that instance's listener). Otherwise the
+    // file is a leftover from a crashed run and is safe to remove.
+    if tokio::net::UnixStream::connect(&path).await.is_ok() {
+        return Err(format!("{} is in use by another running instance", path.display()));
+    }
     let _ = std::fs::remove_file(&path);
     let listener = UnixListener::bind(&path).map_err(|e| format!("bind {}: {e}", path.display()))?;
 
     loop {
-        let Ok((stream, _)) = listener.accept().await else { continue };
+        let Ok((stream, _)) = listener.accept().await else {
+            // Persistent errors (e.g. out of file descriptors) would otherwise spin.
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            continue;
+        };
         tokio::spawn(handle_conn(stream, bus.clone(), queue_state.clone(), app_state.clone(), audio_player.clone()));
     }
 }
@@ -57,13 +65,22 @@ async fn run(bus: EventBus, queue_state: Arc<QueueState>, app_state: Arc<AppStat
 async fn run(bus: EventBus, queue_state: Arc<QueueState>, app_state: Arc<AppState>, audio_player: Arc<AudioPlayer>) -> Result<(), String> {
     use tokio::net::windows::named_pipe::ServerOptions;
 
+    // `first_pipe_instance(true)` fails when another instance already owns the pipe.
+    let mut server = ServerOptions::new()
+        .first_pipe_instance(true)
+        .create(PIPE_NAME)
+        .map_err(|e| format!("create pipe {PIPE_NAME}: {e}"))?;
     loop {
-        let server = ServerOptions::new()
-            .first_pipe_instance(false)
+        let connected = server.connect().await;
+        // Create the next instance before serving this one so clients never
+        // find the pipe missing.
+        let next = ServerOptions::new()
             .create(PIPE_NAME)
             .map_err(|e| format!("create pipe {PIPE_NAME}: {e}"))?;
-        server.connect().await.map_err(|e| format!("pipe connect: {e}"))?;
-        tokio::spawn(handle_conn(server, bus.clone(), queue_state.clone(), app_state.clone(), audio_player.clone()));
+        let ready = std::mem::replace(&mut server, next);
+        if connected.is_ok() {
+            tokio::spawn(handle_conn(ready, bus.clone(), queue_state.clone(), app_state.clone(), audio_player.clone()));
+        }
     }
 }
 
@@ -90,14 +107,14 @@ async fn dispatch(line: &str, bus: &EventBus, queue_state: &Arc<QueueState>, app
         "play-pause" => crate::commands::queue::toggle_play(queue_state.clone(), app_state.clone(), audio_player.clone()).await,
         "next" => crate::commands::queue::queue_next(queue_state.clone(), app_state.clone(), audio_player.clone()).await,
         "prev" => crate::commands::queue::queue_prev(queue_state.clone(), app_state.clone(), audio_player.clone()).await,
-        "volume" => match arg.and_then(|a| a.parse::<f32>().ok()) {
+        "volume" => match arg.and_then(|a| a.parse::<f32>().ok()).filter(|v| v.is_finite()) {
             Some(pct) => {
                 crate::commands::queue::set_queue_volume(bus, queue_state, audio_player, pct / 100.0);
                 Ok(())
             }
             None => Err("usage: volume <0-100>".to_string()),
         },
-        "seek" => match arg.and_then(|a| a.parse::<f64>().ok()) {
+        "seek" => match arg.and_then(|a| a.parse::<f64>().ok()).filter(|v| v.is_finite()) {
             Some(secs) => crate::commands::queue::seek_queue(queue_state, audio_player, secs),
             None => Err("usage: seek <seconds>".to_string()),
         },

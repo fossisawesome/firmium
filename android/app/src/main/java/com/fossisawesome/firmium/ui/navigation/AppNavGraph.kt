@@ -19,6 +19,7 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.navigation.NavBackStackEntry
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,12 +52,13 @@ import com.fossisawesome.firmium.FirmiumApplication
 import com.fossisawesome.firmium.data.api.AuthManager
 import com.fossisawesome.firmium.data.model.Album
 import com.fossisawesome.firmium.data.model.Song
+import com.fossisawesome.firmium.data.podcast.isPodcastEpisodeId
+import com.fossisawesome.firmium.data.podcast.podcastEpisodeId
 import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.screens.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 import com.fossisawesome.firmium.viewmodel.*
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private data class NavDest(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
@@ -127,7 +129,6 @@ fun AppNavGraph(
     val podcastChannels by podcastsViewModel.channels.collectAsStateWithLifecycle()
     val podcastEpisodes by podcastsViewModel.episodes.collectAsStateWithLifecycle()
     val podcastAddError by podcastsViewModel.addError.collectAsStateWithLifecycle()
-    val podcastPlayingEpisodeId by podcastsViewModel.playingEpisodeId.collectAsStateWithLifecycle()
 
     val lrclibEnabled by app.prefs.lrclibEnabled.collectAsStateWithLifecycle(initialValue = true)
     val lyricsWordFillEnabled by app.prefs.lyricsWordFillEnabled.collectAsStateWithLifecycle(initialValue = true)
@@ -170,18 +171,10 @@ fun AppNavGraph(
     // server-only playlists (not just locally-created ones).
     LaunchedEffect(Unit) { playlistViewModel.refreshServerPlaylists() }
 
-    // Weekly Recap auto-show: surface once every 7 days on app open.
-    LaunchedEffect(Unit) {
-        val last = app.prefs.recapLastShown.first()
-        if (System.currentTimeMillis() - last > 7L * 86400 * 1000) {
-            app.prefs.setRecapLastShown(System.currentTimeMillis())
-            navController.navigate("recap")
-        }
-    }
-
     var showFullPlayer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showSimilarTracks by remember { mutableStateOf(false) }
+    var showAddPodcastDialog by remember { mutableStateOf(false) }
     val similarTracksState by playerViewModel.similarTracksState.collectAsStateWithLifecycle()
 
     // Pending album-add-to-playlist: load tracks on demand, then show the dialog.
@@ -194,14 +187,21 @@ fun AppNavGraph(
     }
 
     val coverUrl: (String?) -> String? = { id ->
-        if (!auth.isAuthenticated) null
-        else id?.let { if (it.startsWith("file://")) it else auth.coverArtUrl(it, 300) }
+        when {
+            id == null -> null
+            id.startsWith("file://") || id.startsWith("http://") || id.startsWith("https://") -> id
+            !auth.isAuthenticated -> null
+            else -> auth.coverArtUrl(id, 300)
+        }
     }
 
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     // Main tab routes — those that show the shared top bar and bottom nav.
-    val mainRoutes = setOf("home", "music", "artists", "playlists")
-    val routeTitle = mapOf("home" to "Home", "music" to "Music", "artists" to "Artists", "playlists" to "Playlists")
+    val mainRoutes = setOf("home", "music", "artists", "playlists", "podcasts", "mix")
+    val routeTitle = mapOf(
+        "home" to "Home", "music" to "Music", "artists" to "Artists",
+        "playlists" to "Playlists", "podcasts" to "Podcasts", "mix" to "Mix",
+    )
     // Section of the current route for highlighting the correct bottom nav item.
     val currentSection = routeSection(currentRoute)
 
@@ -266,6 +266,20 @@ fun AppNavGraph(
                 onSearchClick = if (useRailNav) null else onSearchClick,
                 onSettingsClick = if (useRailNav) null else onSettingsClick,
                 onAccountClick = if (useRailNav) null else onAccountClick,
+                action = if (currentRoute == "podcasts") {
+                    {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(colors.surface2)
+                                .border(1.dp, colors.accent.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                                .clickable { showAddPodcastDialog = true }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                        ) {
+                            Text("+ Add", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.accent)
+                        }
+                    }
+                } else null,
             )
         }
 
@@ -299,6 +313,7 @@ fun AppNavGraph(
                         onArtistClick = { navController.navigate("artist/$it") },
                         onRefresh = { libraryViewModel.loadHome() },
                         onFavoritesClick = { navController.navigate("favorites") },
+                        onShuffleAll = { playerViewModel.shuffleAll() },
                     )
                 }
                 composable(
@@ -332,6 +347,7 @@ fun AppNavGraph(
                         playlistItems = playlistsState.items,
                         onAlbumClick = { navController.navigate("album/$it") },
                         onLoad = { libraryViewModel.loadAlbums() },
+                        loadNewestIds = if (auth.isAuthenticated) ({ app.api.getNewestAlbums(500).map { it.id } }) else null,
                         onAddAlbumToPlaylist = { item, albumId ->
                             scope.launch {
                                 val tracks = try { app.api.getAlbumDetail(albumId).tracks } catch (_: Exception) { emptyList() }
@@ -488,6 +504,8 @@ fun AppNavGraph(
                         addError = podcastAddError,
                         onChannelClick = { navController.navigate("podcast/$it") },
                         onAddChannel = { podcastsViewModel.addChannel(it) },
+                        showAddDialog = showAddPodcastDialog,
+                        onShowAddDialogChange = { showAddPodcastDialog = it },
                     )
                 }
                 composable(
@@ -501,16 +519,21 @@ fun AppNavGraph(
                     val channel = podcastChannels.find { it.id == channelId }
                     LaunchedEffect(channelId) { podcastsViewModel.loadEpisodes(channelId) }
                     if (channel != null) {
+                        val playingEpisodeId = if (playerState.currentTrack?.id?.isPodcastEpisodeId() == true) {
+                            playerState.currentTrack?.id?.podcastEpisodeId()
+                        } else null
                         PodcastDetailScreen(
                             title = channel.title,
                             episodes = podcastEpisodes,
-                            playingEpisodeId = podcastPlayingEpisodeId,
+                            playingEpisodeId = playingEpisodeId,
+                            isPlaying = playerState.playbackState == "playing",
                             onRefresh = { podcastsViewModel.refreshChannel(channelId, channel.feedUrl) },
                             onUnsubscribe = {
                                 podcastsViewModel.unsubscribe(channelId)
                                 navController.popBackStack()
                             },
-                            onPlayEpisode = { podcastsViewModel.playEpisode(it) },
+                            onPlayEpisode = { episode -> playerViewModel.playEpisode(channel, episode) },
+                            onPlayPause = { playerViewModel.togglePlayPause() },
                         )
                     }
                 }
@@ -557,8 +580,6 @@ fun AppNavGraph(
                         onThemeSelected = onThemeSelected,
                         onUiThemeSelected = onUiThemeSelected,
                         onFontSelected = onFontSelected,
-                        onVisualizerToggle = { playerViewModel.setVisualizerEnabled(it) },
-                        onVisualizerTypeSelected = { playerViewModel.setVisualizerType(it) },
                         onLrclibToggle = { scope.launch { app.prefs.setLrclibEnabled(it) } },
                         onLyricsWordFillToggle = { scope.launch { app.prefs.setLyricsWordFillEnabled(it) } },
                         onLastfmToggle = { scope.launch { app.prefs.setLastfmEnabled(it) } },
@@ -589,14 +610,6 @@ fun AppNavGraph(
                             }
                         },
                         onLogout = { authViewModel.logout() },
-                        onViewRecap = { navController.navigate("recap") },
-                    )
-                }
-                composable("recap") {
-                    RecapScreen(
-                        repository = app.playHistory,
-                        coverUrlFor = coverUrl,
-                        onClose = { navController.popBackStack() },
                     )
                 }
             }
@@ -659,7 +672,6 @@ fun AppNavGraph(
         FullScreenPlayer(
             state = playerState,
             coverUrl = coverUrl(playerState.currentTrack?.coverArt),
-            visualizerProcessor = playerState.visualizerProcessor,
             playlistItems = playlistsState.items,
             lyricsState = lyricsState,
             wordFillEnabled = lyricsWordFillEnabled,
@@ -673,6 +685,11 @@ fun AppNavGraph(
             },
             onSeekStart = { playerViewModel.setSeekingFlag(true) },
             onSeekEnd = { playerViewModel.setSeekingFlag(false) },
+            onSeekToSeconds = { seconds ->
+                playerViewModel.setSeekingFlag(true)
+                playerViewModel.seek(seconds)
+                playerViewModel.setSeekingFlag(false)
+            },
             onVolumeChange = { playerViewModel.setVolume(it) },
             onRepeatCycle = {
                 // Cycle: none → all (repeat forever) → one (repeat once) → none
@@ -771,6 +788,7 @@ private fun FirmiumPageHeader(
     onSearchClick: (() -> Unit)?,
     onSettingsClick: (() -> Unit)?,
     onAccountClick: (() -> Unit)?,
+    action: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalFirmiumColors.current
     val spotify = LocalUiTheme.current == "spotify"
@@ -796,6 +814,7 @@ private fun FirmiumPageHeader(
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
             )
+            action?.invoke()
             if (onSearchClick != null) {
                 FirmiumIconButton(onClick = onSearchClick, modifier = Modifier.size(44.dp)) {
                     FirmiumIcon(Icons.Default.Search, contentDescription = "Search", tint = colors.muted)

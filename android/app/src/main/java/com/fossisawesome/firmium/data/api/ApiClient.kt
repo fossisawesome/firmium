@@ -282,6 +282,33 @@ class ApiClient(private val auth: AuthManager) {
         } catch (e: Exception) { Log.e("Firmium/Scrobble", "scrobble($songId, $submission) failed", e) }
     }
 
+    // ── Play queue sync ────────────────────────────────────────────────────────
+
+    data class RemotePlayQueue(
+        val songs: List<Song>,
+        val currentId: String?,
+        val positionMs: Long,
+        val changedBy: String?,
+    )
+
+    // Persists queue + position so another client can resume it. Non-fatal on failure.
+    suspend fun savePlayQueue(ids: List<String>, currentId: String, positionMs: Long) {
+        try {
+            val params = ids.map { "id" to it }.toMutableList()
+            params.add("current" to currentId)
+            params.add("position" to positionMs.toString())
+            fetch("savePlayQueue", params)
+        } catch (e: Exception) { Log.e("Firmium/PlayQueue", "savePlayQueue failed", e) }
+    }
+
+    // Last queue saved by any client, or null if none. Throws on network/session errors.
+    suspend fun getPlayQueue(): RemotePlayQueue? {
+        val queue = fetch("getPlayQueue").getAsJsonObject("playQueue") ?: return null
+        val songs = jsonArray(queue, "entry").map { parseSong(it.asJsonObject) }
+        if (songs.isEmpty()) return null
+        return RemotePlayQueue(songs, queue.optString("current"), queue.optLong("position") ?: 0L, queue.optString("changedBy"))
+    }
+
     // ── Rating ─────────────────────────────────────────────────────────────────
 
     suspend fun setRating(songId: String, rating: Int) {

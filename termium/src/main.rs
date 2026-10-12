@@ -249,6 +249,34 @@ fn perform_side_effect(
                 }
             });
         }
+        SideEffect::ResumeRemoteQueue => {
+            let Some(backend) = app.backend.clone() else { return };
+            tokio::spawn(async move {
+                let app_state = Arc::clone(&backend.app_state);
+                let msg = match firmium_backend::commands::subsonic::get_play_queue(Arc::clone(&app_state)).await {
+                    Ok(Some(q)) => {
+                        let start = q.current.as_deref()
+                            .and_then(|c| q.entries.iter().position(|s| s.id == c))
+                            .unwrap_or(0);
+                        let pos = q.position_ms.unwrap_or(0).max(0) as f64 / 1000.0;
+                        let queue_state = Arc::clone(&backend.queue_state);
+                        let audio_player = Arc::clone(&backend.audio_player);
+                        let res = firmium_backend::commands::queue::set_queue(
+                            Arc::clone(&queue_state), app_state, Arc::clone(&audio_player), q.entries, start,
+                        )
+                        .await
+                        .and_then(|_| firmium_backend::commands::queue::seek_queue(&queue_state, &audio_player, pos));
+                        match res {
+                            Ok(()) => "Resumed server queue".to_string(),
+                            Err(e) => e,
+                        }
+                    }
+                    Ok(None) => "No saved queue on server".to_string(),
+                    Err(e) => e.message(),
+                };
+                let _ = result_tx.send(AppEvent::Status(msg));
+            });
+        }
         SideEffect::PlaySongs(songs) => {
             let Some(backend) = app.backend.clone() else { return };
             tokio::spawn(async move {

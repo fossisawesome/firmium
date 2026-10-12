@@ -117,9 +117,6 @@ fun ArtistDetailScreen(
                             ) {
                                 OverlayIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onClick = onBack)
                                 Spacer(Modifier.weight(1f))
-                                OverlayIconButton(Icons.Default.PlayArrow, "Play all", enabled = state.topSongs.isNotEmpty()) {
-                                    onPlaySongs(state.topSongs, 0)
-                                }
                                 OverlayIconButton(Icons.Default.Share, "Share") {
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
@@ -137,7 +134,7 @@ fun ArtistDetailScreen(
                         }
                     }
 
-                    // Shuffle + Radio buttons.
+                    // Play All + Shuffle + Radio buttons.
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
@@ -146,16 +143,31 @@ fun ArtistDetailScreen(
                             Box(
                                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
                                     .background(colors.accent)
-                                    .clickable(enabled = state.topSongs.isNotEmpty()) {
-                                        onPlaySongs(state.topSongs.shuffled(), 0)
+                                    .clickable(enabled = state.allSongs.isNotEmpty()) {
+                                        onPlaySongs(state.allSongs, 0)
                                     }
                                     .padding(vertical = 12.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    FirmiumIcon(Icons.Default.Shuffle, null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                                    Text("Shuffle", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                    FirmiumIcon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                    Text("Play all", fontSize = 14.sp, fontWeight = FontWeight.Bold,
                                         fontFamily = LocalAppFontFamily.current, color = Color.Black)
+                                }
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
+                                    .background(colors.surface2)
+                                    .clickable(enabled = state.allSongs.isNotEmpty()) {
+                                        onPlaySongs(state.allSongs.shuffled(), 0)
+                                    }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FirmiumIcon(Icons.Default.Shuffle, null, tint = colors.text, modifier = Modifier.size(18.dp))
+                                    Text("Shuffle", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                        fontFamily = LocalAppFontFamily.current, color = colors.text)
                                 }
                             }
                             if (onStartRadio != null) {
