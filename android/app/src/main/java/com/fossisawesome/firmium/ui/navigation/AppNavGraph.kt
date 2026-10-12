@@ -331,6 +331,7 @@ fun AppNavGraph(
                         onArtistClick = { navController.navigate("artist/$it") },
                         onPlaySong = { song -> playerViewModel.playAt(listOf(song), 0) },
                         onToggleSongStar = { libraryViewModel.toggleSongStar(it) },
+                        onAddToQueue = { song -> playerViewModel.addToQueue(song) },
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -392,6 +393,7 @@ fun AppNavGraph(
                         onArtistClick = { navController.navigate("artist/$it") },
                         onToggleAlbumStar = { libraryViewModel.toggleAlbumStar(it) },
                         onToggleSongStar = { libraryViewModel.toggleSongStar(it) },
+                        onAddToQueue = { song -> playerViewModel.addToQueue(song) },
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -476,6 +478,7 @@ fun AppNavGraph(
                                 onMoveTrack = { from, to -> playlistViewModel.moveServerTrack(serverId, from, to) },
                                 onDownloadTrack = onDownloadTrack,
                                 downloadedSongIds = dlIds,
+                                onAddToQueue = { song -> playerViewModel.addToQueue(song) },
                                 onBack = { navController.popBackStack() },
                             )
                         }
@@ -492,6 +495,7 @@ fun AppNavGraph(
                                 onMoveTrack = { from, to -> playlistViewModel.moveTrack(id, from, to) },
                                 onDownloadTrack = onDownloadTrack,
                                 downloadedSongIds = dlIds,
+                                onAddToQueue = { song -> playerViewModel.addToQueue(song) },
                                 onBack = { navController.popBackStack() },
                             )
                         }
@@ -635,6 +639,7 @@ fun AppNavGraph(
                         "none" -> "all"; "all" -> "one"; else -> "none"
                     })
                 },
+                onQueueOpen = { showQueue = true },
             )
         }
 

@@ -8,8 +8,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,10 +38,12 @@ fun FavoritesScreen(
     onArtistClick: (String) -> Unit,
     onPlaySong: (Song) -> Unit,
     onToggleSongStar: (Song) -> Unit,
+    onAddToQueue: ((Song) -> Unit)? = null,
     onBack: () -> Unit,
 ) {
     LaunchedEffect(Unit) { onLoad() }
     val colors = LocalFirmiumColors.current
+    var longPressSong by remember { mutableStateOf<Song?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         FirmiumDetailHeader(title = "Favorites", onBack = onBack)
@@ -82,11 +90,53 @@ fun FavoritesScreen(
                             isCurrentlyPlaying = false,
                             onClick = { onPlaySong(song) },
                             onToggleStar = { onToggleSongStar(song) },
+                            onAddToQueue = onAddToQueue?.let { { it(song) } },
+                            onLongPress = if (onAddToQueue != null) { { longPressSong = song } } else null,
                         )
                         FirmiumDivider()
                     }
                 }
             }
+        }
+    }
+
+    longPressSong?.let { song ->
+        FirmiumBottomSheet(onDismiss = { longPressSong = null }) {
+            Text(
+                song.title,
+                fontSize = 12.sp,
+                fontFamily = LocalAppFontFamily.current,
+                color = colors.muted,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            )
+            FirmiumDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onAddToQueue?.invoke(song)
+                        longPressSong = null
+                    }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                FirmiumIcon(
+                    Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    "Add to queue",
+                    fontSize = 14.sp,
+                    fontFamily = LocalAppFontFamily.current,
+                    color = colors.text,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
