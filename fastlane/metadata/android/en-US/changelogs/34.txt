@@ -1,0 +1,4 @@
+- Swipe a track right to add it to the queue, or long-press it for an Add to queue menu, on album, playlist and favorites lists. The mini player also has a queue button.
+- Playback pauses automatically when headphones are unplugged or a Bluetooth device disconnects.
+- A Shuffle all button on Home plays a random sample of your whole library.
+- The album list can now be sorted by recently added as well as A–Z.

@@ -13,8 +13,8 @@ android {
         applicationId = "com.fossisawesome.firmium"
         minSdk = 30
         targetSdk = 36
-        versionCode = 25
-        versionName = "6.4.1"
+        versionCode = 26
+        versionName = "9.0.0"
     }
 
     // Mirror the phone app's optional release signing so paired release APKs share a

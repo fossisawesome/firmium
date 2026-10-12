@@ -1,5 +1,0 @@
-Firmium is a music player for your own OpenSubsonic server, such as Navidrome, Gonic or Nextcloud Music.
-
-Browse and search your library, play with gapless playback and crossfade, and keep listening on the go with downloads for offline use. Synced lyrics, an equalizer, playlists, mixes and Android Auto support are built in.
-
-Your password is stored in the Android Keystore, and Firmium talks only to the server you point it at.

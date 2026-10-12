@@ -1,6 +1,6 @@
 # Maintainer: fossisawesome <lx bax wp 73 AT moz mail DOT com>
 pkgname=firmium-desktop-bin
-pkgver=8.1.0
+pkgver=9.0.0
 pkgrel=1
 pkgdesc="Lightning fast OpenSubsonic music player (Tauri 2: Rust + Svelte)"
 arch=('x86_64')

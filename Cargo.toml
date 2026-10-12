@@ -3,7 +3,7 @@ resolver = "2"
 members = ["backend", "src-tauri", "termium"]
 
 [workspace.package]
-version = "8.1.0"
+version = "9.0.0"
 edition = "2021"
 
 [profile.release]
