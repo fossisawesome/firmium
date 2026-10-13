@@ -42,7 +42,7 @@ jobs:
 
       # Needs the AUR_SSH_PRIVATE_KEY repo secret (public half added to the AUR account).
       - name: Publish firmium-desktop-bin
-        uses: KSXT/github-actions-deploy-aur@v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: firmium-desktop-bin
           pkgbuild: packaging/aur/PKGBUILD
