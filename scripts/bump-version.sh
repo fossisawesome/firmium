@@ -54,6 +54,8 @@ update_file() {
 # Update main repo files
 update_file "$PROJECT_ROOT/CLAUDE.md" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/Cargo.toml" "$NEW_VERSION"
+# Keep Cargo.lock workspace versions in sync (copr/rpm builds use --locked)
+(cd "$PROJECT_ROOT" && cargo update -w --quiet) && echo "✓ Updated: Cargo.lock"
 update_file "$PROJECT_ROOT/package.json" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/src-tauri/tauri.conf.json" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/PKGBUILD" "$NEW_VERSION"

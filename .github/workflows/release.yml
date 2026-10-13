@@ -182,30 +182,87 @@ jobs:
             target/${{ matrix.target }}/release/bundle/dmg/*.dmg \
             --repo "${{ github.repository }}" --clobber
 
-  build-termium:
+  build-termium-linux:
     needs: create-release
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - os: macos-14
-            target: aarch64-apple-darwin
-          - os: macos-14
-            target: x86_64-apple-darwin
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v7
 
       - name: Install system dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libssl-dev libsecret-1-dev libdbus-1-dev pkg-config
+          sudo apt-get install -y libasound2-dev libssl-dev libsecret-1-dev libdbus-1-dev pkg-config rpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          key: termium-pkg-linux
+
+      - name: Build .deb and .rpm
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          cargo build --release -p termium
+          cargo install cargo-deb@3.8.0 cargo-generate-rpm@0.21.0 --locked
+          cargo deb -p termium --no-build --output "termium_${VER}_amd64.deb"
+          cargo generate-rpm -p termium --output "termium-${VER}-x86_64.rpm"
+
+      - name: Upload Termium Linux packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            termium_*_amd64.deb \
+            termium-*-x86_64.rpm \
+            --repo "${{ github.repository }}" --clobber
+
+  build-termium-windows:
+    needs: create-release
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          key: termium-pkg-windows
+
+      - name: Build NSIS installer
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          cargo build --release -p termium --target x86_64-pc-windows-msvc
+          choco install nsis -y --no-progress
+          "/c/Program Files (x86)/NSIS/makensis.exe" -DVERSION=$VER -DARCH=x86_64-pc-windows-msvc packaging/termium.nsi
+
+      - name: Upload Termium Windows installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            termium-setup-*.exe \
+            --repo "${{ github.repository }}" --clobber
+
+  build-termium-macos:
+    needs: create-release
+    runs-on: macos-14
+
+    strategy:
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+
+    steps:
+      - uses: actions/checkout@v7
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -215,35 +272,22 @@ jobs:
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
         with:
-          key: termium-${{ matrix.target }}
+          key: termium-pkg-${{ matrix.target }}
 
-      - name: Build Termium
-        run: cargo build --release -p termium --target ${{ matrix.target }}
-
-      - name: Package (tar.gz)
-        if: runner.os != 'Windows'
+      - name: Build .dmg
         run: |
-          NAME=termium-${{ github.ref_name }}-${{ matrix.target }}
-          mkdir "$NAME"
-          cp target/${{ matrix.target }}/release/termium "$NAME/"
-          tar czf "$NAME.tar.gz" "$NAME"
-          echo "ASSET=$NAME.tar.gz" >> $GITHUB_ENV
+          cargo build --release -p termium --target ${{ matrix.target }}
+          mkdir dmg-root
+          cp target/${{ matrix.target }}/release/termium dmg-root/
+          hdiutil create -volname Termium -srcfolder dmg-root -ov -format UDZO "termium-${GITHUB_REF_NAME#v}-${{ matrix.target }}.dmg"
 
-      - name: Package (zip)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          NAME=termium-${{ github.ref_name }}-${{ matrix.target }}
-          mkdir "$NAME"
-          cp target/${{ matrix.target }}/release/termium.exe "$NAME/"
-          7z a "$NAME.zip" "$NAME"
-          echo "ASSET=$NAME.zip" >> $GITHUB_ENV
-
-      - name: Upload Termium artifact
-        shell: bash
+      - name: Upload Termium macOS artifact
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" "$ASSET" --repo "${{ github.repository }}" --clobber
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            termium-*.dmg \
+            --repo "${{ github.repository }}" --clobber
 
   build-android:
     needs: create-release
@@ -317,7 +361,7 @@ jobs:
             })
 
   publish-release:
-    needs: [create-release, build-linux, build-windows, build-macos, build-termium, build-android]
+    needs: [create-release, build-linux, build-windows, build-macos, build-termium-linux, build-termium-windows, build-termium-macos, build-android]
     runs-on: ubuntu-latest
     steps:
       - name: Publish release

@@ -1,0 +1,30 @@
+Firmium is an OpenSubsonic and Subsonic music player that also plays local files. It is built fully native in Kotlin, so it stays speedy and lightweight.
+
+Playback
+* Gapless playback and crossfade with adjustable overlap and curve
+* ReplayGain volume normalization
+* 10-band graphic and parametric equalizer with saveable profiles
+* Pick up where you left off: the play queue syncs across your devices
+
+Discovery
+* Synced lyrics with word-by-word highlighting
+* Start Radio from any track, album or artist
+* Mix by mood: Chill, Mid or High energy, optionally narrowed to a genre
+* Shuffle all with one tap
+* Similar tracks, even on servers without native support
+* Podcasts by RSS, resuming where you stopped
+
+Your library, anywhere
+* Connect to your own server, or play music you keep in the Music/Firmium folder with no server at all
+* Download tracks or albums for offline listening, in the original or a transcoded format
+* Local play history with CSV and JSON export
+* ListenBrainz scrobbling
+
+Looks and platforms
+* 18+ color themes, custom themes, and an optional Spotify-style layout
+* Android Auto with voice search and an A-Z index
+* Android TV with big-screen browsing
+
+Your password is kept in the Android Keystore. There are no ads and no tracking.
+
+Firmium is free software under the GPL-3.0. This F-Droid build does not include Wear OS watch sync, which needs Google libraries.

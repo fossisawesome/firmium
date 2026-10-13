@@ -3,6 +3,8 @@ name = "termium"
 version.workspace = true
 edition.workspace = true
 description = "Subsonic TUI Music Streamer"
+license = "GPL-3.0"
+homepage = "https://github.com/fossisawesome/firmium"
 
 [[bin]]
 name = "termium"
@@ -16,3 +18,18 @@ tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time", "
 futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 toml = "1.1"
+
+[package.metadata.deb]
+section = "sound"
+priority = "optional"
+maintainer = "fossisawesome <noreply@users.noreply.github.com>"
+extended-description = "Terminal client for OpenSubsonic and Navidrome servers."
+depends = "$auto"
+assets = [
+    ["target/release/termium", "usr/bin/", "755"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/termium", dest = "/usr/bin/termium", mode = "755" },
+]

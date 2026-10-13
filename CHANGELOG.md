@@ -24,11 +24,12 @@
 - **Android:** Firmium Recap (phone and TV) has been removed. Play history and export in Settings → Stats stay.
 - **Android:** Firmium now saves your queue and position to the server and offers to resume a queue saved by another device when the app opens.
 - **Termium:** Press `r` to resume the queue saved on your server by another device.
-- **Termium:** Ready-made downloads for Linux, Windows and macOS are now attached to every release.
+- **Termium:** Ready-made downloads for Linux, Windows and macOS are now attached to every release, including `.deb`, `.rpm`, a Windows `.exe` installer and a macOS `.dmg`.
 - **Website:** The Firmium site has had a polish pass: better phone layout, a working shortcuts overlay, social preview cards, and plain screenshots without fake window frames.
 - Desktop installers are now built for `.deb`, `.rpm`, Windows and macOS (`Firmium_*_aarch64.dmg` / `Firmium_*_x64.dmg`).
 
 ### Fixes
+- Fedora (Copr) build failed with "cannot update the lock file" because `Cargo.lock` still listed version 8.1.0. Lock now matches 9.0.0 and the version bump script keeps it in sync.
 - Servers that reject the standard login (such as Nextcloud Music) now work ([#74](https://github.com/fossisawesome/firmium/issues/74)).
 - Adding the same track twice to a playlist in one go no longer creates a duplicate.
 - Playing the same song twice in a row, or a one-song queue on repeat, no longer cuts off about 30 seconds early.
