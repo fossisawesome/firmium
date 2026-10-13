@@ -1,14 +1,12 @@
 <script lang="ts">
-  import { dataVersion } from '../lib/stores'
+  import { app, navTo } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { errorMessage } from '../lib/ipc'
   import { extractGenres, albumDecade } from '../lib/utils'
-  import VirtualList from '../lib/VirtualList.svelte'
+import { cover } from '../lib/cover'
+  import { IconMusic } from '../lib/icons'
   import LoadingState from '../components/LoadingState.svelte'
-  import AlbumRow from '../components/AlbumRow.svelte'
   import type { Album } from '../lib/types'
-
-  const ROW_HEIGHT = 60
 
   let albums = $state<Album[]>([])
   let loading = $state(true)
@@ -26,17 +24,25 @@
 
   const toggle = (set: Set<string>, v: string) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); return n }
 
-  // Only full albums here; singles/EPs/etc. are filtered out as in the original list.
   const visible = $derived(
     albums
-      .filter(a => (a.releaseType ?? 'album').toLowerCase() === 'album')
       .filter(a => selectedGenres.size === 0 || extractGenres(a.genres).some(g => selectedGenres.has(g)))
       .filter(a => selectedDecades.size === 0 || selectedDecades.has(albumDecade(a.year) ?? '')),
   )
+  const groups = $derived.by(() => {
+    const g: Record<'Albums' | 'EPs' | 'Singles', Album[]> = { Albums: [], EPs: [], Singles: [] }
+    for (const a of visible) {
+      const t = (a.releaseType ?? '').toLowerCase()
+      if (t === 'single') g.Singles.push(a)
+      else if (t === 'ep') g.EPs.push(a)
+      else g.Albums.push(a)
+    }
+    return g
+  })
   const hasFilters = $derived(selectedGenres.size > 0 || selectedDecades.size > 0)
 
   $effect(() => {
-    $dataVersion
+    app.dataVersion
     const bySort = sort
     let live = true
     loading = true
@@ -53,20 +59,20 @@
 <LoadingState {loading} {error} empty={albums.length === 0} loadingMessage="Loading albums…" emptyMessage="No albums found.">
   <div class="filter-bar">
     <div class="filter-group">
-      <button class="filter-chip" class:active={sort === 'name'} onclick={() => (sort = 'name')}>A–Z</button>
-      <button class="filter-chip" class:active={sort === 'newest'} onclick={() => (sort = 'newest')}>Recently added</button>
+      <button class={["filter-chip", { active: sort === 'name' }]} onclick={() => (sort = 'name')}>A–Z</button>
+      <button class={["filter-chip", { active: sort === 'newest' }]} onclick={() => (sort = 'newest')}>Recently added</button>
     </div>
   </div>
   {#if allGenres.length > 0 || allDecades.length > 0}
     <div class="filter-bar">
       {#if allDecades.length > 0}
         <div class="filter-group">
-          {#each allDecades as d}<button class="filter-chip" class:active={selectedDecades.has(d)} onclick={() => (selectedDecades = toggle(selectedDecades, d))}>{d}</button>{/each}
+          {#each allDecades as d}<button class={["filter-chip", { active: selectedDecades.has(d) }]} onclick={() => (selectedDecades = toggle(selectedDecades, d))}>{d}</button>{/each}
         </div>
       {/if}
       {#if allGenres.length > 0}
         <div class="filter-group">
-          {#each allGenres.slice(0, 20) as g}<button class="filter-chip" class:active={selectedGenres.has(g)} onclick={() => (selectedGenres = toggle(selectedGenres, g))}>{g}</button>{/each}
+          {#each allGenres.slice(0, 20) as g}<button class={["filter-chip", { active: selectedGenres.has(g) }]} onclick={() => (selectedGenres = toggle(selectedGenres, g))}>{g}</button>{/each}
         </div>
       {/if}
       {#if hasFilters}
@@ -74,7 +80,31 @@
       {/if}
     </div>
   {/if}
-  <VirtualList items={visible} itemHeight={ROW_HEIGHT}>
-    {#snippet children(album)}<AlbumRow {album} />{/snippet}
-  </VirtualList>
+  {#each ['Albums', 'EPs', 'Singles'] as const as category}
+    {#if groups[category].length > 0}
+      <div class="release-group-title">{category}</div>
+      <div class="album-grid">
+        {#each groups[category] as album (album.id)}
+          <button class="album-tile" onclick={() => navTo('album', album.id)}>
+            <div class="home-card-art">
+              {#if album.coverArtId}<img {@attach cover(album.coverArtId)} alt="" />
+              {:else}<div class="home-card-no-art"><span class="icon" style="width:24px;height:24px">{@html IconMusic}</span></div>{/if}
+            </div>
+            <span class="album-tile-name">{album.name}</span>
+            <span class="album-tile-artist">{album.albumArtist}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+  {/each}
 </LoadingState>
+
+<style lang="scss">
+  .album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; padding: 8px 0 16px; }
+  .album-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-align: left; content-visibility: auto; contain-intrinsic-size: 200px;
+    :global(.home-card-art) { width: 100%; height: auto; aspect-ratio: 1; margin-bottom: 4px; }
+    &:hover :global(.home-card-art) { box-shadow: inset 0 0 0 2px var(--accent); }
+  }
+  .album-tile-name { font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .album-tile-artist { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>

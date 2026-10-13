@@ -49,7 +49,6 @@ pub struct AudioPlayer {
     sessions: SessionMap,
     output: RwLock<OutputHandle>,
     /// Reused HTTP client — avoids rebuilding a connection pool and TLS context on every track.
-    http_client: reqwest::blocking::Client,
     /// Event bus for broadcasting playback state/position changes to the UI.
     bus: EventBus,
     /// True while a crossfade's volume ramp is in flight. Reopening the
@@ -69,20 +68,11 @@ impl AudioPlayer {
         let sessions: SessionMap = Arc::new(RwLock::new(HashMap::new()));
         let (device, stream) = output::open_default(Arc::clone(&sessions))?;
 
-        let http_client = reqwest::blocking::Client::builder()
-            .user_agent(concat!("firmium-desktop/", env!("CARGO_PKG_VERSION")))
-            // Pin TLS verification explicitly (default is on) so it can't be weakened by accident.
-            .danger_accept_invalid_certs(false)
-            .danger_accept_invalid_hostnames(false)
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
         let eq = Arc::new(EqShared::new(crate::commands::equalizer::resolve_runtime()));
 
         Ok(AudioPlayer {
             sessions,
             output: RwLock::new(OutputHandle { device, stream }),
-            http_client,
             bus,
             crossfade_in_progress: AtomicBool::new(false),
             bit_perfect_mode: parking_lot::Mutex::new("relaxed".to_string()),
@@ -197,7 +187,7 @@ impl AudioPlayer {
         let player_id_clone = player_id.clone();
         let player = Arc::clone(self_arc);
         let sessions = Arc::clone(&self_arc.sessions);
-        let http_client = self_arc.http_client.clone();
+        let http_client = crate::tls::blocking_http();
         let bus = self_arc.bus.clone();
 
         tokio::spawn(async move {

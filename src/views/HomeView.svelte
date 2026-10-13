@@ -1,29 +1,22 @@
 <script lang="ts">
-  import { IconMusic, IconUser, IconHeart, IconShuffle } from '../lib/icons'
-  import { auth, navTo, dataVersion, toast } from '../lib/stores'
+  import { IconMusic, IconUser, IconHeart } from '../lib/icons'
+  import { app, navTo } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { cover } from '../lib/cover'
-  import { errorMessage } from '../lib/ipc'
   import type { Album, Genre, RecentPlay } from '../lib/types'
 
   const hour = new Date().getHours()
   const timeOfDay = hour >= 5 && hour < 12 ? 'Morning' : hour < 17 && hour >= 12 ? 'Afternoon' : hour >= 17 && hour < 21 ? 'Evening' : 'Night'
-  const username = $derived($auth.username ?? 'there')
+  const username = $derived(app.auth.username ?? 'there')
 
   let plays = $state<RecentPlay[]>([])
   let randomAlbums = $state<Album[]>([])
   let genres = $state<Genre[]>([])
   let loading = $state(true)
+  let sectionWidth = $state(0)
 
-  let shuffling = false
-  async function shuffleAll() {
-    if (shuffling) return
-    shuffling = true
-    try {
-      if ((await Api.shuffleAll()) === 0) toast('No songs found to shuffle.')
-    } catch (e) { toast(errorMessage(e)) }
-    finally { shuffling = false }
-  }
+  // As many 110px cards (12px gap) as fit the row, at most the 12 fetched.
+  const randomCount = $derived(Math.min(12, Math.max(1, Math.floor((sectionWidth + 12) / 122))))
 
   // Recently played albums / artists, deduplicated from the play history.
   const recentAlbums = $derived.by(() => {
@@ -36,7 +29,7 @@
   })
 
   $effect(() => {
-    $dataVersion
+    app.dataVersion
     let live = true
     loading = true
     Promise.allSettled([Api.recentPlays(40), Api.albumList('random', 12), Api.genres()]).then(([p, r, g]) => {
@@ -60,9 +53,6 @@
     <button class="home-shortcut" onclick={() => navTo('favorites')}>
       <span class="icon" style="width:16px;height:16px">{@html IconHeart}</span>Favorites
     </button>
-    <button class="home-shortcut" onclick={shuffleAll} title="Shuffle all" aria-label="Shuffle all">
-      <span class="icon" style="width:16px;height:16px">{@html IconShuffle}</span>
-    </button>
   </div>
 
   {#if recentAlbums.length > 0}
@@ -72,7 +62,7 @@
         {#each recentAlbums as p (p.albumId)}
           <button class="home-card" onclick={() => navTo('album', p.albumId)}>
             <div class="home-card-art">
-              {#if p.coverArtId}<img use:cover={p.coverArtId} alt="" />
+              {#if p.coverArtId}<img {@attach cover(p.coverArtId)} alt="" />
               {:else}<div class="home-card-no-art"><span class="icon" style="width:24px;height:24px;color:var(--muted)">{@html IconMusic}</span></div>{/if}
             </div>
             <div class="home-card-info">
@@ -92,7 +82,7 @@
         {#each recentArtists as p (p.artistName)}
           <button class="home-card home-card--artist" onclick={() => (p.artistId ? navTo('artist', p.artistId) : navTo('artists'))}>
             <div class="home-card-art home-card-art--round">
-              {#if p.coverArtId}<img use:cover={p.coverArtId} alt="" />
+              {#if p.coverArtId}<img {@attach cover(p.coverArtId)} alt="" />
               {:else}<div class="home-card-no-art"><span class="icon" style="width:28px;height:28px;color:var(--muted)">{@html IconUser}</span></div>{/if}
             </div>
             <div class="home-card-info"><div class="home-card-title">{p.artistName}</div></div>
@@ -102,7 +92,7 @@
     </section>
   {/if}
 
-  <section class="home-section">
+  <section class="home-section" bind:clientWidth={sectionWidth}>
     <div class="home-section-title">Random Picks</div>
     {#if loading}
       <div class="home-loading">Loading…</div>
@@ -110,10 +100,10 @@
       <div class="home-empty">No albums found.</div>
     {:else}
       <div class="home-scroll-row">
-        {#each randomAlbums as album (album.id)}
+        {#each randomAlbums.slice(0, randomCount) as album (album.id)}
           <button class="home-card" onclick={() => navTo('album', album.id)}>
             <div class="home-card-art">
-              {#if album.coverArtId}<img use:cover={album.coverArtId} alt="" />
+              {#if album.coverArtId}<img {@attach cover(album.coverArtId)} alt="" />
               {:else}<div class="home-card-no-art"><span class="icon" style="width:24px;height:24px;color:var(--muted)">{@html IconMusic}</span></div>{/if}
             </div>
             <div class="home-card-info">

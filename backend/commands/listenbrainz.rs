@@ -38,7 +38,7 @@ fn load_token() -> Option<String> {
 
 /// Fire-and-forget ListenBrainz "single" listen submission, mirroring
 /// `fire_scrobble`. No-op when no token is stored. Errors are logged only.
-pub(crate) fn fire_listenbrainz_listen(state: Arc<AppState>, song: Song) {
+pub(crate) fn fire_listenbrainz_listen(_state: Arc<AppState>, song: Song) {
     tokio::spawn(async move {
         // The keyring lookup blocks (D-Bus, possibly an unlock prompt), so it
         // stays off the caller and off the async workers.
@@ -61,8 +61,7 @@ pub(crate) fn fire_listenbrainz_listen(state: Arc<AppState>, song: Song) {
             "payload": [{ "listened_at": listened_at, "track_metadata": track_metadata }],
         });
 
-        let res = state
-            .http
+        let res = crate::tls::http()
             .post(LB_SUBMIT_URL)
             .header("Authorization", format!("Token {token}"))
             .json(&body)

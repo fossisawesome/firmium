@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -81,48 +83,44 @@ body {
   width: 100%;
   max-width: 400px;
   border-radius: 4px;
-}
 
-.setup-box h1 {
-  font-size: 20px;
-  font-weight: 400;
-  margin-bottom: 2rem;
-  letter-spacing: -0.5px;
-  color: var(--accent);
+  h1 {
+    font-size: 20px;
+    font-weight: 400;
+    margin-bottom: 2rem;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
 }
 
 .field {
   margin-bottom: 1.25rem;
-}
 
-.field label {
-  display: block;
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 6px;
-  letter-spacing: 0.5px;
-}
+  label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
 
-.field input[type="text"],
-.field input[type="password"],
-.field input[type="url"] {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 10px 12px;
-  font-family: var(--font);
-  font-size: 13px;
-  border-radius: 2px;
-  outline: none;
-  transition: border-color var(--timing);
-}
+  input[type="text"], input[type="password"], input[type="url"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: var(--font);
+    font-size: 13px;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color var(--timing);
+  }
 
-.field input[type="text"]:focus,
-.field input[type="password"]:focus,
-.field input[type="url"]:focus {
-  border-color: var(--accent);
+  input[type="text"]:focus, input[type="password"]:focus, input[type="url"]:focus {
+    border-color: var(--accent);
+  }
 }
 
 .field-checkbox {
@@ -130,21 +128,21 @@ body {
   align-items: center;
   gap: 8px;
   margin-bottom: 1.25rem;
-}
 
-.field-checkbox input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
+  input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+  }
 
-.field-checkbox label {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--muted);
-  letter-spacing: 0.5px;
-  cursor: pointer;
+  label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    cursor: pointer;
+  }
 }
 
 .btn-primary {
@@ -162,10 +160,10 @@ body {
   transition: background var(--timing), opacity var(--timing);
   margin-top: 0.5rem;
   touch-action: manipulation;
-}
 
-.btn-primary:hover {
-  opacity: 0.9;
+  &:hover {
+    opacity: 0.9;
+  }
 }
 
 /* ── Saved servers (Setup.svelte) ──────────────────────────────────────── */
@@ -217,8 +215,11 @@ body {
   cursor: pointer;
   border-radius: 2px;
   flex-shrink: 0;
+
+  &:hover {
+    opacity: 0.9;
+  }
 }
-.btn-connect-saved:hover { opacity: 0.9; }
 .btn-remove-saved {
   background: none;
   border: none;
@@ -228,8 +229,11 @@ body {
   padding: 0 4px;
   line-height: 1;
   flex-shrink: 0;
+
+  &:hover {
+    color: var(--text);
+  }
 }
-.btn-remove-saved:hover { color: var(--text); }
 .saved-servers-divider {
   font-size: 11px;
   color: var(--muted);
@@ -262,15 +266,17 @@ body {
   border-radius: 2px;
   cursor: pointer;
   transition: background var(--timing), color var(--timing), border-color var(--timing);
-}
-.filter-chip:hover {
-  color: var(--text);
-  border-color: var(--text);
-}
-.filter-chip.active {
-  background: var(--accent);
-  color: #000;
-  border-color: var(--accent);
+
+  &:hover {
+    color: var(--text);
+    border-color: var(--text);
+  }
+
+  &.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
 }
 .filter-clear {
   color: var(--muted);
@@ -283,7 +289,7 @@ body {
 .drop-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: $overlay;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -333,9 +339,11 @@ body {
 .resume-queue-btn {
   color: var(--accent);
   border-color: var(--accent);
-}
 
-.resume-queue-btn:hover { background: var(--accent-dim); }
+  &:hover {
+    background: var(--accent-dim);
+  }
+}
 .resume-queue-dismiss:hover { background: var(--surface2); }
 
 

@@ -11,7 +11,6 @@
 
   let enabled = $state(false)
   let profiles = $state<EqState['profiles']>([])
-  let devices = $state<AudioDevice[]>([])
   let deviceProfiles = $state<Record<string, string>>({})
   let defaultDevice = $state<string | null>(null)
   let selectedDevice = $state<string>('')
@@ -19,7 +18,6 @@
   let mode = $state<EqMode>('graphic')
   let bands = $state<EqBandSpec[]>(graphicDefaults())
 
-  let deviceOpen = $state(false)
   let profileOpen = $state(false)
   let newName = $state('')
   let saveDebounce: ReturnType<typeof setTimeout> | undefined
@@ -44,7 +42,6 @@
       profiles = state.profiles
       deviceProfiles = state.deviceProfiles
       defaultDevice = state.defaultDevice
-      devices = devs
       selectedDevice = defaultDevice ?? devs.find(d => d.default)?.name ?? devs[0]?.name ?? ''
       loadActiveProfileIntoEditor()
     } catch (e) {
@@ -67,12 +64,6 @@
   async function toggleEnabled(v: boolean) {
     enabled = v
     try { await tauriInvoke('set_eq_enabled', { enabled: v }) } catch (e) { console.error(e) }
-  }
-
-  function selectDevice(name: string) {
-    selectedDevice = name
-    deviceOpen = false
-    loadActiveProfileIntoEditor()
   }
 
   async function selectProfile(name: string) {
@@ -150,7 +141,7 @@
   onMount(load)
 </script>
 
-<svelte:document onclick={() => { deviceOpen = false; profileOpen = false }} />
+<svelte:document onclick={() => { profileOpen = false }} />
 
 <div class="sett-panel-title">Equalizer</div>
 
@@ -167,33 +158,13 @@
 
 <div class="settings-row">
   <div class="settings-info">
-    <div class="settings-title">Output Device</div>
-    <div class="settings-desc">Choose which device this profile applies to. Only the system default device is audibly active.</div>
-  </div>
-  <div class="theme-selector" class:open={deviceOpen} role="button" tabindex="0"
-    onclick={e => { e.stopPropagation(); deviceOpen = !deviceOpen }}
-    onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && (deviceOpen = !deviceOpen) }}>
-    <div class="theme-selector-value">{selectedDevice || 'No device'}{selectedDevice === defaultDevice ? ' (default)' : ''}</div>
-    <span class="theme-selector-arrow icon" style="width:14px;height:14px">{@html IconChevronDown}</span>
-    <div class="theme-selector-dropdown">
-      {#each devices as dev (dev.name)}
-        <div class="theme-option" class:selected={selectedDevice === dev.name} role="option" tabindex="0" aria-selected={selectedDevice === dev.name}
-          onclick={e => { e.stopPropagation(); selectDevice(dev.name) }}
-          onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && selectDevice(dev.name) }}>
-          {dev.name}{dev.default ? ' (default)' : ''}
-        </div>
-      {/each}
-    </div>
-  </div>
-</div>
-
-<div class="settings-row">
-  <div class="settings-info">
     <div class="settings-title">Profile</div>
-    <div class="settings-desc">Active profile for the selected device</div>
+    <div class="settings-desc">Active profile for the system default output</div>
   </div>
   <div class="eq-profile-controls">
-    <div class="theme-selector" class:open={profileOpen} role="button" tabindex="0"
+    <div class={["theme-selector", { open: profileOpen }]}
+      role="button"
+      tabindex="0"
       onclick={e => { e.stopPropagation(); profileOpen = !profileOpen }}
       onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && (profileOpen = !profileOpen) }}>
       <div class="theme-selector-value">{activeProfileName || 'None'}</div>
@@ -203,7 +174,10 @@
           <div class="theme-option" aria-disabled="true">No saved profiles</div>
         {/if}
         {#each profiles as p (p.name)}
-          <div class="theme-option" class:selected={activeProfileName === p.name} role="option" tabindex="0" aria-selected={activeProfileName === p.name}
+          <div class={["theme-option", { selected: activeProfileName === p.name }]}
+            role="option"
+            tabindex="0"
+            aria-selected={activeProfileName === p.name}
             onclick={e => { e.stopPropagation(); selectProfile(p.name) }}
             onkeydown={e => { e.stopPropagation(); (e.key === 'Enter' || e.key === ' ') && selectProfile(p.name) }}>
             {p.name}
@@ -224,7 +198,7 @@
   </div>
   <div class="bp-mode-selector">
     {#each [['graphic', 'Graphic'], ['parametric', 'Parametric']] as [id, label]}
-      <button class="bp-mode-btn" class:bp-mode-btn--active={mode === id} onclick={() => changeMode(id as EqMode)}>{label}</button>
+      <button class={["bp-mode-btn", { 'bp-mode-btn--active': mode === id }]} onclick={() => changeMode(id as EqMode)}>{label}</button>
     {/each}
   </div>
 </div>
@@ -271,7 +245,7 @@
   </div>
 </div>
 
-<style>
+<style lang="scss">
   .eq-profile-controls { display: flex; gap: 8px; align-items: center; }
   .eq-graphic {
     display: flex; justify-content: space-between; gap: 4px;

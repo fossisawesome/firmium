@@ -117,6 +117,7 @@ fun AccountDialog(
                         )
                     }
                     AccountConnectForm(state = state, onLogin = onLogin)
+                    ClientCertSection(modifier = Modifier.padding(top = 20.dp))
                 }
             }
 

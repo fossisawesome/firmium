@@ -2,8 +2,8 @@
   import { IconMusic, IconDownload, IconLoading } from '../lib/icons'
   import { Api } from '../lib/api'
   import { cover } from '../lib/cover'
-  import { showMenu } from '../lib/menu'
-  import { navTo, isAuthed, toastError } from '../lib/stores'
+  import { showMenu } from '../lib/menu.svelte'
+  import { app, navTo, toastError } from '../lib/stores.svelte'
   import type { Album } from '../lib/types'
 
   let { album }: { album: Album } = $props()
@@ -23,7 +23,7 @@
   onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navTo('album', album.id)}>
   <div class="album-art-sm">
     {#if album.coverArtId}
-      <img use:cover={album.coverArtId} alt="" />
+      <img {@attach cover(album.coverArtId)} alt="" />
     {:else}
       <div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconMusic}</span></div>
     {/if}
@@ -32,9 +32,11 @@
     <div class="album-title">{album.name}</div>
     <div class="album-artist">{album.albumArtist}</div>
   </div>
-  {#if $isAuthed}
-    <button class="album-download-btn" class:download-done={dl === 'done'} class:download-error={dl === 'error'}
-      title="Download album" disabled={dl === 'loading'} onclick={download}>
+  {#if app.isAuthed}
+    <button class={["album-download-btn", { 'download-done': dl === 'done', 'download-error': dl === 'error' }]}
+      title="Download album"
+      disabled={dl === 'loading'}
+      onclick={download}>
       <span class="icon" style="width:14px;height:14px">{@html dl === 'loading' ? IconLoading : IconDownload}</span>
     </button>
   {/if}

@@ -19,6 +19,8 @@ export const Api = {
   // settings
   settings: () => call<T.Settings>('get_settings'),
   setSetting: <K extends T.SettingKey>(key: K, value: T.Settings[K]) => call<T.Settings>('set_setting', { key, value }),
+  pickTlsCert: (kind: T.TlsCertKind) => call<T.Settings | null>('pick_tls_cert', { kind }),
+  clearTlsCert: (kind: T.TlsCertKind) => call<T.Settings>('clear_tls_cert', { kind }),
   resetSettings: () => call<T.Settings>('reset_settings'),
   setWindowDecorations: (enabled: boolean) => call('set_window_decorations', { enabled }),
 
@@ -86,6 +88,7 @@ export const Api = {
   syncPlaylistNow: (localId: string) => call<T.Playlist[]>('sync_playlist_now', { localId }),
   deletePlaylist: (localId: string) => call<T.Playlist[]>('delete_playlist', { localId }),
   renamePlaylist: (localId: string, name: string) => call<T.Playlist[]>('rename_playlist', { localId, name }),
+  setPlaylistCover: (localId: string, clear = false) => call<T.Playlist[] | null>('set_playlist_cover', { localId, clear }),
   addToPlaylist: (localId: string, song: T.Song) => call<T.Playlist[]>('add_to_playlist', { localId, song }),
   movePlaylistTrack: (localId: string, from: number, to: number) => call<T.Playlist[]>('move_playlist_track', { localId, from, to }),
   removePlaylistTrack: (localId: string, trackId: string) => call<T.Playlist[]>('remove_playlist_track', { localId, trackId }),

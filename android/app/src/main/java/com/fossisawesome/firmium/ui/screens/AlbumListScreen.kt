@@ -5,8 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fossisawesome.firmium.data.model.Album
@@ -38,6 +43,7 @@ fun Album.effectiveType(): String {
 private val typeOrder = mapOf("Single" to 0, "EP" to 1, "Album" to 2, "Compilation" to 3, "Live" to 4, "Remix" to 5)
 fun String.releaseTypeSortOrder(): Int = typeOrder[this] ?: 6
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlbumListScreen(
     state: AlbumListState,
@@ -122,12 +128,15 @@ fun AlbumListScreen(
                     .groupBy { it.effectiveType() }
             }
 
-            LazyColumn(
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(140.dp),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (allDecades.isNotEmpty() || allGenres.isNotEmpty() || loadNewestIds != null) {
-                    item(key = "filters") {
+                    item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
                         FilterChipsRow(
                             showSort = loadNewestIds != null,
                             sortNewest = sortNewest,
@@ -146,16 +155,16 @@ fun AlbumListScreen(
                         )
                     }
                 }
-                item(key = "sort_label") {
+                item(key = "sort_label", span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         if (sortNewest && newest != null) "Sorted by recently added" else "Sorted by type, then year",
                         fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                         color = colors.muted,
-                        modifier = Modifier.padding(start = 16.dp, top = 12.dp),
+                        modifier = Modifier.padding(start = 4.dp, top = 12.dp),
                     )
                 }
                 grouped.forEach { (type, albums) ->
-                    item(key = "header_$type") {
+                    item(key = "header_$type", span = { GridItemSpan(maxLineSpan) }) {
                         val label = when (type) {
                             "Single" -> "Singles"
                             "EP" -> "EPs"
@@ -166,20 +175,35 @@ fun AlbumListScreen(
                             "${label.uppercase()} · ${albums.size}",
                             fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
                             color = colors.muted, letterSpacing = 1.sp,
-                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(start = 4.dp, top = 16.dp),
                         )
                     }
                     items(albums, key = { it.id }) { album ->
-                        AlbumRow(
-                            album = album,
-                            coverUrl = coverUrlFor(album.coverArt),
-                            onAlbumClick = onAlbumClick,
-                            onAddClick = { pendingAlbumId = album.id },
-                            onDownloadClick = onDownloadAlbum?.invoke(album),
-                            coverSize = if (spotify) 56.dp else 44.dp,
-                            coverRadius = if (spotify) 8.dp else 6.dp,
-                        )
-                        FirmiumDivider()
+                        // Long-press adds to a playlist; downloads live on the album page.
+                        Column(
+                            Modifier.clip(RoundedCornerShape(if (spotify) 8.dp else 6.dp))
+                                .combinedClickable(
+                                    onClick = { onAlbumClick(album.id) },
+                                    onLongClick = { pendingAlbumId = album.id },
+                                ),
+                        ) {
+                            CoverImage(
+                                url = coverUrlFor(album.coverArt),
+                                contentDescription = album.name,
+                                modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                                    .clip(RoundedCornerShape(if (spotify) 8.dp else 6.dp))
+                                    .background(colors.surface2),
+                            )
+                            Text(
+                                album.name, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
+                                color = colors.text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                            Text(
+                                album.artist, fontSize = 11.sp, fontFamily = LocalAppFontFamily.current,
+                                color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }

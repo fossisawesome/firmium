@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fossisawesome.firmium.audio.NowPlayingController
 import com.fossisawesome.firmium.data.UserError
 import com.fossisawesome.firmium.ui.components.ErrorHost
+import com.fossisawesome.firmium.ui.components.ResumeQueueDialog
 import com.fossisawesome.firmium.ui.navigation.AppNavGraph
 import com.fossisawesome.firmium.ui.screens.AccountDialog
 import com.fossisawesome.firmium.ui.screens.OnboardingScreen
@@ -155,16 +156,18 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // Offer to continue the queue another device saved on the server.
+                    var resumeOffer by remember { mutableStateOf<com.fossisawesome.firmium.data.api.ApiClient.RemotePlayQueue?>(null) }
+                    resumeOffer?.let { remote ->
+                        ResumeQueueDialog(
+                            remote = remote,
+                            onResume = { playerViewModel.resumeRemoteQueue(remote); resumeOffer = null },
+                            onDismiss = { resumeOffer = null },
+                        )
+                    }
                     LaunchedEffect(authState.isAuthenticated) {
                         if (!authState.isAuthenticated) return@LaunchedEffect
                         val remote = playerViewModel.offerableRemoteQueue() ?: return@LaunchedEffect
-                        val first = remote.songs.firstOrNull { it.id == remote.currentId } ?: remote.songs.first()
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("Resume server queue?")
-                            .setMessage("${remote.songs.size} tracks saved by ${remote.changedBy ?: "another device"}, starting at \"${first.title}\".")
-                            .setPositiveButton("Resume") { _, _ -> playerViewModel.resumeRemoteQueue(remote) }
-                            .setNegativeButton("Not now", null)
-                            .show()
+                        resumeOffer = remote
                     }
 
                     // Auto-open login dialog when saved credentials couldn't be restored.

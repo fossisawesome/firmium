@@ -9,7 +9,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import com.fossisawesome.firmium.data.net.TlsConfig
+import okhttp3.Call
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.*
@@ -45,10 +47,10 @@ class AudioPlayer(private val context: Context) {
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
 
-    // ExoPlayer's default HTTP source rejects http->https redirects, which a reverse proxy
-    // (e.g. nginx in front of gonic) commonly issues. OkHttp for the API follows them, so
-    // browsing worked while playback failed (#84).
-    private val httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
+    // OkHttp (not HttpURLConnection) so playback shares the API client's mTLS identity and follows
+    // http->https redirects from reverse proxies (#84). The Call.Factory reads the client per
+    // request so cert changes apply without rebuilding the player.
+    private val httpFactory = OkHttpDataSource.Factory(Call.Factory { TlsConfig.client.newCall(it) })
 
     private fun buildPlayer(): ExoPlayer =
         ExoPlayer.Builder(context)

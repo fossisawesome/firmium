@@ -13,7 +13,6 @@ const SERVICE: &str = "firmium-desktop";
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub theme_id: String,
-    pub ui_theme_id: String,
     pub font_family: String,
     pub scrollbar_width: u32,
     pub download_format: String,
@@ -31,6 +30,10 @@ pub struct Settings {
     pub lastfm_key: String,
     pub lastfm_secret: String,
     pub listenbrainz_token: String,
+    /// mTLS material installed (see `tls.rs`).
+    pub client_cert: bool,
+    pub client_key: bool,
+    pub ca_cert: bool,
 }
 
 fn secret(key: &str) -> String {
@@ -63,10 +66,10 @@ impl Core {
     }
 
     pub fn settings(&self) -> Settings {
+        let (client_cert, client_key, ca_cert) = crate::tls::installed();
         let c = self.config.lock();
         Settings {
             theme_id: c.theme_id.clone().unwrap_or_else(|| "firmium".into()),
-            ui_theme_id: c.ui_theme_id.clone().unwrap_or_else(|| "default".into()),
             font_family: c.font_family.clone().unwrap_or_else(|| "Liberation Mono".into()),
             scrollbar_width: c.scrollbar_width.unwrap_or(10).clamp(6, 20),
             download_format: c.download_format.clone().unwrap_or_else(|| "raw".into()),
@@ -84,6 +87,9 @@ impl Core {
             lastfm_key: secret("lastfm_key"),
             lastfm_secret: secret("lastfm_secret"),
             listenbrainz_token: secret("listenbrainz_token"),
+            client_cert,
+            client_key,
+            ca_cert,
         }
     }
 
@@ -96,7 +102,6 @@ impl Core {
         let as_str = || value.as_str().map(String::from).ok_or_else(|| format!("{key}: expected string"));
         match key {
             "themeId" => self.config.lock().theme_id = Some(as_str()?),
-            "uiThemeId" => self.config.lock().ui_theme_id = Some(as_str()?),
             "fontFamily" => self.config.lock().font_family = Some(as_str()?),
             "scrollbarWidth" => self.config.lock().scrollbar_width = Some((as_f32()? as u32).clamp(6, 20)),
             "downloadFormat" => self.config.lock().download_format = Some(as_str()?),
@@ -187,6 +192,17 @@ impl Core {
             other => return Err(format!("unknown setting: {other}")),
         }
         self.save_config();
+        Ok(self.settings())
+    }
+
+    /// Installs the PEM at `path` as mTLS material (`clientCert`, `clientKey`, `caCert`).
+    pub fn import_tls_cert(&self, kind: &str, path: &std::path::Path) -> Result<Settings, String> {
+        crate::tls::import(kind, path)?;
+        Ok(self.settings())
+    }
+
+    pub fn clear_tls_cert(&self, kind: &str) -> Result<Settings, String> {
+        crate::tls::clear(kind)?;
         Ok(self.settings())
     }
 

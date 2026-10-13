@@ -52,7 +52,11 @@ fun computeWordTimings(lines: List<LyricLine>, trackDurationMs: Long): List<List
 }
 
 // Owns lyrics fetching, caching, and position-sync state for the currently playing track.
-class LyricsController(private val scope: CoroutineScope, private val api: ApiClient) {
+class LyricsController(
+    private val scope: CoroutineScope,
+    private val api: ApiClient,
+    private val lrclibEnabled: suspend () -> Boolean = { true },
+) {
 
     private val _state = MutableStateFlow(LyricsState())
     val state: StateFlow<LyricsState> = _state.asStateFlow()
@@ -70,7 +74,7 @@ class LyricsController(private val scope: CoroutineScope, private val api: ApiCl
         lyricsJob = scope.launch {
             val trackId = track.id
             val result = try {
-                api.getLyrics(track.id, track.artist, track.title, track.album, track.duration)
+                api.getLyrics(track.id, track.artist, track.title, track.album, track.duration, lrclibEnabled())
             } catch (e: Exception) { if (e is CancellationException) throw e; null }
             // Guard against a stale fetch racing ahead of a newer track that started before this
             // coroutine was cancelled.

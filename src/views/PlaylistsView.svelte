@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { IconList, IconCloud } from '../lib/icons'
-  import { isAuthed, navTo, toastError } from '../lib/stores'
+  import { app, navTo, toastError } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { cover } from '../lib/cover'
   import { errorMessage } from '../lib/ipc'
-  import { localPlaylists, serverOnlyPlaylists, loadPlaylists } from '../lib/playlists'
+  import { playlistState, loadPlaylists } from '../lib/playlists.svelte'
   import PlaylistMosaic from '../components/PlaylistMosaic.svelte'
 
   let showDialog = $state(false)
@@ -17,7 +17,7 @@
 
   onMount(async () => {
     loading = true
-    try { await loadPlaylists($isAuthed) } catch (e) { error = errorMessage(e) }
+    try { await loadPlaylists(app.isAuthed) } catch (e) { error = errorMessage(e) }
     finally { loading = false }
   })
 
@@ -33,7 +33,7 @@
     if (!name) return
     try {
       const lists = await Api.createPlaylist(name)
-      localPlaylists.set(lists)
+      playlistState.local = lists
       navTo('playlist', lists[0].id)
     } catch (e) { toastError(e) }
   }
@@ -42,11 +42,11 @@
     e.stopPropagation()
     if (syncing.has(localId)) return
     syncing = new Set(syncing).add(localId)
-    try { localPlaylists.set(await Api.syncPlaylistNow(localId)) } catch (err) { toastError(err) }
+    try { (playlistState.local = await Api.syncPlaylistNow(localId)) } catch (err) { toastError(err) }
     finally { const n = new Set(syncing); n.delete(localId); syncing = n }
   }
 
-  const total = $derived($localPlaylists.length + $serverOnlyPlaylists.length)
+  const total = $derived(playlistState.local.length + playlistState.serverOnly.length)
 </script>
 
 {#if showDialog}
@@ -77,11 +77,11 @@
     <div>No playlists yet</div>
   </div>
 {:else}
-  {#each $localPlaylists as pl (pl.id)}
+  {#each playlistState.local as pl (pl.id)}
     <div class="pl-card" role="button" tabindex="0" onclick={() => navTo('playlist', pl.id)}
       onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navTo('playlist', pl.id)}>
       <div class="pl-card-art">
-        {#if pl.tracks.length}<PlaylistMosaic covers={pl.tracks.map(t => t.coverArtId)} />
+        {#if pl.tracks.length || pl.customCover}<PlaylistMosaic covers={pl.tracks.map(t => t.coverArtId)} custom={pl.customCover} />
         {:else}<div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconList}</span></div>{/if}
       </div>
       <div class="pl-card-info">
@@ -90,18 +90,18 @@
         </div>
         <div class="pl-card-meta">{pl.tracks.length} track{pl.tracks.length !== 1 ? 's' : ''}</div>
       </div>
-      {#if $isAuthed && !pl.serverId}
+      {#if app.isAuthed && !pl.serverId}
         <button class="pl-sync-btn" title="Sync to server" disabled={syncing.has(pl.id)} onclick={e => syncNow(e, pl.id)}>
           <span class="icon" style="width:14px;height:14px">{@html IconCloud}</span>{syncing.has(pl.id) ? 'Syncing…' : 'Sync'}
         </button>
       {/if}
     </div>
   {/each}
-  {#each $serverOnlyPlaylists as sp (sp.id)}
+  {#each playlistState.serverOnly as sp (sp.id)}
     <div class="pl-card" role="button" tabindex="0" onclick={() => navTo('playlist', `server-${sp.id}`)}
       onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navTo('playlist', `server-${sp.id}`)}>
       <div class="pl-card-art">
-        {#if sp.coverArt}<img use:cover={sp.coverArt} alt="" />
+        {#if sp.coverArt}<img {@attach cover(sp.coverArt)} alt="" />
         {:else}<div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconList}</span></div>{/if}
       </div>
       <div class="pl-card-info">
@@ -114,21 +114,76 @@
   {/each}
 {/if}
 
-<style>
-  .pl-sync-btn { display: flex; align-items: center; gap: 5px; flex-shrink: 0; padding: 5px 10px; font-size: 0.8rem; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 3px; cursor: pointer; font-family: var(--font); }
-  .pl-sync-btn:hover { background: var(--accent); color: var(--bg); }
-  .pl-sync-btn:disabled { opacity: 0.5; cursor: default; }
+<style lang="scss">
+  .pl-sync-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--font);
+
+  &:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
   .pl-synced-badge, .pl-server-badge { display: inline-flex; align-items: center; margin-left: 5px; color: var(--accent); opacity: 0.8; vertical-align: middle; }
   .pl-server-loading, .pl-server-error { font-size: 0.8rem; color: var(--muted); padding: 8px 0; }
   .pl-server-error { color: var(--error); }
   .dialog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
   .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 24px; width: 320px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
   .dialog-title { font-size: 1rem; font-weight: 600; color: var(--text); }
-  .dialog-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-family: var(--font); font-size: 0.9rem; padding: 9px 12px; outline: none; transition: border-color 0.15s; }
-  .dialog-input:focus { border-color: var(--accent); }
+  .dialog-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
   .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
-  .dialog-btn { border: none; border-radius: 3px; padding: 8px 18px; font-family: var(--font); font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
-  .dialog-btn.cancel { background: var(--surface2); color: var(--text); }
-  .dialog-btn.confirm { background: var(--accent); color: var(--bg); }
-  .dialog-btn.confirm:disabled { opacity: 0.4; cursor: default; }
+  .dialog-btn {
+  border: none;
+  border-radius: 3px;
+  padding: 8px 18px;
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &.cancel {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  &.confirm {
+    background: var(--accent);
+    color: var(--bg);
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+}
 </style>

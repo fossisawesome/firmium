@@ -1,9 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    initBackend, auth, setAuthState, activeView, navTo, showAccountModal, isAuthed, currentTrack, bumpData,
-    toast, toastError, navBack, navForward, setScrollHost,
-  } from './lib/stores'
+  import type { Attachment } from 'svelte/attachments'
+  import { app, initBackend, setAuthState, navTo, bumpData, toast, toastError, navBack, navForward, setScrollHost } from './lib/stores.svelte'
   import { Api } from './lib/api'
   import { errorMessage } from './lib/ipc'
   import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -16,7 +14,6 @@
   import LyricsPanel from './components/LyricsPanel.svelte'
   import SimilarTracksPanel from './components/SimilarTracksPanel.svelte'
   import QueuePanel from './components/QueuePanel.svelte'
-  import EqPanel from './components/EqPanel.svelte'
   import AudioStatsPanel from './components/AudioStatsPanel.svelte'
   import PlaylistMenu from './components/PlaylistMenu.svelte'
   import Toasts from './components/Toasts.svelte'
@@ -35,7 +32,7 @@
   import PodcastsView from './views/PodcastsView.svelte'
   import PodcastDetail from './views/PodcastDetail.svelte'
 
-  const scrollHost = (el: HTMLElement) => { setScrollHost(el); return { destroy: () => setScrollHost(null) } }
+  const scrollHost: Attachment<HTMLElement> = el => { setScrollHost(el); return () => setScrollHost(null) }
 
   let ready = $state(false)
   let showOnboarding = $state(false)
@@ -48,16 +45,20 @@
   function finishOnboarding() {
     try { localStorage.setItem(ONBOARDED, 'true') } catch { /* private mode */ }
     showOnboarding = false
-    showAccountModal.set(true)
+    app.showAccountModal = true
   }
 
-  $effect(() => { document.documentElement.classList.toggle('has-player', !!$currentTrack) })
-  $effect(() => { document.title = $currentTrack ? `▶ ${$currentTrack.title} - Firmium` : 'Firmium' })
+  $effect(() => { document.documentElement.classList.toggle('has-player', !!app.currentTrack) })
+  $effect(() => { document.title = app.currentTrack ? `▶ ${app.currentTrack.title} - Firmium` : 'Firmium' })
 
+  // Offer once per launch, and only while nothing is playing (same as Android).
+  let resumeOffered = false
   async function offerResume() {
+    if (resumeOffered || app.currentTrack) return
+    resumeOffered = true
     try {
       const q = await Api.remotePlayQueue()
-      showResume = !!q && q.entries.length > 0
+      showResume = !!q && q.entries.length > 0 && !app.currentTrack
     } catch { /* offline or unsupported */ }
   }
 
@@ -68,14 +69,14 @@
       try {
         const a = await Api.autoLogin()
         if (a) { await setAuthState(a); offerResume() }
-        if (!$auth.authed) {
+        if (!app.auth.authed) {
           let onboarded = false
           try { onboarded = localStorage.getItem(ONBOARDED) === 'true' } catch { /* ignore */ }
-          if (!onboarded && $auth.accounts.length === 0) showOnboarding = true
+          if (!onboarded && app.auth.accounts.length === 0) showOnboarding = true
         }
       } catch (e) {
         setupError = errorMessage(e)
-        showAccountModal.set(true)
+        app.showAccountModal = true
       }
       ready = true
     })()
@@ -129,23 +130,23 @@
 {#if showOnboarding}<Onboarding onFinish={finishOnboarding} />{/if}
 <div class="sidebar"><Sidebar /></div>
 <div class="main-area">
-  <div class="list-panel" use:scrollHost>
+  <div class="list-panel" {@attach scrollHost}>
     {#if ready}
-      {#key $activeView.type + ($activeView.id ?? '')}
-        {#if $activeView.type === 'home'}<HomeView />
-        {:else if $activeView.type === 'favorites'}<FavoritesView />
-        {:else if $activeView.type === 'albums'}<AlbumList />
-        {:else if $activeView.type === 'album'}<AlbumDetail id={$activeView.id!} />
-        {:else if $activeView.type === 'artists'}<ArtistList />
-        {:else if $activeView.type === 'artist'}<ArtistDetail id={$activeView.id!} />
-        {:else if $activeView.type === 'genre'}<GenreView name={$activeView.id!} />
-        {:else if $activeView.type === 'mix'}<MixView />
-        {:else if $activeView.type === 'search'}<SearchView />
-        {:else if $activeView.type === 'playlists'}<PlaylistsView />
-        {:else if $activeView.type === 'playlist'}<PlaylistDetail id={$activeView.id!} />
-        {:else if $activeView.type === 'podcasts'}<PodcastsView />
-        {:else if $activeView.type === 'podcast'}<PodcastDetail id={$activeView.id!} />
-        {:else if $activeView.type === 'settings'}<Settings />
+      {#key app.activeView.type + (app.activeView.id ?? '')}
+        {#if app.activeView.type === 'home'}<HomeView />
+        {:else if app.activeView.type === 'favorites'}<FavoritesView />
+        {:else if app.activeView.type === 'albums'}<AlbumList />
+        {:else if app.activeView.type === 'album'}<AlbumDetail id={app.activeView.id!} />
+        {:else if app.activeView.type === 'artists'}<ArtistList />
+        {:else if app.activeView.type === 'artist'}<ArtistDetail id={app.activeView.id!} />
+        {:else if app.activeView.type === 'genre'}<GenreView name={app.activeView.id!} />
+        {:else if app.activeView.type === 'mix'}<MixView />
+        {:else if app.activeView.type === 'search'}<SearchView />
+        {:else if app.activeView.type === 'playlists'}<PlaylistsView />
+        {:else if app.activeView.type === 'playlist'}<PlaylistDetail id={app.activeView.id!} />
+        {:else if app.activeView.type === 'podcasts'}<PodcastsView />
+        {:else if app.activeView.type === 'podcast'}<PodcastDetail id={app.activeView.id!} />
+        {:else if app.activeView.type === 'settings'}<Settings />
         {/if}
       {/key}
     {/if}
@@ -154,12 +155,11 @@
 <QueuePanel />
 <LyricsPanel />
 <SimilarTracksPanel />
-<EqPanel />
 <AudioStatsPanel />
 <PlayerBar />
 <PlaylistMenu />
 <Toasts />
-{#if $showAccountModal}<AccountModal bind:error={setupError} />{/if}
+{#if app.showAccountModal}<AccountModal bind:error={setupError} />{/if}
 {#if showResume}<ResumeQueuePrompt onDismiss={() => (showResume = false)} />{/if}
 {#if dragActive}
   <div class="drop-overlay"><div class="drop-overlay-content">Drop to add to your library</div></div>

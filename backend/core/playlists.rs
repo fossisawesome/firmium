@@ -25,6 +25,9 @@ pub struct Playlist {
     pub create_pending: bool,
     #[serde(default)]
     pub create_attempts: u32,
+    /// Absolute path of a user-chosen cover image, copied under `<config>/playlist_covers`.
+    #[serde(default)]
+    pub custom_cover: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -71,6 +74,7 @@ pub fn new_local(name: String) -> Playlist {
         server_id: None,
         create_pending: true,
         create_attempts: 0,
+        custom_cover: None,
     }
 }
 
@@ -250,6 +254,31 @@ impl Core {
             sync::push_rename(self.backend.app_state.clone(), sid, name).await;
         }
         self.local_playlists()
+    }
+
+    /// Copies `src` into the config dir as this playlist's cover; `None` clears it.
+    pub fn set_local_playlist_cover(&self, local_id: &str, src: Option<PathBuf>) -> Result<Vec<Playlist>, String> {
+        let dest = match src {
+            Some(src) => {
+                let dir = crate::paths::config_dir().join("playlist_covers");
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("png");
+                // Unique name per pick so the webview never serves a cached older image.
+                let dest = dir.join(format!("{local_id}-{}.{ext}", now_ms()));
+                std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
+                Some(dest.to_string_lossy().into_owned())
+            }
+            None => None,
+        };
+        let mut list = self.playlists.lock();
+        if let Some(p) = list.iter_mut().find(|p| p.id == local_id) {
+            if let Some(old) = p.custom_cover.take() {
+                let _ = std::fs::remove_file(old);
+            }
+            p.custom_cover = dest;
+        }
+        save(&list);
+        Ok(list.clone())
     }
 
     pub async fn add_to_local_playlist(&self, local_id: &str, song: Song) -> Vec<Playlist> {

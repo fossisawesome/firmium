@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Api } from '../lib/api'
-  import { toastError } from '../lib/stores'
+  import { toastError } from '../lib/stores.svelte'
 
   let { onDismiss }: { onDismiss: () => void } = $props()
 

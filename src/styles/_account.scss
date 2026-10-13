@@ -1,8 +1,10 @@
+@use 'variables' as *;
+
 /* ── Account modal ────────────────────────────────────────────────────────── */
 .account-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: $overlay;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,10 +13,10 @@
 
 .account-modal-content {
   position: relative;
-}
 
-.account-modal-content .setup-box {
-  width: 360px;
+  .setup-box {
+    width: 360px;
+  }
 }
 
 .account-modal-close {
@@ -32,11 +34,11 @@
   color: var(--text);
   cursor: pointer;
   z-index: 1;
-}
 
-.account-modal-close:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  &:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 }
 
 .account-modal-server {
@@ -96,20 +98,20 @@ html.sidebar-collapsed .nav-btn {
   gap: 10px;
   margin-bottom: 14px;
   padding-bottom: 0;
-}
 
-.app-brand .logo {
-  font-size: 18px;
-  color: var(--accent);
-}
+  .logo {
+    font-size: 18px;
+    color: var(--accent);
+  }
 
-.app-brand .server-lbl {
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
+  .server-lbl {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
 }
 
 .account-btn {
@@ -124,11 +126,11 @@ html.sidebar-collapsed .nav-btn {
   border-radius: 4px;
   transition: all var(--timing);
   flex-shrink: 0;
-}
 
-.account-btn:hover {
-  color: var(--accent);
-  background: var(--surface2);
+  &:hover {
+    color: var(--accent);
+    background: var(--surface2);
+  }
 }
 
 .nav-links {
@@ -150,15 +152,21 @@ html.sidebar-collapsed .nav-btn {
   border-radius: 4px;
   transition: all var(--timing);
   touch-action: manipulation;
+
+  &:hover, &.active {
+    color: var(--text);
+    background: var(--surface2);
+  }
+
+  &.active {
+    color: var(--accent);
+    font-weight: bold;
+  }
 }
 
-.nav-btn:hover, .nav-btn.active {
-  color: var(--text);
-  background: var(--surface2);
-}
 
-.nav-btn.active {
-  color: var(--accent);
-  font-weight: bold;
-}
-
+/* Search lives in the brand row on desktop; the tab bar keeps its own entry on mobile. */
+html:not(.is-mobile-layout) .nav-btn.mobile-only { display: none; }
+.account-btn.active { color: var(--accent); }
+.app-brand { justify-content: flex-end; }
+html.sidebar-collapsed .app-brand { flex-direction: column; gap: 6px; }

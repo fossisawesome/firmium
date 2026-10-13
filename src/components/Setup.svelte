@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Api } from '../lib/api'
-  import { auth, setAuthState, showAccountModal } from '../lib/stores'
+  import { app, setAuthState } from '../lib/stores.svelte'
   import { errorMessage } from '../lib/ipc'
   import type { SavedAccount } from '../lib/types'
 
   interface Props { error?: string }
   let { error = $bindable('') }: Props = $props()
 
-  let serverUrl = $state($auth.server ?? '')
-  let username = $state($auth.username ?? '')
+  let serverUrl = $state(app.auth.server ?? '')
+  let username = $state(app.auth.username ?? '')
   let password = $state('')
   let savePassword = $state(true)
   let connecting = $state(false)
@@ -33,7 +33,7 @@
     error = ''
     try {
       await setAuthState(await next)
-      showAccountModal.set(false)
+      app.showAccountModal = false
     } catch (e) {
       error = errorMessage(e)
     } finally {
@@ -51,7 +51,7 @@
     error = ''
     try {
       await setAuthState(await Api.switchAccount(a.server, a.username))
-      showAccountModal.set(false)
+      app.showAccountModal = false
     } catch {
       // No stored password: prefill the form so only the password is needed.
       serverUrl = a.server
@@ -63,17 +63,17 @@
   }
 
   async function deleteSaved(a: SavedAccount) {
-    auth.set(await Api.removeAccount(a.server, a.username))
+    app.auth = await Api.removeAccount(a.server, a.username)
   }
 </script>
 
 <div class="setup-box">
   <h1>Firmium</h1>
 
-  {#if $auth.accounts.length > 0}
+  {#if app.auth.accounts.length > 0}
     <div class="saved-servers">
       <div class="saved-servers-title">Saved Servers</div>
-      {#each $auth.accounts as a}
+      {#each app.auth.accounts as a}
         <div class="saved-server-row">
           <div class="saved-server-info">
             <div class="saved-server-url">{a.server}</div>

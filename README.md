@@ -40,6 +40,7 @@ Firmium is a cross-platform music player targeting **Linux desktop, Windows, mac
 - **Play history** — local play history recorded on-device; export as CSV or JSON, works with or without a server
 - **Android Auto & Wear OS** — full library browsing, voice search, and transport controls in the car and on your wrist
 - **Credentials in OS keyring** — never stored as plaintext; supports multiple saved servers
+- **Client certificates (mTLS)** — connect to servers behind a reverse proxy that requires a client certificate, with an optional custom CA (desktop and Android)
 - **Scrobbling** — Last.fm (via server) and ListenBrainz
 
 ## Gallery

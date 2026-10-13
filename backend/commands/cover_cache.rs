@@ -1,19 +1,10 @@
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 
 const MAX_CACHE_BYTES: u64 = 200 * 1024 * 1024; // 200 MB
 const MAX_COVER_BYTES: u64 = 32 * 1024 * 1024; // 32 MB — far above any real cover, caps server OOM abuse
 
-fn http_client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            // Pin TLS verification explicitly (default is on) so it can't be weakened by accident.
-            .danger_accept_invalid_certs(false)
-            .danger_accept_invalid_hostnames(false)
-            .build()
-            .expect("failed to build cover-art http client")
-    })
+fn http_client() -> reqwest::Client {
+    crate::tls::http()
 }
 
 fn covers_dir() -> PathBuf {

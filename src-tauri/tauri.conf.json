@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Firmium",
-  "version": "9.0.1",
+  "version": "9.0.2",
   "identifier": "com.fossisawesome.firmium",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -25,7 +25,7 @@
       "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: asset: http://asset.localhost; media-src 'self' blob:;",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPCACHE/**", "$CACHE/com.fossisawesome.firmium/**"]
+        "scope": ["$APPCACHE/**", "$CACHE/com.fossisawesome.firmium/**", "$CONFIG/com.fossisawesome.firmium/playlist_covers/**"]
       }
     }
   },

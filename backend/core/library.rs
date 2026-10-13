@@ -523,7 +523,7 @@ impl Core {
             urlencode(artist),
             urlencode(key)
         );
-        let Ok(res) = self.backend.app_state.http.get(url).send().await else { return Vec::new() };
+        let Ok(res) = crate::tls::http().get(url).send().await else { return Vec::new() };
         let Ok(body) = res.json::<serde_json::Value>().await else { return Vec::new() };
         match body.pointer("/similarartists/artist") {
             Some(serde_json::Value::Array(a)) => a.iter().filter_map(|x| x.get("name").and_then(|n| n.as_str()).map(String::from)).collect(),

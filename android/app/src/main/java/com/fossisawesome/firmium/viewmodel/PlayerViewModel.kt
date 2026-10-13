@@ -16,6 +16,7 @@ import com.fossisawesome.firmium.data.podcast.isPodcastEpisodeId
 import com.fossisawesome.firmium.data.podcast.podcastEpisodeId
 import com.fossisawesome.firmium.data.podcast.toSong
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class SimilarTracksState(
@@ -36,7 +37,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     val state: StateFlow<PlayerState> get() = controller.state
 
-    private val lyrics = LyricsController(viewModelScope, api)
+    private val lyrics = LyricsController(viewModelScope, api) { getApplication<FirmiumApplication>().prefs.lrclibEnabled.first() }
     val lyricsState: StateFlow<LyricsState> = lyrics.state
 
     private val _similarTracksState = kotlinx.coroutines.flow.MutableStateFlow(SimilarTracksState())

@@ -1,5 +1,5 @@
 Name:           firmium
-Version:        9.0.1
+Version:        9.0.2
 Release:        1
 Summary:        OpenSubsonic music streaming desktop client
 

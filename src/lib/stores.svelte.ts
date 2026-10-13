@@ -1,7 +1,6 @@
 // UI state. Anything that is real application state (queue, settings, auth)
-// lives in Rust; these stores only mirror what the backend reports and hold
+// lives in Rust; this only mirrors what the backend reports and holds
 // purely visual state (current view, open panel, toasts).
-import { writable, derived, get } from 'svelte/store'
 import { Api } from './api'
 import { on, errorMessage, isSessionExpired } from './ipc'
 import type {
@@ -9,41 +8,53 @@ import type {
   PlaybackStateEvent, PlaybackPositionEvent,
 } from './types'
 
-// ── Backend mirrors ─────────────────────────────────────────────────────────
-export const auth = writable<AuthState>({ authed: false, server: null, username: null, accounts: [] })
-export const isAuthed = derived(auth, $a => $a.authed)
-export const settings = writable<Settings | null>(null)
-export const themes = writable<Theme[]>([])
-export const serverExtensions = writable<string[]>([])
-
-export const queueState = writable<QueueState>({
-  queue: [], queueIdx: -1, repeatOne: false, repeatAll: false, shuffleEnabled: false,
-  crossfadeEnabled: false, crossfadeDuration: 5, crossfadeCurve: 'linear', gaplessEnabled: true,
-  replayGainEnabled: true, volume: 0.8, playerId: null,
-})
-export const queue = derived(queueState, $q => $q.queue)
-export const queueIdx = derived(queueState, $q => $q.queueIdx)
-export const currentTrack = derived(queueState, $q => $q.queue[$q.queueIdx] ?? null as Song | null)
-export const volume = derived(queueState, $q => $q.volume)
-
-export const playbackState = writable<PlaybackState>('stopped')
-export const position = writable(0)
-export const duration = writable(0)
-
-// Bumped after imports/downloads/account switches so views refetch.
-export const dataVersion = writable(0)
-export const bumpData = () => dataVersion.update(n => n + 1)
-
-// ── Navigation (view-only) ──────────────────────────────────────────────────
 export type ViewType =
   | 'home' | 'albums' | 'artists' | 'search' | 'playlists' | 'favorites' | 'genres' | 'mix'
   | 'podcasts' | 'settings'
   | 'album' | 'artist' | 'playlist' | 'podcast' | 'genre'
 
 export interface ActiveView { type: ViewType; id?: string }
+export type PanelType = 'queue' | 'lyrics' | 'similar' | 'stats'
+export interface Toast { id: number; text: string }
 
-export const activeView = writable<ActiveView>({ type: 'home' })
+// Backend payloads are replaced wholesale, so everything is $state.raw (no deep proxies).
+class AppState {
+  // ── Backend mirrors
+  auth = $state.raw<AuthState>({ authed: false, server: null, username: null, accounts: [] })
+  settings = $state.raw<Settings | null>(null)
+  themes = $state.raw<Theme[]>([])
+  serverExtensions = $state.raw<string[]>([])
+  queueState = $state.raw<QueueState>({
+    queue: [], queueIdx: -1, repeatOne: false, repeatAll: false, shuffleEnabled: false,
+    crossfadeEnabled: false, crossfadeDuration: 5, crossfadeCurve: 'linear', gaplessEnabled: true,
+    replayGainEnabled: true, volume: 0.8, playerId: null,
+  })
+  playbackState = $state.raw<PlaybackState>('stopped')
+  position = $state(0)
+  duration = $state(0)
 
+  isAuthed = $derived(this.auth.authed)
+  queue = $derived(this.queueState.queue)
+  queueIdx = $derived(this.queueState.queueIdx)
+  currentTrack = $derived<Song | null>(this.queueState.queue[this.queueState.queueIdx] ?? null)
+  volume = $derived(this.queueState.volume)
+
+  /** Bumped after imports/downloads/account switches so views refetch. */
+  dataVersion = $state(0)
+
+  // ── View-only state
+  activeView = $state.raw<ActiveView>({ type: 'home' })
+  /** Right-hand panels, one at a time. */
+  openPanel = $state<PanelType | null>(null)
+  showAccountModal = $state(false)
+  toasts = $state.raw<Toast[]>([])
+}
+
+export const app = new AppState()
+
+export const bumpData = () => { app.dataVersion++ }
+
+// ── Navigation (view-only) ──────────────────────────────────────────────────
 interface NavEntry { view: ActiveView; scroll: number }
 const backStack: NavEntry[] = []
 const forwardStack: NavEntry[] = []
@@ -52,7 +63,7 @@ let scrollHost: HTMLElement | null = null
 /** The one scrollable pane every main view renders into, so its offset can be saved and restored. */
 export function setScrollHost(el: HTMLElement | null): void { scrollHost = el }
 
-const snapshot = (): NavEntry => ({ view: get(activeView), scroll: scrollHost?.scrollTop ?? 0 })
+const snapshot = (): NavEntry => ({ view: app.activeView, scroll: scrollHost?.scrollTop ?? 0 })
 
 // Views fetch asynchronously, so the pane may be too short at first; retry until it can reach `top`.
 function restoreScroll(top: number): void {
@@ -67,7 +78,7 @@ function restoreScroll(top: number): void {
 }
 
 function show(entry: NavEntry): void {
-  activeView.set(entry.view)
+  app.activeView = entry.view
   restoreScroll(entry.scroll)
 }
 
@@ -75,7 +86,7 @@ export function navTo(type: ViewType, id?: string): void {
   backStack.push(snapshot())
   if (backStack.length > 50) backStack.shift()
   forwardStack.length = 0
-  activeView.set({ type, id })
+  app.activeView = { type, id }
   restoreScroll(0)
 }
 export function navBack(): void {
@@ -92,20 +103,14 @@ export function navForward(): void {
 }
 
 // ── Right-hand panels (one at a time) ───────────────────────────────────────
-export type PanelType = 'queue' | 'lyrics' | 'similar' | 'eq' | 'stats'
-export const openPanel = writable<PanelType | null>(null)
-export const togglePanel = (p: PanelType) => openPanel.update(cur => (cur === p ? null : p))
-
-export const showAccountModal = writable(false)
+export const togglePanel = (p: PanelType) => { app.openPanel = app.openPanel === p ? null : p }
 
 // ── Toasts ──────────────────────────────────────────────────────────────────
-export interface Toast { id: number; text: string }
-export const toasts = writable<Toast[]>([])
 let toastId = 0
 export function toast(text: string, ms = 4000): void {
   const id = ++toastId
-  toasts.update(t => [...t, { id, text }])
-  setTimeout(() => toasts.update(t => t.filter(x => x.id !== id)), ms)
+  app.toasts = [...app.toasts, { id, text }]
+  setTimeout(() => { app.toasts = app.toasts.filter(x => x.id !== id) }, ms)
 }
 /** Shows a rejected command's message unless it is a session expiry (handled by the event). */
 export function toastError(e: unknown): void {
@@ -116,13 +121,13 @@ export function toastError(e: unknown): void {
 export async function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void> {
   try {
     const s = await Api.setSetting(key, value)
-    settings.set(s)
+    app.settings = s
     if (key === 'windowDecorations') Api.setWindowDecorations(value as boolean).catch(() => {})
   } catch (e) { toastError(e) }
 }
 
 export async function resetSettings(): Promise<void> {
-  settings.set(await Api.resetSettings())
+  app.settings = await Api.resetSettings()
 }
 
 /** Writes the active color theme, UI theme, font and scrollbar width onto :root. */
@@ -141,7 +146,6 @@ export function applyAppearance(s: Settings, all: Theme[]): void {
   }
   root.style.setProperty('--font', fontStack(s.fontFamily, theme?.colors.font))
   root.style.setProperty('--scrollbar-width', `${s.scrollbarWidth}px`)
-  root.dataset.uiTheme = s.uiThemeId
 }
 
 export const FONT_OPTIONS = [
@@ -170,7 +174,9 @@ let appearanceReady = false
 function watchAppearance() {
   if (appearanceReady) return
   appearanceReady = true
-  derived([settings, themes], x => x).subscribe(([s, t]) => { if (s && t.length) applyAppearance(s, t) })
+  $effect.root(() => {
+    $effect(() => { if (app.settings && app.themes.length) applyAppearance(app.settings, app.themes) })
+  })
 }
 
 // ── Startup ─────────────────────────────────────────────────────────────────
@@ -179,41 +185,40 @@ export async function initBackend(): Promise<() => void> {
   watchAppearance()
   const unlisten = await Promise.all([
     on<PlaybackStateEvent>('playback-state-changed', e => {
-      if (e.playerId === get(queueState).playerId) playbackState.set(e.state)
+      if (e.playerId === app.queueState.playerId) app.playbackState = e.state
     }),
     on<PlaybackPositionEvent>('playback-position', e => {
-      if (e.playerId !== get(queueState).playerId) return
-      position.set(e.position)
-      if (e.duration != null) duration.set(e.duration)
+      if (e.playerId !== app.queueState.playerId) return
+      app.position = e.position
+      if (e.duration != null) app.duration = e.duration
     }),
     on<{ playerId: string }>('playback-finished', () => {}),
     on<QueueState>('queue-state-changed', q => {
-      const prev = get(queueState)
-      queueState.set(q)
+      const prev = app.queueState
+      app.queueState = q
       if (q.playerId !== prev.playerId || q.queueIdx !== prev.queueIdx) {
-        position.set(0)
-        duration.set(get(currentTrack)?.duration ?? 0)
+        app.position = 0
+        app.duration = app.currentTrack?.duration ?? 0
       }
     }),
     on('session-expired', async () => {
-      auth.set(await Api.logout())
-      showAccountModal.set(true)
+      app.auth = await Api.logout()
+      app.showAccountModal = true
       toast('Session expired. Please log in again.')
     }),
   ])
 
   const [s, t] = await Promise.all([Api.settings(), Api.themes()])
-  themes.set(t)
-  settings.set(s)
-  queueState.set(await Api.queueState())
-  auth.set(await Api.authState())
+  app.themes = t
+  app.settings = s
+  app.queueState = await Api.queueState()
+  app.auth = await Api.authState()
   return () => unlisten.forEach(u => u())
 }
 
 /** Refreshes auth and clears cached views after login / account switch / logout. */
 export async function setAuthState(a: AuthState): Promise<void> {
-  auth.set(a)
-  if (a.authed) serverExtensions.set(await Api.serverExtensions())
-  else serverExtensions.set([])
+  app.auth = a
+  app.serverExtensions = a.authed ? await Api.serverExtensions() : []
   bumpData()
 }

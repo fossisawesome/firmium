@@ -1,12 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { Api } from '../lib/api'
-  import {
-    settings, themes, updateSetting, resetSettings, isAuthed, auth, showAccountModal, setAuthState, navTo, toast, toastError, FONT_OPTIONS,
-  } from '../lib/stores'
+  import { app, updateSetting, resetSettings, setAuthState, navTo, toast, toastError, FONT_OPTIONS } from '../lib/stores.svelte'
   import { IconChevronDown, IconPalette, IconPlay, IconGlobe, IconUser, IconInfo, IconDownload, IconEqualizer, IconStats } from '../lib/icons'
   import EqualizerSettings from '../components/EqualizerSettings.svelte'
-  import type { PlayHistorySummary } from '../lib/types'
+  import type { PlayHistorySummary, TlsCertKind } from '../lib/types'
 
   const CATEGORIES = [
     { id: 'appearance', label: 'Appearance', icon: IconPalette },
@@ -22,23 +20,22 @@
     { id: 'raw', name: 'Original' }, { id: 'mp3', name: 'MP3' }, { id: 'flac', name: 'FLAC' },
     { id: 'wav', name: 'WAV' }, { id: 'opus', name: 'Opus' },
   ]
-  const UI_THEMES = [{ id: 'default', name: 'Default' }, { id: 'spotify', name: 'Spotify' }]
   const BIT_PERFECT = [['off', 'Off'], ['relaxed', 'Relaxed'], ['strict', 'Strict']] as const
 
   let category = $state('appearance')
-  let open = $state<'' | 'theme' | 'ui' | 'font' | 'format'>('')
+  let open = $state<'' | 'theme' | 'font' | 'format'>('')
   let version = $state('Loading…')
   let summary = $state<PlayHistorySummary | null>(null)
   let lastfmOn = $state(false)
   let listenbrainzOn = $state(false)
   let flash = $state({ wipe: 'Wipe', reset: 'Reset' })
 
-  const s = $derived($settings)
+  const s = $derived(app.settings)
 
   onMount(async () => {
     Api.appVersion().then(v => (version = `v${v}`)).catch(() => (version = 'unavailable'))
     Api.historySummary().then(r => (summary = r)).catch(() => {})
-    const cur = $settings
+    const cur = app.settings
     if (cur) { lastfmOn = !!cur.lastfmKey; listenbrainzOn = !!cur.listenbrainzToken }
   })
 
@@ -66,6 +63,19 @@
     } catch (e) { toastError(e) }
   }
 
+  const CERTS = [
+    { kind: 'clientCert', title: 'Client Certificate (mTLS)', desc: 'PEM certificate your server requires. A private key inside it is moved to your system keyring.' },
+    { kind: 'clientKey', title: 'Client Private Key', desc: 'PEM key, only needed when it is not inside the certificate file. Kept in your system keyring.' },
+    { kind: 'caCert', title: 'CA Certificate', desc: 'Trust a private certificate authority for your server (PEM)' },
+  ] as const
+
+  async function pickCert(kind: TlsCertKind) {
+    try { const r = await Api.pickTlsCert(kind); if (r) { app.settings = r; toast('Certificate installed') } } catch (e) { toastError(e) }
+  }
+  async function clearCert(kind: TlsCertKind) {
+    try { app.settings = await Api.clearTlsCert(kind) } catch (e) { toastError(e) }
+  }
+
   async function wipeCache() {
     await Api.clearCoverCache().catch(toastError)
     flash.wipe = 'Wiped!'
@@ -88,15 +98,20 @@
 
 <svelte:document onclick={() => (open = '')} />
 
-{#snippet dropdown(kind: 'theme' | 'ui' | 'font' | 'format', label: string, options: { id: string; name: string }[], current: string, onPick: (id: string) => void)}
-  <div class="theme-selector" class:open={open === kind} role="button" tabindex="0"
+{#snippet dropdown(kind: 'theme' | 'font' | 'format', label: string, options: { id: string; name: string }[], current: string, onPick: (id: string) => void)}
+  <div class={["theme-selector", { open: open === kind }]}
+    role="button"
+    tabindex="0"
     onclick={e => { e.stopPropagation(); open = open === kind ? '' : kind }}
     onkeydown={e => { e.stopPropagation(); if (e.key === 'Enter' || e.key === ' ') open = open === kind ? '' : kind }}>
     <div class="theme-selector-value">{label}</div>
     <span class="theme-selector-arrow icon" style="width:14px;height:14px">{@html IconChevronDown}</span>
     <div class="theme-selector-dropdown">
       {#each options as o (o.id)}
-        <div class="theme-option" class:selected={current === o.id} role="option" tabindex="0" aria-selected={current === o.id}
+        <div class={["theme-option", { selected: current === o.id }]}
+          role="option"
+          tabindex="0"
+          aria-selected={current === o.id}
           onclick={e => { e.stopPropagation(); pick(kind, () => onPick(o.id)) }}
           onkeydown={e => { e.stopPropagation(); if (e.key === 'Enter' || e.key === ' ') pick(kind, () => onPick(o.id)) }}>{o.name}</div>
       {/each}
@@ -116,7 +131,7 @@
   <nav class="sett-sidebar">
     <div class="sett-sidebar-label">Settings</div>
     {#each CATEGORIES as cat}
-      <button class="sett-nav-btn" class:sett-nav-btn--active={category === cat.id} onclick={() => (category = cat.id)}>
+      <button class={["sett-nav-btn", { 'sett-nav-btn--active': category === cat.id }]} onclick={() => (category = cat.id)}>
         <span class="icon sett-nav-icon" style="width:16px;height:16px">{@html cat.icon}</span>{cat.label}
       </button>
     {/each}
@@ -133,12 +148,7 @@
 
       <div class="settings-row">
         <div class="settings-info"><div class="settings-title">Color Theme</div><div class="settings-desc">Color scheme for the interface</div></div>
-        {@render dropdown('theme', $themes.find(t => t.id === s.themeId)?.name ?? s.themeId, $themes.map(t => ({ id: t.id, name: t.name })), s.themeId, id => updateSetting('themeId', id))}
-      </div>
-
-      <div class="settings-row">
-        <div class="settings-info"><div class="settings-title">UI Theme</div><div class="settings-desc">Layout style for navigation, player bar and browsing screens</div></div>
-        {@render dropdown('ui', UI_THEMES.find(t => t.id === s.uiThemeId)?.name ?? 'Default', UI_THEMES, s.uiThemeId, id => updateSetting('uiThemeId', id))}
+        {@render dropdown('theme', app.themes.find(t => t.id === s.themeId)?.name ?? s.themeId, app.themes.map(t => ({ id: t.id, name: t.name })), s.themeId, id => updateSetting('themeId', id))}
       </div>
 
       <div class="settings-row">
@@ -173,7 +183,7 @@
           <div class="settings-info"><div class="settings-title">Crossfade Curve</div><div class="settings-desc">Linear, or logarithmic (equal-power) fade</div></div>
           <div class="bp-mode-selector">
             {#each [['linear', 'Linear'], ['logarithmic', 'Log']] as [id, label]}
-              <button class="bp-mode-btn" class:bp-mode-btn--active={s.crossfadeCurve === id} onclick={() => updateSetting('crossfadeCurve', id as 'linear' | 'logarithmic')}>{label}</button>
+              <button class={["bp-mode-btn", { 'bp-mode-btn--active': s.crossfadeCurve === id }]} onclick={() => updateSetting('crossfadeCurve', id as 'linear' | 'logarithmic')}>{label}</button>
             {/each}
           </div>
         </div>
@@ -203,7 +213,7 @@
         </div>
         <div class="bp-mode-selector">
           {#each BIT_PERFECT as [id, label]}
-            <button class="bp-mode-btn" class:bp-mode-btn--active={s.bitPerfectMode === id} onclick={() => updateSetting('bitPerfectMode', id)}>{label}</button>
+            <button class={["bp-mode-btn", { 'bp-mode-btn--active': s.bitPerfectMode === id }]} onclick={() => updateSetting('bitPerfectMode', id)}>{label}</button>
           {/each}
         </div>
       </div>
@@ -284,20 +294,31 @@
       <div class="settings-row">
         <div class="settings-info">
           <div class="settings-title">Connection</div>
-          <div class="settings-desc">{$isAuthed ? `${$auth.username}@${$auth.server}` : 'Not connected. Browsing local files'}</div>
+          <div class="settings-desc">{app.isAuthed ? `${app.auth.username}@${app.auth.server}` : 'Not connected. Browsing local files'}</div>
         </div>
-        {#if $isAuthed}
+        {#if app.isAuthed}
           <button class="debug-btn debug-btn--danger" onclick={disconnect}>Disconnect</button>
         {:else}
-          <button class="debug-btn" onclick={() => showAccountModal.set(true)}>Connect</button>
+          <button class="debug-btn" onclick={() => (app.showAccountModal = true)}>Connect</button>
         {/if}
       </div>
-      {#if $auth.accounts.length > 0}
+      {#if app.auth.accounts.length > 0}
         <div class="settings-row">
           <div class="settings-info"><div class="settings-title">Saved Accounts</div><div class="settings-desc">Switch accounts from the account button in the sidebar</div></div>
-          <button class="debug-btn" onclick={() => showAccountModal.set(true)}>Manage</button>
+          <button class="debug-btn" onclick={() => (app.showAccountModal = true)}>Manage</button>
         </div>
       {/if}
+
+      {#each CERTS as c}
+        <div class="settings-row">
+          <div class="settings-info"><div class="settings-title">{c.title}</div><div class="settings-desc">{c.desc}</div></div>
+          {#if s[c.kind]}
+            <button class="debug-btn debug-btn--danger" onclick={() => clearCert(c.kind)}>Remove</button>
+          {:else}
+            <button class="debug-btn" onclick={() => pickCert(c.kind)}>Choose file…</button>
+          {/if}
+        </div>
+      {/each}
 
     {:else if category === 'debug'}
       <div class="sett-panel-title">Debug</div>

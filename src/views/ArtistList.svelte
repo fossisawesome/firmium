@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { navTo, dataVersion } from '../lib/stores'
+  import { app, navTo } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { artistPhoto } from '../lib/cover'
   import { errorMessage } from '../lib/ipc'
@@ -13,7 +13,7 @@
   let error = $state('')
 
   $effect(() => {
-    $dataVersion
+    app.dataVersion
     let live = true
     loading = true
     error = ''
@@ -33,7 +33,7 @@
       {#snippet children(artist)}
         <div class="artist-row" role="button" tabindex="0" onclick={() => navTo('artist', artist.id)}
           onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navTo('artist', artist.id)}>
-          <img class="artist-row-avatar" use:artistPhoto={artist.id} alt="" />
+          <img class="artist-row-avatar" {@attach artistPhoto(artist.id)} alt="" />
           <div class="artist-info">
             <div class="artist-name">{artist.name}</div>
             <div class="artist-album-count">{artist.albumCount} albums</div>

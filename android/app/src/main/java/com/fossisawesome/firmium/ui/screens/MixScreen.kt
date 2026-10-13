@@ -21,12 +21,13 @@ import com.fossisawesome.firmium.ui.components.*
 import com.fossisawesome.firmium.ui.theme.LocalFirmiumColors
 import com.fossisawesome.firmium.ui.theme.LocalUiTheme
 
-private data class EnergyOption(val energy: RadioSeeder.Energy, val label: String, val desc: String)
+private data class EnergyOption(val energy: RadioSeeder.Energy?, val label: String, val desc: String)
 
 private val ENERGIES = listOf(
     EnergyOption(RadioSeeder.Energy.CHILL, "Chill", "Under 80 BPM"),
     EnergyOption(RadioSeeder.Energy.MID, "Mid", "80–120 BPM"),
     EnergyOption(RadioSeeder.Energy.HIGH, "High", "120+ BPM"),
+    EnergyOption(null, "Any", "Random songs from your whole library"),
 )
 
 // Mood Mix — pick an energy band (+ optional genre) and play a shuffled queue.
@@ -34,10 +35,11 @@ private val ENERGIES = listOf(
 fun MixScreen(
     genres: List<String>,
     onStartMix: (RadioSeeder.Energy, String?) -> Unit,
+    onShuffleAll: () -> Unit,
 ) {
     val colors = LocalFirmiumColors.current
     val spotify = LocalUiTheme.current == "spotify"
-    var energy by remember { mutableStateOf(RadioSeeder.Energy.MID) }
+    var energy by remember { mutableStateOf<RadioSeeder.Energy?>(RadioSeeder.Energy.MID) }
     var genre by remember { mutableStateOf<String?>(null) }
 
     Column(
@@ -46,7 +48,7 @@ fun MixScreen(
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        Text("Generate a shuffled queue tuned to an energy level.",
+        Text("Generate a shuffled queue tuned to an energy level, or shuffle your whole library.",
             fontSize = 13.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted)
 
         Spacer(Modifier.height(24.dp))
@@ -72,7 +74,7 @@ fun MixScreen(
             }
         }
 
-        if (genres.isNotEmpty()) {
+        if (energy != null && genres.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))
             Text("GENRE (OPTIONAL)", fontSize = 11.sp, fontFamily = LocalAppFontFamily.current, color = colors.muted, letterSpacing = 1.sp)
             Spacer(Modifier.height(10.dp))
@@ -84,11 +86,11 @@ fun MixScreen(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
                 .background(colors.accent)
-                .clickable { onStartMix(energy, genre) }
+                .clickable { energy?.let { onStartMix(it, genre) } ?: onShuffleAll() }
                 .padding(horizontal = 28.dp, vertical = 14.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("Start Mix", fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
+            Text(if (energy == null) "Shuffle all" else "Start Mix", fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = LocalAppFontFamily.current,
                 color = androidx.compose.ui.graphics.Color.Black)
         }
     }

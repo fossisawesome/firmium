@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { menuState, hideMenu, menuList, menuCreate } from '../lib/menu'
-  import { localPlaylists, serverOnlyPlaylists, loadPlaylists } from '../lib/playlists'
-  import { isAuthed, toastError, toast } from '../lib/stores'
+  import { menu, hideMenu, menuList, menuCreate } from '../lib/menu.svelte'
+  import { playlistState, loadPlaylists } from '../lib/playlists.svelte'
+  import { app, toastError, toast } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { IconCloud, IconWaveform, IconList } from '../lib/icons'
   import type { Song } from '../lib/types'
@@ -11,8 +11,8 @@
 
   // Anchor the popup beside the button, keeping it on screen.
   $effect(() => {
-    if (!$menuState.visible || !$menuState.rect || !popupEl) return
-    const { rect } = $menuState
+    if (!menu.visible || !menu.rect || !popupEl) return
+    const { rect } = menu
     popupEl.style.left = `${rect.right + 6}px`
     popupEl.style.top = `${rect.top}px`
     requestAnimationFrame(() => {
@@ -25,13 +25,13 @@
 
   // Refresh the playlist list each time the picker opens.
   $effect(() => {
-    if ($menuState.visible && $menuState.mode === 'list') loadPlaylists($isAuthed).catch(() => {})
+    if (menu.visible && menu.mode === 'list') loadPlaylists(app.isAuthed).catch(() => {})
   })
 
   // Capture phase so outside clicks dismiss the popup regardless of stopPropagation.
   $effect(() => {
     const onClick = (e: MouseEvent) => {
-      if (!$menuState.visible) return
+      if (!menu.visible) return
       const target = e.target as HTMLElement
       if (popupEl?.contains(target)) return
       if (target.closest('.track-add-btn, .album-add-btn, .artist-add-btn')) return
@@ -43,7 +43,7 @@
 
   // The tracks the pending item stands for (an album/artist expands to its tracks).
   async function pendingTracks(): Promise<Song[]> {
-    const p = $menuState.pending
+    const p = menu.pending
     if (!p) return []
     if (p.type === 'tracks') return p.tracks
     if (p.type === 'album') return (await Api.albumTracks(p.albumId)).tracks
@@ -64,7 +64,7 @@
     try {
       let lists
       for (const song of await pendingTracks()) lists = await Api.addToPlaylist(localId, song)
-      if (lists) localPlaylists.set(lists)
+      if (lists) playlistState.local = lists
     } catch (e) { toastError(e) }
   }
 
@@ -83,7 +83,7 @@
       let lists = await Api.createPlaylist(name, tracks[0])
       const created = lists[0]
       for (const t of tracks.slice(1)) lists = await Api.addToPlaylist(created.id, t)
-      localPlaylists.set(lists)
+      playlistState.local = lists
       toast(`Added to "${name}"`)
     } catch (e) { toastError(e) }
   }
@@ -98,14 +98,14 @@
   }
 
   $effect(() => {
-    if ($menuState.visible && $menuState.mode !== 'create' && popupEl) {
+    if (menu.visible && menu.mode !== 'create' && popupEl) {
       requestAnimationFrame(() => popupEl?.querySelector<HTMLElement>('[role="button"]')?.focus())
     }
   })
 </script>
 
-<div class="pl-popup" class:pl-popup--visible={$menuState.visible} bind:this={popupEl}>
-  {#if $menuState.mode === 'create'}
+<div class={["pl-popup", { 'pl-popup--visible': menu.visible }]} bind:this={popupEl}>
+  {#if menu.mode === 'create'}
     <div class="pl-popup-header">New playlist</div>
     <!-- svelte-ignore a11y_autofocus -->
     <input class="pl-popup-input" type="text" placeholder="Playlist name…" maxlength="100" bind:value={newName} autofocus
@@ -114,8 +114,8 @@
       <button class="pl-popup-btn pl-popup-cancel" onclick={hideMenu}>Cancel</button>
       <button class="pl-popup-btn pl-popup-confirm" onclick={confirmCreate}>Create</button>
     </div>
-  {:else if $menuState.mode === 'actions'}
-    {#if $isAuthed}
+  {:else if menu.mode === 'actions'}
+    {#if app.isAuthed}
       <div class="pl-popup-item" role="button" tabindex="0" onclick={startRadio} onkeydown={e => onItemKey(e, startRadio)}>
         <span class="pl-popup-name"><span class="icon" aria-hidden="true" style="width:15px;height:15px;margin-right:8px;vertical-align:-2px;display:inline-flex">{@html IconWaveform}</span>Start Radio</span>
       </div>
@@ -125,10 +125,10 @@
     </div>
   {:else}
     <div class="pl-popup-header">Add to playlist</div>
-    {#if $localPlaylists.length + $serverOnlyPlaylists.length === 0}
+    {#if playlistState.local.length + playlistState.serverOnly.length === 0}
       <div class="pl-popup-empty">No playlists yet</div>
     {/if}
-    {#each $localPlaylists as pl}
+    {#each playlistState.local as pl}
       <div class="pl-popup-item" role="button" tabindex="0" onclick={() => addToLocal(pl.id)} onkeydown={e => onItemKey(e, () => addToLocal(pl.id))}>
         <span class="pl-popup-name">{pl.name}
           {#if pl.serverId}<span class="pl-popup-cloud" title="Synced to server"><span class="icon" style="width:10px;height:10px">{@html IconCloud}</span></span>{/if}
@@ -136,7 +136,7 @@
         <span class="pl-popup-count">{pl.tracks.length}</span>
       </div>
     {/each}
-    {#each $serverOnlyPlaylists as pl}
+    {#each playlistState.serverOnly as pl}
       <div class="pl-popup-item" role="button" tabindex="0" onclick={() => addToServerOnly(pl.id)} onkeydown={e => onItemKey(e, () => addToServerOnly(pl.id))}>
         <span class="pl-popup-name">{pl.name}
           <span class="pl-popup-cloud" title="Server playlist"><span class="icon" style="width:10px;height:10px">{@html IconCloud}</span></span>

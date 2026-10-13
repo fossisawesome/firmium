@@ -1,5 +1,28 @@
 # Changelog
 
+## v9.0.2
+
+### What's New
+- **Desktop and Android:** The Albums (desktop) and Music (Android) tabs are now a grid of cover tiles grouped into Albums, EPs and Singles instead of a long list. On Android, long-press a tile to add it to a playlist.
+
+- **Desktop:** Servers that require a client certificate (mTLS) now work. Settings > Account lets you add a client certificate, private key and custom CA certificate (PEM files). The private key is stored in your system keyring.
+- **Android:** Servers that require a client certificate (mTLS) now work. Add a .p12/.pfx identity (and optionally a custom CA) in the login dialog or Settings > Account. The key is kept in the Android Keystore.
+
+- **Android:** The "Resume server queue?" prompt is now a themed in-app popup instead of the system dialog.
+
+- **Desktop:** The player bar is tidier: Similar Tracks and Audio Stats moved into a three-dot menu, and the equalizer button is gone (the equalizer stays in Settings).
+
+- **Desktop:** Playlists can now have a custom image (click the cover) and a visible rename pencil; Reset image restores the mosaic.
+- **Desktop:** Search is now a small icon at the top of the sidebar that is always visible. The server address and logo are gone from there.
+- **Desktop:** Genre pages have a back button. Home shows as many Random Picks as fit the window, up to 12.
+- **Desktop:** The Spotify UI theme is removed. The equalizer settings no longer show an output device picker (profiles apply to the default device).
+
+### Fixes
+- **Desktop:** The play queue is now saved to the server again, so other devices can resume it. The "Resume server queue?" prompt only appears once per launch and only when nothing is playing.
+- **Desktop:** Home cover cards no longer flicker on hover, the no-artist photo placeholder is clean, and the empty-cover fallback in the player bar is centered.
+- **Desktop:** Shuffle no longer lights up on empty playlists or an empty queue.
+- **Android:** Lyrics from LRCLIB now load for tracks with featured artists, "(Live)"/"(Remix)" titles or differing album names, falls back to a fuzzy LRCLIB search when there is no exact match, shows instrumental tracks as such, and the LRCLIB setting is now respected.
+
 ## v9.0.1
 
 ### What's New
@@ -12,7 +35,7 @@
 - **Desktop:** The desktop app is now built on Tauri again. On Linux it needs `webkit2gtk-4.1` installed.
 - **Desktop:** Albums can be sorted by name or by recently added ([#65](https://github.com/fossisawesome/firmium/issues/65)).
 - **Desktop:** Media keys, headset buttons and the system now-playing widget now control Firmium (MPRIS on Linux, the media overlay on Windows, Now Playing on macOS) ([#69](https://github.com/fossisawesome/firmium/issues/69)).
-- **Desktop and Android:** A shuffle icon button on Home plays a random sample of your whole library ([#72](https://github.com/fossisawesome/firmium/issues/72)).
+- **Desktop and Android:** Mix has an **Any** option that plays a random sample of your whole library ([#72](https://github.com/fossisawesome/firmium/issues/72)).
 - **Android:** The album list can now be sorted by recently added as well as A–Z ([#65](https://github.com/fossisawesome/firmium/issues/65)).
 - **Android:** An F-Droid friendly build without Google libraries is available with `./gradlew assembleRelease -Pfoss`; Wear OS sync is not included in it ([#62](https://github.com/fossisawesome/firmium/issues/62)).
 - **Desktop:** Crossfade, gapless, ReplayGain, auto-continue and bit-perfect settings are now remembered between launches. Strict bit-perfect turns gapless off.

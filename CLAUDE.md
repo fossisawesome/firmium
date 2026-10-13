@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Version**: 9.0.1
+**Version**: 9.0.2
 
 Guidance for Claude Code (claude.ai/code) when working in this repository.
 
@@ -41,6 +41,7 @@ The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no I
 
 - **state.rs**: `AppState` — holds `ConnectionState` (server URL, username, password, detected `openSubsonicExtensions`) behind `parking_lot::RwLock`, plus shared async `reqwest::Client` used by `commands/subsonic.rs` and `commands/lyrics.rs`, plus the `EventBus` handle. Set via `set_connection`.
 
+- **tls.rs**: shared `reqwest` clients with optional mTLS (client cert + key, extra CA). PEMs under `<config>/certs/`, private key in the OS keyring; clients rebuilt live on change.
 - **commands/**: Plain async/sync fns, re-exported via `commands/mod.rs`:
   - `themes.rs`: `list_themes()` — reads `.toml` theme files
   - `mappers.rs`: `map_albums()`, `map_artists()`, `map_songs()` — Rust-side mapping of raw Subsonic JSON to typed structs (including `infer_release_type()` and `format_track_info()` for `Song.trackInfo`)
@@ -68,8 +69,8 @@ The backend is its own crate (`firmium-backend`, `backend/` dir) — no UI, no I
 
 - **src-tauri/src/**: `lib.rs` (builder, setup, handler list), `commands.rs` (thin `#[tauri::command]` forwarders, `CmdError {kind, message}`), `events.rs` (EventBus → Tauri events), `cli.rs` (`firmium <cmd>` control-socket client).
 - **backend/core/**: all app logic: `settings.rs` (persisted prefs + side effects), `accounts.rs` (login/switch/keyring), `library.rs` (server vs offline routing, Mix, radio, auto-continue, podcasts, artist helpers), `playlists.rs` (local-first playlists + server sync), `stats.rs` (history summary, export).
-- **src/lib/**: `ipc.ts` (invoke/listen), `api.ts` (one-line typed command wrappers), `types.ts`, `stores.ts` (mirrors of backend state + view routing, panels, toasts, theme application), `cover.ts` (image actions), `menu.ts`/`playlists.ts` (popup + list stores). No business logic in TS.
-- **src/views, src/components**: Svelte 5 screens and widgets. **src/styles/**: SCSS partials (`main.scss` @uses them; `_spotify.scss` is the Spotify UI theme via `html[data-ui-theme]`).
+- **src/lib/**: `ipc.ts` (invoke/listen), `api.ts` (one-line typed command wrappers), `types.ts`, `stores.svelte.ts` (mirrors of backend state + view routing, panels, toasts, theme application), `cover.ts` (image actions), `menu.svelte.ts`/`playlists.svelte.ts` (popup + list stores). No business logic in TS.
+- **src/views, src/components**: Svelte 5 screens and widgets. **src/styles/**: SCSS partials (`main.scss` @uses them; `_variables.scss` holds shared tokens; the desktop has a single UI layout, the Spotify theme is Android-only).
 - Themes: TOML under `themes/`, embedded in the backend (`commands/themes.rs`) and applied as CSS variables.
 
 ### Data Flow

@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 /* ── Mobile layout (phone viewport or Android device) ────────────────────── */
 /* Applied via JS: html.is-mobile-layout is set when isMobile || viewport ≤ 640px */
 
@@ -59,11 +61,11 @@ html.is-mobile-layout .nav-btn {
   border-radius: 0;
   border-bottom: 2px solid transparent;
   text-align: center;
-}
 
-html.is-mobile-layout .nav-btn.active {
-  border-bottom-color: var(--accent);
-  background: none;
+  &.active {
+    border-bottom-color: var(--accent);
+    background: none;
+  }
 }
 
 html.is-mobile-layout .nav-icon {
@@ -129,12 +131,12 @@ html.is-mobile-layout .ctrl-btn {
   width: 28px;
   height: 28px;
   font-size: 14px;
-}
 
-html.is-mobile-layout .ctrl-btn.main-ctrl {
-  width: 36px;
-  height: 36px;
-  font-size: 18px;
+  &.main-ctrl {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
 }
 
 /* Lyrics panel → full-screen overlay, above MobilePlayer (z-index 300) */
@@ -149,10 +151,10 @@ html.is-mobile-layout .lyrics-panel {
   padding-bottom: calc(68px + 56px + env(safe-area-inset-bottom, 0px));
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
 
-html.is-mobile-layout .lyrics-panel.open {
-  transform: translateY(0);
+  &.open {
+    transform: translateY(0);
+  }
 }
 
 /* Spacer that reserves the status bar / notch area at the top of the full-screen
@@ -176,14 +178,14 @@ html.is-mobile-layout .similar-tracks-panel {
   padding-bottom: calc(68px + 56px + env(safe-area-inset-bottom, 0px));
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
 
-html.is-mobile-layout .similar-tracks-panel.open {
-  transform: translateY(0);
-}
+  &.open {
+    transform: translateY(0);
 
-html.is-mobile-layout .similar-tracks-panel.open .similar-tracks-safe-top {
-  height: env(safe-area-inset-top, 24px);
+    .similar-tracks-safe-top {
+      height: env(safe-area-inset-top, 24px);
+    }
+  }
 }
 
 /* Visualizer panel → full-screen overlay, same pattern as the lyrics panel */
@@ -196,14 +198,14 @@ html.is-mobile-layout .visualizer-panel {
   padding-bottom: calc(68px + 56px + env(safe-area-inset-bottom, 0px));
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
 
-html.is-mobile-layout .visualizer-panel.open {
-  transform: translateY(0);
-}
+  &.open {
+    transform: translateY(0);
 
-html.is-mobile-layout .visualizer-panel.open .visualizer-safe-top {
-  height: env(safe-area-inset-top, 24px);
+    .visualizer-safe-top {
+      height: env(safe-area-inset-top, 24px);
+    }
+  }
 }
 
 html.is-mobile-layout .artist-page-header { flex-direction: column; gap: 16px; }
@@ -218,8 +220,14 @@ html.is-mobile-layout .home-view { padding: 16px; gap: 24px; }
 html.is-mobile-layout .home-greeting-name { font-size: 22px; }
 html.is-mobile-layout .home-card { width: 130px; }
 html.is-mobile-layout .home-card-art { width: 130px; height: 130px; }
-html.is-mobile-layout .home-card--artist { width: 110px; }
-html.is-mobile-layout .home-card--artist .home-card-art { width: 110px; height: 110px; }
+html.is-mobile-layout .home-card--artist {
+  width: 110px;
+
+  .home-card-art {
+    width: 110px;
+    height: 110px;
+  }
+}
 html.is-mobile-layout .track-row { padding: 14px 10px; }
 
 /* Always show action buttons — no hover state on touch screens */
@@ -286,9 +294,11 @@ html.is-mobile-layout .setup-box { padding: 1.5rem; }
   cursor: pointer;
   border-radius: 50%;
   transition: background var(--timing);
-}
 
-.mp-close-btn:active { background: var(--surface2); }
+  &:active {
+    background: var(--surface2);
+  }
+}
 
 /* Legacy handle-row kept for backward compat but now inside mp-topbar */
 .mp-handle-row {
@@ -315,14 +325,14 @@ html.is-mobile-layout .setup-box { padding: 1.5rem; }
   justify-content: center;
   flex-shrink: 0;
   margin-bottom: 32px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
-}
+  box-shadow: 0 16px 48px $shadow;
 
-.mp-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
 }
 
 .mp-no-art {
@@ -429,11 +439,11 @@ html.is-mobile-layout .setup-box { padding: 1.5rem; }
   font-family: var(--font);
   flex-shrink: 0;
   touch-action: manipulation;
-}
 
-.mp-btn:active {
-  background: var(--surface2);
-  transform: scale(0.93);
+  &:active {
+    background: var(--surface2);
+    transform: scale(0.93);
+  }
 }
 
 .mp-btn-main {
@@ -443,11 +453,11 @@ html.is-mobile-layout .setup-box { padding: 1.5rem; }
   background: var(--accent);
   /* Use bg color so icon contrasts regardless of accent hue */
   color: var(--bg);
-}
 
-.mp-btn-main:active {
-  opacity: 0.8;
-  background: var(--accent);
+  &:active {
+    opacity: 0.8;
+    background: var(--accent);
+  }
 }
 
 .mp-btn-sm {
@@ -456,9 +466,11 @@ html.is-mobile-layout .setup-box { padding: 1.5rem; }
   height: 48px;
   color: var(--muted);
   position: relative;
-}
 
-.mp-btn-sm.active { color: var(--accent); }
+  &.active {
+    color: var(--accent);
+  }
+}
 
 .mp-repeat-badge {
   position: absolute;
@@ -537,14 +549,14 @@ html.is-mobile-layout .player-bar .progress-row input[type="range"] {
   );
   border-radius: 2px;
   flex: 1;
-}
 
-html.is-mobile-layout .player-bar .progress-row input[type="range"]::-webkit-slider-thumb {
-  display: none;
-}
+  &::-webkit-slider-thumb {
+    display: none;
+  }
 
-html.is-mobile-layout .player-bar .progress-row input[type="range"]::-moz-range-thumb {
-  display: none;
+  &::-moz-range-thumb {
+    display: none;
+  }
 }
 
 /* ── Queue sheet ──────────────────────────────────────────────────────────── */
@@ -609,9 +621,11 @@ html.is-mobile-layout .player-bar .progress-row input[type="range"]::-moz-range-
   cursor: pointer;
   border-radius: 50%;
   transition: background var(--timing);
-}
 
-.qs-close-btn:active { background: var(--surface2); }
+  &:active {
+    background: var(--surface2);
+  }
+}
 
 .qs-list {
   flex: 1;
@@ -641,16 +655,18 @@ html.is-mobile-layout .player-bar .progress-row input[type="range"]::-moz-range-
   font-family: var(--font);
   transition: background var(--timing);
   border-bottom: 1px solid var(--border);
-}
 
-.qs-track:active { background: var(--surface2); }
+  &:active {
+    background: var(--surface2);
+  }
+}
 
 .qs-track-active {
   background: var(--surface2);
-}
 
-.qs-track-active .qs-track-title {
-  color: var(--accent);
+  .qs-track-title {
+    color: var(--accent);
+  }
 }
 
 .qs-track-index {
@@ -741,11 +757,11 @@ html.is-mobile-layout .mobile-page-header {
   border-radius: 50%;
   transition: background var(--timing), color var(--timing);
   touch-action: manipulation;
-}
 
-.mobile-header-btn:active {
-  background: var(--surface2);
-  color: var(--text);
+  &:active {
+    background: var(--surface2);
+    color: var(--text);
+  }
 }
 
 /* list-panel sits below the mobile-page-header in the flex column */
@@ -764,10 +780,10 @@ html.is-mobile-layout .list-panel {
   flex-direction: column;
   padding-top: env(safe-area-inset-top, 0px);
   animation: ms-slide-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
-.ms-overlay.ms-closing {
-  animation: ms-slide-out 0.28s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+  &.ms-closing {
+    animation: ms-slide-out 0.28s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+  }
 }
 
 @keyframes ms-slide-in {
@@ -803,9 +819,11 @@ html.is-mobile-layout .list-panel {
   flex-shrink: 0;
   touch-action: manipulation;
   transition: background var(--timing);
-}
 
-.ms-back-btn:active { background: var(--surface2); }
+  &:active {
+    background: var(--surface2);
+  }
+}
 
 .ms-input-wrap {
   flex: 1;
@@ -825,10 +843,15 @@ html.is-mobile-layout .list-panel {
   transition: border-color var(--timing);
   -webkit-appearance: none;
   appearance: none;
-}
 
-.ms-input::placeholder { color: var(--muted); }
-.ms-input:focus { border-color: var(--accent); }
+  &::placeholder {
+    color: var(--muted);
+  }
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
 /* Remove the native clear/search decoration */
 .ms-input::-webkit-search-cancel-button { display: none; }
 
@@ -846,9 +869,11 @@ html.is-mobile-layout .list-panel {
   flex-shrink: 0;
   touch-action: manipulation;
   transition: background var(--timing);
-}
 
-.ms-search-exec:active { background: var(--surface2); }
+  &:active {
+    background: var(--surface2);
+  }
+}
 
 .ms-body {
   flex: 1;
@@ -886,10 +911,10 @@ html.is-mobile-layout .list-panel {
   flex-direction: column;
   padding-top: env(safe-area-inset-top, 0px);
   animation: ms-slide-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
-.mset-overlay.mset-closing {
-  animation: ms-slide-out 0.28s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+  &.mset-closing {
+    animation: ms-slide-out 0.28s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+  }
 }
 
 .mset-header {
@@ -915,9 +940,11 @@ html.is-mobile-layout .list-panel {
   flex-shrink: 0;
   touch-action: manipulation;
   transition: background var(--timing);
-}
 
-.mset-back-btn:active { background: var(--surface2); }
+  &:active {
+    background: var(--surface2);
+  }
+}
 
 .mset-title {
   font-size: 18px;
@@ -957,10 +984,15 @@ html.is-mobile-layout .list-panel {
   width: 100%;
   touch-action: manipulation;
   transition: background var(--timing);
-}
 
-.mset-cat-row:first-child { border-top: 1px solid var(--border); }
-.mset-cat-row:active { background: var(--surface2); }
+  &:first-child {
+    border-top: 1px solid var(--border);
+  }
+
+  &:active {
+    background: var(--surface2);
+  }
+}
 
 .mset-cat-icon {
   color: var(--accent);
@@ -1026,11 +1058,11 @@ html.is-mobile-layout .mobile-play-circle-btn {
   touch-action: manipulation;
   transition: opacity var(--timing), transform var(--timing);
   margin-left: auto;
-}
 
-html.is-mobile-layout .mobile-play-circle-btn:active {
-  opacity: 0.8;
-  transform: scale(0.93);
+  &:active {
+    opacity: 0.8;
+    transform: scale(0.93);
+  }
 }
 
 /* Position within tracklist-header / pl-detail-actions */
@@ -1047,7 +1079,7 @@ html.is-mobile-layout .pl-detail-actions {
 /* ── Responsive font / spacing tweaks ─────────────────────────────────────── */
 
 /* Small phones (< 375px) get slightly tighter spacing */
-@media (max-width: 374px) {
+@media (max-width: $bp-xs-max) {
   html.is-mobile-layout .mp-art {
     width: min(80vw, 280px);
     height: min(80vw, 280px);
@@ -1072,7 +1104,7 @@ html.is-mobile-layout .pl-detail-actions {
 }
 
 /* Wider phones (> 430px) can use a bit more space */
-@media (min-width: 430px) and (max-width: 640px) {
+@media (min-width: $bp-sm-min) and (max-width: $bp-sm-max) {
   html.is-mobile-layout .home-card {
     width: 150px;
   }
@@ -1082,9 +1114,10 @@ html.is-mobile-layout .pl-detail-actions {
   }
   html.is-mobile-layout .home-card--artist {
     width: 130px;
-  }
-  html.is-mobile-layout .home-card--artist .home-card-art {
-    width: 130px;
-    height: 130px;
+
+    .home-card-art {
+      width: 130px;
+      height: 130px;
+    }
   }
 }

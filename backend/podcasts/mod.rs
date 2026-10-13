@@ -8,11 +8,11 @@ pub use store::{PodcastChannel, PodcastEpisode, PodcastStore};
 use crate::state::AppState;
 
 pub async fn add_channel(
-    state: Arc<AppState>,
+    _state: Arc<AppState>,
     store: Arc<PodcastStore>,
     feed_url: String,
 ) -> Result<PodcastChannel, String> {
-    let parsed = feed::fetch_and_parse(&state.http, &feed_url).await?;
+    let parsed = feed::fetch_and_parse(&crate::tls::http(), &feed_url).await?;
     let channel = store.add_channel(
         &feed_url,
         &parsed.title,
@@ -25,12 +25,12 @@ pub async fn add_channel(
 
 /// Returns how many *new* episodes were added.
 pub async fn refresh_channel(
-    state: Arc<AppState>,
+    _state: Arc<AppState>,
     store: Arc<PodcastStore>,
     channel_id: String,
     feed_url: String,
 ) -> Result<usize, String> {
-    let parsed = feed::fetch_and_parse(&state.http, &feed_url).await?;
+    let parsed = feed::fetch_and_parse(&crate::tls::http(), &feed_url).await?;
     store.insert_episodes(&channel_id, &parsed.episodes)
 }
 
@@ -69,7 +69,7 @@ pub async fn probe_server_podcast_support(state: Arc<AppState>) -> bool {
         }
     }
 
-    let Ok(resp) = state.http.get(url).send().await else { return false };
+    let Ok(resp) = crate::tls::http().get(url).send().await else { return false };
     let Ok(json) = resp.json::<serde_json::Value>().await else { return false };
     let supported = json
         .get("subsonic-response")

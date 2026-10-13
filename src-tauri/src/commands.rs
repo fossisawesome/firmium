@@ -95,6 +95,23 @@ pub fn set_setting(core: S, key: String, value: serde_json::Value) -> R<Settings
     Ok(core.set_setting(&key, value)?)
 }
 
+/// Opens a native picker and installs the chosen PEM as mTLS material. `None` if cancelled.
+#[tauri::command]
+pub async fn pick_tls_cert(app: AppHandle, core: S<'_>, kind: String) -> R<Option<Settings>> {
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog().file().add_filter("PEM", &["pem", "crt", "cer", "key"]).blocking_pick_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(path) = picked.and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    Ok(Some(core.import_tls_cert(&kind, &path)?))
+}
+
+#[tauri::command]
+pub fn clear_tls_cert(core: S, kind: String) -> R<Settings> {
+    Ok(core.clear_tls_cert(&kind)?)
+}
+
 #[tauri::command]
 pub fn reset_settings(core: S) -> Settings {
     core.reset_settings()
@@ -426,6 +443,19 @@ pub async fn delete_playlist(core: S<'_>, local_id: String) -> R<Vec<Playlist>> 
 #[tauri::command]
 pub async fn rename_playlist(core: S<'_>, local_id: String, name: String) -> R<Vec<Playlist>> {
     Ok(core.rename_local_playlist(&local_id, name).await)
+}
+
+/// Opens an image picker and sets the chosen file as the playlist cover (`clear` removes it).
+#[tauri::command]
+pub async fn set_playlist_cover(app: AppHandle, core: S<'_>, local_id: String, clear: bool) -> R<Option<Vec<Playlist>>> {
+    if clear {
+        return Ok(Some(core.set_local_playlist_cover(&local_id, None)?));
+    }
+    let picked = tauri::async_runtime::spawn_blocking(move || app.dialog().file().add_filter("Image", &["png", "jpg", "jpeg", "webp"]).blocking_pick_file())
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(path) = picked.and_then(|f| f.into_path().ok()) else { return Ok(None) };
+    Ok(Some(core.set_local_playlist_cover(&local_id, Some(path))?))
 }
 
 #[tauri::command]

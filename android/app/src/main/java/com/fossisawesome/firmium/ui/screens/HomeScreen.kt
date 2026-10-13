@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Radio
@@ -44,7 +43,6 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onFavoritesClick: () -> Unit = {},
     onExploreNavigate: (String) -> Unit = {},
-    onShuffleAll: () -> Unit = {},
 ) {
     LaunchedEffect(Unit) { onRefresh() }
 
@@ -62,8 +60,6 @@ fun HomeScreen(
         HomeGreeting(username)
 
         Spacer(Modifier.height(12.dp))
-        ShuffleAllButton(onShuffleAll)
-        Spacer(Modifier.height(8.dp))
 
         if (spotify) {
             ExploreChips(onNavigate = onExploreNavigate)
@@ -237,20 +233,6 @@ private fun ExploreChips(onNavigate: (String) -> Unit) {
                 Text(dest.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = LocalAppFontFamily.current, color = colors.text)
             }
         }
-    }
-}
-
-@Composable
-private fun ShuffleAllButton(onClick: () -> Unit) {
-    val colors = LocalFirmiumColors.current
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(colors.surface2)
-            .clickable(onClick = onClick)
-            .padding(10.dp),
-    ) {
-        FirmiumIcon(Icons.Default.Shuffle, contentDescription = "Shuffle all", tint = colors.text, modifier = Modifier.size(18.dp))
     }
 }
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { Api } from '../lib/api'
-  import { navTo, currentTrack, toastError, toast } from '../lib/stores'
+  import { app, navTo, toastError, toast } from '../lib/stores.svelte'
   import { formatDuration } from '../lib/utils'
   import { IconPlay, IconRefresh } from '../lib/icons'
   import type { PodcastChannel, PodcastEpisode } from '../lib/types'
@@ -44,7 +44,7 @@
   <span class="section-header" style="margin:0">{channel?.title ?? 'Podcast'}</span>
   <div class="pl-detail-actions">
     <button class="debug-btn" onclick={refresh} disabled={refreshing}>
-      <span class="icon" class:icon-spin={refreshing} style="width:12px;height:12px;display:inline-flex;margin-right:6px">{@html IconRefresh}</span>Refresh
+      <span class={["icon", { 'icon-spin': refreshing }]} style="width:12px;height:12px;display:inline-flex;margin-right:6px">{@html IconRefresh}</span>Refresh
     </button>
     <button class="debug-btn debug-btn--danger" onclick={unsubscribe}>Unsubscribe</button>
   </div>
@@ -55,8 +55,11 @@
 {:else}
   <div class="track-list">
     {#each episodes as ep (ep.id)}
-      <div class="track-row" class:playing={$currentTrack?.id === `podcast:${ep.id}`} role="button" tabindex="0"
-        onclick={() => play(ep)} onkeydown={e => (e.key === 'Enter' || e.key === ' ') && play(ep)}>
+      <div class={["track-row", { playing: app.currentTrack?.id === `podcast:${ep.id}` }]}
+        role="button"
+        tabindex="0"
+        onclick={() => play(ep)}
+        onkeydown={e => (e.key === 'Enter' || e.key === ' ') && play(ep)}>
         <div class="track-num"><span class="icon" style="width:12px;height:12px;display:inline-flex">{@html IconPlay}</span></div>
         <div class="track-info">
           <div class="track-title">{ep.title}</div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { currentTrack, toastError } from '../lib/stores'
+  import { app, toastError } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { errorMessage } from '../lib/ipc'
   import TrackRow from '../components/TrackRow.svelte'
@@ -59,12 +59,12 @@
         <div class="section-header">Songs</div>
         <div class="filter-bar"><div class="filter-group">
           {#each RATING_FILTERS as r}
-            <button class="filter-chip" class:active={minRating === r} onclick={() => (minRating = r)}>{r === 0 ? 'Any rating' : `${r}+ ★`}</button>
+            <button class={["filter-chip", { active: minRating === r }]} onclick={() => (minRating = r)}>{r === 0 ? 'Any rating' : `${r}+ ★`}</button>
           {/each}
         </div></div>
         <div class="track-list">
           {#each visibleSongs as track, idx (track.id)}
-            <TrackRow {track} {idx} playing={$currentTrack?.id === track.id} onPlay={play} />
+            <TrackRow {track} {idx} playing={app.currentTrack?.id === track.id} onPlay={play} />
           {/each}
         </div>
       {/if}

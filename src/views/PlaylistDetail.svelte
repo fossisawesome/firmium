@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { IconList, IconPlay, IconCloud, IconShuffle } from '../lib/icons'
-  import { currentTrack, isAuthed, navTo, toastError } from '../lib/stores'
+  import { IconList, IconPlay, IconCloud, IconShuffle, IconEdit } from '../lib/icons'
+  import { app, navTo, toastError } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { formatDuration } from '../lib/utils'
-  import { localPlaylists, loadPlaylists } from '../lib/playlists'
+  import { playlistState, loadPlaylists } from '../lib/playlists.svelte'
   import VirtualList from '../lib/VirtualList.svelte'
   import TrackRow from '../components/TrackRow.svelte'
   import PlaylistMosaic from '../components/PlaylistMosaic.svelte'
@@ -32,12 +32,12 @@
         serverTracks = r.tracks
       } catch (e) { toastError(e) }
       finally { serverLoading = false }
-    } else if ($localPlaylists.length === 0) {
+    } else if (playlistState.local.length === 0) {
       loadPlaylists(false).catch(() => {})
     }
   })
 
-  const local = $derived(serverOnlyId ? null : ($localPlaylists.find(p => p.id === id) ?? null))
+  const local = $derived(serverOnlyId ? null : (playlistState.local.find(p => p.id === id) ?? null))
   const name = $derived(serverOnlyId ? serverName : (local?.name ?? ''))
   const tracks = $derived<Song[]>(serverOnlyId ? serverTracks : (local?.tracks ?? []))
   const linked = $derived(!!serverOnlyId || !!local?.serverId)
@@ -56,13 +56,21 @@
     editingName = false
     const val = nameValue.trim()
     if (!local || !val || val === local.name) return
-    try { localPlaylists.set(await Api.renamePlaylist(local.id, val)) } catch (e) { toastError(e) }
+    try { (playlistState.local = await Api.renamePlaylist(local.id, val)) } catch (e) { toastError(e) }
+  }
+
+  async function changeImage(clear = false) {
+    if (!local) return
+    try {
+      const lists = await Api.setPlaylistCover(local.id, clear === true)
+      if (lists) playlistState.local = lists
+    } catch (e) { toastError(e) }
   }
 
   async function deletePlaylist() {
     if (!local || !confirm(`Delete "${local.name}"? This cannot be undone.`)) return
     try {
-      localPlaylists.set(await Api.deletePlaylist(local.id))
+      playlistState.local = await Api.deletePlaylist(local.id)
       navTo('playlists')
     } catch (e) { toastError(e) }
   }
@@ -73,7 +81,7 @@
         await Api.removeFromServerPlaylist(serverOnlyId, idx)
         serverTracks = serverTracks.filter((_, i) => i !== idx)
       } else if (local) {
-        localPlaylists.set(await Api.removePlaylistTrack(local.id, track.id))
+        playlistState.local = await Api.removePlaylistTrack(local.id, track.id)
       }
     } catch (e) { toastError(e) }
   }
@@ -88,7 +96,7 @@
         serverTracks = next
         await Api.reorderServerPlaylist(serverOnlyId, next.map(t => t.id))
       } else if (local) {
-        localPlaylists.set(await Api.movePlaylistTrack(local.id, idx, to))
+        playlistState.local = await Api.movePlaylistTrack(local.id, idx, to)
       }
     } catch (e) { toastError(e) }
   }
@@ -106,9 +114,12 @@
   <div class="loading-msg">Playlist not found.</div>
 {:else}
   <div class="pl-detail-header">
-    <div class="pl-detail-art">
-      {#if tracks.length}<PlaylistMosaic covers={tracks.map(t => t.coverArtId)} />
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div class="pl-detail-art" role={local ? 'button' : undefined} tabindex={local ? 0 : undefined} title={local ? 'Change image' : ''}
+      onclick={() => changeImage()} onkeydown={e => (e.key === 'Enter' || e.key === ' ') && changeImage()}>
+      {#if tracks.length || local?.customCover}<PlaylistMosaic covers={tracks.map(t => t.coverArtId)} custom={local?.customCover} />
       {:else}<span class="icon" style="width:40px;height:40px;color:var(--muted)">{@html IconList}</span>{/if}
+      {#if local}<div class="pl-detail-art-overlay">Change image</div>{/if}
     </div>
 
     <div class="pl-detail-info">
@@ -118,10 +129,11 @@
           onkeydown={e => { if (e.key === 'Enter') { e.preventDefault(); commitName() } if (e.key === 'Escape') editingName = false }} />
       {:else}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <div class="pl-detail-name" role={local ? 'button' : undefined} tabindex={local ? 0 : undefined} title={local ? 'Click to rename' : ''}
+        <div class="pl-detail-name" role={local ? 'button' : undefined} tabindex={local ? 0 : undefined} title={local ? 'Rename' : ''}
           onclick={() => { if (local) { nameValue = local.name; editingName = true } }}
           onkeydown={e => (e.key === 'Enter' || e.key === ' ') && local && (nameValue = local.name, editingName = true)}>
           {name}
+          {#if local}<span class="pl-rename-hint icon" aria-hidden="true">{@html IconEdit}</span>{/if}
           {#if linked}<span class="pl-server-indicator" title="Synced with server"><span class="icon" style="width:11px;height:11px">{@html IconCloud}</span></span>{/if}
         </div>
       {/if}
@@ -131,6 +143,7 @@
       <div class="pl-detail-actions">
         <button class="play-all-btn" onclick={() => play(0)} disabled={!tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>Play All</button>
         <button class="play-all-btn shuffle-all-btn" onclick={() => Api.shuffleAndPlay(tracks).catch(toastError)} disabled={!tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconShuffle}</span>Shuffle</button>
+        {#if local?.customCover}<button class="pl-delete-btn" onclick={() => changeImage(true)}>Reset image</button>{/if}
         {#if local}<button class="pl-delete-btn" onclick={deletePlaylist}>Delete</button>{/if}
       </div>
     </div>
@@ -141,14 +154,14 @@
   {:else}
     {#if hasBpm}
       <div class="filter-bar"><div class="filter-group">
-        {#each BPM_RANGES as r, i}<button class="filter-chip" class:active={bpm === i} onclick={() => (bpm = i)}>BPM {r.label}</button>{/each}
+        {#each BPM_RANGES as r, i}<button class={["filter-chip", { active: bpm === i }]} onclick={() => (bpm = i)}>BPM {r.label}</button>{/each}
       </div></div>
     {/if}
     <div class="track-list">
       <VirtualList items={visible} itemHeight={ROW_HEIGHT}>
         {#snippet children(track, idx)}
-          <TrackRow {track} {idx} playing={$currentTrack?.id === track.id} displayNum={idx + 1} showAddButton={!serverOnlyId}
-            onPlay={() => play(tracks.indexOf(track))} onRate={$isAuthed ? rate : undefined} onRemove={remove} onMove={move}
+          <TrackRow {track} {idx} playing={app.currentTrack?.id === track.id} displayNum={idx + 1} showAddButton={!serverOnlyId}
+            onPlay={() => play(tracks.indexOf(track))} onRate={app.isAuthed ? rate : undefined} onRemove={remove} onMove={move}
             isFirst={idx === 0} isLast={idx === visible.length - 1} />
         {/snippet}
       </VirtualList>

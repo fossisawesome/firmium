@@ -68,11 +68,11 @@
   transition: all var(--timing);
   padding: 0;
   font-family: var(--font);
-}
 
-.lyrics-close:hover {
-  color: var(--text);
-  background: var(--surface2);
+  &:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
 }
 
 .lyrics-body {
@@ -167,11 +167,11 @@
   flex-direction: column;
   padding-bottom: 75px;
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
-.similar-tracks-panel.open {
-  width: 300px;
-  min-width: 300px;
+  &.open {
+    width: 300px;
+    min-width: 300px;
+  }
 }
 
 .similar-tracks-header {
@@ -204,11 +204,11 @@
   transition: all var(--timing);
   padding: 0;
   font-family: var(--font);
-}
 
-.similar-tracks-close:hover {
-  color: var(--text);
-  background: var(--surface2);
+  &:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
 }
 
 .similar-tracks-body {
@@ -251,11 +251,11 @@
   flex-direction: column;
   padding-bottom: 75px;
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
-.audio-stats-panel.open {
-  width: 300px;
-  min-width: 300px;
+  &.open {
+    width: 300px;
+    min-width: 300px;
+  }
 }
 
 .audio-stats-header {
@@ -288,11 +288,11 @@
   transition: all var(--timing);
   padding: 0;
   font-family: var(--font);
-}
 
-.audio-stats-close:hover {
-  color: var(--text);
-  background: var(--surface2);
+  &:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
 }
 
 .audio-stats-body {
@@ -308,9 +308,3 @@
   flex-shrink: 0;
 }
 
-
-/* Equalizer panel is wider than the other side panels to fit the band sliders. */
-.similar-tracks-panel.eq-panel.open {
-  width: 420px;
-  min-width: 420px;
-}

@@ -49,7 +49,7 @@ async fn subsonic_request(
         }
     }
 
-    let res = state.http.get(url).send().await?;
+    let res = crate::tls::http().get(url).send().await?;
     if res.status() == reqwest::StatusCode::UNAUTHORIZED {
         if !silent {
             state.bus.emit(BackendEvent::SessionExpired);
@@ -272,7 +272,7 @@ pub async fn get_artist_info(
     };
 
     if !lastfm_key.trim().is_empty() && !artist_name.trim().is_empty() {
-        if let Some(lf) = fetch_lastfm_artist_info(&state.http, lastfm_key.trim(), artist_name.trim()).await {
+        if let Some(lf) = fetch_lastfm_artist_info(&crate::tls::http(), lastfm_key.trim(), artist_name.trim()).await {
             if lf.bio.is_some() {
                 info.bio = lf.bio;
             }

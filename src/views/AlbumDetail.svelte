@@ -1,6 +1,6 @@
 <script lang="ts">
   import { IconMusic, IconPlay, IconShuffle, IconHeart, IconHeartOutline, IconDownload } from '../lib/icons'
-  import { currentTrack, isAuthed, dataVersion, toastError, toast } from '../lib/stores'
+  import { app, toastError, toast } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { cover } from '../lib/cover'
   import { errorMessage } from '../lib/ipc'
@@ -24,7 +24,7 @@
   const key = (n: number | null | undefined, title: string) => `${n ?? ''}|${title.trim().toLowerCase()}`
 
   $effect(() => {
-    $dataVersion
+    app.dataVersion
     const albumId = id
     let live = true
     loading = true
@@ -70,7 +70,7 @@
 
 <div class="tracklist-header">
   <div class="tl-art">
-    {#if coverArtId}<img use:cover={coverArtId} alt="{albumName} by {albumArtist}" />
+    {#if coverArtId}<img {@attach cover(coverArtId)} alt="{albumName} by {albumArtist}" />
     {:else}<span class="icon" style="width:32px;height:32px;color:var(--muted)">{@html IconMusic}</span>{/if}
   </div>
   <div class="tl-info">
@@ -79,7 +79,7 @@
     <div class="pl-detail-actions">
       <button class="play-all-btn" onclick={() => play(0)} disabled={!tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconPlay}</span>Play All</button>
       <button class="play-all-btn shuffle-all-btn" onclick={shuffle} disabled={!tracks.length}><span class="icon" style="width:12px;height:12px;margin-right:6px">{@html IconShuffle}</span>Shuffle</button>
-      {#if $isAuthed}
+      {#if app.isAuthed}
         <button class="play-all-btn shuffle-all-btn" onclick={toggleStar} aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}>
           <span class="icon" style="width:12px;height:12px">{@html starred ? IconHeart : IconHeartOutline}</span>
         </button>
@@ -94,15 +94,15 @@
 <LoadingState {loading} {error} empty={tracks.length === 0} loadingMessage="Loading album tracks…" emptyMessage="No tracks found.">
   {#if hasBpm}
     <div class="filter-bar"><div class="filter-group">
-      {#each BPM_RANGES as r, i}<button class="filter-chip" class:active={bpm === i} onclick={() => (bpm = i)}>BPM {r.label}</button>{/each}
+      {#each BPM_RANGES as r, i}<button class={["filter-chip", { active: bpm === i }]} onclick={() => (bpm = i)}>BPM {r.label}</button>{/each}
     </div></div>
   {/if}
   <div class="track-list">
     <VirtualList items={filtered} itemHeight={ROW_HEIGHT}>
       {#snippet children(track, idx)}
-        <TrackRow {track} {idx} playing={$currentTrack?.id === track.id} {albumArtist}
+        <TrackRow {track} {idx} playing={app.currentTrack?.id === track.id} {albumArtist}
           downloaded={downloadedKeys.has(key(track.trackNumber, track.title))}
-          onPlay={() => play(tracks.indexOf(track))} onRate={$isAuthed ? rate : undefined} />
+          onPlay={() => play(tracks.indexOf(track))} onRate={app.isAuthed ? rate : undefined} />
       {/snippet}
     </VirtualList>
   </div>

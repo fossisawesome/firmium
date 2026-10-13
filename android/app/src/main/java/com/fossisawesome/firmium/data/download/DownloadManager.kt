@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
+import com.fossisawesome.firmium.data.net.TlsConfig
 import okhttp3.Request
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -36,10 +36,8 @@ class DownloadManager(
     private val localLibrary: LocalLibraryRepository,
 ) {
 
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    // Shared mTLS-aware client with a longer read timeout for file transfers.
+    private val http get() = TlsConfig.client.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
 
     // Application-scoped so a "download entire library" run survives navigating away from Settings.
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

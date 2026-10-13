@@ -87,6 +87,7 @@ export interface Playlist {
   serverId?: string
   createPending: boolean
   createAttempts: number
+  customCover?: string
 }
 
 /** Server playlist not linked to a local playlist. */
@@ -112,7 +113,6 @@ export interface AuthState {
 
 export interface Settings {
   themeId: string
-  uiThemeId: string
   fontFamily: string
   scrollbarWidth: number
   downloadFormat: string
@@ -130,7 +130,11 @@ export interface Settings {
   lastfmKey: string
   lastfmSecret: string
   listenbrainzToken: string
+  clientCert: boolean
+  clientKey: boolean
+  caCert: boolean
 }
+export type TlsCertKind = 'clientCert' | 'clientKey' | 'caCert'
 export type SettingKey = keyof Settings
 
 export interface ThemeColors {

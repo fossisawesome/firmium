@@ -50,7 +50,7 @@ Legend: ✅ supported — ❌ not available — (blank) = same as ✅
 | Feature | Desktop | Android |
 |---|:---:|:---:|
 | 18+ built-in color themes plus custom themes via TOML | ✅ | ✅ |
-| Spotify-style UI layout, independent of color theme | ✅ | ✅ |
+| Spotify-style UI layout, independent of color theme | ❌ | ✅ |
 
 ---
 

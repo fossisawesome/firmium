@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { Api } from '../lib/api'
-  import { navTo } from '../lib/stores'
+  import { navTo } from '../lib/stores.svelte'
   import { errorMessage } from '../lib/ipc'
   import { cover } from '../lib/cover'
   import { IconPlus, IconPodcast } from '../lib/icons'
@@ -61,7 +61,7 @@
   <div class="pl-card" role="button" tabindex="0" onclick={() => navTo('podcast', ch.id)}
     onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navTo('podcast', ch.id)}>
     <div class="pl-card-art">
-      {#if ch.imageUrl}<img use:cover={ch.imageUrl} alt="" />
+      {#if ch.imageUrl}<img {@attach cover(ch.imageUrl)} alt="" />
       {:else}<div class="no-art"><span class="icon" style="width:16px;height:16px;color:var(--muted)">{@html IconPodcast}</span></div>{/if}
     </div>
     <div class="pl-card-info">
@@ -71,8 +71,27 @@
   </div>
 {/each}
 
-<style>
-  .podcast-add { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; align-items: center; }
-  .podcast-add input { flex: 1; min-width: 220px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 3px; font-family: var(--font); }
-  .podcast-add .error-msg { flex-basis: 100%; }
+<style lang="scss">
+  .podcast-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  align-items: center;
+
+  input {
+    flex: 1;
+    min-width: 220px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 3px;
+    font-family: var(--font);
+  }
+
+  .error-msg {
+    flex-basis: 100%;
+  }
+}
 </style>

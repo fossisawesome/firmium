@@ -2,8 +2,8 @@
   import { IconDownload, IconLoading, IconChevronUp, IconChevronDown, IconStarFilled, IconStarEmpty, IconHeart, IconHeartOutline } from '../lib/icons'
   import { Api } from '../lib/api'
   import { cover } from '../lib/cover'
-  import { showMenu } from '../lib/menu'
-  import { isAuthed, toastError } from '../lib/stores'
+  import { showMenu } from '../lib/menu.svelte'
+  import { app, toastError } from '../lib/stores.svelte'
   import { formatDuration } from '../lib/utils'
   import type { Song } from '../lib/types'
 
@@ -49,17 +49,20 @@
   }
 </script>
 
-<div class="track-row" class:playing role="button" tabindex="0" onclick={() => onPlay(idx)}
+<div class={["track-row", { playing }]}
+  role="button"
+  tabindex="0"
+  onclick={() => onPlay(idx)}
   onkeydown={e => (e.key === 'Enter' || e.key === ' ') && onPlay(idx)}>
   <div class="track-num">{displayNum ?? track.trackNumber ?? idx + 1}</div>
-  <div class="track-thumb">{#if track.coverArtId}<img use:cover={track.coverArtId} alt="" />{/if}</div>
+  <div class="track-thumb">{#if track.coverArtId}<img {@attach cover(track.coverArtId)} alt="" />{/if}</div>
   <div class="track-info">
     <div class="track-title">{track.title}</div>
     <div class="track-artist">{track.artist}</div>
   </div>
   <div class="track-duration">{formatDuration(track.duration)}</div>
   {#if onRate}
-    <div class="track-stars" class:has-rating={track.userRating && track.userRating > 0}>
+    <div class={["track-stars", { 'has-rating': track.userRating && track.userRating > 0 }]}>
       {#each [1, 2, 3, 4, 5] as star}
         <button class="star-btn" title="Rate {star}" onclick={e => { e.stopPropagation(); onRate!(track, track.userRating === star ? 0 : star) }}>
           <span class="icon" style="width:12px;height:12px">{@html star <= (track.userRating ?? 0) ? IconStarFilled : IconStarEmpty}</span>
@@ -67,12 +70,14 @@
       {/each}
     </div>
   {/if}
-  {#if $isAuthed && serverTrack}
-    <button class="track-heart-btn" class:starred title={starred ? 'Remove from favorites' : 'Add to favorites'} onclick={toggleStar}>
+  {#if app.isAuthed && serverTrack}
+    <button class={["track-heart-btn", { starred }]} title={starred ? 'Remove from favorites' : 'Add to favorites'} onclick={toggleStar}>
       <span class="icon" style="width:13px;height:13px">{@html starred ? IconHeart : IconHeartOutline}</span>
     </button>
-    <button class="track-download-btn" class:download-done={dl === 'done'} class:download-error={dl === 'error'}
-      title="Download track" disabled={dl === 'loading'} onclick={download}>
+    <button class={["track-download-btn", { 'download-done': dl === 'done', 'download-error': dl === 'error' }]}
+      title="Download track"
+      disabled={dl === 'loading'}
+      onclick={download}>
       <span class="icon" style="width:13px;height:13px">{@html dl === 'loading' ? IconLoading : IconDownload}</span>
     </button>
   {/if}

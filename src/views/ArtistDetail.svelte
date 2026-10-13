@@ -6,8 +6,8 @@
   import { Api } from '../lib/api'
   import { artistPhoto, DEFAULT_AVATAR } from '../lib/cover'
   import { errorMessage } from '../lib/ipc'
-  import { showMenu } from '../lib/menu'
-  import { navTo, dataVersion, isAuthed, toast, toastError } from '../lib/stores'
+  import { showMenu } from '../lib/menu.svelte'
+  import { app, navTo, toast, toastError } from '../lib/stores.svelte'
   import type { Album, Artist } from '../lib/types'
 
   const ROW_HEIGHT = 60
@@ -38,7 +38,7 @@
   })
 
   $effect(() => {
-    $dataVersion
+    app.dataVersion
     const artistId = id
     let live = true
     loading = true
@@ -99,17 +99,17 @@
     <div class="artist-page-bio">{bio}</div>
     <div class="artist-page-actions">
       <button class="play-all-btn" onclick={() => playAll(false)} disabled={busy !== null}>
-        <span class="icon" class:icon-spin={busy === 'play'} style="width:12px;height:12px;margin-right:6px">{@html busy === 'play' ? IconLoading : IconPlay}</span>{busy === 'play' ? 'Loading Queue…' : 'Play All Songs'}
+        <span class={["icon", { 'icon-spin': busy === 'play' }]} style="width:12px;height:12px;margin-right:6px">{@html busy === 'play' ? IconLoading : IconPlay}</span>{busy === 'play' ? 'Loading Queue…' : 'Play All Songs'}
       </button>
       <button class="play-all-btn shuffle-all-btn" onclick={() => playAll(true)} disabled={busy !== null}>
-        <span class="icon" class:icon-spin={busy === 'shuffle'} style="width:12px;height:12px;margin-right:6px">{@html busy === 'shuffle' ? IconLoading : IconShuffle}</span>{busy === 'shuffle' ? 'Loading Queue…' : 'Shuffle'}
+        <span class={["icon", { 'icon-spin': busy === 'shuffle' }]} style="width:12px;height:12px;margin-right:6px">{@html busy === 'shuffle' ? IconLoading : IconShuffle}</span>{busy === 'shuffle' ? 'Loading Queue…' : 'Shuffle'}
       </button>
-      {#if $isAuthed}
+      {#if app.isAuthed}
         <button class="play-all-btn shuffle-all-btn" onclick={toggleStar} aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}>
           <span class="icon" style="width:12px;height:12px">{@html starred ? IconHeart : IconHeartOutline}</span>
         </button>
         <button class="play-all-btn shuffle-all-btn" onclick={downloadAll} disabled={downloaded !== null || albums.length === 0} aria-label="Download all albums">
-          <span class="icon" class:icon-spin={downloaded !== null} style="width:12px;height:12px">{@html downloaded !== null ? IconLoading : IconDownload}</span>{#if downloaded !== null}<span style="margin-left:6px">{downloaded}/{albums.length}</span>{/if}
+          <span class={["icon", { 'icon-spin': downloaded !== null }]} style="width:12px;height:12px">{@html downloaded !== null ? IconLoading : IconDownload}</span>{#if downloaded !== null}<span style="margin-left:6px">{downloaded}/{albums.length}</span>{/if}
         </button>
       {/if}
       <button class="play-all-btn artist-add-btn" title="More options" aria-label="More options"
@@ -133,7 +133,7 @@
     <div class="reco-row">
       {#each recommendations as artist (artist.id)}
         <button class="reco-card" onclick={() => navTo('artist', artist.id)} title={artist.name}>
-          <img class="reco-img" use:artistPhoto={artist.id} alt={artist.name} />
+          <img class="reco-img" {@attach artistPhoto(artist.id)} alt={artist.name} />
           <span class="reco-name">{artist.name}</span>
         </button>
       {/each}
@@ -141,7 +141,7 @@
   {/if}
 </LoadingState>
 
-<style>
+<style lang="scss">
   .reco-row { display: flex; flex-wrap: wrap; gap: 16px; padding: 8px 0 24px; }
   .reco-card { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 96px; background: none; border: none; cursor: pointer; color: var(--text); }
   .reco-img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--surface2); border: 1px solid var(--border); }

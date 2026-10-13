@@ -47,7 +47,7 @@
 
     <div class="dots">
       {#each panels as _, i}
-        <span class="dot" class:active={i === index}></span>
+        <span class={["dot", { active: i === index }]}></span>
       {/each}
     </div>
 
@@ -61,7 +61,7 @@
   </div>
 </div>
 
-<style>
+<style lang="scss">
   .onboarding {
     position: fixed;
     inset: 0;
@@ -86,14 +86,42 @@
   h1 { margin: 0; font-size: 1.6rem; }
   p { margin: 0; color: var(--muted); line-height: 1.5; max-width: 40ch; }
   .dots { display: flex; gap: 8px; margin: 8px 0; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background var(--timing); }
-  .dot.active { background: var(--accent); }
+  .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background var(--timing);
+
+  &.active {
+    background: var(--accent);
+  }
+}
   .controls { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
   button { font-family: var(--font); cursor: pointer; border-radius: 8px; padding: 10px 18px; font-size: 0.95rem; transition: all var(--timing); }
-  .primary { background: var(--accent); color: var(--bg); border: none; }
-  .primary:hover { background: var(--accent-dim); }
-  .ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-  .ghost:hover:not(:disabled) { color: var(--text); border-color: var(--text); }
-  .ghost:disabled { opacity: 0.4; cursor: default; }
+  .primary {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+
+  &:hover {
+    background: var(--accent-dim);
+  }
+}
+  .ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+
+  &:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--text);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
   .skip { border: none; }
 </style>

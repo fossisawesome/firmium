@@ -1,16 +1,16 @@
 <script lang="ts">
   import { Api } from '../lib/api'
-  import { isAuthed, auth, showAccountModal, setAuthState, navTo } from '../lib/stores'
+  import { app, setAuthState, navTo } from '../lib/stores.svelte'
   import { IconClose } from '../lib/icons'
   import Setup from './Setup.svelte'
 
   let { error = $bindable('') }: { error?: string } = $props()
 
   const serverLabel = $derived.by(() => {
-    try { return new URL($auth.server ?? '').hostname } catch { return $auth.server ?? '' }
+    try { return new URL(app.auth.server ?? '').hostname } catch { return app.auth.server ?? '' }
   })
 
-  const close = () => showAccountModal.set(false)
+  const close = () => (app.showAccountModal = false)
 
   async function disconnect() {
     await setAuthState(await Api.logout())
@@ -44,11 +44,11 @@
       <span class="icon" style="width:14px;height:14px" aria-hidden="true">{@html IconClose}</span>
     </button>
 
-    {#if $isAuthed}
+    {#if app.isAuthed}
       <div class="setup-box">
         <h1>Connected</h1>
-        <div class="account-modal-server">{$auth.username}@{serverLabel}</div>
-        {#each $auth.accounts.filter(a => a.server !== $auth.server || a.username !== $auth.username) as a}
+        <div class="account-modal-server">{app.auth.username}@{serverLabel}</div>
+        {#each app.auth.accounts.filter(a => a.server !== app.auth.server || a.username !== app.auth.username) as a}
           <div class="saved-server-row">
             <div class="saved-server-info">
               <div class="saved-server-url">{a.server}</div>

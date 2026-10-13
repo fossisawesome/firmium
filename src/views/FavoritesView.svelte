@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { currentTrack, dataVersion, navTo, toastError } from '../lib/stores'
+  import { app, navTo, toastError } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { cover, artistPhoto } from '../lib/cover'
   import { errorMessage } from '../lib/ipc'
@@ -14,7 +14,7 @@
   const empty = $derived(!data.artists.length && !data.albums.length && !data.songs.length)
 
   $effect(() => {
-    $dataVersion
+    app.dataVersion
     let live = true
     loading = true
     error = ''
@@ -35,7 +35,7 @@
     <div class="release-group-title">Songs</div>
     <div class="track-list">
       {#each data.songs as track, idx (track.id)}
-        <TrackRow {track} {idx} playing={$currentTrack?.id === track.id} onPlay={play} />
+        <TrackRow {track} {idx} playing={app.currentTrack?.id === track.id} onPlay={play} />
       {/each}
     </div>
   {/if}
@@ -49,7 +49,7 @@
       {#each data.artists as artist (artist.id)}
         <div class="artist-row" role="button" tabindex="0" onclick={() => navTo('artist', artist.id)}
           onkeydown={e => (e.key === 'Enter' || e.key === ' ') && navTo('artist', artist.id)}>
-          <img class="artist-row-avatar" use:artistPhoto={artist.id} alt="" />
+          <img class="artist-row-avatar" {@attach artistPhoto(artist.id)} alt="" />
           <div class="artist-info">
             <div class="artist-name">{artist.name}</div>
             <div class="artist-album-count">{artist.albumCount} albums</div>

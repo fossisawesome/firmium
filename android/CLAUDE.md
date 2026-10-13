@@ -1,13 +1,13 @@
 # CLAUDE.md (Android)
 
-Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../CLAUDE.md) for project-wide conventions, principles, and desktop (iced-rs/Rust) architecture.
+Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../CLAUDE.md) for project-wide conventions, principles, and desktop (Tauri/Rust + Svelte) architecture.
 
 ## Tech Stack
 
 - **Language**: Kotlin
 - **UI**: Jetpack Compose
 - **Audio**: Media3/ExoPlayer-based player + foreground `NowPlayingService`
-- **HTTP**: OkHttp/Retrofit-style `ApiClient` for OpenSubsonic API calls
+- **HTTP**: OkHttp/Retrofit-style `ApiClient` for OpenSubsonic API calls. All stacks (API, downloads, ExoPlayer via `OkHttpDataSource`, Coil) use the shared `TlsConfig.client` (`data/net/TlsConfig.kt`), which carries the optional mTLS identity (PKCS#12 imported into the Android Keystore alias `firmium_mtls`, non-extractable) and extra CA (PEM in `filesDir/certs/ca.pem`). Read `TlsConfig.client` per request; never cache it. Podcasts keep their own client. The Wear app is not covered.
 - **Credentials**: `SecureStorage` (Android Keystore-backed)
 - **Packaging**: Gradle (`assembleDebug` / `assembleRelease`)
 - **SDK**: minSdk 26 (Android 8.0), targetSdk 36, compileSdk 37

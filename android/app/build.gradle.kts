@@ -15,8 +15,8 @@ android {
         applicationId = "com.fossisawesome.firmium"
         minSdk = 26
         targetSdk = 36
-        versionCode = 35
-        versionName = "9.0.1"
+        versionCode = 36
+        versionName = "9.0.2"
         manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
@@ -113,6 +113,7 @@ dependencies {
     // Audio
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-common:1.11.1")
+    implementation("androidx.media3:media3-datasource-okhttp:1.11.1")
     implementation("androidx.media:media:1.8.0")
 
     // Wear OS companion: phone <-> watch communication (Wearable Data Layer).

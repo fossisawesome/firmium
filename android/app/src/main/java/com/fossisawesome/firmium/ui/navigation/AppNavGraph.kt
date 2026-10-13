@@ -313,7 +313,6 @@ fun AppNavGraph(
                         onArtistClick = { navController.navigate("artist/$it") },
                         onRefresh = { libraryViewModel.loadHome() },
                         onFavoritesClick = { navController.navigate("favorites") },
-                        onShuffleAll = { playerViewModel.shuffleAll() },
                     )
                 }
                 composable(
@@ -339,6 +338,7 @@ fun AppNavGraph(
                     MixScreen(
                         genres = mixGenres,
                         onStartMix = { energy, genre -> playerViewModel.playMoodMix(energy, genre) },
+                        onShuffleAll = { playerViewModel.shuffleAll() },
                     )
                 }
                 composable("music") {

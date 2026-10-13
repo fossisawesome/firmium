@@ -17,12 +17,12 @@
   border-radius: 3px;
   cursor: pointer;
   transition: background var(--timing), border-color var(--timing);
-}
 
-.pl-new-btn:hover {
-  background: var(--accent);
-  color: #000;
-  border-color: var(--accent);
+  &:hover {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
 }
 
 .pl-empty-state {
@@ -48,14 +48,14 @@
   gap: 16px;
   transition: background var(--timing);
   touch-action: manipulation;
-}
 
-.pl-card:hover {
-  background: var(--surface);
-}
+  &:hover {
+    background: var(--surface);
+  }
 
-.pl-card:active {
-  background: var(--surface2);
+  &:active {
+    background: var(--surface2);
+  }
 }
 
 .pl-card-art {
@@ -68,12 +68,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-}
 
-.pl-card-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
 .pl-card-info {
@@ -122,12 +122,12 @@
   justify-content: center;
   font-size: 40px;
   color: var(--muted);
-}
 
-.pl-detail-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
 .pl-detail-art-overlay {
@@ -169,10 +169,10 @@
   text-overflow: ellipsis;
   border-bottom: 1px solid transparent;
   transition: border-color var(--timing);
-}
 
-.pl-detail-name:hover {
-  border-bottom-color: var(--border);
+  &:hover {
+    border-bottom-color: var(--border);
+  }
 }
 
 .pl-detail-desc {
@@ -182,10 +182,10 @@
   border-bottom: 1px solid transparent;
   transition: border-color var(--timing);
   min-height: 18px;
-}
 
-.pl-detail-desc:hover {
-  border-bottom-color: var(--border);
+  &:hover {
+    border-bottom-color: var(--border);
+  }
 }
 
 .pl-detail-desc-hint {
@@ -216,11 +216,11 @@
   border-radius: 3px;
   cursor: pointer;
   transition: all var(--timing);
-}
 
-.pl-delete-btn:hover {
-  border-color: var(--error);
-  color: var(--error);
+  &:hover {
+    border-color: var(--error);
+    color: var(--error);
+  }
 }
 
 /* ── Playlist cover picker ───────────────────────────────────────────────── */
@@ -253,12 +253,12 @@
   border-radius: 3px;
   font-size: 11px;
   transition: background var(--timing);
-}
 
-.pl-cover-upload-label:hover {
-  background: var(--accent);
-  color: #000;
-  border-color: var(--accent);
+  &:hover {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
 }
 
 .pl-cover-file-input {
@@ -280,18 +280,18 @@
   border: 2px solid transparent;
   transition: border-color var(--timing), transform var(--timing);
   flex-shrink: 0;
-}
 
-.pl-cover-option:hover {
-  border-color: var(--accent);
-  transform: scale(1.05);
-}
+  &:hover {
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
 
-.pl-cover-option img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
 }
 
 .pl-cover-empty {
@@ -320,3 +320,6 @@
   font-weight: normal;
 }
 
+
+.pl-rename-hint { width: 14px; height: 14px; margin-left: 8px; vertical-align: -1px; color: var(--muted); opacity: 0.6; }
+.pl-detail-name:hover .pl-rename-hint { opacity: 1; color: var(--accent); }

@@ -1063,6 +1063,8 @@ private fun FirmiumAccountPanel(
             color = colors.error)
     }
     FirmiumDivider()
+    ClientCertSection(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp))
+    FirmiumDivider()
 }
 
 @Composable

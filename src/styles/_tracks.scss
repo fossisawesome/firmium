@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 /* ── Playlist add button on track rows ────────────────────────────────────── */
 
 .track-add-btn,
@@ -46,12 +48,12 @@
 
 .track-remove-btn {
   font-size: 14px;
-}
 
-.track-remove-btn:hover {
-  color: var(--error);
-  border-color: var(--error);
-  background: rgba(224, 96, 96, 0.12);
+  &:hover {
+    color: var(--error);
+    border-color: var(--error);
+    background: rgba(224, 96, 96, 0.12);
+  }
 }
 
 /* ── Album add button ─────────────────────────────────────────────────────── */
@@ -151,9 +153,11 @@
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--timing);
-}
 
-.track-stars.has-rating { opacity: 1; }
+  &.has-rating {
+    opacity: 1;
+  }
+}
 .track-row:hover .track-stars { opacity: 1; }
 
 .star-btn {
@@ -166,9 +170,11 @@
   align-items: center;
   justify-content: center;
   transition: color var(--timing);
-}
 
-.star-btn:hover { color: var(--accent); }
+  &:hover {
+    color: var(--accent);
+  }
+}
 .track-stars.has-rating .star-btn { color: var(--accent); }
 
 /* ── Playlist add popup menu ─────────────────────────────────────────────── */
@@ -181,7 +187,7 @@
   border-radius: 6px;
   min-width: 200px;
   max-width: 260px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 24px $shadow;
   padding: 6px 0;
   opacity: 0;
   pointer-events: none;
@@ -216,10 +222,10 @@
   color: var(--text);
   transition: background var(--timing);
   gap: 8px;
-}
 
-.pl-popup-item:hover {
-  background: var(--surface2);
+  &:hover {
+    background: var(--surface2);
+  }
 }
 
 .pl-popup-name {
@@ -273,10 +279,10 @@
   border-radius: 3px;
   outline: none;
   display: block;
-}
 
-.pl-popup-input:focus {
-  border-color: var(--accent);
+  &:focus {
+    border-color: var(--accent);
+  }
 }
 
 .pl-popup-actions {
@@ -302,10 +308,10 @@
   background: var(--accent);
   color: #000;
   border-color: var(--accent);
-}
 
-.pl-popup-confirm:hover {
-  opacity: 0.85;
+  &:hover {
+    opacity: 0.85;
+  }
 }
 
 .pl-popup-cancel:hover {

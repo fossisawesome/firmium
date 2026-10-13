@@ -19,8 +19,6 @@ pub struct Config {
     pub server: Option<String>,
     pub username: Option<String>,
     pub theme_id: Option<String>,
-    #[serde(default)]
-    pub ui_theme_id: Option<String>,
     pub volume: Option<f32>,
     #[serde(default)]
     pub accounts: Vec<SavedAccount>,

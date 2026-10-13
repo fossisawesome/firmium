@@ -64,11 +64,11 @@ pub(crate) fn schedule_save_play_queue(
     }
 
     let ids: Vec<String> = inner.queue.iter()
-        .filter(|t| !is_server_song(&t.id))
+        .filter(|t| is_server_song(&t.id))
         .map(|t| t.id.clone())
         .collect();
     let current_id = inner.queue.get(inner.queue_idx as usize)
-        .filter(|t| !is_server_song(&t.id))
+        .filter(|t| is_server_song(&t.id))
         .map(|t| t.id.clone());
 
     drop(inner);

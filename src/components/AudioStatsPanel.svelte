@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { openPanel, currentTrack } from '../lib/stores'
+  import { app } from '../lib/stores.svelte'
   import { IconClose } from '../lib/icons'
   import type { ReplayGain } from '../lib/types'
 
-  function close() { openPanel.set(null) }
+  function close() { (app.openPanel = null) }
 
-  const rg = $derived(($currentTrack?.replayGain ?? {}) as ReplayGain)
+  const rg = $derived((app.currentTrack?.replayGain ?? {}) as ReplayGain)
 
   function db(v: number | undefined): string {
     return v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)} dB`
@@ -19,7 +19,7 @@
   )
 </script>
 
-<div class="audio-stats-panel" class:open={$openPanel === 'stats'}>
+<div class={["audio-stats-panel", { open: app.openPanel === 'stats' }]}>
   <div class="audio-stats-header">
     <span class="audio-stats-header-title">Audio Stats</span>
     <button class="audio-stats-close" onclick={close}>
@@ -29,17 +29,17 @@
   <hr class="divider" style="margin: 0 20px;">
 
   <div class="audio-stats-body">
-    {#if !$currentTrack}
+    {#if !app.currentTrack}
       <div class="audio-stats-status">No track playing</div>
     {:else}
       <div class="audio-stats-group">
         <div class="audio-stats-label">Format</div>
-        <div class="audio-stats-value">{$currentTrack.trackInfo ?? '—'}</div>
+        <div class="audio-stats-value">{app.currentTrack.trackInfo ?? '—'}</div>
       </div>
 
       <div class="audio-stats-group">
         <div class="audio-stats-label">Tempo</div>
-        <div class="audio-stats-value">{$currentTrack.bpm != null ? `${Math.round($currentTrack.bpm)} BPM` : '—'}</div>
+        <div class="audio-stats-value">{app.currentTrack.bpm != null ? `${Math.round(app.currentTrack.bpm)} BPM` : '—'}</div>
       </div>
 
       <div class="audio-stats-group">
@@ -63,7 +63,7 @@
   </div>
 </div>
 
-<style>
+<style lang="scss">
   .audio-stats-group { margin-bottom: 18px; }
   .audio-stats-label {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -71,8 +71,22 @@
   }
   .audio-stats-value { font-size: 13px; color: var(--text); }
   .audio-stats-status { color: var(--muted); font-size: 12px; text-align: center; padding: 40px 0; }
-  .audio-stats-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .audio-stats-table td { padding: 4px 0; }
-  .audio-stats-table td:first-child { color: var(--muted); }
-  .audio-stats-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .audio-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  td {
+    padding: 4px 0;
+
+    &:first-child {
+      color: var(--muted);
+    }
+
+    &:last-child {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+}
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openPanel, currentTrack, toastError } from '../lib/stores'
+  import { app, toastError } from '../lib/stores.svelte'
   import { Api } from '../lib/api'
   import { cover } from '../lib/cover'
   import { formatDuration } from '../lib/utils'
@@ -10,7 +10,7 @@
   let status = $state('')
   let loadedFor: string | null = null
 
-  const open = $derived($openPanel === 'similar')
+  const open = $derived(app.openPanel === 'similar')
 
   async function load(song: Song) {
     loadedFor = song.id
@@ -27,17 +27,17 @@
   }
 
   $effect(() => {
-    const t = $currentTrack
+    const t = app.currentTrack
     if (open && t && t.id !== loadedFor) load(t)
   })
 
   const play = (idx: number) => Api.setQueueSeamless(results.map(m => m.song), idx).catch(toastError)
 </script>
 
-<div class="similar-tracks-panel" class:open>
+<div class={["similar-tracks-panel", { open }]}>
   <div class="similar-tracks-header">
     <span class="similar-tracks-header-title">Similar Tracks</span>
-    <button class="similar-tracks-close" onclick={() => openPanel.set(null)} aria-label="Close similar tracks">
+    <button class="similar-tracks-close" onclick={() => (app.openPanel = null)} aria-label="Close similar tracks">
       <span class="icon" style="width:13px;height:13px">{@html IconClose}</span>
     </button>
   </div>
@@ -47,13 +47,16 @@
     {#if status}
       <div class="similar-tracks-status">{status}</div>
     {:else if results.length === 0}
-      <div class="similar-tracks-status">{$currentTrack ? 'No similar tracks found' : 'No track playing'}</div>
+      <div class="similar-tracks-status">{app.currentTrack ? 'No similar tracks found' : 'No track playing'}</div>
     {:else}
       <div class="track-list">
         {#each results as match, idx}
-          <div class="track-row" class:playing={$currentTrack?.id === match.song.id} role="button" tabindex="0"
-            onclick={() => play(idx)} onkeydown={e => (e.key === 'Enter' || e.key === ' ') && play(idx)}>
-            <div class="track-thumb">{#if match.song.coverArtId}<img use:cover={match.song.coverArtId} alt="" />{/if}</div>
+          <div class={["track-row", { playing: app.currentTrack?.id === match.song.id }]}
+            role="button"
+            tabindex="0"
+            onclick={() => play(idx)}
+            onkeydown={e => (e.key === 'Enter' || e.key === ' ') && play(idx)}>
+            <div class="track-thumb">{#if match.song.coverArtId}<img {@attach cover(match.song.coverArtId)} alt="" />{/if}</div>
             <div class="track-info">
               <div class="track-title">{match.song.title}</div>
               <div class="track-artist">{match.song.artist}</div>

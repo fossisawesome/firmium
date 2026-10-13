@@ -13,6 +13,8 @@ pub mod events;
 pub mod errors;
 #[path = "../paths.rs"]
 pub mod paths;
+#[path = "../tls.rs"]
+pub mod tls;
 #[path = "../state.rs"]
 pub mod state;
 #[path = "../audio/mod.rs"]

@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.OkHttpClient
+import com.fossisawesome.firmium.data.net.TlsConfig
 import okhttp3.Request
 import android.util.Log
 import okhttp3.logging.HttpLoggingInterceptor
@@ -25,24 +25,8 @@ import java.util.concurrent.TimeUnit
 // All endpoints return parsed domain models; raw JSON parsing is contained here.
 class ApiClient(private val auth: AuthManager) {
 
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .apply {
-            // BASIC logging includes the request URL, which carries the OpenSubsonic
-            // auth token (t=) and salt (s=) as query params — keep this out of release logcat.
-            if (BuildConfig.DEBUG) {
-                val redactingLogger = HttpLoggingInterceptor.Logger { message ->
-                    // Strip the auth token (t=) and salt (s=) from logged URLs even in debug.
-                    val safe = message.replace(Regex("([?&](?:t|s)=)[^&\\s]+"), "$1<redacted>")
-                    Log.d("Firmium/OkHttp", safe)
-                }
-                addInterceptor(HttpLoggingInterceptor(redactingLogger).apply {
-                    level = HttpLoggingInterceptor.Level.BASIC
-                })
-            }
-        }
-        .build()
+    // Shared client carries the optional mTLS identity (see TlsConfig); read per call so cert changes apply live.
+    private val http get() = TlsConfig.client
 
     // ── Core fetch ─────────────────────────────────────────────────────────────
 
@@ -567,37 +551,47 @@ class ApiClient(private val auth: AuthManager) {
         // 3. LrcLib — free community lyrics database, supports synced LRC format.
         if (useLrclib) {
             tryFetchLyrics {
-                val url = buildString {
-                    append("https://lrclib.net/api/get")
-                    append("?artist_name=${java.net.URLEncoder.encode(artist, "UTF-8")}")
-                    append("&track_name=${java.net.URLEncoder.encode(title, "UTF-8")}")
-                    if (albumName.isNotBlank()) append("&album_name=${java.net.URLEncoder.encode(albumName, "UTF-8")}")
-                    if (durationSec > 0) append("&duration=$durationSec")
-                }
-                val (body, isSuccessful) = withContext(Dispatchers.IO) {
+                // Same normalization as desktop (lyrics.rs): LRCLIB /get is an exact match, so raw
+                // "A feat. B" artists, "(Live)" titles and album names make it 404. Album is omitted.
+                val cleanArtist = artist.split(Regex("(?i) feat\\.? | featuring | ft\\.? |/"), limit = 2)[0].trim()
+                val cleanTitle = title
+                    .replace(Regex("(?i)\\s*[(\\[](remix|live|extended|acoustic|instrumental|remaster|cover|edit|version|feat|featuring)[^)\\]]*[)\\]]\\s*$"), "")
+                    .replace(Regex("(?i) - (feat\\.?|featuring).*$"), "")
+                    .trim()
+                val q = "artist_name=${java.net.URLEncoder.encode(cleanArtist, "UTF-8")}" +
+                    "&track_name=${java.net.URLEncoder.encode(cleanTitle, "UTF-8")}"
+                suspend fun lrclibGet(url: String): JsonElement? = withContext(Dispatchers.IO) {
                     val request = Request.Builder()
                         .url(url)
                         .header("Lrclib-Client", "Firmium (https://github.com/fossisawesome/firmium)")
                         .build()
-                    val response = http.newCall(request).execute()
-                    response.body?.string() to response.isSuccessful
+                    http.newCall(request).execute().use { r ->
+                        if (!r.isSuccessful) null else r.body?.string()?.let { JsonParser.parseString(it) }
+                    }
                 }
-                if (body == null || !isSuccessful) return@tryFetchLyrics null
-                val obj = JsonParser.parseString(body).asJsonObject
-                val synced = obj.optString("syncedLyrics")
-                if (!synced.isNullOrBlank()) {
-                    val result = parseLrc(synced)
-                    if (result.lines.isNotEmpty()) return@tryFetchLyrics result
-                }
-                val plain = obj.optString("plainLyrics")
-                if (!plain.isNullOrBlank()) {
-                    val lines = plain.lines().map { LyricLine(null, it) }
-                    if (lines.isNotEmpty()) LyricsResult(lines, false) else null
-                } else null
+                // Exact match first, then fuzzy search ranked by closest duration (within 15s when known).
+                val exact = lrclibGet("https://lrclib.net/api/get?$q" + if (durationSec > 0) "&duration=$durationSec" else "")
+                    ?.asJsonObject?.let { lrclibToResult(it) }
+                if (exact != null) return@tryFetchLyrics exact
+                lrclibGet("https://lrclib.net/api/search?$q")?.asJsonArray
+                    ?.map { it.asJsonObject }
+                    ?.filter { durationSec <= 0 || kotlin.math.abs((it.optDouble("duration") ?: 0.0) - durationSec) <= 15 }
+                    ?.sortedBy { kotlin.math.abs((it.optDouble("duration") ?: 0.0) - durationSec) }
+                    ?.firstNotNullOfOrNull { lrclibToResult(it) }
             }?.let { return it }
         }
 
         return null
+    }
+
+    // Converts one LRCLIB track object to a result: instrumental marker, synced LRC, else plain text.
+    private fun lrclibToResult(obj: JsonObject): LyricsResult? {
+        if (obj.optBoolean("instrumental") == true) return LyricsResult(listOf(LyricLine(null, "♪ Instrumental ♪")), false)
+        obj.optString("syncedLyrics")?.takeIf { it.isNotBlank() }?.let { lrc ->
+            parseLrc(lrc).takeIf { it.lines.isNotEmpty() }?.let { return it }
+        }
+        val plain = obj.optString("plainLyrics")?.takeIf { it.isNotBlank() } ?: return null
+        return LyricsResult(plain.lines().map { LyricLine(null, it) }, false)
     }
 
     // Parses LRC-format lyrics ([mm:ss.xx] text per line) into a LyricsResult.

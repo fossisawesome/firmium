@@ -2,6 +2,8 @@ package com.fossisawesome.firmium
 
 import android.app.Application
 import coil.Coil
+import com.fossisawesome.firmium.data.net.TlsConfig
+import okhttp3.Call
 import coil.ImageLoader
 import coil.EventListener
 import coil.disk.DiskCache
@@ -66,6 +68,7 @@ class FirmiumApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        TlsConfig.init(this)
         // Configure Coil with a persistent disk cache and a larger memory cache so cover art
         // survives navigation and stays loaded for the entire session.
         val imageLoader = ImageLoader.Builder(this)
@@ -80,6 +83,8 @@ class FirmiumApplication : Application() {
                     .maxSizeBytes(256L * 1024 * 1024)  // 256 MB disk cache
                     .build()
             }
+            // Shared mTLS-aware client, resolved per request so cert changes apply live.
+            .callFactory { Call.Factory { TlsConfig.client.newCall(it) } }
             .crossfade(true)
             // Covers fail silently into the placeholder (#56); log why, with the token/salt redacted.
             .eventListener(object : EventListener {

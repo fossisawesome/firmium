@@ -65,7 +65,7 @@ pub async fn download_track(
         query.append_pair("format", &format);
     }
 
-    let res = state.http.get(url).send().await.map_err(|e| e.to_string())?;
+    let res = crate::tls::http().get(url).send().await.map_err(|e| e.to_string())?;
     if !res.status().is_success() {
         return Err(format!("HTTP error {}", res.status()));
     }
