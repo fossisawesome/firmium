@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v9.0.1
 
 ### What's New
 - **Desktop:** The mouse back and forward side buttons now navigate between pages, and going back returns you to your previous scroll position.
@@ -12,7 +12,7 @@
 - **Desktop:** The desktop app is now built on Tauri again. On Linux it needs `webkit2gtk-4.1` installed.
 - **Desktop:** Albums can be sorted by name or by recently added ([#65](https://github.com/fossisawesome/firmium/issues/65)).
 - **Desktop:** Media keys, headset buttons and the system now-playing widget now control Firmium (MPRIS on Linux, the media overlay on Windows, Now Playing on macOS) ([#69](https://github.com/fossisawesome/firmium/issues/69)).
-- **Desktop and Android:** A **Shuffle all** button on Home plays a random sample of your whole library ([#72](https://github.com/fossisawesome/firmium/issues/72)).
+- **Desktop and Android:** A shuffle icon button on Home plays a random sample of your whole library ([#72](https://github.com/fossisawesome/firmium/issues/72)).
 - **Android:** The album list can now be sorted by recently added as well as A–Z ([#65](https://github.com/fossisawesome/firmium/issues/65)).
 - **Android:** An F-Droid friendly build without Google libraries is available with `./gradlew assembleRelease -Pfoss`; Wear OS sync is not included in it ([#62](https://github.com/fossisawesome/firmium/issues/62)).
 - **Desktop:** Crossfade, gapless, ReplayGain, auto-continue and bit-perfect settings are now remembered between launches. Strict bit-perfect turns gapless off.

@@ -60,8 +60,8 @@
     <button class="home-shortcut" onclick={() => navTo('favorites')}>
       <span class="icon" style="width:16px;height:16px">{@html IconHeart}</span>Favorites
     </button>
-    <button class="home-shortcut" onclick={shuffleAll}>
-      <span class="icon" style="width:16px;height:16px">{@html IconShuffle}</span>Shuffle all
+    <button class="home-shortcut" onclick={shuffleAll} title="Shuffle all" aria-label="Shuffle all">
+      <span class="icon" style="width:16px;height:16px">{@html IconShuffle}</span>
     </button>
   </div>
 

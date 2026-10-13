@@ -243,17 +243,14 @@ private fun ExploreChips(onNavigate: (String) -> Unit) {
 @Composable
 private fun ShuffleAllButton(onClick: () -> Unit) {
     val colors = LocalFirmiumColors.current
-    Row(
+    Box(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(colors.surface2)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(10.dp),
     ) {
-        FirmiumIcon(Icons.Default.Shuffle, contentDescription = null, tint = colors.text, modifier = Modifier.size(16.dp))
-        Text("Shuffle all", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = LocalAppFontFamily.current, color = colors.text)
+        FirmiumIcon(Icons.Default.Shuffle, contentDescription = "Shuffle all", tint = colors.text, modifier = Modifier.size(18.dp))
     }
 }
 

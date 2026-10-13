@@ -2,7 +2,7 @@
 # Repackages the .deb built by the Tauri bundler in release.yml. aur.yml bumps
 # pkgver and refreshes the checksum on each release.
 pkgname=firmium-desktop-bin
-pkgver=9.0.0
+pkgver=9.0.1
 pkgrel=1
 pkgdesc="Lightning fast OpenSubsonic music player (Tauri 2: Rust + Svelte)"
 arch=('x86_64')
