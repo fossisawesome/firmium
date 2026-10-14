@@ -431,6 +431,41 @@ html.is-mobile-layout.has-player .main-area {
   min-width: 0;
 }
 
+@media (min-width: 641px) {
+  .player-bar.windows-player {
+    // Reserve room for track details and let all eight controls size their column.
+    grid-template-columns: minmax(340px, 1fr) minmax(0, 1.5fr) max-content;
+    column-gap: 16px;
+
+    .progress-row { padding: 0; }
+    .more-wrap { flex-shrink: 0; }
+
+    @media (max-width: 1000px) {
+      grid-template-columns: minmax(0, 1fr) max-content;
+      grid-template-rows: 44px 15px;
+      gap: 4px 16px;
+      padding: 6px 20px;
+
+      .now-playing {
+        grid-column: 1;
+        grid-row: 1;
+        gap: 10px;
+      }
+
+      .controls {
+        grid-column: 2;
+        grid-row: 1;
+        gap: 6px;
+      }
+
+      .progress-row {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+    }
+  }
+}
+
 .ctrl-btn {
   background: none;
   border: none;

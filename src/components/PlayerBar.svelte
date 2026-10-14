@@ -9,6 +9,8 @@
   } from '../lib/icons'
 
   const run = (p: Promise<unknown>) => p.catch(toastError)
+  const isWindows = import.meta.env.TAURI_ENV_PLATFORM === 'windows'
+    || (!import.meta.env.TAURI_ENV_PLATFORM && navigator.userAgent.includes('Windows'))
 
   const playIcon = $derived(app.playbackState === 'loading' ? IconLoading : app.playbackState === 'playing' ? IconPause : IconPlay)
   const effectiveDuration = $derived(app.duration || app.currentTrack?.duration || 0)
@@ -46,7 +48,7 @@
 </script>
 <svelte:window onclick={() => (moreOpen = false)} onkeydown={e => e.key === 'Escape' && (moreOpen = false)} />
 
-<div class="player-bar">
+<div class={["player-bar", { 'windows-player': isWindows }]}>
   <div class="now-playing">
     <div class="np-art">
       {#if app.currentTrack?.coverArtId}
@@ -56,9 +58,9 @@
       {/if}
     </div>
     <div class="np-info">
-      <div class="np-title">{app.currentTrack?.title ?? '—'}</div>
-      <div class="np-artist">{app.currentTrack?.artist ?? 'No track selected'}</div>
-      {#if app.currentTrack?.trackInfo}<div class="np-format">{app.currentTrack.trackInfo}</div>{/if}
+      <div class="np-title" title={isWindows ? app.currentTrack?.title : undefined}>{app.currentTrack?.title ?? '—'}</div>
+      <div class="np-artist" title={isWindows ? app.currentTrack?.artist : undefined}>{app.currentTrack?.artist ?? 'No track selected'}</div>
+      {#if app.currentTrack?.trackInfo}<div class="np-format" title={isWindows ? app.currentTrack.trackInfo : undefined}>{app.currentTrack.trackInfo}</div>{/if}
     </div>
     {#if app.currentTrack && !app.currentTrack.id.startsWith('podcast:') && !app.currentTrack.id.startsWith('local:')}
       <button class={["ctrl-btn secondary-ctrl np-heart", { active: starred }]} onclick={toggleStar} aria-label={starred ? 'Remove from favorites' : 'Add to favorites'} title="Favorite">
