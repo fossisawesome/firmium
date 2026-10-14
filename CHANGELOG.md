@@ -21,6 +21,7 @@
 - **Desktop:** The Spotify UI theme is removed. The equalizer settings no longer show an output device picker (profiles apply to the default device).
 
 ### Fixes
+- **Windows:** The player bar gives track titles more room and keeps playback buttons clear of the duration. In narrower windows, the seek bar moves below the track details and controls.
 - **Desktop:** The play queue is now saved to the server again, so other devices can resume it. The "Resume server queue?" prompt only appears once per launch and only when nothing is playing.
 - **Desktop:** Home cover cards no longer flicker on hover, the no-artist photo placeholder is clean, and the empty-cover fallback in the player bar is centered.
 - **Desktop:** Shuffle no longer lights up on empty playlists or an empty queue.
