@@ -1,9 +1,12 @@
 # Changelog
 
-## v9.0.2
+## v9.1.0
 
 ### What's New
-- **Desktop and Android:** The Albums (desktop) and Music (Android) tabs are now a grid of cover tiles grouped into Albums, EPs and Singles instead of a long list. On Android, long-press a tile to add it to a playlist.
+- **Android:** Firmium now runs on Meta Quest headsets (Horizon OS) as a resizable floating window with the phone interface. Use the dedicated Quest build, which leaves out Google libraries and Android Auto.
+
+- **Desktop:** The Albums tab is now a grid of cover tiles grouped into Albums, EPs and Singles instead of a long list.
+- **Android:** The Music tab is now a grid of cover tiles grouped into Albums, EPs and Singles instead of a long list. Long-press a tile to add it to a playlist.
 
 - **Desktop:** Servers that require a client certificate (mTLS) now work. Settings > Account lets you add a client certificate, private key and custom CA certificate (PEM files). The private key is stored in your system keyring.
 - **Android:** Servers that require a client certificate (mTLS) now work. Add a .p12/.pfx identity (and optionally a custom CA) in the login dialog or Settings > Account. The key is kept in the Android Keystore.
@@ -30,7 +33,7 @@
 - **Desktop:** Opus files now play. Building from source now needs `cmake` and a C compiler.
 - **Desktop:** Artist pages have a button to download every album by that artist, with progress.
 - **Android:** Swipe a track right to add it to the queue, or long-press it for an Add to queue menu, on album, playlist and favorites lists. The mini player also has a queue button.
-- **Android:** Playback pauses automatically when headphones are unplugged or a Bluetooth device disconnects.
+- **Android:** Playback pauses automatically when headphones are unplugged or a Bluetooth device disconnects ([#77](https://github.com/fossisawesome/firmium/pull/77)).
 - **Desktop:** FreeBSD is no longer mentioned or targeted anywhere in the code and docs.
 - **Desktop:** The desktop app is now built on Tauri again. On Linux it needs `webkit2gtk-4.1` installed.
 - **Desktop:** Albums can be sorted by name or by recently added ([#65](https://github.com/fossisawesome/firmium/issues/65)).
@@ -42,7 +45,6 @@
 - **Desktop:** Podcast episodes play through the main queue and player bar, and your place is saved as you listen.
 - **Desktop:** The audio visualizer has been removed.
 - **Desktop:** Firmium Recap has been removed. Play history and CSV/JSON export in Settings → Stats stay.
-- **Android:** Playback pauses when you unplug headphones or a Bluetooth device disconnects ([#77](https://github.com/fossisawesome/firmium/pull/77)).
 - **Android:** The audio visualizer has been removed.
 - **Android:** Firmium Recap (phone and TV) has been removed. Play history and export in Settings → Stats stay.
 - **Android:** Firmium now saves your queue and position to the server and offers to resume a queue saved by another device when the app opens.

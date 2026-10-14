@@ -360,6 +360,36 @@ jobs:
               data: fs.readFileSync(apk),
             })
 
+      # Quest (Horizon OS) variant: no Google libraries, no Android Auto. Same signing key and
+      # applicationId as the phone APK, so it can't be installed alongside it.
+      - name: Build Quest APK
+        env:
+          ANDROID_SIGNING_KEY_PATH: ${{ runner.temp }}/release.keystore
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd android && ./gradlew assembleRelease -Pquest
+          APK=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*-unsigned.apk' | head -1)
+          [ -n "$APK" ] || { echo "No signed Quest APK found"; exit 1; }
+          cp "$APK" "$RUNNER_TEMP/firmium-quest.apk"
+
+      - name: Upload Quest APK to release
+        uses: actions/github-script@v9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const fs = require('fs')
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              name: 'firmium-quest.apk',
+              data: fs.readFileSync(process.env.RUNNER_TEMP + '/firmium-quest.apk'),
+            })
+
   publish-release:
     needs: [create-release, build-linux, build-windows, build-macos, build-termium-linux, build-termium-windows, build-termium-macos, build-android]
     runs-on: ubuntu-latest

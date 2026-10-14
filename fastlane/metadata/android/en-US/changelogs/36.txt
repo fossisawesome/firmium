@@ -1,3 +1,5 @@
-- The Albums (desktop) and Music (Android) tabs are now a grid of cover tiles grouped into Albums, EPs and Singles instead of a long list. On Android, long-press a tile to add it to a playlist.
-- Servers that require a client certificate (mTLS) now work. Add a .p12/.pfx identity (and optionally a custom CA) in the login dialog or Settings > Account. The key is kept in the Android Keystore.
-- The "Resume server queue?" prompt is now a themed in-app popup instead of the system dialog.
+- Firmium now runs on Meta Quest headsets (Horizon OS) as a floating window.
+- The Music tab is now a grid of cover tiles grouped into Albums, EPs and Singles. Long-press a tile to add it to a playlist.
+- Servers that require a client certificate (mTLS) now work. Add a .p12/.pfx identity in the login dialog or Settings > Account.
+- The "Resume server queue?" prompt is now a themed in-app popup.
+- Lyrics from LRCLIB now load for tracks with featured artists or (Live)/(Remix) titles.

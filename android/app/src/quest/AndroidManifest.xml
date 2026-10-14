@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:installLocation="auto">
+
+    <!-- Meta Quest build (-Pquest): Horizon Store release manifest rules (VRC.Quest.Packaging)
+         for a 2D panel app, and no cars, so the Android Auto entries are dropped. -->
+    <uses-feature
+        android:name="android.hardware.vr.headtracking"
+        android:required="false"
+        android:version="1" />
+
+    <!-- Only used on API 28 and below; minSdk is 29 here, and the store flags it for review. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        tools:node="remove" />
+
+    <application>
+        <!-- Store rule: the launcher activity must not appear in recents. -->
+        <activity
+            android:name=".MainActivity"
+            android:excludeFromRecents="true" />
+
+        <service
+            android:name=".audio.FirmiumMediaBrowserService"
+            tools:node="remove" />
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            tools:node="remove" />
+    </application>
+</manifest>

@@ -1,4 +1,5 @@
-- Swipe a track right to add it to the queue, or long-press it for an Add to queue menu, on album, playlist and favorites lists. The mini player also has a queue button.
-- Playback pauses automatically when headphones are unplugged or a Bluetooth device disconnects.
-- A shuffle icon button on Home plays a random sample of your whole library.
-- The album list can now be sorted by recently added as well as A–Z.
+- Mix has an Any option that plays a random sample of your whole library.
+- Shuffle now works after a crossfade, and starting an album or playlist with shuffle on shuffles the rest of the queue.
+- Tracks now play behind reverse proxies that redirect http to https.
+- Artist Play all and Shuffle queue the whole catalog instead of about 20 tracks.
+- Podcast episodes show in the mini and full-screen players, with 15 second skips.

@@ -1,4 +1,5 @@
-- Swipe a track right to add it to the queue, or long-press it for an Add to queue menu, on album, playlist and favorites lists. The mini player also has a queue button.
-- Playback pauses automatically when headphones are unplugged or a Bluetooth device disconnects.
+- Swipe a track right to add it to the queue, or long-press it for an Add to queue menu. The mini player also has a queue button.
+- Playback pauses when headphones are unplugged or a Bluetooth device disconnects.
 - A Shuffle all button on Home plays a random sample of your whole library.
-- The album list can now be sorted by recently added as well as A–Z.
+- Albums can be sorted by recently added as well as A-Z.
+- Your queue and position are saved to the server, and Firmium offers to resume a queue from another device.

@@ -120,3 +120,11 @@ jobs:
       - name: Run unit tests
         working-directory: android
         run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Unit tests, F-Droid (foss) variant
+        working-directory: android
+        run: ./gradlew testDebugUnitTest -Pfoss --no-daemon
+
+      - name: Unit tests, Quest variant
+        working-directory: android
+        run: ./gradlew testDebugUnitTest -Pquest --no-daemon

@@ -65,9 +65,6 @@ update_file "$PROJECT_ROOT/firmium.spec" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/android/app/build.gradle.kts" "$NEW_VERSION"
 update_file "$PROJECT_ROOT/android/wear/build.gradle.kts" "$NEW_VERSION"
 
-# F-Droid changelog for the new versionCode, from the newest CHANGELOG.md section
-"$SCRIPT_DIR/fdroid-changelog.sh"
-
 # Update AUR folders
 update_file "$HOME/firmium/aur-firmium-git/PKGBUILD" "$NEW_VERSION"
 update_file "$HOME/firmium/aur-firmium-bin/PKGBUILD" "$NEW_VERSION"

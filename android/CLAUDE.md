@@ -16,6 +16,7 @@ Guidance specific to native Android app in `android/`. See root [CLAUDE.md](../C
 
 Native Kotlin/Compose app, independent of the desktop Tauri build, sharing OpenSubsonic API contract with desktop. Second Gradle module, `wear/`, is Wear OS companion (remote control for phone playback over Wearable Data Layer); shares phone's `applicationId` but no code. Android TV support (`ui/tv/`, `TvMainActivity`) lives in this same module, not a separate one — it's a second UI layer over the same ViewModels/data/audio stack, not a separate app.
 
+- **Meta Quest (Horizon OS)**: runs `MainActivity` as a 2D panel (Look and Pinch arrives as touch events). `AndroidManifest.xml` carries the `com.oculus.supportedDevices` meta-data and a `<layout>` (1024x640dp default, 360x225dp min) on `MainActivity`; phones ignore both. Build with `-Pquest` (implies `-Pfoss`, plus `src/quest/AndroidManifest.xml` overlay removing the Android Auto service and meta-data, and adding store rules: installLocation=auto, headtracking uses-feature required=false, excludeFromRecents on MainActivity; minSdk 29). No immersive/Spatial SDK code. Untested on a headset.
 - **MainActivity.kt / FirmiumApplication.kt**: App entry points
 - **TvMainActivity.kt**: Android TV entry point (separate `LEANBACK_LAUNCHER` activity), reusing the same ViewModels/data/audio layer as `MainActivity` — no touch-specific UI code
 - **viewmodel/**: `AuthViewModel`, `LibraryViewModel`, `PlayerViewModel`, `PlaylistViewModel`, `SearchViewModel` — state holders feeding Compose UI

@@ -5,7 +5,9 @@ plugins {
 }
 
 // ./gradlew assembleRelease -Pfoss builds the F-Droid variant without Google libraries.
-val isFoss = providers.gradleProperty("foss").isPresent
+// -Pquest builds the Meta Quest (Horizon OS) variant: implies -Pfoss and drops Android Auto.
+val isQuest = providers.gradleProperty("quest").isPresent
+val isFoss = isQuest || providers.gradleProperty("foss").isPresent
 
 android {
     namespace = "com.fossisawesome.firmium"
@@ -13,7 +15,8 @@ android {
 
     defaultConfig {
         applicationId = "com.fossisawesome.firmium"
-        minSdk = 26
+        // Quest store allows minSdk 29 to 34 for apps that support more than current headsets.
+        minSdk = if (isQuest) 29 else 26
         targetSdk = 36
         versionCode = 36
         versionName = "9.0.2"
@@ -52,6 +55,10 @@ android {
     }
 
     sourceSets["main"].kotlin.directories.add(if (isFoss) "src/foss/java" else "src/play/java")
+    if (isQuest) {
+        sourceSets["debug"].manifest.srcFile("src/quest/AndroidManifest.xml")
+        sourceSets["release"].manifest.srcFile("src/quest/AndroidManifest.xml")
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
