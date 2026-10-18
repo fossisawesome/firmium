@@ -21,7 +21,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tauri-apps/cli": "^2.12.2",
     "@tsconfig/svelte": "^5.0.8",
     "concurrently": "^10.0.3",
