@@ -115,7 +115,7 @@ dependencies {
     // Image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
     // Dominant-color extraction for the full-screen player background gradient
-    implementation("androidx.palette:palette-ktx:1.0.0")
+    implementation("androidx.palette:palette-ktx:1.1.0")
 
     // Audio
     implementation("androidx.media3:media3-exoplayer:1.11.1")
