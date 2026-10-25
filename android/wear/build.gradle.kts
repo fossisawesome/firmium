@@ -100,7 +100,7 @@ dependencies {
     // Playback engine (Task 5) — same versions as the phone app's build.gradle.kts
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-common:1.11.1")
-    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.datastore:datastore-preferences:1.3.0")
 
     // Browse UI navigation — same version as the already-pinned compose-material/compose-foundation.
     // navigation-compose pinned explicitly too: compose-navigation only brings it in as a version
