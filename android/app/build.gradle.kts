@@ -131,7 +131,7 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0")
 
     // DataStore for non-sensitive preferences (server URL, settings)
-    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.datastore:datastore-preferences:1.3.0")
 
     // Room: local play-history store
     implementation("androidx.room:room-runtime:2.8.5")
