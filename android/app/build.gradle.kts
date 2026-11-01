@@ -108,8 +108,8 @@ dependencies {
     implementation("androidx.tv:tv-material:1.1.0")
 
     // HTTP + JSON
-    implementation("com.squareup.okhttp3:okhttp:5.5.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:5.5.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.1")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.5.1")
     implementation("com.google.code.gson:gson:2.14.0")
 
     // Image loading
